@@ -31,6 +31,9 @@ public:
     // GPU compute trace + instanced draw (one batch)
     void trace_and_draw(const TraceConfig& cfg);
 
+    // Multi-batch: dispatch N compute batches, then one draw call
+    void trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches);
+
     // Post-processing and readback (unchanged)
     void update_display(const PostProcess& pp);
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp);
