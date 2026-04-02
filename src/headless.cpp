@@ -36,30 +36,20 @@ bool HeadlessGL::init() {
         return false;
     }
 
-    // Try GL 4.3 first (compute shaders), fall back to 3.3
-    EGLint ctx43[] = {EGL_CONTEXT_MAJOR_VERSION,
-                      4,
-                      EGL_CONTEXT_MINOR_VERSION,
-                      3,
-                      EGL_CONTEXT_OPENGL_PROFILE_MASK,
-                      EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-                      EGL_NONE};
+    // Require GL 4.3+ (compute shaders)
+    EGLint ctx_attribs[] = {EGL_CONTEXT_MAJOR_VERSION,
+                            4,
+                            EGL_CONTEXT_MINOR_VERSION,
+                            3,
+                            EGL_CONTEXT_OPENGL_PROFILE_MASK,
+                            EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+                            EGL_NONE};
 
-    context_ = eglCreateContext(display_, config, EGL_NO_CONTEXT, ctx43);
+    context_ = eglCreateContext(display_, config, EGL_NO_CONTEXT, ctx_attribs);
     if (context_ == EGL_NO_CONTEXT) {
-        EGLint ctx33[] = {EGL_CONTEXT_MAJOR_VERSION,
-                          3,
-                          EGL_CONTEXT_MINOR_VERSION,
-                          3,
-                          EGL_CONTEXT_OPENGL_PROFILE_MASK,
-                          EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
-                          EGL_NONE};
-        context_ = eglCreateContext(display_, config, EGL_NO_CONTEXT, ctx33);
-        if (context_ == EGL_NO_CONTEXT) {
-            std::cerr << "EGL: failed to create context\n";
-            eglTerminate(display_);
-            return false;
-        }
+        std::cerr << "EGL: failed to create GL 4.3 context\n";
+        eglTerminate(display_);
+        return false;
     }
 
     EGLint pbuf[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};

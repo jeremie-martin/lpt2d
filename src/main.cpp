@@ -3,7 +3,6 @@
 #include "headless.h"
 #include "renderer.h"
 #include "scenes.h"
-#include "tracer.h"
 
 #include <cstring>
 #include <iostream>
@@ -64,7 +63,7 @@ int main(int argc, char** argv) {
     std::string output = "output.png";
     int width = 1280, height = 720;
     int total_rays = 10'000'000;
-    Tracer::Config tcfg;
+    TraceConfig tcfg;
     PostProcess pp;
 
     for (int i = 1; i < argc; ++i) {
@@ -117,18 +116,16 @@ int main(int argc, char** argv) {
 
         Scene scene = find_scene(all_scenes, scene_name);
         Bounds bounds = compute_bounds(scene);
-        Tracer tracer;
-
+        renderer.upload_scene(scene, bounds);
         renderer.clear();
 
         int num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
         for (int i = 0; i < num_batches; ++i) {
-            auto segments = tracer.trace_batch(scene, tcfg);
-            world_to_pixel(segments, bounds, width, height);
-            renderer.draw_lines(segments);
-            renderer.flush();
+            renderer.trace_and_draw(tcfg);
 
-            std::cerr << "\r" << tracer.total_rays() << "/" << total_rays << " rays"
+            int done = (i + 1) * tcfg.batch_size;
+            if (done > total_rays) done = total_rays;
+            std::cerr << "\r" << done << "/" << total_rays << " rays"
                       << std::flush;
         }
         std::cerr << "\n";

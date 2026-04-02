@@ -35,7 +35,6 @@ set(SOURCES
     src/app.cpp
     src/scene.cpp
     src/spectrum.cpp
-    src/tracer.cpp
     src/renderer.cpp
     src/headless.cpp
     src/export.cpp

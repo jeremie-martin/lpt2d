@@ -2,7 +2,6 @@
 
 #include "export.h"
 #include "renderer.h"
-#include "tracer.h"
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -24,15 +23,9 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
     GLFWwindow* window = glfwCreateWindow(config.width, config.height, "lpt2d", nullptr, nullptr);
     if (!window) {
-        // Fall back to GL 3.3
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        window = glfwCreateWindow(config.width, config.height, "lpt2d", nullptr, nullptr);
-        if (!window) {
-            std::cerr << "GLFW: failed to create window\n";
-            glfwTerminate();
-            return 1;
-        }
+        std::cerr << "GLFW: failed to create GL 4.3 window\n";
+        glfwTerminate();
+        return 1;
     }
 
     glfwMakeContextCurrent(window);
@@ -48,7 +41,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init("#version 430");
     ImGui::StyleColorsDark();
 
     // State
@@ -64,11 +57,11 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
     Scene scene = scenes[current_scene].second();
     Bounds bounds = compute_bounds(scene);
-    Tracer tracer;
-    Tracer::Config tcfg;
+    renderer.upload_scene(scene, bounds);
+
+    TraceConfig tcfg;
     PostProcess pp;
-    pp.tone_map = ToneMap::ACES;
-    int batches_done = 0;
+    int total_rays = 0;
     bool paused = false;
 
     renderer.clear();
@@ -78,11 +71,8 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         // Trace a batch
         if (!paused) {
-            auto segments = tracer.trace_batch(scene, tcfg);
-            world_to_pixel(segments, bounds, config.width, config.height);
-            renderer.draw_lines(segments);
-            renderer.flush();
-            batches_done++;
+            renderer.trace_and_draw(tcfg);
+            total_rays += tcfg.batch_size;
         }
 
         // Post-process and display
@@ -122,9 +112,9 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     current_scene = i;
                     scene = scenes[current_scene].second();
                     bounds = compute_bounds(scene);
+                    renderer.upload_scene(scene, bounds);
                     renderer.clear();
-                    tracer = Tracer{};
-                    batches_done = 0;
+                    total_rays = 0;
                 }
             }
             ImGui::EndCombo();
@@ -132,7 +122,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         ImGui::Separator();
         ImGui::Text("Tracer");
-        ImGui::SliderInt("Batch size", &tcfg.batch_size, 1000, 200000);
+        ImGui::SliderInt("Batch size", &tcfg.batch_size, 1000, 1000000);
         ImGui::SliderInt("Max depth", &tcfg.max_depth, 1, 30);
         ImGui::SliderFloat("Intensity", &tcfg.intensity, 0.001f, 10.0f, "%.3f", ImGuiSliderFlags_Logarithmic);
         ImGui::Checkbox("Paused", &paused);
@@ -151,14 +141,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         ImGui::Separator();
         ImGui::Text("Stats");
-        ImGui::Text("Rays: %d", tracer.total_rays());
-        ImGui::Text("Batches: %d", batches_done);
+        ImGui::Text("Rays: %d", total_rays);
         ImGui::Text("Max HDR: %.2f", renderer.last_max());
 
         if (ImGui::Button("Clear")) {
             renderer.clear();
-            tracer = Tracer{};
-            batches_done = 0;
+            total_rays = 0;
         }
 
         ImGui::SameLine();

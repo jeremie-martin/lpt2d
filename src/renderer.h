@@ -6,6 +6,12 @@
 #include <cstdint>
 #include <vector>
 
+struct TraceConfig {
+    int batch_size = 200000;
+    int max_depth = 12;
+    float intensity = 1.0f;
+};
+
 class Renderer {
 public:
     ~Renderer();
@@ -14,9 +20,13 @@ public:
     void shutdown();
     void clear();
 
-    void draw_lines(std::span<const LineSegment> segments, float thickness = 1.5f);
-    void flush();
+    // Upload scene geometry, lights, and viewport transform to GPU
+    void upload_scene(const Scene& scene, const Bounds& bounds);
 
+    // GPU compute trace + instanced draw (one batch)
+    void trace_and_draw(const TraceConfig& cfg);
+
+    // Post-processing and readback (unchanged)
     void update_display(const PostProcess& pp);
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp);
 
@@ -36,27 +46,59 @@ private:
     GLuint display_fbo_ = 0;
     GLuint display_texture_ = 0; // GL_RGBA8
 
-    // Line drawing
+    // --- GPU tracing ---
+    GLuint trace_program_ = 0;
+
+    // Scene SSBOs
+    GLuint circle_ssbo_ = 0;
+    GLuint segment_ssbo_ = 0;
+    GLuint light_ssbo_ = 0;
+    GLuint light_weights_ssbo_ = 0;
+    int num_circles_ = 0;
+    int num_segments_ = 0;
+    int num_lights_ = 0;
+
+    // Wavelength LUT texture
+    GLuint wavelength_lut_ = 0;
+
+    // Output segment SSBO + draw indirect buffer
+    GLuint output_ssbo_ = 0;
+    GLuint draw_cmd_buffer_ = 0;
+    int max_output_segments_ = 0;
+
+    // Trace shader uniform locations
+    GLint trace_loc_num_circles_ = -1;
+    GLint trace_loc_num_segments_ = -1;
+    GLint trace_loc_num_lights_ = -1;
+    GLint trace_loc_max_depth_ = -1;
+    GLint trace_loc_seed_ = -1;
+    GLint trace_loc_intensity_ = -1;
+    GLint trace_loc_max_segments_ = -1;
+    GLint trace_loc_view_offset_ = -1;
+    GLint trace_loc_view_scale_ = -1;
+    GLint trace_loc_bounds_min_ = -1;
+    GLint trace_loc_wavelength_lut_ = -1;
+
+    uint32_t batch_counter_ = 0;
+
+    // --- Instanced line drawing ---
     GLuint line_program_ = 0;
     GLuint line_vao_ = 0;
-    GLuint line_vbo_ = 0;
-    std::vector<float> vertex_buffer_;
+    GLint loc_resolution_ = -1;
+    GLint loc_thickness_ = -1;
 
-    // Post-processing
+    // --- Post-processing ---
     GLuint pp_program_ = 0;
     GLuint pp_vao_ = 0;
 
-    // Compute shader max reduction (GL 4.3+)
+    // Compute shader max reduction
     GLuint max_compute_ = 0;
     GLuint max_ssbo_ = 0;
-    bool has_compute_ = false;
 
     float last_max_ = 0.0f;
-    std::vector<float> float_buffer_;
     std::vector<uint8_t> rgba_buffer_;
 
-    // Cached uniform locations
-    GLint loc_resolution_ = -1;
+    // Cached PP uniform locations
     GLint loc_max_val_ = -1;
     GLint loc_exposure_ = -1;
     GLint loc_contrast_ = -1;
@@ -67,8 +109,10 @@ private:
 
     bool create_framebuffers();
     void delete_framebuffers();
+    bool create_trace_shader();
     bool create_line_shader();
     bool create_pp_shader();
     bool create_compute_shader();
+    void create_wavelength_lut();
     float compute_max_gpu();
 };

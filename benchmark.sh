@@ -11,15 +11,21 @@ BATCH="${BATCH:-50000}"
 SCENES=(three_spheres prism diamond lens fiber mirror_box ring double_slit)
 
 # ── Setup ──────────────────────────────────────────────────────────────
-if [[ ! -x "$BINARY" ]]; then
-    echo "Binary not found: $BINARY — building..."
-    cmake --build build -j"$(nproc)" --config Release
+# Always ensure Release build
+BUILD_TYPE=$(cmake -L build 2>/dev/null | grep CMAKE_BUILD_TYPE | cut -d= -f2)
+if [[ "$BUILD_TYPE" != "Release" ]] || [[ ! -x "$BINARY" ]]; then
+    echo "Configuring Release build..."
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release >/dev/null 2>&1
+    cmake --build build -j"$(nproc)" 2>&1 | tail -1
 fi
 
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 OUTDIR="benchmarks/${COMMIT}_${TIMESTAMP}"
 mkdir -p "$OUTDIR"
+
+# Archive the binary for reproducibility
+cp "$BINARY" "$OUTDIR/lpt2d"
 
 echo "═══════════════════════════════════════════════════════════"
 echo " lpt2d benchmark"
