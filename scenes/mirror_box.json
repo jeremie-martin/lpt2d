@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "name": "mirror_box",
+  "shapes": [
+    {
+      "type": "segment",
+      "a": [-0.9, -0.6],
+      "b": [0.9, -0.6],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [0.9, 0.6],
+      "b": [-0.9, 0.6],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [-0.9, 0.6],
+      "b": [-0.9, -0.6],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [0.9, -0.6],
+      "b": [0.9, 0.6],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "circle",
+      "center": [-0.3, 0.15],
+      "radius": 0.15,
+      "material": {
+        "ior": 1.8,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 25000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0.3, -0.1],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.3,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0, -0.25],
+      "radius": 0.08,
+      "material": {
+        "ior": 2,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.5,
+        "cauchy_b": 30000,
+        "albedo": 1
+      }
+    }
+  ],
+  "lights": [
+    {
+      "type": "point",
+      "pos": [-0.6, -0.35],
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    },
+    {
+      "type": "point",
+      "pos": [0.6, 0.35],
+      "intensity": 0.7,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "name": "ring",
+  "shapes": [
+    {
+      "type": "circle",
+      "center": [0.5, 0],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0.35355338, 0.35355338],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0, 0.5],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [-0.35355338, 0.35355338],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [-0.5, 0],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [-0.35355332, -0.35355344],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0, -0.5],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "circle",
+      "center": [0.3535535, -0.35355327],
+      "radius": 0.1,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
+    },
+    {
+      "type": "segment",
+      "a": [-1, -1],
+      "b": [1, -1],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [1, 1],
+      "b": [-1, 1],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [-1, 1],
+      "b": [-1, -1],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    },
+    {
+      "type": "segment",
+      "a": [1, -1],
+      "b": [1, 1],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
+    }
+  ],
+  "lights": [
+    {
+      "type": "point",
+      "pos": [0, 0],
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}

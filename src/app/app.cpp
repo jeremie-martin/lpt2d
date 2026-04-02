@@ -3,6 +3,7 @@
 #include "editor.h"
 #include "export.h"
 #include "renderer.h"
+#include "scenes.h"
 #include "serialize.h"
 #include "ui.h"
 
@@ -19,7 +20,7 @@
 
 // ─── App::run ───────────────────────────────────────────────────────────
 
-int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
+int App::run(const AppConfig& config) {
     if (!glfwInit()) { std::cerr << "GLFW init failed\n"; return 1; }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -62,14 +63,18 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
     // ── Editor state ──
     EditorState ed;
+    const auto& builtins = get_builtin_scenes();
 
     int current_scene = 0;
     if (!config.initial_scene.empty()) {
-        for (int i = 0; i < (int)scenes.size(); ++i) {
-            if (scenes[i].first == config.initial_scene) { current_scene = i; break; }
+        bool found = false;
+        for (int i = 0; i < (int)builtins.size(); ++i) {
+            if (builtins[i].name == config.initial_scene) { current_scene = i; found = true; break; }
         }
+        if (!found)
+            std::cerr << "Unknown scene: " << config.initial_scene << ", using " << builtins[0].name << "\n";
     }
-    ed.scene = scenes[current_scene].second();
+    ed.scene = load_builtin_scene(builtins[current_scene]);
     ed.scene_bounds = compute_bounds(ed.scene);
     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
 
@@ -576,12 +581,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         // -- Scene --
         if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Scene");
-            const char* label = (current_scene >= 0) ? scenes[current_scene].first.c_str() : "Custom";
+            const char* label = (current_scene >= 0) ? builtins[current_scene].name.c_str() : "Custom";
             if (ImGui::BeginCombo("##scene", label)) {
-                for (int i = 0; i < (int)scenes.size(); ++i) {
-                    if (ImGui::Selectable(scenes[i].first.c_str(), i == current_scene)) {
+                for (int i = 0; i < (int)builtins.size(); ++i) {
+                    if (ImGui::Selectable(builtins[i].name.c_str(), i == current_scene)) {
                         current_scene = i;
-                        ed.scene = scenes[i].second();
+                        ed.scene = load_builtin_scene(builtins[i]);
                         reset_editor();
                     }
                 }

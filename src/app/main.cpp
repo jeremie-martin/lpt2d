@@ -1,12 +1,12 @@
 #include "app.h"
+#include "scenes.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
 
 int main(int argc, char** argv) {
-    auto all_scenes = get_all_scenes();
-
     std::string scene_name = "three_spheres";
     int width = 1280, height = 720;
 
@@ -20,8 +20,8 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
             std::cerr << "Usage: lpt2d [--scene <name>] [--width <int>] [--height <int>]\n"
                       << "\nScenes: ";
-            for (const auto& [name, _] : all_scenes)
-                std::cerr << name << " ";
+            for (const auto& entry : get_builtin_scenes())
+                std::cerr << entry.name << " ";
             std::cerr << "\n";
             return 0;
         } else {
@@ -35,5 +35,5 @@ int main(int argc, char** argv) {
     config.width = width;
     config.height = height;
     config.initial_scene = scene_name;
-    return app.run(all_scenes, config);
+    return app.run(config);
 }

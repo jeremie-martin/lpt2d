@@ -1,6 +1,6 @@
 #pragma once
 
-#include "scenes.h"
+#include "scene.h"
 
 #include <string>
 
@@ -12,5 +12,5 @@ struct AppConfig {
 
 class App {
 public:
-    int run(const std::vector<SceneFactory>& scenes, const AppConfig& config);
+    int run(const AppConfig& config);
 };

@@ -2,15 +2,16 @@
 #include "headless.h"
 #include "renderer.h"
 #include "scenes.h"
+#include "serialize.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
-#include <vector>
 
-static void print_usage(const std::vector<SceneFactory>& scenes) {
+static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
-              << "  --scene <name>           Scene name (default: three_spheres)\n"
+              << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
               << "  --width <int>            Width (default: 1920)\n"
               << "  --height <int>           Height (default: 1080)\n"
@@ -21,32 +22,31 @@ static void print_usage(const std::vector<SceneFactory>& scenes) {
               << "  --contrast <float>       Contrast (default: 1)\n"
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|aces|log (default: aces)\n"
-              << "\nScenes: ";
-    for (const auto& [name, _] : scenes)
-        std::cerr << name << " ";
+              << "\nBuilt-in scenes: ";
+    for (const auto& entry : get_builtin_scenes())
+        std::cerr << entry.name << " ";
     std::cerr << "\n";
 }
 
-static Scene find_scene(const std::vector<SceneFactory>& scenes, const std::string& name) {
-    for (const auto& [n, f] : scenes) {
-        if (n == name)
-            return f();
-    }
-    std::cerr << "Unknown scene: " << name << "\n";
+static Scene resolve_scene(const std::string& arg) {
+    // Try built-in name first
+    if (auto s = find_builtin_scene(arg)) return *s;
+    // Then try as a file path
+    Scene s = load_scene_json(arg);
+    if (!s.shapes.empty() || !s.lights.empty()) return s;
+    std::cerr << "Unknown scene: " << arg << "\n";
     std::cerr << "Available: ";
-    for (const auto& [n, _] : scenes)
-        std::cerr << n << " ";
+    for (auto& entry : get_builtin_scenes())
+        std::cerr << entry.name << " ";
     std::cerr << "\n";
     std::exit(1);
 }
 
 int main(int argc, char** argv) {
-    auto all_scenes = get_all_scenes();
-
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     int width = 1920, height = 1080;
-    int total_rays = 10'000'000;
+    int64_t total_rays = 10'000'000;
     TraceConfig tcfg;
     PostProcess pp;
 
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
             height = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--rays") == 0 && i + 1 < argc)
-            total_rays = std::atoi(argv[++i]);
+            total_rays = std::strtoll(argv[++i], nullptr, 10);
         else if (std::strcmp(argv[i], "--batch") == 0 && i + 1 < argc)
             tcfg.batch_size = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
@@ -78,11 +78,11 @@ int main(int argc, char** argv) {
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
-            print_usage(all_scenes);
+            print_usage();
             return 0;
         } else {
             std::cerr << "Unknown option: " << argv[i] << "\n";
-            print_usage(all_scenes);
+            print_usage();
             return 1;
         }
     }
@@ -95,16 +95,16 @@ int main(int argc, char** argv) {
     if (!renderer.init(width, height))
         return 1;
 
-    Scene scene = find_scene(all_scenes, scene_name);
+    Scene scene = resolve_scene(scene_name);
     Bounds bounds = compute_bounds(scene);
     renderer.upload_scene(scene, bounds);
     renderer.clear();
 
-    int num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
-    for (int i = 0; i < num_batches; ++i) {
+    int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
+    for (int64_t i = 0; i < num_batches; ++i) {
         renderer.trace_and_draw(tcfg);
 
-        int done = (i + 1) * tcfg.batch_size;
+        int64_t done = (i + 1) * tcfg.batch_size;
         if (done > total_rays) done = total_rays;
         std::cerr << "\r" << done << "/" << total_rays << " rays"
                   << std::flush;

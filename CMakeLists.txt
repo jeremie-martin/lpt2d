@@ -38,6 +38,7 @@ find_package(GLEW REQUIRED)
 # ── Core library ──────────────────────────────────────────────────
 add_library(lpt2d-core STATIC
     src/core/scene.cpp
+    src/core/scenes.cpp
     src/core/renderer.cpp
     src/core/spectrum.cpp
     src/core/export.cpp
@@ -54,6 +55,9 @@ target_include_directories(lpt2d-core PRIVATE
 target_link_libraries(lpt2d-core PUBLIC
     OpenGL::GL
     GLEW::GLEW
+)
+target_compile_definitions(lpt2d-core PUBLIC
+    LPT2D_SCENES_DIR="${CMAKE_SOURCE_DIR}/scenes"
 )
 target_compile_options(lpt2d-core PRIVATE -Wall -Wextra -Wpedantic)
 
