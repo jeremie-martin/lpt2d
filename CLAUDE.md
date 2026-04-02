@@ -21,7 +21,7 @@ Produces three targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (head
 ./build/lpt2d-cli --scene prism --width 1920 --height 1080 --rays 100000000 --output render.png
 ```
 
-Key CLI flags: `--scene`, `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--tonemap (none|reinhard|aces|log)`.
+Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--tonemap (none|reinhard|aces|log)`.
 
 ## Benchmarking
 
@@ -41,14 +41,15 @@ The benchmark script forces Release build, archives the binary, and produces `re
 ```
 CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lpt2d-cli (headless)
 cmake/embed_shaders.cmake   — build-time GLSL→C++ header embedding
+scenes/                     — JSON scene files (the single source of truth for all scenes)
 src/
   core/                     — lpt2d-core static library (no GUI/windowing deps)
     scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, intersection, bounds
+    scenes.h/cpp            — runtime scene discovery from scenes/ directory
     renderer.h/cpp          — GPU pipeline: framebuffers, compute dispatch, instanced draw, post-processing
     spectrum.h/cpp          — CIE 1931 wavelength→RGB (Gaussian fit), uploaded as 1D texture LUT
     export.h/cpp            — PNG export via stb_image_write
-    serialize.h/cpp         — JSON scene save/load
-    scenes.h                — 10 built-in scene factory functions + SceneFactory type + get_all_scenes()
+    serialize.h/cpp         — JSON scene save/load (file and string APIs)
   shaders/                  — standalone GLSL files (embedded at build time → build/generated/shaders.h)
     trace.comp              — main ray tracing compute kernel
     line.vert/frag          — instanced anti-aliased line rasterization
@@ -79,3 +80,4 @@ src/
 - **Gold standard**: The GPU renderer matches the original CPU tracer output (mean pixel difference < 0.13 at 100M rays, archived in `benchmarks/01_cpu_release_100M/`). Any rendering changes must preserve this.
 - **Experiment branch**: `experiment/direct-to-image` has an alternative architecture (Wu AA lines, R32UI fixed-point accumulation, no instanced draw). Faster on light scenes but introduces brightness differences — not production quality.
 - **Shader editing**: Edit `.glsl` files in `src/shaders/`, not embedded strings. The build system generates `build/generated/shaders.h` automatically.
+- **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed. The CLI accepts `--scene <name>` (looks up in `scenes/`) or `--scene path/to/file.json` (loads directly). The GUI discovers all scenes in the directory and lists them in the combo box.
