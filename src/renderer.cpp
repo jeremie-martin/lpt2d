@@ -128,9 +128,9 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
     vec2 d = s.b - s.a;
     float denom = rd.x * d.y - rd.y * d.x;
-    if (abs(denom) < 1e-10) return NO_HIT;
+    if (abs(denom) < INTERSECT_EPS) return NO_HIT;
 
-    vec2 f = s.a - ro;
+    vec2 f = ro - s.a;
     float t = (d.x * f.y - d.y * f.x) / denom;
     float u = (rd.x * f.y - rd.y * f.x) / denom;
     if (t < INTERSECT_EPS || u < 0.0 || u > 1.0) return NO_HIT;
