@@ -619,6 +619,17 @@ bool Renderer::init(int width, int height) {
     return true;
 }
 
+void Renderer::resize(int width, int height) {
+    if (width == width_ && height == height_) return;
+    glFinish();
+    delete_framebuffers();
+    width_ = width;
+    height_ = height;
+    if (!create_framebuffers())
+        std::cerr << "Renderer: framebuffer recreation failed on resize\n";
+    rgba_buffer_.resize(width * height * 4);
+}
+
 void Renderer::shutdown() {
     delete_framebuffers();
 

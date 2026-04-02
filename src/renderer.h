@@ -17,6 +17,7 @@ public:
     ~Renderer();
 
     bool init(int width, int height);
+    void resize(int width, int height);
     void shutdown();
     void clear();
 
