@@ -566,6 +566,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         // -- Scene --
         if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Scene");
             const char* label = (current_scene >= 0) ? scenes[current_scene].first.c_str() : "Custom";
             if (ImGui::BeginCombo("##scene", label)) {
                 for (int i = 0; i < (int)scenes.size(); ++i) {
@@ -614,10 +615,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
                 ImGui::EndPopup();
             }
+            ImGui::PopID();
         }
 
         // -- Tools --
         if (ImGui::CollapsingHeader("Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Tools");
             ImVec4 accent(0.31f, 0.53f, 0.86f, 1.0f);
             ImVec4 accent_h(0.38f, 0.60f, 0.92f, 1.0f);
             auto tbtn = [&](const char* lbl, EditTool t) {
@@ -640,10 +643,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             tbtn("Beam", EditTool::BeamLight);
 
             ImGui::Checkbox("Wireframe overlay", &show_wireframe);
+            ImGui::PopID();
         }
 
         // -- Objects --
         if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Objects");
             int n_items = (int)(ed.scene.shapes.size() + ed.scene.lights.size());
             float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
                                  40.0f, 200.0f * dpi_scale);
@@ -703,11 +708,13 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     delete_selected();
                 }
             }
+            ImGui::PopID();
         }
 
         // -- Properties --
         if (ed.selection.size() == 1 &&
             ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Properties");
             bool changed = false;
             auto& sid = ed.selection[0];
 
@@ -781,20 +788,24 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             if (!ImGui::IsAnyItemActive() && ed.prop_editing) {
                 ed.prop_editing = false;
             }
+            ImGui::PopID();
         }
 
         // -- Tracer --
         if (ImGui::CollapsingHeader("Tracer", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Tracer");
             ImGui::SliderInt("Batch", &tcfg.batch_size, 1000, 1000000, "%d",
                              ImGuiSliderFlags_Logarithmic);
             ImGui::SliderInt("Max depth", &tcfg.max_depth, 1, 30);
             ImGui::SliderFloat("Intensity", &tcfg.intensity, 0.001f, 10.0f, "%.3f",
                                ImGuiSliderFlags_Logarithmic);
             ImGui::Checkbox("Paused", &paused);
+            ImGui::PopID();
         }
 
         // -- Display --
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Display");
             ImGui::SliderFloat("Exposure", &pp.exposure, -5.0f, 5.0f);
             ImGui::SliderFloat("Contrast", &pp.contrast, 0.1f, 3.0f);
             ImGui::SliderFloat("Gamma", &pp.gamma, 0.5f, 4.0f);
@@ -803,10 +814,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             int tm = (int)pp.tone_map;
             if (ImGui::Combo("Tone map", &tm, tone_names, 5))
                 pp.tone_map = (ToneMap)tm;
+            ImGui::PopID();
         }
 
         // -- Output --
         if (ImGui::CollapsingHeader("Output", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Output");
             char ray_str[32];
             if (total_rays >= 1'000'000)
                 std::snprintf(ray_str, sizeof(ray_str), "%.1fM", total_rays / 1e6);
@@ -831,6 +844,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 if (export_png(filename, pixels.data(), fb_w, fb_h))
                     std::cerr << "Exported: " << filename << "\n";
             }
+            ImGui::PopID();
         }
 
         ImGui::End(); // Controls
