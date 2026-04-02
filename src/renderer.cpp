@@ -358,9 +358,8 @@ void main() {
             vec2 n = h.normal;
             float cos_i = dot(rd, n);
 
-            // Cauchy dispersion
-            float lambda_um = wavelength * 0.001;
-            float ior = h.ior + h.cauchy_b / (lambda_um * lambda_um * 1e6);
+            // Cauchy dispersion: ior(λ) = A + B/λ² (wavelength in nm, cauchy_b in nm²)
+            float ior = h.ior + h.cauchy_b / (wavelength * wavelength);
 
             // Orient normal toward incoming ray, determine n1/n2
             float n1, n2;
@@ -412,18 +411,27 @@ void main() {
                 // ── NON-REFLECTED ──
                 if (h.transmission > 0.0 && rand01() < h.transmission) {
                     // Refract (Snell's law)
-                    rd = normalize(rd * ratio + n * (ratio * cos_i - cos_t));
-                    if (h.roughness > 0.0 && h.roughness < 1.0) {
-                        vec2 new_rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness * 0.5);
-                        if (dot(new_rd, n) < 0.0) rd = new_rd;
+                    if (h.roughness >= 1.0) {
+                        rd = cosine_scatter_2d(-n);
+                    } else {
+                        rd = normalize(rd * ratio + n * (ratio * cos_i - cos_t));
+                        if (h.roughness > 0.0) {
+                            vec2 new_rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness * 0.5);
+                            if (dot(new_rd, n) < 0.0) rd = new_rd;
+                        }
                     }
                     ro = h.point - n * SCATTER_EPS;
                     current_absorption = entering ? h.absorption : 0.0;
-                } else if (rand01() < h.albedo) {
-                    rd = cosine_scatter_2d(n);
-                    ro = h.point + n * SCATTER_EPS;
                 } else {
-                    return; // absorb
+                    // Diffuse or absorb: metals absorb non-reflected energy,
+                    // dielectrics scatter with probability albedo
+                    float diffuse_p = (1.0 - h.metallic) * h.albedo;
+                    if (rand01() < diffuse_p) {
+                        rd = cosine_scatter_2d(n);
+                        ro = h.point + n * SCATTER_EPS;
+                    } else {
+                        return; // absorb
+                    }
                 }
             }
         }

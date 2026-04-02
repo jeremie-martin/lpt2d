@@ -44,22 +44,36 @@ struct Vec3 {
 };
 
 // --- Materials (Principled BSDF) ---
+//
+// Decision tree per bounce (Russian roulette):
+//
+//   F_eff = mix(F_fresnel, albedo, metallic)   [TIR forces F_eff = 1]
+//
+//   [P = F_eff]           REFLECT  (specular/rough/Lambertian per roughness)
+//   [P = 1 - F_eff]       NON-REFLECTED:
+//     [P = transmission]     REFRACT  (Snell, Beer-Lambert, Cauchy dispersion)
+//     [P = 1-transmission]   SURFACE:
+//       [P = (1-metallic)*albedo]  DIFFUSE scatter
+//       [else]                     ABSORB (metal absorption + dielectric loss)
+//
+// Energy is always conserved (probabilities sum to 1).
 
 struct Material {
-    float ior = 1.0f;          // Index of refraction (1.0 = no refraction boundary)
-    float roughness = 0.0f;    // 0 = perfect specular, 1 = fully diffuse
-    float metallic = 0.0f;     // 0 = dielectric (Fresnel), 1 = conductor (flat reflectance)
-    float transmission = 0.0f; // 0 = opaque, 1 = fully transmissive
-    float absorption = 0.0f;   // Beer-Lambert coefficient inside medium
-    float cauchy_b = 0.0f;     // Cauchy dispersion coefficient (nm^2)
-    float albedo = 1.0f;       // Scattering probability [0,1]
+    float ior = 1.0f;          // Index of refraction (1.0 = no boundary)
+    float roughness = 0.0f;    // 0 = specular, 1 = Lambertian (applies to both reflect & refract)
+    float metallic = 0.0f;     // 0 = dielectric (Fresnel), 1 = conductor (flat reflectance = albedo)
+    float transmission = 0.0f; // Fraction of non-reflected light that refracts (0 = opaque, 1 = glass)
+    float absorption = 0.0f;   // Beer-Lambert coefficient inside medium (per unit distance)
+    float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
+    float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
 };
 
 // Convenience constructors
 inline Material mat_absorber() { return {.albedo = 0.0f}; }
 inline Material mat_diffuse(float reflectance) { return {.albedo = reflectance}; }
 inline Material mat_mirror(float reflectance, float roughness = 0.0f) {
-    // transmission=1 so non-reflected rays pass through (ior=1 refraction = no bending)
+    // Beam splitter: reflects (reflectance), transmits the rest (ior=1 = no bending).
+    // metallic=1 makes reflectance flat (angle-independent).
     return {.roughness = roughness, .metallic = 1.0f, .transmission = 1.0f, .albedo = reflectance};
 }
 inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0.0f) {
