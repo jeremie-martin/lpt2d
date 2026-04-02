@@ -1,7 +1,9 @@
 #include "app.h"
 
+#include "editor.h"
 #include "export.h"
 #include "renderer.h"
+#include "serialize.h"
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -13,89 +15,6 @@
 #include <chrono>
 #include <cstdio>
 #include <iostream>
-
-// ─── Types ──────────────────────────────────────────────────────────────
-
-enum class EditTool { Select, Circle, Segment, Arc, Bezier, PointLight, SegmentLight, BeamLight, Erase };
-
-struct ViewTransform {
-    Bounds bounds;
-    float scale, ox, oy, w, h;
-};
-
-struct Selection {
-    enum Type { None, Shape, Light } type = None;
-    int index = -1;
-};
-
-// ─── Coordinate helpers ─────────────────────────────────────────────────
-
-static ViewTransform compute_view(const Bounds& bounds, float w, float h) {
-    Vec2 sz = bounds.max - bounds.min;
-    sz.x = std::max(sz.x, 0.01f);
-    sz.y = std::max(sz.y, 0.01f);
-    float s = std::min(w / sz.x, h / sz.y);
-    return {bounds, s, (w - sz.x * s) * 0.5f, (h - sz.y * s) * 0.5f, w, h};
-}
-
-static ImVec2 to_screen(const ViewTransform& vt, Vec2 p) {
-    return {(p.x - vt.bounds.min.x) * vt.scale + vt.ox,
-            vt.h - ((p.y - vt.bounds.min.y) * vt.scale + vt.oy)};
-}
-
-static Vec2 to_world(const ViewTransform& vt, ImVec2 s) {
-    return {(s.x - vt.ox) / vt.scale + vt.bounds.min.x,
-            (vt.h - s.y - vt.oy) / vt.scale + vt.bounds.min.y};
-}
-
-// ─── Hit testing ────────────────────────────────────────────────────────
-
-static float point_seg_dist(Vec2 p, Vec2 a, Vec2 b) {
-    Vec2 ab = b - a;
-    float len2 = ab.length_sq();
-    if (len2 < 1e-10f) return (p - a).length();
-    float t = std::clamp((p - a).dot(ab) / len2, 0.0f, 1.0f);
-    return (p - (a + ab * t)).length();
-}
-
-static Selection hit_test(Vec2 wp, const Scene& scene, float threshold) {
-    Selection sel;
-    float best = threshold;
-    for (int i = 0; i < (int)scene.shapes.size(); ++i) {
-        float d = std::visit(overloaded{
-            [&](const Circle& c) -> float {
-                float dc = (wp - c.center).length();
-                return dc < c.radius ? 0.0f : dc - c.radius;
-            },
-            [&](const Segment& s) -> float { return point_seg_dist(wp, s.a, s.b); },
-            [&](const Arc& a) -> float {
-                float dc = (wp - a.center).length();
-                return dc < a.radius ? 0.0f : dc - a.radius;
-            },
-            [&](const Bezier& b) -> float {
-                // Approximate: sample curve at N points, find min distance
-                float best = 1e30f;
-                for (int j = 0; j <= 20; ++j) {
-                    float t = j / 20.0f;
-                    float u = 1.0f - t;
-                    Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
-                    best = std::min(best, (wp - p).length());
-                }
-                return best;
-            },
-        }, scene.shapes[i]);
-        if (d < best) { best = d; sel = {Selection::Shape, i}; }
-    }
-    for (int i = 0; i < (int)scene.lights.size(); ++i) {
-        float d = std::visit(overloaded{
-            [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
-            [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
-            [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
-        }, scene.lights[i]);
-        if (d < best) { best = d; sel = {Selection::Light, i}; }
-    }
-    return sel;
-}
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -112,7 +31,6 @@ static const char* material_name(const Material& m) {
 static bool edit_material(Material& mat) {
     bool changed = false;
 
-    // Quick presets
     const char* presets[] = {"(custom)", "Absorber", "Diffuse", "Mirror", "Glass"};
     int preset = 0;
     if (ImGui::Combo("Preset", &preset, presets, 5)) {
@@ -186,9 +104,165 @@ static void apply_style(float s) {
 
 static constexpr ImU32 COL_SHAPE     = IM_COL32(200, 200, 210, 90);
 static constexpr ImU32 COL_SHAPE_SEL = IM_COL32(80, 140, 235, 200);
+static constexpr ImU32 COL_SHAPE_HOV = IM_COL32(160, 170, 220, 140);
 static constexpr ImU32 COL_LIGHT     = IM_COL32(255, 210, 60, 120);
 static constexpr ImU32 COL_LIGHT_SEL = IM_COL32(255, 230, 80, 220);
+static constexpr ImU32 COL_LIGHT_HOV = IM_COL32(255, 230, 80, 160);
 static constexpr ImU32 COL_PREVIEW   = IM_COL32(255, 255, 255, 140);
+static constexpr ImU32 COL_HANDLE    = IM_COL32(255, 255, 255, 200);
+static constexpr ImU32 COL_HANDLE_HOV = IM_COL32(80, 140, 235, 255);
+static constexpr ImU32 COL_BOX_SEL_FILL = IM_COL32(80, 140, 235, 40);
+static constexpr ImU32 COL_BOX_SEL_BORDER = IM_COL32(80, 140, 235, 160);
+static constexpr ImU32 COL_PIVOT     = IM_COL32(255, 160, 40, 200);
+
+// ─── Overlay drawing ────────────────────────────────────────────────────
+
+static void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape, ImU32 col, float th) {
+    std::visit(overloaded{
+        [&](const Circle& c) {
+            dl->AddCircle(cv.to_screen(c.center), c.radius * cv.cam.zoom, col, 64, th);
+        },
+        [&](const Segment& s) {
+            dl->AddLine(cv.to_screen(s.a), cv.to_screen(s.b), col, th);
+        },
+        [&](const Arc& a) {
+            constexpr int N = 64;
+            float span = a.angle_end - a.angle_start;
+            if (span < 0) span += TWO_PI;
+            for (int j = 0; j < N; ++j) {
+                float t0 = a.angle_start + span * j / N;
+                float t1 = a.angle_start + span * (j + 1) / N;
+                Vec2 p0 = a.center + Vec2{a.radius * std::cos(t0), a.radius * std::sin(t0)};
+                Vec2 p1 = a.center + Vec2{a.radius * std::cos(t1), a.radius * std::sin(t1)};
+                dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
+            }
+        },
+        [&](const Bezier& b) {
+            constexpr int N = 32;
+            for (int j = 0; j < N; ++j) {
+                float t0 = (float)j / N, t1 = (float)(j + 1) / N;
+                float u0 = 1.0f - t0, u1 = 1.0f - t1;
+                Vec2 p0 = b.p0 * (u0*u0) + b.p1 * (2.0f*u0*t0) + b.p2 * (t0*t0);
+                Vec2 p1 = b.p0 * (u1*u1) + b.p1 * (2.0f*u1*t1) + b.p2 * (t1*t1);
+                dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
+            }
+            dl->AddCircleFilled(cv.to_screen(b.p1), 3.0f, col);
+        },
+    }, shape);
+}
+
+static void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light, ImU32 col, float th, float dpi) {
+    std::visit(overloaded{
+        [&](const PointLight& l) {
+            float r = 4.0f * dpi;
+            dl->AddCircleFilled(cv.to_screen(l.pos), r, col);
+        },
+        [&](const SegmentLight& l) {
+            ImVec2 a = cv.to_screen(l.a), b = cv.to_screen(l.b);
+            dl->AddLine(a, b, col, th);
+            dl->AddCircleFilled(a, 3.0f * dpi, col);
+            dl->AddCircleFilled(b, 3.0f * dpi, col);
+        },
+        [&](const BeamLight& l) {
+            ImVec2 o = cv.to_screen(l.origin);
+            dl->AddCircleFilled(o, 4.0f * dpi, col);
+            Vec2 d = l.direction.normalized();
+            ImVec2 tip = cv.to_screen(l.origin + d * 0.3f);
+            dl->AddLine(o, tip, col, th);
+            float half_w = l.angular_width * 0.5f;
+            float base_a = std::atan2(d.y, d.x);
+            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
+            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
+            dl->AddLine(o, cv.to_screen(l.origin + w1 * 0.2f), col, th * 0.5f);
+            dl->AddLine(o, cv.to_screen(l.origin + w2 * 0.2f), col, th * 0.5f);
+        },
+    }, light);
+}
+
+static void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
+                         const std::vector<Handle>& handles, int hovered_handle) {
+    // Draw guide lines for Bezier control points
+    ImU32 guide_col = IM_COL32(120, 120, 140, 80);
+    for (auto& h : handles) {
+        if (h.obj.type == ObjectId::Shape && h.kind == Handle::Position && h.param_index == 1) {
+            // This is a Bezier control point — draw dashed lines to P0 and P2
+            auto& shape = scene.shapes[h.obj.index];
+            if (auto* b = std::get_if<Bezier>(&shape)) {
+                dl->AddLine(cv.to_screen(b->p0), cv.to_screen(b->p1), guide_col, 1.0f);
+                dl->AddLine(cv.to_screen(b->p1), cv.to_screen(b->p2), guide_col, 1.0f);
+            }
+        }
+    }
+
+    for (int i = 0; i < (int)handles.size(); ++i) {
+        ImVec2 sp = cv.to_screen(handles[i].world_pos);
+        float r = (i == hovered_handle) ? 5.0f : 4.0f;
+        ImU32 col = (i == hovered_handle) ? COL_HANDLE_HOV : COL_HANDLE;
+
+        if (handles[i].kind == Handle::Position && handles[i].param_index == 1 &&
+            handles[i].obj.type == ObjectId::Shape) {
+            // Bezier control point: diamond shape
+            dl->AddQuadFilled(ImVec2(sp.x, sp.y - r), ImVec2(sp.x + r, sp.y),
+                              ImVec2(sp.x, sp.y + r), ImVec2(sp.x - r, sp.y), col);
+        } else if (handles[i].kind == Handle::Position) {
+            // Filled square
+            dl->AddRectFilled(ImVec2(sp.x - r, sp.y - r), ImVec2(sp.x + r, sp.y + r), col);
+        } else {
+            // Diamond for radius/angle/direction
+            dl->AddQuadFilled(ImVec2(sp.x, sp.y - r), ImVec2(sp.x + r, sp.y),
+                              ImVec2(sp.x, sp.y + r), ImVec2(sp.x - r, sp.y), col);
+        }
+    }
+}
+
+// ─── UV computation for camera-independent rendering ────────────────────
+
+// The renderer always renders the full scene to its FBO using scene bounds.
+// Pan/zoom is applied by adjusting the UV coordinates when displaying the texture.
+static void compute_display_uvs(const Camera& cam, const Bounds& scene_bounds,
+                                float win_w, float win_h,
+                                ImVec2& uv0, ImVec2& uv1) {
+    // Renderer's own transform: maps scene_bounds to fill the FBO
+    Vec2 scene_sz = scene_bounds.max - scene_bounds.min;
+    scene_sz.x = std::max(scene_sz.x, 0.01f);
+    scene_sz.y = std::max(scene_sz.y, 0.01f);
+    float renderer_scale = std::min(win_w / scene_sz.x, win_h / scene_sz.y);
+
+    // What the camera sees in world space
+    Bounds vis = cam.visible_bounds(win_w, win_h);
+
+    // Map camera visible bounds to UV coordinates in the renderer's FBO
+    // Renderer maps: scene_bounds.min → pixel (offset_x, offset_y)
+    //                scene_bounds.max → pixel (offset_x + sz.x*scale, offset_y + sz.y*scale)
+    // With centering offsets
+
+    float fbo_used_w = scene_sz.x * renderer_scale;
+    float fbo_used_h = scene_sz.y * renderer_scale;
+    float offset_x = (win_w - fbo_used_w) * 0.5f;
+    float offset_y = (win_h - fbo_used_h) * 0.5f;
+
+    // World to FBO UV: world point → pixel → normalized UV
+    auto world_to_uv_x = [&](float wx) -> float {
+        float px = (wx - scene_bounds.min.x) * renderer_scale + offset_x;
+        return px / win_w;
+    };
+    auto world_to_uv_y = [&](float wy) -> float {
+        float py = (wy - scene_bounds.min.y) * renderer_scale + offset_y;
+        return py / win_h;
+    };
+
+    // Camera visible bounds in UV space
+    float u_left  = world_to_uv_x(vis.min.x);
+    float u_right = world_to_uv_x(vis.max.x);
+    float v_bottom = world_to_uv_y(vis.min.y); // OpenGL Y-up: bottom = min.y
+    float v_top    = world_to_uv_y(vis.max.y);
+
+    // ImGui::Image with UV flip for OpenGL (Y is inverted)
+    // uv0 = top-left of image = (u_left, v_top flipped)
+    // uv1 = bottom-right = (u_right, v_bottom flipped)
+    uv0 = ImVec2(u_left, 1.0f - v_top);
+    uv1 = ImVec2(u_right, 1.0f - v_bottom);
+}
 
 // ─── App::run ───────────────────────────────────────────────────────────
 
@@ -233,58 +307,95 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
     }
     apply_style(dpi_scale);
 
-    // ── Scene state ──
+    // ── Editor state ──
+    EditorState ed;
+
     int current_scene = 0;
     if (!config.initial_scene.empty()) {
         for (int i = 0; i < (int)scenes.size(); ++i) {
             if (scenes[i].first == config.initial_scene) { current_scene = i; break; }
         }
     }
-    Scene scene = scenes[current_scene].second();
-    Bounds bounds = compute_bounds(scene);
-    renderer.upload_scene(scene, bounds);
+    ed.scene = scenes[current_scene].second();
+    ed.scene_bounds = compute_bounds(ed.scene);
+
+    renderer.upload_scene(ed.scene, ed.scene_bounds);
     renderer.clear();
-    ViewTransform vt = compute_view(bounds, (float)win_w, (float)win_h);
+
+    ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+    ed.undo.push(ed.scene); // initial state
 
     TraceConfig tcfg;
-    tcfg.batch_size = 50000; // Lower default for interactive responsiveness
+    tcfg.batch_size = 50000;
     PostProcess pp;
     int64_t total_rays = 0;
     bool paused = false;
     float frame_ms = 16.0f;
-
-    // ── Edit state ──
-    EditTool tool = EditTool::Select;
-    Selection sel;
     bool show_wireframe = true;
-    bool creating = false;
-    bool dragging = false;
-    Vec2 create_start{};
-    Vec2 drag_offset{}, drag_offset_b{};
+    bool open_load_popup = false;
 
-    auto delete_selected = [&]() {
-        if (sel.type == Selection::Shape && sel.index < (int)scene.shapes.size()) {
-            scene.shapes.erase(scene.shapes.begin() + sel.index);
-            sel = {};
-            return true;
-        }
-        if (sel.type == Selection::Light && sel.index < (int)scene.lights.size()) {
-            scene.lights.erase(scene.lights.begin() + sel.index);
-            sel = {};
-            return true;
-        }
-        return false;
-    };
-
+    // Reload: re-upload scene to GPU, clear accumulation
     auto reload = [&]() {
-        if (scene.shapes.empty() && scene.lights.empty())
-            bounds = {{-1, -1}, {1, 1}};
+        if (ed.scene.shapes.empty() && ed.scene.lights.empty())
+            ed.scene_bounds = {{-1, -1}, {1, 1}};
         else
-            bounds = compute_bounds(scene);
-        renderer.upload_scene(scene, bounds);
+            ed.scene_bounds = compute_bounds(ed.scene);
+        renderer.upload_scene(ed.scene, ed.scene_bounds);
         renderer.clear();
         total_rays = 0;
-        vt = compute_view(bounds, (float)win_w, (float)win_h);
+        ed.dirty = true;
+    };
+
+    auto do_save = [&]() {
+        std::string path = ed.save_path.empty() ? (ed.scene.name + ".json") : ed.save_path;
+        if (save_scene_json(ed.scene, path)) {
+            ed.save_path = path;
+            ed.dirty = false;
+            std::cerr << "Saved: " << path << "\n";
+        }
+    };
+
+    auto copy_to_clipboard = [&]() {
+        ed.clipboard.shapes.clear();
+        ed.clipboard.lights.clear();
+        for (auto& sid : ed.selection) {
+            if (sid.type == ObjectId::Shape) ed.clipboard.shapes.push_back(ed.scene.shapes[sid.index]);
+            else ed.clipboard.lights.push_back(ed.scene.lights[sid.index]);
+        }
+        ed.clipboard.centroid = ed.selection_centroid();
+    };
+
+    auto reset_editor = [&]() {
+        ed.clear_selection();
+        ed.creating = false;
+        ed.dragging = false;
+        ed.handle_dragging = false;
+        ed.undo.clear();
+        ed.undo.push(ed.scene);
+        reload();
+        ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+        ed.dirty = false;
+    };
+
+    auto delete_selected = [&]() {
+        if (ed.selection.empty()) return false;
+        ed.undo.push(ed.scene);
+
+        // Sort selection in reverse order so deletion doesn't invalidate indices
+        auto sorted = ed.selection;
+        std::sort(sorted.begin(), sorted.end(), [](const ObjectId& a, const ObjectId& b) {
+            if (a.type != b.type) return a.type > b.type; // lights first (higher enum)
+            return a.index > b.index; // higher indices first
+        });
+        for (auto& id : sorted) {
+            if (id.type == ObjectId::Shape && id.index < (int)ed.scene.shapes.size())
+                ed.scene.shapes.erase(ed.scene.shapes.begin() + id.index);
+            else if (id.type == ObjectId::Light && id.index < (int)ed.scene.lights.size())
+                ed.scene.lights.erase(ed.scene.lights.begin() + id.index);
+        }
+        ed.clear_selection();
+        reload();
+        return true;
     };
 
     // ── Main loop ───────────────────────────────────────────────────────
@@ -307,14 +418,16 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         if (fb_w <= 0 || fb_h <= 0) { glfwWaitEvents(); continue; }
 
         // Validate selection
-        if (sel.type == Selection::Shape && sel.index >= (int)scene.shapes.size()) sel = {};
-        if (sel.type == Selection::Light && sel.index >= (int)scene.lights.size()) sel = {};
+        ed.validate_selection();
+
+        // Camera view for this frame
+        CameraView cv{ed.camera, (float)win_w, (float)win_h};
 
         // Trace
         auto t0 = std::chrono::steady_clock::now();
-        if (!paused && !scene.lights.empty()) {
+        if (!paused && !ed.scene.lights.empty()) {
             renderer.trace_and_draw(tcfg);
-            glFinish(); // Prevent GPU command queue buildup — keeps system responsive
+            glFinish();
             total_rays += tcfg.batch_size;
         }
         renderer.update_display(pp);
@@ -340,97 +453,126 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoBackground);
 
+        // Display rendered image with camera-based UV mapping
+        ImVec2 uv0, uv1;
+        compute_display_uvs(ed.camera, ed.scene_bounds, (float)win_w, (float)win_h, uv0, uv1);
         ImGui::Image((ImTextureID)(intptr_t)renderer.display_texture(),
-                     ImVec2((float)win_w, (float)win_h),
-                     ImVec2(0, 1), ImVec2(1, 0)); // Flip V: OpenGL texture has Y-up
+                     ImVec2((float)win_w, (float)win_h), uv0, uv1);
 
         bool vp_hovered = ImGui::IsWindowHovered();
 
-        // Overlay
+        // ── Wireframe overlay ───────────────────────────────────────────
+
         if (show_wireframe) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            for (int i = 0; i < (int)scene.shapes.size(); ++i) {
-                bool is_sel = (sel.type == Selection::Shape && sel.index == i);
-                ImU32 col = is_sel ? COL_SHAPE_SEL : COL_SHAPE;
+            Vec2 mouse_w = cv.to_world(io.MousePos);
+            for (int i = 0; i < (int)ed.scene.shapes.size(); ++i) {
+                ObjectId id{ObjectId::Shape, i};
+                bool is_sel = ed.is_selected(id);
+                bool is_hov = (ed.hovered == id);
+                ImU32 col = is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE);
                 float th = (is_sel ? 2.5f : 1.5f) * dpi_scale;
-                std::visit(overloaded{
-                    [&](const Circle& c) {
-                        dl->AddCircle(to_screen(vt, c.center), c.radius * vt.scale, col, 64, th);
-                    },
-                    [&](const Segment& s) {
-                        dl->AddLine(to_screen(vt, s.a), to_screen(vt, s.b), col, th);
-                    },
-                    [&](const Arc& a) {
-                        // Draw arc as polyline
-                        constexpr int N = 64;
-                        float span = a.angle_end - a.angle_start;
-                        if (span < 0) span += TWO_PI;
-                        for (int j = 0; j < N; ++j) {
-                            float t0 = a.angle_start + span * j / N;
-                            float t1 = a.angle_start + span * (j + 1) / N;
-                            Vec2 p0 = a.center + Vec2{a.radius * std::cos(t0), a.radius * std::sin(t0)};
-                            Vec2 p1 = a.center + Vec2{a.radius * std::cos(t1), a.radius * std::sin(t1)};
-                            dl->AddLine(to_screen(vt, p0), to_screen(vt, p1), col, th);
-                        }
-                    },
-                    [&](const Bezier& b) {
-                        // Draw bezier as polyline + control point
-                        constexpr int N = 32;
-                        for (int j = 0; j < N; ++j) {
-                            float t0 = (float)j / N, t1 = (float)(j + 1) / N;
-                            float u0 = 1.0f - t0, u1 = 1.0f - t1;
-                            Vec2 p0 = b.p0 * (u0*u0) + b.p1 * (2.0f*u0*t0) + b.p2 * (t0*t0);
-                            Vec2 p1 = b.p0 * (u1*u1) + b.p1 * (2.0f*u1*t1) + b.p2 * (t1*t1);
-                            dl->AddLine(to_screen(vt, p0), to_screen(vt, p1), col, th);
-                        }
-                        // Draw control point marker
-                        dl->AddCircleFilled(to_screen(vt, b.p1), 3.0f * dpi_scale, col);
-                    },
-                }, scene.shapes[i]);
+
+                if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.shapes.size()) {
+                    // Ghost at original position (dim)
+                    draw_shape_overlay(dl, cv, ed.transform.snapshot.shapes[i], IM_COL32(100, 100, 110, 60), 1.0f * dpi_scale);
+                    // Preview at transformed position
+                    Shape preview = ed.transform.snapshot.shapes[i];
+                    apply_transform_shape(preview, ed.transform.snapshot.shapes[i], ed.transform, mouse_w, io.KeyShift);
+                    draw_shape_overlay(dl, cv, preview, IM_COL32(120, 180, 255, 220), 2.5f * dpi_scale);
+                } else {
+                    draw_shape_overlay(dl, cv, ed.scene.shapes[i], col, th);
+                }
             }
 
-            for (int i = 0; i < (int)scene.lights.size(); ++i) {
-                bool is_sel = (sel.type == Selection::Light && sel.index == i);
-                ImU32 col = is_sel ? COL_LIGHT_SEL : COL_LIGHT;
+            for (int i = 0; i < (int)ed.scene.lights.size(); ++i) {
+                ObjectId id{ObjectId::Light, i};
+                bool is_sel = ed.is_selected(id);
+                bool is_hov = (ed.hovered == id);
+                ImU32 col = is_sel ? COL_LIGHT_SEL : (is_hov ? COL_LIGHT_HOV : COL_LIGHT);
                 float th = (is_sel ? 3.0f : 2.0f) * dpi_scale;
-                std::visit(overloaded{
-                    [&](const PointLight& l) {
-                        float r = (is_sel ? 5.0f : 4.0f) * dpi_scale;
-                        dl->AddCircleFilled(to_screen(vt, l.pos), r, col);
-                    },
-                    [&](const SegmentLight& l) {
-                        ImVec2 a = to_screen(vt, l.a), b = to_screen(vt, l.b);
-                        dl->AddLine(a, b, col, th);
-                        dl->AddCircleFilled(a, 3.0f * dpi_scale, col);
-                        dl->AddCircleFilled(b, 3.0f * dpi_scale, col);
-                    },
-                    [&](const BeamLight& l) {
-                        ImVec2 o = to_screen(vt, l.origin);
-                        dl->AddCircleFilled(o, (is_sel ? 5.0f : 4.0f) * dpi_scale, col);
-                        // Draw direction line and angular wedge
-                        Vec2 d = l.direction.normalized();
-                        ImVec2 tip = to_screen(vt, l.origin + d * 0.3f);
-                        dl->AddLine(o, tip, col, th);
-                        // Wedge edges
-                        float half_w = l.angular_width * 0.5f;
-                        float base_a = std::atan2(d.y, d.x);
-                        Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
-                        Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
-                        dl->AddLine(o, to_screen(vt, l.origin + w1 * 0.2f), col, th * 0.5f);
-                        dl->AddLine(o, to_screen(vt, l.origin + w2 * 0.2f), col, th * 0.5f);
-                    },
-                }, scene.lights[i]);
+
+                if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.lights.size()) {
+                    draw_light_overlay(dl, cv, ed.transform.snapshot.lights[i], IM_COL32(200, 180, 40, 60), 1.0f * dpi_scale, dpi_scale);
+                    Light preview = ed.transform.snapshot.lights[i];
+                    apply_transform_light(preview, ed.transform.snapshot.lights[i], ed.transform, mouse_w, io.KeyShift);
+                    draw_light_overlay(dl, cv, preview, IM_COL32(255, 240, 100, 220), 3.0f * dpi_scale, dpi_scale);
+                } else {
+                    draw_light_overlay(dl, cv, ed.scene.lights[i], col, th, dpi_scale);
+                }
+            }
+
+            // Handles for selected objects
+            if (!ed.selection.empty() && ed.tool == EditTool::Select && !ed.transform.active()) {
+                auto handles = get_handles(ed.scene, ed.selection);
+                Vec2 mw = cv.to_world(io.MousePos);
+                int hov_h = vp_hovered ? handle_hit_test(handles, mw, 8.0f / cv.cam.zoom) : -1;
+                draw_handles(dl, cv, ed.scene, handles, hov_h);
             }
 
             // Creation preview
-            if (creating) {
-                Vec2 mw = to_world(vt, io.MousePos);
-                if (tool == EditTool::Circle || tool == EditTool::Arc) {
-                    float r = (mw - create_start).length() * vt.scale;
-                    dl->AddCircle(to_screen(vt, create_start), r, COL_PREVIEW, 64, 1.5f * dpi_scale);
-                } else if (tool == EditTool::Segment || tool == EditTool::SegmentLight || tool == EditTool::Bezier) {
-                    dl->AddLine(to_screen(vt, create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
+            if (ed.creating) {
+                Vec2 mw = cv.to_world(io.MousePos);
+                if (ed.tool == EditTool::Circle || ed.tool == EditTool::Arc) {
+                    float r = (mw - ed.create_start).length() * cv.cam.zoom;
+                    dl->AddCircle(cv.to_screen(ed.create_start), r, COL_PREVIEW, 64, 1.5f * dpi_scale);
+                } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier) {
+                    dl->AddLine(cv.to_screen(ed.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
+                }
+            }
+
+            // Box selection preview
+            if (ed.box_selecting) {
+                ImVec2 cur = io.MousePos;
+                ImVec2 mn(std::min(ed.box_start.x, cur.x), std::min(ed.box_start.y, cur.y));
+                ImVec2 mx(std::max(ed.box_start.x, cur.x), std::max(ed.box_start.y, cur.y));
+                dl->AddRectFilled(mn, mx, COL_BOX_SEL_FILL);
+                dl->AddRect(mn, mx, COL_BOX_SEL_BORDER, 0, 0, 1.0f * dpi_scale);
+            }
+
+            // Transform pivot
+            if (ed.transform.active() && ed.transform.type != TransformMode::Grab) {
+                ImVec2 pp = cv.to_screen(ed.transform.pivot);
+                float r = 6.0f * dpi_scale;
+                dl->AddLine(ImVec2(pp.x - r, pp.y), ImVec2(pp.x + r, pp.y), COL_PIVOT, 2.0f * dpi_scale);
+                dl->AddLine(ImVec2(pp.x, pp.y - r), ImVec2(pp.x, pp.y + r), COL_PIVOT, 2.0f * dpi_scale);
+            }
+
+            // Transform status text
+            if (ed.transform.active()) {
+                Vec2 mw = cv.to_world(io.MousePos);
+                char status[128];
+                switch (ed.transform.type) {
+                case TransformMode::Grab: {
+                    Vec2 delta = mw - ed.transform.mouse_start;
+                    if (ed.transform.lock_x) delta.y = 0;
+                    if (ed.transform.lock_y) delta.x = 0;
+                    std::snprintf(status, sizeof(status), "Grab: dx=%.3f dy=%.3f%s",
+                        delta.x, delta.y,
+                        ed.transform.lock_x ? " [X]" : (ed.transform.lock_y ? " [Y]" : ""));
+                    break;
+                }
+                case TransformMode::Rotate: {
+                    Vec2 v0 = ed.transform.mouse_start - ed.transform.pivot;
+                    Vec2 v1 = mw - ed.transform.pivot;
+                    float angle = std::atan2(v1.y, v1.x) - std::atan2(v0.y, v0.x);
+                    std::snprintf(status, sizeof(status), "Rotate: %.1f deg", angle * 180.0f / PI);
+                    break;
+                }
+                case TransformMode::Scale: {
+                    float d0 = (ed.transform.mouse_start - ed.transform.pivot).length();
+                    float d1 = (mw - ed.transform.pivot).length();
+                    float factor = (d0 > 1e-6f) ? d1 / d0 : 1.0f;
+                    std::snprintf(status, sizeof(status), "Scale: %.2fx%s", factor,
+                        ed.transform.lock_x ? " [X]" : (ed.transform.lock_y ? " [Y]" : ""));
+                    break;
+                }
+                default: status[0] = 0;
+                }
+                if (status[0]) {
+                    ImVec2 text_pos((float)win_w * 0.5f - 100, (float)win_h - 30 * dpi_scale);
+                    dl->AddText(text_pos, IM_COL32(255, 255, 255, 220), status);
                 }
             }
         }
@@ -440,104 +582,225 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         // ── Mouse interaction ───────────────────────────────────────────
 
-        Vec2 mw = to_world(vt, io.MousePos);
-        float hit_thresh = 8.0f / vt.scale;
+        Vec2 mw = cv.to_world(io.MousePos);
+        float hit_thresh = 8.0f / cv.cam.zoom;
 
-        if (vp_hovered && ImGui::IsMouseClicked(0)) {
-            if (tool == EditTool::Select) {
-                Selection hit = hit_test(mw, scene, hit_thresh);
-                if (hit.type != Selection::None) {
-                    sel = hit;
-                    dragging = true;
-                    if (sel.type == Selection::Shape) {
-                        std::visit(overloaded{
-                            [&](const Circle& c) { drag_offset = c.center - mw; },
-                            [&](const Segment& s) { drag_offset = s.a - mw; drag_offset_b = s.b - mw; },
-                            [&](const Arc& a) { drag_offset = a.center - mw; },
-                            [&](const Bezier& b) { drag_offset = b.p0 - mw; drag_offset_b = b.p2 - mw; },
-                        }, scene.shapes[sel.index]);
-                    } else {
-                        std::visit(overloaded{
-                            [&](const PointLight& l) { drag_offset = l.pos - mw; },
-                            [&](const SegmentLight& l) { drag_offset = l.a - mw; drag_offset_b = l.b - mw; },
-                            [&](const BeamLight& l) { drag_offset = l.origin - mw; },
-                        }, scene.lights[sel.index]);
-                    }
-                } else {
-                    sel = {};
-                }
-            } else if (tool == EditTool::Erase) {
-                sel = hit_test(mw, scene, hit_thresh);
-                if (delete_selected()) reload();
-            } else if (tool == EditTool::PointLight) {
-                scene.lights.push_back(PointLight{mw, 1.0f});
-                sel = {Selection::Light, (int)scene.lights.size() - 1};
-                reload();
-            } else if (tool == EditTool::BeamLight) {
-                scene.lights.push_back(BeamLight{mw, {1.0f, 0.0f}, 0.1f, 1.0f});
-                sel = {Selection::Light, (int)scene.lights.size() - 1};
-                reload();
-            } else {
-                creating = true;
-                create_start = mw;
+        // Hover detection (Select tool only)
+        if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()) {
+            ObjectId hit = hit_test(mw, ed.scene, hit_thresh);
+            ed.hovered = hit;
+        } else if (!vp_hovered) {
+            ed.hovered = {ObjectId::Shape, -1};
+        }
+
+        // --- Viewport navigation: pan & zoom ---
+
+        // Pan: middle mouse drag or Alt+LMB drag
+        if (vp_hovered && !io.WantCaptureMouse) {
+            bool middle_drag = ImGui::IsMouseDragging(2); // middle button
+            bool alt_drag = io.KeyAlt && ImGui::IsMouseDragging(0);
+
+            if (middle_drag || alt_drag) {
+                ImVec2 delta = io.MouseDelta;
+                ed.camera.center.x -= delta.x / ed.camera.zoom;
+                ed.camera.center.y += delta.y / ed.camera.zoom; // Y inverted
+            }
+
+            // Zoom: scroll wheel (cursor-centered)
+            if (io.MouseWheel != 0) {
+                Vec2 world_before = cv.to_world(io.MousePos);
+                float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
+                ed.camera.zoom *= factor;
+                ed.camera.zoom = std::clamp(ed.camera.zoom, 1.0f, 100000.0f);
+                // Recompute cv after zoom change
+                CameraView cv2{ed.camera, (float)win_w, (float)win_h};
+                Vec2 world_after = cv2.to_world(io.MousePos);
+                ed.camera.center = ed.camera.center + (world_before - world_after);
+                cv = CameraView{ed.camera, (float)win_w, (float)win_h};
             }
         }
 
-        // Drag to move objects
-        if (ImGui::IsMouseDragging(0) && dragging && sel.type != Selection::None) {
-            if (sel.type == Selection::Shape) {
-                std::visit(overloaded{
-                    [&](Circle& c) { c.center = mw + drag_offset; },
-                    [&](Segment& s) { s.a = mw + drag_offset; s.b = mw + drag_offset_b; },
-                    [&](Arc& a) { a.center = mw + drag_offset; },
-                    [&](Bezier& b) {
-                        Vec2 delta = (mw + drag_offset) - b.p0;
-                        b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta;
-                    },
-                }, scene.shapes[sel.index]);
-                reload();
-            } else {
-                std::visit(overloaded{
-                    [&](PointLight& l) { l.pos = mw + drag_offset; },
-                    [&](SegmentLight& l) { l.a = mw + drag_offset; l.b = mw + drag_offset_b; },
-                    [&](BeamLight& l) { l.origin = mw + drag_offset; },
-                }, scene.lights[sel.index]);
-                reload();
+        // --- Tool interactions ---
+
+        // Skip tool interactions during alt-drag (pan) or middle drag
+        bool panning = (io.KeyAlt && ImGui::IsMouseDown(0)) || ImGui::IsMouseDown(2);
+
+        if (vp_hovered && !panning && !ed.transform.active()) {
+            if (ImGui::IsMouseClicked(0)) {
+                if (ed.tool == EditTool::Select) {
+                    // Check handle hit first
+                    auto handles = get_handles(ed.scene, ed.selection);
+                    int h_idx = handle_hit_test(handles, mw, hit_thresh);
+
+                    if (h_idx >= 0) {
+                        // Start handle drag
+                        ed.undo.push(ed.scene);
+                        ed.handle_dragging = true;
+                        ed.active_handle = handles[h_idx];
+                    } else {
+                        // Hit test objects
+                        ObjectId hit = hit_test(mw, ed.scene, hit_thresh);
+
+                        if (hit.index >= 0) {
+                            if (io.KeyShift) {
+                                ed.toggle_select(hit);
+                            } else if (!ed.is_selected(hit)) {
+                                ed.clear_selection();
+                                ed.select(hit);
+                            }
+                            // Start drag move
+                            ed.undo.push(ed.scene);
+                            ed.dragging = true;
+                            ed.drag_offsets.clear();
+                            for (auto& sid : ed.selection) {
+                                if (sid.type == ObjectId::Shape) {
+                                    std::visit(overloaded{
+                                        [&](const Circle& ci) { ed.drag_offsets.push_back({ci.center - mw, {}}); },
+                                        [&](const Segment& s) { ed.drag_offsets.push_back({s.a - mw, s.b - mw}); },
+                                        [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw, {}}); },
+                                        [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw, b.p2 - mw}); },
+                                    }, ed.scene.shapes[sid.index]);
+                                } else {
+                                    std::visit(overloaded{
+                                        [&](const PointLight& l) { ed.drag_offsets.push_back({l.pos - mw, {}}); },
+                                        [&](const SegmentLight& l) { ed.drag_offsets.push_back({l.a - mw, l.b - mw}); },
+                                        [&](const BeamLight& l) { ed.drag_offsets.push_back({l.origin - mw, {}}); },
+                                    }, ed.scene.lights[sid.index]);
+                                }
+                            }
+                        } else {
+                            if (!io.KeyShift) ed.clear_selection();
+                            // Start box select
+                            ed.box_selecting = true;
+                            ed.box_start = io.MousePos;
+                        }
+                    }
+                } else if (ed.tool == EditTool::Erase) {
+                    ObjectId hit = hit_test(mw, ed.scene, hit_thresh);
+                    if (hit.index >= 0) {
+                        ed.clear_selection();
+                        ed.select(hit);
+                        delete_selected();
+                    }
+                } else if (ed.tool == EditTool::PointLight) {
+                    ed.undo.push(ed.scene);
+                    ed.scene.lights.push_back(PointLight{mw, 1.0f});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Light, (int)ed.scene.lights.size() - 1});
+                    reload();
+                } else if (ed.tool == EditTool::BeamLight) {
+                    ed.undo.push(ed.scene);
+                    ed.scene.lights.push_back(BeamLight{mw, {1.0f, 0.0f}, 0.1f, 1.0f});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Light, (int)ed.scene.lights.size() - 1});
+                    reload();
+                } else {
+                    ed.creating = true;
+                    ed.create_start = mw;
+                }
             }
+        }
+
+        // Handle drag (specific parameter modification)
+        if (ImGui::IsMouseDragging(0) && ed.handle_dragging) {
+            apply_handle_drag(ed.scene, ed.active_handle, mw);
+            reload();
+        }
+
+        // Drag to move selected objects
+        if (ImGui::IsMouseDragging(0) && ed.dragging && !ed.handle_dragging && !ed.box_selecting &&
+            ed.drag_offsets.size() == ed.selection.size()) {
+            for (int i = 0; i < (int)ed.selection.size(); ++i) {
+                auto& sid = ed.selection[i];
+                auto& off = ed.drag_offsets[i];
+                if (sid.type == ObjectId::Shape && sid.index < (int)ed.scene.shapes.size()) {
+                    std::visit(overloaded{
+                        [&](Circle& c) { c.center = mw + off.a; },
+                        [&](Segment& s) { s.a = mw + off.a; s.b = mw + off.b; },
+                        [&](Arc& a) { a.center = mw + off.a; },
+                        [&](Bezier& b) {
+                            Vec2 delta = (mw + off.a) - b.p0;
+                            b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta;
+                        },
+                    }, ed.scene.shapes[sid.index]);
+                } else if (sid.type == ObjectId::Light && sid.index < (int)ed.scene.lights.size()) {
+                    std::visit(overloaded{
+                        [&](PointLight& l) { l.pos = mw + off.a; },
+                        [&](SegmentLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
+                        [&](BeamLight& l) { l.origin = mw + off.a; },
+                    }, ed.scene.lights[sid.index]);
+                }
+            }
+            reload();
         }
 
         if (ImGui::IsMouseReleased(0)) {
-            if (creating) {
-                Vec2 end = to_world(vt, io.MousePos);
-                float dist = (end - create_start).length();
+            // Complete creation
+            if (ed.creating) {
+                Vec2 end = cv.to_world(io.MousePos);
+                float dist = (end - ed.create_start).length();
 
-                if (tool == EditTool::Circle) {
+                ed.undo.push(ed.scene);
+                bool created = false;
+
+                if (ed.tool == EditTool::Circle) {
                     float r = std::max(dist, 0.02f);
-                    scene.shapes.push_back(Circle{create_start, r, mat_glass(1.5f, 20000.0f, 0.3f)});
-                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
-                    reload();
-                } else if (tool == EditTool::Segment && dist > 0.01f) {
-                    scene.shapes.push_back(Segment{create_start, end, mat_mirror(0.95f)});
-                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
-                    reload();
-                } else if (tool == EditTool::Arc) {
+                    ed.scene.shapes.push_back(Circle{ed.create_start, r, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::Segment && dist > 0.01f) {
+                    ed.scene.shapes.push_back(Segment{ed.create_start, end, mat_mirror(0.95f)});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::Arc) {
                     float r = std::max(dist, 0.02f);
-                    scene.shapes.push_back(Arc{create_start, r, 0.0f, TWO_PI, mat_glass(1.5f, 20000.0f, 0.3f)});
-                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
-                    reload();
-                } else if (tool == EditTool::Bezier && dist > 0.01f) {
-                    Vec2 mid = (create_start + end) * 0.5f;
-                    scene.shapes.push_back(Bezier{create_start, mid, end, mat_glass(1.5f, 20000.0f, 0.3f)});
-                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
-                    reload();
-                } else if (tool == EditTool::SegmentLight && dist > 0.01f) {
-                    scene.lights.push_back(SegmentLight{create_start, end, 1.0f});
-                    sel = {Selection::Light, (int)scene.lights.size() - 1};
-                    reload();
+                    ed.scene.shapes.push_back(Arc{ed.create_start, r, 0.0f, TWO_PI, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::Bezier && dist > 0.01f) {
+                    Vec2 mid = (ed.create_start + end) * 0.5f;
+                    ed.scene.shapes.push_back(Bezier{ed.create_start, mid, end, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::SegmentLight && dist > 0.01f) {
+                    ed.scene.lights.push_back(SegmentLight{ed.create_start, end, 1.0f});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Light, (int)ed.scene.lights.size() - 1});
+                    created = true;
                 }
-                creating = false;
+
+                if (created) reload();
+                else { ed.undo.snapshots.pop_back(); ed.undo.current--; } // nothing created, revert push
+                ed.creating = false;
             }
-            dragging = false;
+
+            // Complete box selection
+            if (ed.box_selecting) {
+                ImVec2 cur = io.MousePos;
+                Vec2 wmin = cv.to_world(ImVec2(std::min(ed.box_start.x, cur.x), std::max(ed.box_start.y, cur.y)));
+                Vec2 wmax = cv.to_world(ImVec2(std::max(ed.box_start.x, cur.x), std::min(ed.box_start.y, cur.y)));
+
+                if (!io.KeyShift) ed.clear_selection();
+                for (int i = 0; i < (int)ed.scene.shapes.size(); ++i) {
+                    ObjectId id{ObjectId::Shape, i};
+                    if (object_in_rect(ed.scene, id, wmin, wmax))
+                        ed.select(id);
+                }
+                for (int i = 0; i < (int)ed.scene.lights.size(); ++i) {
+                    ObjectId id{ObjectId::Light, i};
+                    if (object_in_rect(ed.scene, id, wmin, wmax))
+                        ed.select(id);
+                }
+                ed.box_selecting = false;
+            }
+
+            ed.dragging = false;
+            ed.handle_dragging = false;
+            ed.drag_offsets.clear();
         }
 
         // ── Controls panel ──────────────────────────────────────────────
@@ -555,25 +818,48 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 for (int i = 0; i < (int)scenes.size(); ++i) {
                     if (ImGui::Selectable(scenes[i].first.c_str(), i == current_scene)) {
                         current_scene = i;
-                        scene = scenes[i].second();
-                        sel = {};
-                        creating = false;
-                        dragging = false;
-                        reload();
+                        ed.scene = scenes[i].second();
+                        reset_editor();
                     }
                 }
                 ImGui::EndCombo();
             }
             if (ImGui::Button("New Scene")) {
                 current_scene = -1;
-                scene = Scene{};
-                scene.name = "custom";
-                add_box_walls(scene, 1.0f, 0.7f, mat_mirror(0.95f));
-                scene.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
-                sel = {};
-                creating = false;
-                dragging = false;
-                reload();
+                ed.scene = Scene{};
+                ed.scene.name = "custom";
+                add_box_walls(ed.scene, 1.0f, 0.7f, mat_mirror(0.95f));
+                ed.scene.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
+                reset_editor();
+            }
+
+            // Save/Load
+            ImGui::SameLine();
+            if (ImGui::Button("Save")) { do_save(); }
+            ImGui::SameLine();
+            if (ImGui::Button("Load")) {
+                ImGui::OpenPopup("Load Scene##popup");
+            }
+
+            // Load popup (can be triggered by Ctrl+O shortcut)
+            static char load_path_buf[256] = "";
+            if (open_load_popup) { ImGui::OpenPopup("Load Scene##popup"); open_load_popup = false; }
+            if (ImGui::BeginPopup("Load Scene##popup")) {
+                ImGui::Text("File path:");
+                ImGui::InputText("##loadpath", load_path_buf, sizeof(load_path_buf));
+                if (ImGui::Button("OK") && load_path_buf[0]) {
+                    Scene loaded = load_scene_json(load_path_buf);
+                    if (!loaded.shapes.empty() || !loaded.lights.empty()) {
+                        ed.scene = loaded;
+                        ed.save_path = load_path_buf;
+                        current_scene = -1;
+                        reset_editor();
+                    }
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+                ImGui::EndPopup();
             }
         }
 
@@ -582,12 +868,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             ImVec4 accent(0.31f, 0.53f, 0.86f, 1.0f);
             ImVec4 accent_h(0.38f, 0.60f, 0.92f, 1.0f);
             auto tbtn = [&](const char* lbl, EditTool t) {
-                bool active = (tool == t);
+                bool active = (ed.tool == t);
                 if (active) {
                     ImGui::PushStyleColor(ImGuiCol_Button, accent);
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_h);
                 }
-                if (ImGui::Button(lbl)) { tool = t; creating = false; }
+                if (ImGui::Button(lbl)) { ed.tool = t; ed.creating = false; }
                 if (active) ImGui::PopStyleColor(2);
             };
             tbtn("Select", EditTool::Select); ImGui::SameLine();
@@ -605,13 +891,14 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
         // -- Objects --
         if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
-            int n_items = (int)(scene.shapes.size() + scene.lights.size());
+            int n_items = (int)(ed.scene.shapes.size() + ed.scene.lights.size());
             float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
                                  40.0f, 200.0f * dpi_scale);
             ImGui::BeginChild("##objlist", ImVec2(0, h), ImGuiChildFlags_Borders);
 
-            for (int i = 0; i < (int)scene.shapes.size(); ++i) {
-                bool is_sel = (sel.type == Selection::Shape && sel.index == i);
+            for (int i = 0; i < (int)ed.scene.shapes.size(); ++i) {
+                ObjectId id{ObjectId::Shape, i};
+                bool is_sel = ed.is_selected(id);
                 char lbl[96];
                 std::visit(overloaded{
                     [&](const Circle& c) {
@@ -626,13 +913,16 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     [&](const Bezier& b) {
                         std::snprintf(lbl, sizeof(lbl), "Bezier %d (%s)", i, material_name(b.material));
                     },
-                }, scene.shapes[i]);
-                if (ImGui::Selectable(lbl, is_sel))
-                    sel = {Selection::Shape, i};
+                }, ed.scene.shapes[i]);
+                if (ImGui::Selectable(lbl, is_sel)) {
+                    if (io.KeyShift) ed.toggle_select(id);
+                    else { ed.clear_selection(); ed.select(id); }
+                }
             }
 
-            for (int i = 0; i < (int)scene.lights.size(); ++i) {
-                bool is_sel = (sel.type == Selection::Light && sel.index == i);
+            for (int i = 0; i < (int)ed.scene.lights.size(); ++i) {
+                ObjectId id{ObjectId::Light, i};
+                bool is_sel = ed.is_selected(id);
                 char lbl[96];
                 std::visit(overloaded{
                     [&](const PointLight& l) {
@@ -644,25 +934,32 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     [&](const BeamLight& l) {
                         std::snprintf(lbl, sizeof(lbl), "Beam Light %d (I=%.1f)", i, l.intensity);
                     },
-                }, scene.lights[i]);
-                if (ImGui::Selectable(lbl, is_sel))
-                    sel = {Selection::Light, i};
+                }, ed.scene.lights[i]);
+                if (ImGui::Selectable(lbl, is_sel)) {
+                    if (io.KeyShift) ed.toggle_select(id);
+                    else { ed.clear_selection(); ed.select(id); }
+                }
             }
 
             ImGui::EndChild();
 
-            if (sel.type != Selection::None && ImGui::Button("Delete Selected")) {
-                if (delete_selected()) reload();
+            if (!ed.selection.empty()) {
+                if (ed.selection.size() > 1)
+                    ImGui::Text("%d objects selected", (int)ed.selection.size());
+                if (ImGui::Button("Delete Selected")) {
+                    delete_selected();
+                }
             }
         }
 
         // -- Properties --
-        if (sel.type != Selection::None &&
+        if (ed.selection.size() == 1 &&
             ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
             bool changed = false;
+            auto& sid = ed.selection[0];
 
-            if (sel.type == Selection::Shape && sel.index < (int)scene.shapes.size()) {
-                auto& shape = scene.shapes[sel.index];
+            if (sid.type == ObjectId::Shape && sid.index < (int)ed.scene.shapes.size()) {
+                auto& shape = ed.scene.shapes[sid.index];
                 std::visit(overloaded{
                     [&](Circle& c) {
                         changed |= ImGui::DragFloat2("Center", &c.center.x, 0.01f);
@@ -690,8 +987,8 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 }, shape);
             }
 
-            if (sel.type == Selection::Light && sel.index < (int)scene.lights.size()) {
-                auto& light = scene.lights[sel.index];
+            if (sid.type == ObjectId::Light && sid.index < (int)ed.scene.lights.size()) {
+                auto& light = ed.scene.lights[sid.index];
                 auto edit_wavelength = [&](float& wl_min, float& wl_max) {
                     changed |= ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
                     changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
@@ -721,7 +1018,16 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 }, light);
             }
 
-            if (changed) reload();
+            if (changed) {
+                if (!ed.prop_editing) {
+                    ed.undo.push(ed.scene);
+                    ed.prop_editing = true;
+                }
+                reload();
+            }
+            if (!ImGui::IsAnyItemActive() && ed.prop_editing) {
+                ed.prop_editing = false;
+            }
         }
 
         // -- Tracer --
@@ -758,6 +1064,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             ImGui::Text("Rays: %s", ray_str);
             ImGui::Text("Max HDR: %.2f", renderer.last_max());
             ImGui::Text("%.1f FPS (%.1f ms)", 1000.0f / frame_ms, frame_ms);
+            ImGui::Text("Zoom: %.0f%%", ed.camera.zoom / std::min((float)win_w / std::max(ed.scene_bounds.max.x - ed.scene_bounds.min.x, 0.01f), (float)win_h / std::max(ed.scene_bounds.max.y - ed.scene_bounds.min.y, 0.01f)) * 100.0f);
 
             if (ImGui::Button("Clear")) {
                 renderer.clear();
@@ -767,7 +1074,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             if (ImGui::Button("Export PNG")) {
                 std::vector<uint8_t> pixels;
                 renderer.read_pixels(pixels, pp);
-                std::string filename = scene.name + ".png";
+                std::string filename = ed.scene.name + ".png";
                 if (export_png(filename, pixels.data(), fb_w, fb_h))
                     std::cerr << "Exported: " << filename << "\n";
             }
@@ -778,15 +1085,209 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         // ── Keyboard shortcuts ──────────────────────────────────────────
 
         if (!io.WantCaptureKeyboard) {
-            if (ImGui::IsKeyPressed(ImGuiKey_Space)) paused = !paused;
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                sel = {};
-                tool = EditTool::Select;
-                creating = false;
+            // --- Modal transform input ---
+            if (ed.transform.active()) {
+                // Axis constraints
+                if (ImGui::IsKeyPressed(ImGuiKey_X)) {
+                    ed.transform.lock_x = !ed.transform.lock_x;
+                    ed.transform.lock_y = false;
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
+                    ed.transform.lock_y = !ed.transform.lock_y;
+                    ed.transform.lock_x = false;
+                }
+
+                // Numeric input
+                for (int k = ImGuiKey_0; k <= ImGuiKey_9; ++k) {
+                    if (ImGui::IsKeyPressed((ImGuiKey)k))
+                        ed.transform.numeric_buf += ('0' + (k - ImGuiKey_0));
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Period))
+                    ed.transform.numeric_buf += '.';
+                if (ImGui::IsKeyPressed(ImGuiKey_Minus))
+                    ed.transform.numeric_buf += '-';
+                if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && !ed.transform.numeric_buf.empty())
+                    ed.transform.numeric_buf.pop_back();
+
+                // Confirm
+                if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsMouseClicked(0)) {
+                    // Apply transform to scene
+                    for (auto& sid : ed.selection) {
+                        if (sid.type == ObjectId::Shape && sid.index < (int)ed.transform.snapshot.shapes.size()) {
+                            apply_transform_shape(ed.scene.shapes[sid.index],
+                                ed.transform.snapshot.shapes[sid.index], ed.transform, mw, io.KeyShift);
+                        } else if (sid.type == ObjectId::Light && sid.index < (int)ed.transform.snapshot.lights.size()) {
+                            apply_transform_light(ed.scene.lights[sid.index],
+                                ed.transform.snapshot.lights[sid.index], ed.transform, mw, io.KeyShift);
+                        }
+                    }
+                    ed.transform.type = TransformMode::None;
+                    ed.transform.snapshot = {};
+                    reload();
+                }
+
+                // Cancel
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsMouseClicked(1)) {
+                    ed.scene = ed.transform.snapshot;
+                    ed.transform.type = TransformMode::None;
+                    ed.transform.snapshot = {};
+                    reload();
+                }
+            } else {
+                // --- Global shortcuts ---
+
+                // Undo/Redo
+                if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)) {
+                    if (ed.undo.redo(ed.scene)) { ed.validate_selection(); reload(); }
+                } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
+                    if (ed.undo.undo(ed.scene)) { ed.validate_selection(); reload(); }
+                }
+
+                // Save/Load
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) { do_save(); }
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
+                    open_load_popup = true;
+                }
+
+                // Select all
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+                    ed.select_all();
+                }
+
+                // Copy/Paste/Cut/Duplicate
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
+                    copy_to_clipboard();
+                }
+
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !ed.clipboard.empty()) {
+                    ed.undo.push(ed.scene);
+                    Vec2 offset = mw - ed.clipboard.centroid;
+                    ed.clear_selection();
+                    for (auto s : ed.clipboard.shapes) {
+                        translate_shape(s, offset);
+                        ed.scene.shapes.push_back(s);
+                        ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                    }
+                    for (auto l : ed.clipboard.lights) {
+                        translate_light(l, offset);
+                        ed.scene.lights.push_back(l);
+                        ed.select({ObjectId::Light, (int)ed.scene.lights.size() - 1});
+                    }
+                    reload();
+                }
+
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X)) {
+                    copy_to_clipboard();
+                    delete_selected();
+                }
+
+                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !ed.selection.empty()) {
+                    // Duplicate: copy in place with small offset, then enter grab
+                    ed.undo.push(ed.scene);
+                    std::vector<ObjectId> new_sel;
+                    Vec2 offset{0.05f, 0.05f};
+                    for (auto& sid : ed.selection) {
+                        if (sid.type == ObjectId::Shape) {
+                            Shape s = ed.scene.shapes[sid.index];
+                            translate_shape(s, offset);
+                            ed.scene.shapes.push_back(s);
+                            new_sel.push_back({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
+                        } else {
+                            Light l = ed.scene.lights[sid.index];
+                            translate_light(l, offset);
+                            ed.scene.lights.push_back(l);
+                            new_sel.push_back({ObjectId::Light, (int)ed.scene.lights.size() - 1});
+                        }
+                    }
+                    ed.selection = new_sel;
+
+                    // Enter grab mode
+                    ed.transform.type = TransformMode::Grab;
+                    ed.transform.pivot = ed.selection_centroid();
+                    ed.transform.mouse_start = mw;
+                    ed.transform.lock_x = ed.transform.lock_y = false;
+                    ed.transform.numeric_buf.clear();
+                    ed.transform.snapshot = ed.scene;
+                    reload();
+                }
+
+                // Transform shortcuts (G/R/S)
+                if (!ed.selection.empty()) {
+                    auto start_transform = [&](TransformMode::Type type) {
+                        ed.transform.type = type;
+                        ed.transform.pivot = ed.selection_centroid();
+                        ed.transform.mouse_start = mw;
+                        ed.transform.lock_x = ed.transform.lock_y = false;
+                        ed.transform.numeric_buf.clear();
+                        ed.transform.snapshot = ed.scene;
+                        ed.undo.push(ed.scene);
+                    };
+
+                    if (ImGui::IsKeyPressed(ImGuiKey_G)) start_transform(TransformMode::Grab);
+                    if (ImGui::IsKeyPressed(ImGuiKey_R)) start_transform(TransformMode::Rotate);
+                    if (ImGui::IsKeyPressed(ImGuiKey_S) && !io.KeyCtrl) start_transform(TransformMode::Scale);
+                }
+
+                // Tool switching
+                if (!io.KeyCtrl && !io.KeyAlt) {
+                    if (ImGui::IsKeyPressed(ImGuiKey_Q)) ed.tool = EditTool::Select;
+                    if (ImGui::IsKeyPressed(ImGuiKey_C)) ed.tool = EditTool::Circle;
+                    if (ImGui::IsKeyPressed(ImGuiKey_L)) ed.tool = EditTool::Segment;
+                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) ed.tool = EditTool::Arc;
+                    if (ImGui::IsKeyPressed(ImGuiKey_B)) ed.tool = EditTool::Bezier;
+                    if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.transform.active()) ed.tool = EditTool::Erase;
+                    if (ImGui::IsKeyPressed(ImGuiKey_P)) ed.tool = EditTool::PointLight;
+                    if (ImGui::IsKeyPressed(ImGuiKey_T)) ed.tool = EditTool::SegmentLight;
+                    if (ImGui::IsKeyPressed(ImGuiKey_W)) ed.tool = EditTool::BeamLight;
+                }
+
+                // Fit to view
+                if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+                    if (!ed.selection.empty()) {
+                        Bounds sb = ed.selection_bounds();
+                        Vec2 sz = sb.max - sb.min;
+                        float pad = std::max(sz.x, sz.y) * 0.2f;
+                        sb.min = sb.min - Vec2{pad, pad};
+                        sb.max = sb.max + Vec2{pad, pad};
+                        ed.camera.fit(sb, (float)win_w, (float)win_h);
+                    } else {
+                        ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+                    }
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                    ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+                }
+
+                // Space: pause
+                if (ImGui::IsKeyPressed(ImGuiKey_Space)) paused = !paused;
+
+                // Escape cascade
+                if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                    if (ed.creating) {
+                        ed.creating = false;
+                    } else if (!ed.selection.empty()) {
+                        ed.clear_selection();
+                    } else {
+                        ed.tool = EditTool::Select;
+                    }
+                }
+
+                // Delete
+                if (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                    delete_selected();
+                }
             }
-            if (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
-                if (delete_selected()) reload();
-            }
+        }
+
+        // ── Update window title (only when changed) ────────────────────
+
+        {
+            static std::string last_title;
+            char title[256];
+            std::snprintf(title, sizeof(title), "lpt2d \xe2\x80\x94 %s%s",
+                ed.scene.name.empty() ? "untitled" : ed.scene.name.c_str(),
+                ed.dirty ? " *" : "");
+            if (last_title != title) { glfwSetWindowTitle(window, title); last_title = title; }
         }
 
         // ── Render ──────────────────────────────────────────────────────

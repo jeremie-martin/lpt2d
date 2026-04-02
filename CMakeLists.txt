@@ -33,6 +33,8 @@ set(IMGUI_SOURCES
 set(SOURCES
     src/main.cpp
     src/app.cpp
+    src/editor.cpp
+    src/serialize.cpp
     src/scene.cpp
     src/spectrum.cpp
     src/renderer.cpp
