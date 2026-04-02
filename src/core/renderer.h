@@ -27,6 +27,7 @@ public:
     // Update only the viewport transform (for pan/zoom without re-uploading geometry)
     void update_viewport(const Bounds& bounds);
 
+
     // GPU compute trace + instanced draw (one batch)
     void trace_and_draw(const TraceConfig& cfg);
 
@@ -106,6 +107,7 @@ private:
     GLuint max_ssbo_ = 0;
 
     float last_max_ = 0.0f;
+    float viewport_scale_ = 1.0f;
     std::vector<uint8_t> rgba_buffer_;
 
     // Cached PP uniform locations

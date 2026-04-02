@@ -504,6 +504,8 @@ void Renderer::update_viewport(const Bounds& bounds) {
     float offset_x = (width_ - size.x * scale) * 0.5f;
     float offset_y = (height_ - size.y * scale) * 0.5f;
 
+    viewport_scale_ = scale;
+
     glUseProgram(trace_program_);
     glUniform2f(trace_loc_bounds_min_, bounds.min.x, bounds.min.y);
     glUniform2f(trace_loc_view_scale_, scale, scale);
