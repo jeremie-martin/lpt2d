@@ -3,3 +3,4 @@ compile_commands.json
 *.png
 *.ppm
 .cache/
+benchmarks/

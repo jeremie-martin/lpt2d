@@ -17,7 +17,7 @@ static void print_usage(const std::vector<App::SceneFactory>& scenes) {
               << "  --output <path>          Output PNG (headless, default: output.png)\n"
               << "  --width <int>            Width (default: 1280)\n"
               << "  --height <int>           Height (default: 720)\n"
-              << "  --batches <int>          Number of batches (headless, default: 300)\n"
+              << "  --rays <int>             Total rays (headless, default: 10000000)\n"
               << "  --batch <int>            Rays per batch (default: 30000)\n"
               << "  --depth <int>            Max ray depth (default: 12)\n"
               << "  --exposure <float>       Exposure in stops (default: 0)\n"
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     int width = 1280, height = 720;
-    int batches = 300;
+    int total_rays = 10'000'000;
     Tracer::Config tcfg;
     PostProcess pp;
 
@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
             width = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
             height = std::atoi(argv[++i]);
-        else if (std::strcmp(argv[i], "--batches") == 0 && i + 1 < argc)
-            batches = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--rays") == 0 && i + 1 < argc)
+            total_rays = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--batch") == 0 && i + 1 < argc)
             tcfg.batch_size = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
@@ -121,13 +121,14 @@ int main(int argc, char** argv) {
 
         renderer.clear();
 
-        for (int i = 0; i < batches; ++i) {
+        int num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
+        for (int i = 0; i < num_batches; ++i) {
             auto segments = tracer.trace_batch(scene, tcfg);
             world_to_pixel(segments, bounds, width, height);
             renderer.draw_lines(segments);
             renderer.flush();
 
-            std::cerr << "\r" << (i + 1) << "/" << batches << " batches (" << tracer.total_rays() << " rays)"
+            std::cerr << "\r" << tracer.total_rays() << "/" << total_rays << " rays"
                       << std::flush;
         }
         std::cerr << "\n";
