@@ -323,7 +323,8 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             ImGuiWindowFlags_NoBackground);
 
         ImGui::Image((ImTextureID)(intptr_t)renderer.display_texture(),
-                     ImVec2((float)win_w, (float)win_h));
+                     ImVec2((float)win_w, (float)win_h),
+                     ImVec2(0, 1), ImVec2(1, 0)); // Flip V: OpenGL texture has Y-up
 
         bool vp_hovered = ImGui::IsWindowHovered();
 
