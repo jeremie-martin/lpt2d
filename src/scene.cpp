@@ -121,8 +121,9 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
 }
 
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat) {
-    scene.shapes.push_back(Segment{{-half_w, -half_h}, {half_w, -half_h}, mat});
-    scene.shapes.push_back(Segment{{-half_w, half_h}, {half_w, half_h}, mat});
-    scene.shapes.push_back(Segment{{-half_w, -half_h}, {-half_w, half_h}, mat});
-    scene.shapes.push_back(Segment{{half_w, -half_h}, {half_w, half_h}, mat});
+    // CW winding so perp() normals point inward
+    scene.shapes.push_back(Segment{{-half_w, -half_h}, {half_w, -half_h}, mat});  // bottom → normal up
+    scene.shapes.push_back(Segment{{half_w, half_h}, {-half_w, half_h}, mat});    // top → normal down
+    scene.shapes.push_back(Segment{{-half_w, half_h}, {-half_w, -half_h}, mat});  // left → normal right
+    scene.shapes.push_back(Segment{{half_w, -half_h}, {half_w, half_h}, mat});    // right → normal left
 }

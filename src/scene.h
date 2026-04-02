@@ -38,13 +38,18 @@ struct Vec3 {
 
 // --- Materials ---
 
-struct Diffuse {};
+struct Diffuse {
+    float reflectance = 0.0f; // 0 = absorb, >0 = probability of diffuse scatter
+};
 
-struct Specular {};
+struct Specular {
+    float reflectance = 1.0f; // probability of reflection (else pass through)
+};
 
 struct Refractive {
     float ior = 1.5f;
-    float cauchy_b = 0.0f; // Cauchy dispersion coefficient (nm^2)
+    float cauchy_b = 0.0f;    // Cauchy dispersion coefficient (nm^2)
+    float absorption = 0.0f;  // Beer-Lambert absorption coefficient (per world unit)
 };
 
 using Material = std::variant<Diffuse, Specular, Refractive>;
@@ -121,7 +126,7 @@ struct LineSegment {
 enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 
 struct PostProcess {
-    float exposure = 0.0f;   // stops
+    float exposure = 2.0f;   // stops (brighter default)
     float contrast = 1.0f;   // centered at 0.5
     float gamma = 2.2f;      // sRGB
     ToneMap tone_map = ToneMap::ACES;

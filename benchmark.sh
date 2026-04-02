@@ -8,7 +8,7 @@ HEIGHT="${HEIGHT:-1080}"
 RAYS="${RAYS:-10000000}"
 DEPTH="${DEPTH:-12}"
 BATCH="${BATCH:-50000}"
-SCENES=(three_spheres prism diamond lens fiber mirror_box ring double_slit)
+SCENES=(three_spheres prism diamond lens fiber mirror_box ring double_slit crystal_field mirrors)
 
 # ── Setup ──────────────────────────────────────────────────────────────
 # Always ensure Release build

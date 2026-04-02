@@ -19,6 +19,8 @@ struct GPUCircle {
     uint mat_type;
     float ior;
     float cauchy_b;
+    float reflectance;
+    float absorption;
 };
 
 struct GPUSeg {
@@ -27,6 +29,8 @@ struct GPUSeg {
     uint mat_type;
     float ior;
     float cauchy_b;
+    float reflectance;
+    float absorption;
     float _pad;
 };
 
@@ -103,9 +107,11 @@ struct Hit {
     uint mat_type;
     float ior;
     float cauchy_b;
+    float reflectance;
+    float absorption;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 0u, 0.0, 0.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 0u, 0.0, 0.0, 0.0, 0.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -122,7 +128,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.mat_type, c.ior, c.cauchy_b);
+    return Hit(t, p, normalize(p - c.center), c.mat_type, c.ior, c.cauchy_b, c.reflectance, c.absorption);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -137,7 +143,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.mat_type, s.ior, s.cauchy_b);
+    return Hit(t, p, n, s.mat_type, s.ior, s.cauchy_b, s.reflectance, s.absorption);
 }
 
 Hit hit_scene(vec2 ro, vec2 rd) {
@@ -199,6 +205,8 @@ void main() {
     vec4 color = vec4(rgb * uIntensity, uIntensity);
 
     // Trace
+    float current_absorption = 0.0;
+
     for (uint depth = 0u; depth < uMaxDepth; depth++) {
         Hit h = hit_scene(ro, rd);
 
@@ -207,19 +215,38 @@ void main() {
             return;
         }
 
+        // Beer-Lambert attenuation inside absorbing medium
+        color *= exp(-current_absorption * h.t);
+
         emit(ro, h.point, color);
 
         if (h.mat_type == 0u) {
-            // Diffuse: absorb
-            return;
+            // Diffuse: scatter with probability reflectance, else absorb
+            if (h.reflectance > 0.0 && rand01() < h.reflectance) {
+                vec2 n = h.normal;
+                if (dot(rd, n) > 0.0) n = -n;
+                // Uniform random direction in 2D half-plane
+                float u = rand01();
+                float sin_theta = 2.0 * u - 1.0;
+                float cos_theta = sqrt(1.0 - sin_theta * sin_theta);
+                vec2 tangent = vec2(-n.y, n.x);
+                rd = n * cos_theta + tangent * sin_theta;
+                ro = h.point + n * SCATTER_EPS;
+            } else {
+                return;
+            }
         } else if (h.mat_type == 1u) {
-            // Specular: reflect
+            // Specular: reflect with probability reflectance, else pass through
             vec2 n = h.normal;
             if (dot(rd, n) > 0.0) n = -n;
-            rd = reflect(rd, n);
-            ro = h.point + n * SCATTER_EPS;
+            if (rand01() < h.reflectance) {
+                rd = reflect(rd, n);
+                ro = h.point + n * SCATTER_EPS;
+            } else {
+                ro = h.point - n * SCATTER_EPS;
+            }
         } else {
-            // Refractive: Fresnel + Snell with Cauchy dispersion
+            // Refractive: Fresnel + Snell with Cauchy dispersion + absorption
             vec2 n = h.normal;
             float cos_i = dot(rd, n);
 
@@ -227,19 +254,22 @@ void main() {
             float ior = h.ior + h.cauchy_b / (lambda_um * lambda_um * 1e6);
 
             float n1, n2;
+            bool entering;
             if (cos_i > 0.0) {
                 n1 = ior; n2 = 1.0;
                 n = -n;   cos_i = -cos_i;
+                entering = false;
             } else {
                 n1 = 1.0; n2 = ior;
                 cos_i = -cos_i;
+                entering = true;
             }
 
             float ratio = n1 / n2;
             float cos_t_sq = 1.0 - ratio * ratio * (1.0 - cos_i * cos_i);
 
             if (cos_t_sq < 0.0) {
-                // Total internal reflection
+                // Total internal reflection — stay in same medium
                 rd = reflect(rd, n);
                 ro = h.point + n * SCATTER_EPS;
             } else {
@@ -249,11 +279,14 @@ void main() {
                 float R = 0.5 * (rs * rs + rp * rp);
 
                 if (rand01() < R) {
+                    // Fresnel reflection — stay in same medium
                     rd = reflect(rd, n);
                     ro = h.point + n * SCATTER_EPS;
                 } else {
+                    // Refraction — cross boundary, update medium
                     rd = normalize(rd * ratio + n * (ratio * cos_i - cos_t));
                     ro = h.point - n * SCATTER_EPS;
+                    current_absorption = entering ? h.absorption : 0.0;
                 }
             }
         }
@@ -514,8 +547,10 @@ struct GPUCircle {
     uint32_t mat_type; // 0=diffuse, 1=specular, 2=refractive
     float ior;
     float cauchy_b;
+    float reflectance;
+    float absorption;
 };
-static_assert(sizeof(GPUCircle) == 24);
+static_assert(sizeof(GPUCircle) == 32);
 
 struct GPUSegment {
     float a[2];
@@ -523,9 +558,11 @@ struct GPUSegment {
     uint32_t mat_type;
     float ior;
     float cauchy_b;
+    float reflectance;
+    float absorption;
     float _pad;
 };
-static_assert(sizeof(GPUSegment) == 32);
+static_assert(sizeof(GPUSegment) == 40);
 
 struct GPULight {
     uint32_t type; // 0=point, 1=segment
@@ -771,6 +808,14 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<GPUCircle> circles;
     std::vector<GPUSegment> segs;
 
+    auto fill_material = [](auto& gpu, const Material& mat) {
+        std::visit(overloaded{
+            [&](const Diffuse& d) { gpu.mat_type = 0; gpu.reflectance = d.reflectance; },
+            [&](const Specular& s) { gpu.mat_type = 1; gpu.reflectance = s.reflectance; },
+            [&](const Refractive& r) { gpu.mat_type = 2; gpu.ior = r.ior; gpu.cauchy_b = r.cauchy_b; gpu.absorption = r.absorption; },
+        }, mat);
+    };
+
     for (const auto& shape : scene.shapes) {
         std::visit(overloaded{
             [&](const Circle& c) {
@@ -778,22 +823,14 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gc.center[0] = c.center.x;
                 gc.center[1] = c.center.y;
                 gc.radius = c.radius;
-                std::visit(overloaded{
-                    [&](const Diffuse&) { gc.mat_type = 0; },
-                    [&](const Specular&) { gc.mat_type = 1; },
-                    [&](const Refractive& r) { gc.mat_type = 2; gc.ior = r.ior; gc.cauchy_b = r.cauchy_b; },
-                }, c.material);
+                fill_material(gc, c.material);
                 circles.push_back(gc);
             },
             [&](const Segment& s) {
                 GPUSegment gs{};
                 gs.a[0] = s.a.x; gs.a[1] = s.a.y;
                 gs.b[0] = s.b.x; gs.b[1] = s.b.y;
-                std::visit(overloaded{
-                    [&](const Diffuse&) { gs.mat_type = 0; },
-                    [&](const Specular&) { gs.mat_type = 1; },
-                    [&](const Refractive& r) { gs.mat_type = 2; gs.ior = r.ior; gs.cauchy_b = r.cauchy_b; },
-                }, s.material);
+                fill_material(gs, s.material);
                 segs.push_back(gs);
             },
         }, shape);

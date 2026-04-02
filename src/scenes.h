@@ -2,18 +2,19 @@
 
 #include "scene.h"
 
+#include <cstdint>
 #include <numbers>
 
 inline Scene scene_three_spheres() {
     Scene s;
     s.name = "three_spheres";
 
-    Refractive glass{1.5f, 20000.0f};
+    Refractive glass{1.5f, 20000.0f, 0.5f};
     s.shapes.push_back(Circle{{-0.5f, 0.0f}, 0.2f, glass});
     s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.2f, glass});
     s.shapes.push_back(Circle{{0.5f, 0.0f}, 0.2f, glass});
 
-    add_box_walls(s, 1.2f, 0.8f, Specular{});
+    add_box_walls(s, 1.2f, 0.8f, Specular{0.95f});
 
     s.lights.push_back(PointLight{{-0.8f, 0.5f}, 1.0f});
     s.lights.push_back(PointLight{{0.8f, -0.5f}, 1.0f});
@@ -30,7 +31,7 @@ inline Scene scene_prism() {
     Vec2 p0{-0.1f, -h * 0.6f};
     Vec2 p1{-0.1f - size, h * 0.4f};
     Vec2 p2{-0.1f + size, h * 0.4f};
-    Refractive glass{1.5f, 30000.0f};
+    Refractive glass{1.5f, 30000.0f, 0.3f};
 
     // CW winding → perp() gives outward normals
     s.shapes.push_back(Segment{p0, p1, glass});
@@ -53,9 +54,9 @@ inline Scene scene_diamond() {
     Scene s;
     s.name = "diamond";
 
-    s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.35f, Refractive{2.42f, 30000.0f}});
+    s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.35f, Refractive{2.42f, 30000.0f, 0.2f}});
 
-    add_box_walls(s, 1.0f, 0.7f, Specular{});
+    add_box_walls(s, 1.0f, 0.7f, Specular{0.95f});
 
     s.lights.push_back(PointLight{{-0.7f, 0.4f}, 1.0f});
     s.lights.push_back(PointLight{{0.7f, 0.4f}, 1.0f});
@@ -68,11 +69,11 @@ inline Scene scene_lens() {
     Scene s;
     s.name = "lens";
 
-    Refractive glass{1.5f, 20000.0f};
+    Refractive glass{1.5f, 20000.0f, 0.3f};
     s.shapes.push_back(Circle{{-0.35f, 0.0f}, 0.4f, glass});
     s.shapes.push_back(Circle{{0.35f, 0.0f}, 0.4f, glass});
 
-    add_box_walls(s, 1.2f, 0.8f, Diffuse{});
+    add_box_walls(s, 1.2f, 0.8f, Diffuse{0.1f});
 
     s.lights.push_back(SegmentLight{{-1.0f, 0.3f}, {-1.0f, -0.3f}, 1.0f});
 
@@ -86,11 +87,11 @@ inline Scene scene_fiber() {
 
     // Outer mirrored walls forming a narrow channel
     float len = 1.5f, gap = 0.12f;
-    s.shapes.push_back(Segment{{-len, -gap}, {len, -gap}, Specular{}});
-    s.shapes.push_back(Segment{{-len, gap}, {len, gap}, Specular{}});
+    s.shapes.push_back(Segment{{-len, -gap}, {len, -gap}, Specular{0.98f}});
+    s.shapes.push_back(Segment{{-len, gap}, {len, gap}, Specular{0.98f}});
 
     // Glass core (slight curve via two large circles)
-    Refractive glass{1.5f, 15000.0f};
+    Refractive glass{1.5f, 15000.0f, 0.5f};
     s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.06f, glass});
     s.shapes.push_back(Circle{{0.5f, 0.0f}, 0.06f, glass});
     s.shapes.push_back(Circle{{-0.5f, 0.0f}, 0.06f, glass});
@@ -108,12 +109,12 @@ inline Scene scene_mirror_box() {
     Scene s;
     s.name = "mirror_box";
 
-    add_box_walls(s, 0.9f, 0.6f, Specular{});
+    add_box_walls(s, 0.9f, 0.6f, Specular{0.95f});
 
     // A few glass spheres of varying sizes
-    s.shapes.push_back(Circle{{-0.3f, 0.15f}, 0.15f, Refractive{1.8f, 25000.0f}});
-    s.shapes.push_back(Circle{{0.3f, -0.1f}, 0.1f, Refractive{1.5f, 20000.0f}});
-    s.shapes.push_back(Circle{{0.0f, -0.25f}, 0.08f, Refractive{2.0f, 30000.0f}});
+    s.shapes.push_back(Circle{{-0.3f, 0.15f}, 0.15f, Refractive{1.8f, 25000.0f, 0.4f}});
+    s.shapes.push_back(Circle{{0.3f, -0.1f}, 0.1f, Refractive{1.5f, 20000.0f, 0.3f}});
+    s.shapes.push_back(Circle{{0.0f, -0.25f}, 0.08f, Refractive{2.0f, 30000.0f, 0.5f}});
 
     s.lights.push_back(PointLight{{-0.6f, -0.35f}, 1.0f});
     s.lights.push_back(PointLight{{0.6f, 0.35f}, 0.7f});
@@ -130,7 +131,7 @@ inline Scene scene_ring() {
     int n = 8;
     float ring_r = 0.5f;
     float sphere_r = 0.1f;
-    Refractive glass{1.5f, 20000.0f};
+    Refractive glass{1.5f, 20000.0f, 0.4f};
 
     for (int i = 0; i < n; ++i) {
         float angle = 2.0f * PI * i / n;
@@ -138,9 +139,72 @@ inline Scene scene_ring() {
         s.shapes.push_back(Circle{pos, sphere_r, glass});
     }
 
-    add_box_walls(s, 1.0f, 1.0f, Specular{});
+    add_box_walls(s, 1.0f, 1.0f, Specular{0.95f});
 
     s.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
+
+    return s;
+}
+
+// Many refractive spheres in a hex grid — complex multi-body caustics
+inline Scene scene_crystal_field() {
+    Scene s;
+    s.name = "crystal_field";
+
+    float spacing = 0.24f;
+    float sphere_r = 0.07f;
+    int cols = 7, rows = 5;
+    static constexpr float iors[] = {1.3f, 1.5f, 1.8f, 2.0f};
+
+    for (int r = 0; r < rows; ++r) {
+        int n_cols = (r % 2 == 0) ? cols : cols - 1;
+        float x_off = (r % 2 == 0) ? 0.0f : spacing * 0.5f;
+        for (int c = 0; c < n_cols; ++c) {
+            float x = (c - (n_cols - 1) * 0.5f) * spacing + x_off;
+            float y = (r - (rows - 1) * 0.5f) * spacing * (std::sqrt(3.0f) / 2.0f);
+            float ior = iors[(c + r) % 4];
+            s.shapes.push_back(Circle{{x, y}, sphere_r, Refractive{ior, 20000.0f, 0.3f}});
+        }
+    }
+
+    add_box_walls(s, 1.2f, 0.8f, Specular{0.9f});
+
+    s.lights.push_back(PointLight{{-1.0f, 0.6f}, 1.0f});
+    s.lights.push_back(PointLight{{0.8f, -0.6f}, 0.7f});
+
+    return s;
+}
+
+// Many semi-transparent mirror segments — light splitting and recombining
+inline Scene scene_mirrors() {
+    Scene s;
+    s.name = "mirrors";
+
+    constexpr float PI = std::numbers::pi_v<float>;
+
+    // Deterministic LCG for reproducible placement
+    uint32_t seed = 42u;
+    auto rng = [&seed]() -> float {
+        seed = seed * 1664525u + 1013904223u;
+        return float(seed >> 8) / float(1u << 24);
+    };
+
+    int n = 12;
+    for (int i = 0; i < n; ++i) {
+        float cx = (rng() - 0.5f) * 1.4f;
+        float cy = (rng() - 0.5f) * 0.9f;
+        float angle = rng() * PI;
+        float half_len = 0.06f + rng() * 0.12f;
+        Vec2 dir{std::cos(angle) * half_len, std::sin(angle) * half_len};
+        Vec2 center{cx, cy};
+        float refl = 0.3f + rng() * 0.5f;
+        s.shapes.push_back(Segment{center - dir, center + dir, Specular{refl}});
+    }
+
+    add_box_walls(s, 1.0f, 0.7f, Specular{0.9f});
+
+    s.lights.push_back(PointLight{{-0.7f, 0.0f}, 1.0f});
+    s.lights.push_back(PointLight{{0.5f, 0.4f}, 0.8f});
 
     return s;
 }

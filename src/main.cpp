@@ -17,9 +17,9 @@ static void print_usage(const std::vector<App::SceneFactory>& scenes) {
               << "  --width <int>            Width (default: 1280)\n"
               << "  --height <int>           Height (default: 720)\n"
               << "  --rays <int>             Total rays (headless, default: 10000000)\n"
-              << "  --batch <int>            Rays per batch (default: 30000)\n"
+              << "  --batch <int>            Rays per batch (default: 200000)\n"
               << "  --depth <int>            Max ray depth (default: 12)\n"
-              << "  --exposure <float>       Exposure in stops (default: 0)\n"
+              << "  --exposure <float>       Exposure in stops (default: 2)\n"
               << "  --contrast <float>       Contrast (default: 1)\n"
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|aces|log (default: aces)\n"
@@ -39,6 +39,8 @@ static std::vector<App::SceneFactory> get_scenes() {
         {"mirror_box", scene_mirror_box},
         {"ring", scene_ring},
         {"double_slit", scene_double_slit},
+        {"crystal_field", scene_crystal_field},
+        {"mirrors", scene_mirrors},
     };
 }
 
