@@ -21,6 +21,8 @@ struct GPUCircle {
     float cauchy_b;
     float reflectance;
     float absorption;
+    float roughness;
+    float _pad;
 };
 
 struct GPUSeg {
@@ -31,7 +33,7 @@ struct GPUSeg {
     float cauchy_b;
     float reflectance;
     float absorption;
-    float _pad;
+    float roughness;
 };
 
 struct GPULight {
@@ -39,6 +41,10 @@ struct GPULight {
     float intensity;
     vec2 pos_a;
     vec2 pos_b;
+    float angular_width;
+    float wavelength_min;
+    float wavelength_max;
+    float _pad;
 };
 
 struct LineSeg {
@@ -59,10 +65,41 @@ layout(std430, binding = 4) buffer DrawCmd {
 };
 layout(std430, binding = 5) readonly buffer WeightBuf  { float light_cum_weights[]; };
 
+struct GPUArc {
+    vec2 center;
+    float radius;
+    float angle_start;
+    float angle_end;
+    uint mat_type;
+    float ior;
+    float cauchy_b;
+    float reflectance;
+    float absorption;
+    float roughness;
+    float _pad;
+};
+
+struct GPUBezier {
+    vec2 p0;
+    vec2 p1;
+    vec2 p2;
+    uint mat_type;
+    float ior;
+    float cauchy_b;
+    float reflectance;
+    float absorption;
+    float roughness;
+};
+
+layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
+layout(std430, binding = 7) readonly buffer BezierBuf { GPUBezier beziers[]; };
+
 uniform sampler1D uWavelengthLUT;
 
 uniform uint uNumCircles;
 uniform uint uNumSegments;
+uniform uint uNumArcs;
+uniform uint uNumBeziers;
 uniform uint uNumLights;
 uniform uint uMaxDepth;
 uniform uint uSeed;
@@ -109,9 +146,10 @@ struct Hit {
     float cauchy_b;
     float reflectance;
     float absorption;
+    float roughness;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 0u, 0.0, 0.0, 0.0, 0.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 0u, 0.0, 0.0, 0.0, 0.0, 0.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -128,7 +166,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.mat_type, c.ior, c.cauchy_b, c.reflectance, c.absorption);
+    return Hit(t, p, normalize(p - c.center), c.mat_type, c.ior, c.cauchy_b, c.reflectance, c.absorption, c.roughness);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -143,7 +181,85 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.mat_type, s.ior, s.cauchy_b, s.reflectance, s.absorption);
+    return Hit(t, p, n, s.mat_type, s.ior, s.cauchy_b, s.reflectance, s.absorption, s.roughness);
+}
+
+bool in_arc(float angle, float start, float end) {
+    if (start <= end)
+        return angle >= start && angle <= end;
+    else
+        return angle >= start || angle <= end;
+}
+
+Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
+    vec2 oc = ro - a.center;
+    float qa = dot(rd, rd);
+    float qb = 2.0 * dot(oc, rd);
+    float qc = dot(oc, oc) - a.radius * a.radius;
+    float disc = qb * qb - 4.0 * qa * qc;
+    if (disc < 0.0) return NO_HIT;
+
+    float sq = sqrt(disc);
+    float t1 = (-qb - sq) / (2.0 * qa);
+    float t2 = (-qb + sq) / (2.0 * qa);
+
+    for (int i = 0; i < 2; i++) {
+        float t = (i == 0) ? t1 : t2;
+        if (t < INTERSECT_EPS) continue;
+        vec2 p = ro + rd * t;
+        float angle = atan(p.y - a.center.y, p.x - a.center.x);
+        if (angle < 0.0) angle += 2.0 * PI;
+        if (angle >= 2.0 * PI) angle -= 2.0 * PI;
+        if (in_arc(angle, a.angle_start, a.angle_end)) {
+            return Hit(t, p, normalize(p - a.center),
+                       a.mat_type, a.ior, a.cauchy_b, a.reflectance, a.absorption, a.roughness);
+        }
+    }
+    return NO_HIT;
+}
+
+Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
+    vec2 A = b.p0 - 2.0*b.p1 + b.p2;
+    vec2 B = 2.0*(b.p1 - b.p0);
+    vec2 C = b.p0;
+
+    float qa = rd.y*A.x - rd.x*A.y;
+    float qb = rd.y*B.x - rd.x*B.y;
+    float qc = rd.y*(C.x - ro.x) - rd.x*(C.y - ro.y);
+
+    float roots[2];
+    int n_roots = 0;
+
+    if (abs(qa) < INTERSECT_EPS) {
+        if (abs(qb) >= INTERSECT_EPS) {
+            roots[0] = -qc / qb;
+            n_roots = 1;
+        }
+    } else {
+        float disc = qb*qb - 4.0*qa*qc;
+        if (disc >= 0.0) {
+            float sq = sqrt(disc);
+            roots[0] = (-qb - sq) / (2.0*qa);
+            roots[1] = (-qb + sq) / (2.0*qa);
+            n_roots = 2;
+        }
+    }
+
+    Hit best = NO_HIT;
+    for (int i = 0; i < n_roots; i++) {
+        float t = roots[i];
+        if (t < 0.0 || t > 1.0) continue;
+        vec2 p = A*t*t + B*t + C;
+        float s = dot(p - ro, rd);
+        if (s < INTERSECT_EPS || s >= best.t) continue;
+
+        vec2 tangent = 2.0*A*t + B;
+        vec2 n = normalize(vec2(-tangent.y, tangent.x));
+        if (dot(n, rd) > 0.0) n = -n;
+
+        best = Hit(s, p, n, b.mat_type, b.ior, b.cauchy_b, b.reflectance, b.absorption, b.roughness);
+    }
+    return best;
 }
 
 Hit hit_scene(vec2 ro, vec2 rd) {
@@ -154,6 +270,14 @@ Hit hit_scene(vec2 ro, vec2 rd) {
     }
     for (uint i = 0u; i < uNumSegments; i++) {
         Hit h = hit_segment(ro, rd, segments[i]);
+        if (h.t < best.t) best = h;
+    }
+    for (uint i = 0u; i < uNumArcs; i++) {
+        Hit h = hit_arc(ro, rd, arcs[i]);
+        if (h.t < best.t) best = h;
+    }
+    for (uint i = 0u; i < uNumBeziers; i++) {
+        Hit h = hit_bezier(ro, rd, beziers[i]);
         if (h.t < best.t) best = h;
     }
     return best;
@@ -188,7 +312,7 @@ void main() {
         float a = rand01() * 2.0 * PI;
         ro = lt.pos_a;
         rd = vec2(cos(a), sin(a));
-    } else {
+    } else if (lt.type == 1u) {
         // Segment light: random point, hemisphere
         float t = rand01();
         ro = mix(lt.pos_a, lt.pos_b, t);
@@ -197,10 +321,16 @@ void main() {
         vec2 tangent = normalize(seg_d);
         float a = (rand01() - 0.5) * PI;
         rd = normal * cos(a) + tangent * sin(a);
+    } else {
+        // Beam light: origin + direction ± angular half-width
+        ro = lt.pos_a;
+        float base_angle = atan(lt.pos_b.y, lt.pos_b.x);
+        float a = base_angle + (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = vec2(cos(a), sin(a));
     }
 
-    // Random wavelength → color
-    float wavelength = 380.0 + rand01() * 400.0;
+    // Random wavelength → color (per-light spectral range)
+    float wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
     vec3 rgb = wavelength_rgb(wavelength);
     vec4 color = vec4(rgb * uIntensity, uIntensity);
 
@@ -241,6 +371,13 @@ void main() {
             if (dot(rd, n) > 0.0) n = -n;
             if (rand01() < h.reflectance) {
                 rd = reflect(rd, n);
+                // Glossy perturbation (triangular distribution for smooth falloff)
+                if (h.roughness > 0.0) {
+                    float perturb = (rand01() + rand01() - 1.0) * PI * h.roughness;
+                    float cs = cos(perturb), sn = sin(perturb);
+                    vec2 new_rd = vec2(rd.x*cs - rd.y*sn, rd.x*sn + rd.y*cs);
+                    if (dot(new_rd, n) > 0.0) rd = new_rd;
+                }
                 ro = h.point + n * SCATTER_EPS;
             } else {
                 ro = h.point - n * SCATTER_EPS;
@@ -549,8 +686,10 @@ struct GPUCircle {
     float cauchy_b;
     float reflectance;
     float absorption;
+    float roughness;
+    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
 };
-static_assert(sizeof(GPUCircle) == 32);
+static_assert(sizeof(GPUCircle) == 40);
 
 struct GPUSegment {
     float a[2];
@@ -560,17 +699,49 @@ struct GPUSegment {
     float cauchy_b;
     float reflectance;
     float absorption;
-    float _pad;
+    float roughness;
 };
 static_assert(sizeof(GPUSegment) == 40);
 
 struct GPULight {
-    uint32_t type; // 0=point, 1=segment
+    uint32_t type; // 0=point, 1=segment, 2=beam
     float intensity;
     float pos_a[2];
     float pos_b[2];
+    float angular_width;  // beam only (half-angle radians), 0 for others
+    float wavelength_min; // nm, default 380
+    float wavelength_max; // nm, default 780
+    float _pad;
 };
-static_assert(sizeof(GPULight) == 24);
+static_assert(sizeof(GPULight) == 40);
+
+struct GPUArc {
+    float center[2];
+    float radius;
+    float angle_start;
+    float angle_end;
+    uint32_t mat_type;
+    float ior;
+    float cauchy_b;
+    float reflectance;
+    float absorption;
+    float roughness;
+    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+};
+static_assert(sizeof(GPUArc) == 48);
+
+struct GPUBezier {
+    float p0[2];
+    float p1[2]; // control point
+    float p2[2];
+    uint32_t mat_type;
+    float ior;
+    float cauchy_b;
+    float reflectance;
+    float absorption;
+    float roughness;
+};
+static_assert(sizeof(GPUBezier) == 48);
 
 // ─── Renderer implementation ─────────────────────────────────────────
 
@@ -646,6 +817,8 @@ void Renderer::shutdown() {
     };
     del_buf(circle_ssbo_);
     del_buf(segment_ssbo_);
+    del_buf(arc_ssbo_);
+    del_buf(bezier_ssbo_);
     del_buf(light_ssbo_);
     del_buf(light_weights_ssbo_);
     del_buf(output_ssbo_);
@@ -716,6 +889,8 @@ bool Renderer::create_trace_shader() {
 
     trace_loc_num_circles_ = glGetUniformLocation(trace_program_, "uNumCircles");
     trace_loc_num_segments_ = glGetUniformLocation(trace_program_, "uNumSegments");
+    trace_loc_num_arcs_ = glGetUniformLocation(trace_program_, "uNumArcs");
+    trace_loc_num_beziers_ = glGetUniformLocation(trace_program_, "uNumBeziers");
     trace_loc_num_lights_ = glGetUniformLocation(trace_program_, "uNumLights");
     trace_loc_max_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
@@ -818,11 +993,14 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     // Flatten scene shapes into GPU arrays
     std::vector<GPUCircle> circles;
     std::vector<GPUSegment> segs;
+    std::vector<GPUArc> gpu_arcs;
+    std::vector<GPUBezier> gpu_beziers;
 
     auto fill_material = [](auto& gpu, const Material& mat) {
+        gpu.roughness = 0.0f;
         std::visit(overloaded{
             [&](const Diffuse& d) { gpu.mat_type = 0; gpu.reflectance = d.reflectance; },
-            [&](const Specular& s) { gpu.mat_type = 1; gpu.reflectance = s.reflectance; },
+            [&](const Specular& s) { gpu.mat_type = 1; gpu.reflectance = s.reflectance; gpu.roughness = s.roughness; },
             [&](const Refractive& r) { gpu.mat_type = 2; gpu.ior = r.ior; gpu.cauchy_b = r.cauchy_b; gpu.absorption = r.absorption; },
         }, mat);
     };
@@ -844,6 +1022,23 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 fill_material(gs, s.material);
                 segs.push_back(gs);
             },
+            [&](const Arc& a) {
+                GPUArc ga{};
+                ga.center[0] = a.center.x; ga.center[1] = a.center.y;
+                ga.radius = a.radius;
+                ga.angle_start = a.angle_start;
+                ga.angle_end = a.angle_end;
+                fill_material(ga, a.material);
+                gpu_arcs.push_back(ga);
+            },
+            [&](const Bezier& b) {
+                GPUBezier gb{};
+                gb.p0[0] = b.p0.x; gb.p0[1] = b.p0.y;
+                gb.p1[0] = b.p1.x; gb.p1[1] = b.p1.y;
+                gb.p2[0] = b.p2.x; gb.p2[1] = b.p2.y;
+                fill_material(gb, b.material);
+                gpu_beziers.push_back(gb);
+            },
         }, shape);
     }
 
@@ -859,12 +1054,26 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.type = 0;
                 gl.intensity = l.intensity;
                 gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
             },
             [&](const SegmentLight& l) {
                 gl.type = 1;
                 gl.intensity = l.intensity;
                 gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
                 gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
+            },
+            [&](const BeamLight& l) {
+                gl.type = 2;
+                gl.intensity = l.intensity;
+                gl.pos_a[0] = l.origin.x; gl.pos_a[1] = l.origin.y;
+                Vec2 d = l.direction.normalized();
+                gl.pos_b[0] = d.x; gl.pos_b[1] = d.y;
+                gl.angular_width = l.angular_width * 0.5f; // store half-angle
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
             },
         }, light);
         total += gl.intensity;
@@ -874,6 +1083,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 
     num_circles_ = (int)circles.size();
     num_segments_ = (int)segs.size();
+    num_arcs_ = (int)gpu_arcs.size();
+    num_beziers_ = (int)gpu_beziers.size();
     num_lights_ = (int)gpu_lights.size();
 
     // Upload SSBOs
@@ -886,6 +1097,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 
     upload(circle_ssbo_, circles.data(), circles.size() * sizeof(GPUCircle));
     upload(segment_ssbo_, segs.data(), segs.size() * sizeof(GPUSegment));
+    upload(arc_ssbo_, gpu_arcs.data(), gpu_arcs.size() * sizeof(GPUArc));
+    upload(bezier_ssbo_, gpu_beziers.data(), gpu_beziers.size() * sizeof(GPUBezier));
     upload(light_ssbo_, gpu_lights.data(), gpu_lights.size() * sizeof(GPULight));
     upload(light_weights_ssbo_, cum_weights.data(), cum_weights.size() * sizeof(float));
 
@@ -903,6 +1116,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     glUniform2f(trace_loc_view_offset_, offset_x, offset_y);
     glUniform1ui(trace_loc_num_circles_, num_circles_);
     glUniform1ui(trace_loc_num_segments_, num_segments_);
+    glUniform1ui(trace_loc_num_arcs_, num_arcs_);
+    glUniform1ui(trace_loc_num_beziers_, num_beziers_);
     glUniform1ui(trace_loc_num_lights_, num_lights_);
 }
 
@@ -955,6 +1170,8 @@ void Renderer::trace_and_draw(const TraceConfig& cfg) {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, output_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, draw_cmd_buffer_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, light_weights_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, arc_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
 
     GLuint groups = (cfg.batch_size + 63) / 64;
     glDispatchCompute(groups, 1, 1);

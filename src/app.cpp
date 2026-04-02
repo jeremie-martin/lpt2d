@@ -16,7 +16,7 @@
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
-enum class EditTool { Select, Circle, Segment, PointLight, SegmentLight, Erase };
+enum class EditTool { Select, Circle, Segment, Arc, Bezier, PointLight, SegmentLight, BeamLight, Erase };
 
 struct ViewTransform {
     Bounds bounds;
@@ -68,6 +68,21 @@ static Selection hit_test(Vec2 wp, const Scene& scene, float threshold) {
                 return dc < c.radius ? 0.0f : dc - c.radius;
             },
             [&](const Segment& s) -> float { return point_seg_dist(wp, s.a, s.b); },
+            [&](const Arc& a) -> float {
+                float dc = (wp - a.center).length();
+                return dc < a.radius ? 0.0f : dc - a.radius;
+            },
+            [&](const Bezier& b) -> float {
+                // Approximate: sample curve at N points, find min distance
+                float best = 1e30f;
+                for (int j = 0; j <= 20; ++j) {
+                    float t = j / 20.0f;
+                    float u = 1.0f - t;
+                    Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
+                    best = std::min(best, (wp - p).length());
+                }
+                return best;
+            },
         }, scene.shapes[i]);
         if (d < best) { best = d; sel = {Selection::Shape, i}; }
     }
@@ -75,6 +90,7 @@ static Selection hit_test(Vec2 wp, const Scene& scene, float threshold) {
         float d = std::visit(overloaded{
             [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
             [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
+            [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
         }, scene.lights[i]);
         if (d < best) { best = d; sel = {Selection::Light, i}; }
     }
@@ -105,7 +121,10 @@ static bool edit_material(Material& mat) {
     }
     std::visit(overloaded{
         [&](Diffuse& d)    { changed |= ImGui::SliderFloat("Reflectance", &d.reflectance, 0.0f, 1.0f); },
-        [&](Specular& s)   { changed |= ImGui::SliderFloat("Reflectance", &s.reflectance, 0.0f, 1.0f); },
+        [&](Specular& s)   {
+            changed |= ImGui::SliderFloat("Reflectance", &s.reflectance, 0.0f, 1.0f);
+            changed |= ImGui::SliderFloat("Roughness", &s.roughness, 0.0f, 1.0f);
+        },
         [&](Refractive& r) {
             changed |= ImGui::SliderFloat("IOR", &r.ior, 1.0f, 3.0f);
             changed |= ImGui::SliderFloat("Dispersion", &r.cauchy_b, 0.0f, 50000.0f, "%.0f");
@@ -343,6 +362,32 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     [&](const Segment& s) {
                         dl->AddLine(to_screen(vt, s.a), to_screen(vt, s.b), col, th);
                     },
+                    [&](const Arc& a) {
+                        // Draw arc as polyline
+                        constexpr int N = 64;
+                        float span = a.angle_end - a.angle_start;
+                        if (span < 0) span += TWO_PI;
+                        for (int j = 0; j < N; ++j) {
+                            float t0 = a.angle_start + span * j / N;
+                            float t1 = a.angle_start + span * (j + 1) / N;
+                            Vec2 p0 = a.center + Vec2{a.radius * std::cos(t0), a.radius * std::sin(t0)};
+                            Vec2 p1 = a.center + Vec2{a.radius * std::cos(t1), a.radius * std::sin(t1)};
+                            dl->AddLine(to_screen(vt, p0), to_screen(vt, p1), col, th);
+                        }
+                    },
+                    [&](const Bezier& b) {
+                        // Draw bezier as polyline + control point
+                        constexpr int N = 32;
+                        for (int j = 0; j < N; ++j) {
+                            float t0 = (float)j / N, t1 = (float)(j + 1) / N;
+                            float u0 = 1.0f - t0, u1 = 1.0f - t1;
+                            Vec2 p0 = b.p0 * (u0*u0) + b.p1 * (2.0f*u0*t0) + b.p2 * (t0*t0);
+                            Vec2 p1 = b.p0 * (u1*u1) + b.p1 * (2.0f*u1*t1) + b.p2 * (t1*t1);
+                            dl->AddLine(to_screen(vt, p0), to_screen(vt, p1), col, th);
+                        }
+                        // Draw control point marker
+                        dl->AddCircleFilled(to_screen(vt, b.p1), 3.0f * dpi_scale, col);
+                    },
                 }, scene.shapes[i]);
             }
 
@@ -361,16 +406,31 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                         dl->AddCircleFilled(a, 3.0f * dpi_scale, col);
                         dl->AddCircleFilled(b, 3.0f * dpi_scale, col);
                     },
+                    [&](const BeamLight& l) {
+                        ImVec2 o = to_screen(vt, l.origin);
+                        dl->AddCircleFilled(o, (is_sel ? 5.0f : 4.0f) * dpi_scale, col);
+                        // Draw direction line and angular wedge
+                        Vec2 d = l.direction.normalized();
+                        ImVec2 tip = to_screen(vt, l.origin + d * 0.3f);
+                        dl->AddLine(o, tip, col, th);
+                        // Wedge edges
+                        float half_w = l.angular_width * 0.5f;
+                        float base_a = std::atan2(d.y, d.x);
+                        Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
+                        Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
+                        dl->AddLine(o, to_screen(vt, l.origin + w1 * 0.2f), col, th * 0.5f);
+                        dl->AddLine(o, to_screen(vt, l.origin + w2 * 0.2f), col, th * 0.5f);
+                    },
                 }, scene.lights[i]);
             }
 
             // Creation preview
             if (creating) {
                 Vec2 mw = to_world(vt, io.MousePos);
-                if (tool == EditTool::Circle) {
+                if (tool == EditTool::Circle || tool == EditTool::Arc) {
                     float r = (mw - create_start).length() * vt.scale;
                     dl->AddCircle(to_screen(vt, create_start), r, COL_PREVIEW, 64, 1.5f * dpi_scale);
-                } else if (tool == EditTool::Segment || tool == EditTool::SegmentLight) {
+                } else if (tool == EditTool::Segment || tool == EditTool::SegmentLight || tool == EditTool::Bezier) {
                     dl->AddLine(to_screen(vt, create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
             }
@@ -394,11 +454,14 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                         std::visit(overloaded{
                             [&](const Circle& c) { drag_offset = c.center - mw; },
                             [&](const Segment& s) { drag_offset = s.a - mw; drag_offset_b = s.b - mw; },
+                            [&](const Arc& a) { drag_offset = a.center - mw; },
+                            [&](const Bezier& b) { drag_offset = b.p0 - mw; drag_offset_b = b.p2 - mw; },
                         }, scene.shapes[sel.index]);
                     } else {
                         std::visit(overloaded{
                             [&](const PointLight& l) { drag_offset = l.pos - mw; },
                             [&](const SegmentLight& l) { drag_offset = l.a - mw; drag_offset_b = l.b - mw; },
+                            [&](const BeamLight& l) { drag_offset = l.origin - mw; },
                         }, scene.lights[sel.index]);
                     }
                 } else {
@@ -409,6 +472,10 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 if (delete_selected()) reload();
             } else if (tool == EditTool::PointLight) {
                 scene.lights.push_back(PointLight{mw, 1.0f});
+                sel = {Selection::Light, (int)scene.lights.size() - 1};
+                reload();
+            } else if (tool == EditTool::BeamLight) {
+                scene.lights.push_back(BeamLight{mw, {1.0f, 0.0f}, 0.1f, 1.0f});
                 sel = {Selection::Light, (int)scene.lights.size() - 1};
                 reload();
             } else {
@@ -423,12 +490,18 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 std::visit(overloaded{
                     [&](Circle& c) { c.center = mw + drag_offset; },
                     [&](Segment& s) { s.a = mw + drag_offset; s.b = mw + drag_offset_b; },
+                    [&](Arc& a) { a.center = mw + drag_offset; },
+                    [&](Bezier& b) {
+                        Vec2 delta = (mw + drag_offset) - b.p0;
+                        b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta;
+                    },
                 }, scene.shapes[sel.index]);
                 reload();
             } else {
                 std::visit(overloaded{
                     [&](PointLight& l) { l.pos = mw + drag_offset; },
                     [&](SegmentLight& l) { l.a = mw + drag_offset; l.b = mw + drag_offset_b; },
+                    [&](BeamLight& l) { l.origin = mw + drag_offset; },
                 }, scene.lights[sel.index]);
                 reload();
             }
@@ -446,6 +519,16 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     reload();
                 } else if (tool == EditTool::Segment && dist > 0.01f) {
                     scene.shapes.push_back(Segment{create_start, end, Specular{0.95f}});
+                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
+                    reload();
+                } else if (tool == EditTool::Arc) {
+                    float r = std::max(dist, 0.02f);
+                    scene.shapes.push_back(Arc{create_start, r, 0.0f, TWO_PI, Refractive{1.5f, 20000.0f, 0.3f}});
+                    sel = {Selection::Shape, (int)scene.shapes.size() - 1};
+                    reload();
+                } else if (tool == EditTool::Bezier && dist > 0.01f) {
+                    Vec2 mid = (create_start + end) * 0.5f;
+                    scene.shapes.push_back(Bezier{create_start, mid, end, Refractive{1.5f, 20000.0f, 0.3f}});
                     sel = {Selection::Shape, (int)scene.shapes.size() - 1};
                     reload();
                 } else if (tool == EditTool::SegmentLight && dist > 0.01f) {
@@ -511,9 +594,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             tbtn("Select", EditTool::Select); ImGui::SameLine();
             tbtn("Circle", EditTool::Circle); ImGui::SameLine();
             tbtn("Segment", EditTool::Segment);
+            tbtn("Arc", EditTool::Arc); ImGui::SameLine();
+            tbtn("Bezier", EditTool::Bezier); ImGui::SameLine();
+            tbtn("Erase", EditTool::Erase);
             tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
             tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
-            tbtn("Erase", EditTool::Erase);
+            tbtn("Beam", EditTool::BeamLight);
 
             ImGui::Checkbox("Wireframe overlay", &show_wireframe);
         }
@@ -535,6 +621,12 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     [&](const Segment& s) {
                         std::snprintf(lbl, sizeof(lbl), "Segment %d (%s)", i, material_name(s.material));
                     },
+                    [&](const Arc& a) {
+                        std::snprintf(lbl, sizeof(lbl), "Arc %d (%s)", i, material_name(a.material));
+                    },
+                    [&](const Bezier& b) {
+                        std::snprintf(lbl, sizeof(lbl), "Bezier %d (%s)", i, material_name(b.material));
+                    },
                 }, scene.shapes[i]);
                 if (ImGui::Selectable(lbl, is_sel))
                     sel = {Selection::Shape, i};
@@ -549,6 +641,9 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     },
                     [&](const SegmentLight& l) {
                         std::snprintf(lbl, sizeof(lbl), "Seg Light %d (I=%.1f)", i, l.intensity);
+                    },
+                    [&](const BeamLight& l) {
+                        std::snprintf(lbl, sizeof(lbl), "Beam Light %d (I=%.1f)", i, l.intensity);
                     },
                 }, scene.lights[i]);
                 if (ImGui::Selectable(lbl, is_sel))
@@ -580,20 +675,49 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                         changed |= ImGui::DragFloat2("Point B", &s.b.x, 0.01f);
                         changed |= edit_material(s.material);
                     },
+                    [&](Arc& a) {
+                        changed |= ImGui::DragFloat2("Center", &a.center.x, 0.01f);
+                        changed |= ImGui::DragFloat("Radius", &a.radius, 0.005f, 0.01f, 5.0f);
+                        changed |= ImGui::SliderFloat("Start angle", &a.angle_start, 0.0f, TWO_PI);
+                        changed |= ImGui::SliderFloat("End angle", &a.angle_end, 0.0f, TWO_PI);
+                        changed |= edit_material(a.material);
+                    },
+                    [&](Bezier& b) {
+                        changed |= ImGui::DragFloat2("P0", &b.p0.x, 0.01f);
+                        changed |= ImGui::DragFloat2("P1 (ctrl)", &b.p1.x, 0.01f);
+                        changed |= ImGui::DragFloat2("P2", &b.p2.x, 0.01f);
+                        changed |= edit_material(b.material);
+                    },
                 }, shape);
             }
 
             if (sel.type == Selection::Light && sel.index < (int)scene.lights.size()) {
                 auto& light = scene.lights[sel.index];
+                auto edit_wavelength = [&](float& wl_min, float& wl_max) {
+                    changed |= ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
+                    changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
+                    if (wl_min > wl_max) wl_max = wl_min;
+                };
                 std::visit(overloaded{
                     [&](PointLight& l) {
                         changed |= ImGui::DragFloat2("Position", &l.pos.x, 0.01f);
                         changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
+                        edit_wavelength(l.wavelength_min, l.wavelength_max);
                     },
                     [&](SegmentLight& l) {
                         changed |= ImGui::DragFloat2("Point A", &l.a.x, 0.01f);
                         changed |= ImGui::DragFloat2("Point B", &l.b.x, 0.01f);
                         changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
+                        edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    },
+                    [&](BeamLight& l) {
+                        changed |= ImGui::DragFloat2("Origin", &l.origin.x, 0.01f);
+                        changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
+                        if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+                        else l.direction = {1.0f, 0.0f};
+                        changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.01f, PI);
+                        changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
+                        edit_wavelength(l.wavelength_min, l.wavelength_max);
                     },
                 }, light);
             }

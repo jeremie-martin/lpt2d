@@ -7,6 +7,13 @@
 #include <variant>
 #include <vector>
 
+// --- Constants ---
+
+inline constexpr float PI = 3.14159265358979f;
+inline constexpr float TWO_PI = 2.0f * PI;
+inline constexpr float INTERSECT_EPS = 1e-5f;
+inline constexpr float SCATTER_EPS = 1e-4f;
+
 // --- Math ---
 
 struct Vec2 {
@@ -44,6 +51,7 @@ struct Diffuse {
 
 struct Specular {
     float reflectance = 1.0f; // probability of reflection (else pass through)
+    float roughness = 0.0f;   // 0 = perfect mirror, >0 = glossy (angular spread)
 };
 
 struct Refractive {
@@ -67,21 +75,47 @@ struct Segment {
     Material material;
 };
 
-using Shape = std::variant<Circle, Segment>;
+struct Arc {
+    Vec2 center;
+    float radius;
+    float angle_start = 0.0f;                   // radians [0, 2π]
+    float angle_end = TWO_PI;  // radians [0, 2π]
+    Material material;
+};
+
+struct Bezier {
+    Vec2 p0, p1, p2; // p1 is control point
+    Material material;
+};
+
+using Shape = std::variant<Circle, Segment, Arc, Bezier>;
 
 // --- Lights ---
 
 struct PointLight {
     Vec2 pos;
     float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
 };
 
 struct SegmentLight {
     Vec2 a, b;
     float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
 };
 
-using Light = std::variant<PointLight, SegmentLight>;
+struct BeamLight {
+    Vec2 origin;
+    Vec2 direction{1.0f, 0.0f}; // normalized
+    float angular_width = 0.1f;  // full cone angle in radians
+    float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+};
+
+using Light = std::variant<PointLight, SegmentLight, BeamLight>;
 
 // --- Ray tracing ---
 
@@ -107,6 +141,8 @@ struct Scene {
 // Intersection testing
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle);
 std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
+std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
+std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // Scene bounds (AABB with padding)
@@ -132,11 +168,6 @@ struct PostProcess {
     ToneMap tone_map = ToneMap::ACES;
     float white_point = 1.0f;
 };
-
-// --- Constants ---
-
-inline constexpr float INTERSECT_EPS = 1e-5f;
-inline constexpr float SCATTER_EPS = 1e-4f;
 
 // --- Utilities ---
 

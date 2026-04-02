@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
@@ -48,6 +49,94 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg) {
     return Hit{t, point, normal, &seg.material};
 }
 
+static bool angle_in_arc(float angle, float start, float end) {
+    while (angle < 0.0f) angle += TWO_PI;
+    while (angle >= TWO_PI) angle -= TWO_PI;
+    if (start <= end)
+        return angle >= start && angle <= end;
+    else
+        return angle >= start || angle <= end;
+}
+
+std::optional<Hit> intersect(const Ray& ray, const Arc& arc) {
+    Vec2 oc = ray.origin - arc.center;
+    float a = ray.dir.dot(ray.dir);
+    float b = 2.0f * oc.dot(ray.dir);
+    float c = oc.dot(oc) - arc.radius * arc.radius;
+    float disc = b * b - 4.0f * a * c;
+
+    if (disc < 0)
+        return std::nullopt;
+
+    float sqrt_disc = std::sqrt(disc);
+    float t1 = (-b - sqrt_disc) / (2.0f * a);
+    float t2 = (-b + sqrt_disc) / (2.0f * a);
+
+    // Try both roots, take closest valid one within arc angle range
+    float roots[] = {t1, t2};
+    for (float t : roots) {
+        if (t < INTERSECT_EPS) continue;
+        Vec2 point = ray.origin + ray.dir * t;
+        float angle = std::atan2(point.y - arc.center.y, point.x - arc.center.x);
+        if (angle_in_arc(angle, arc.angle_start, arc.angle_end)) {
+            Vec2 normal = (point - arc.center).normalized();
+            return Hit{t, point, normal, &arc.material};
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<Hit> intersect(const Ray& ray, const Bezier& bez) {
+    // Quadratic Bezier: B(t) = (1-t)²p0 + 2t(1-t)p1 + t²p2 = At² + Bt + C
+    Vec2 A = bez.p0 - bez.p1 * 2.0f + bez.p2;
+    Vec2 B_coeff = (bez.p1 - bez.p0) * 2.0f;
+    Vec2 C = bez.p0;
+
+    // Cross-multiply to eliminate ray parameter s:
+    // (rd.y*A.x - rd.x*A.y)t² + (rd.y*B.x - rd.x*B.y)t + (rd.y*(C.x-ro.x) - rd.x*(C.y-ro.y)) = 0
+    Vec2 ro = ray.origin;
+    Vec2 rd = ray.dir;
+    float a_coeff = rd.y * A.x - rd.x * A.y;
+    float b_coeff = rd.y * B_coeff.x - rd.x * B_coeff.y;
+    float c_coeff = rd.y * (C.x - ro.x) - rd.x * (C.y - ro.y);
+
+    float roots[2];
+    int n_roots = 0;
+
+    if (std::abs(a_coeff) < INTERSECT_EPS) {
+        // Degenerate: linear
+        if (std::abs(b_coeff) >= INTERSECT_EPS) {
+            roots[0] = -c_coeff / b_coeff;
+            n_roots = 1;
+        }
+    } else {
+        float disc = b_coeff * b_coeff - 4.0f * a_coeff * c_coeff;
+        if (disc >= 0.0f) {
+            float sq = std::sqrt(disc);
+            roots[0] = (-b_coeff - sq) / (2.0f * a_coeff);
+            roots[1] = (-b_coeff + sq) / (2.0f * a_coeff);
+            n_roots = 2;
+        }
+    }
+
+    std::optional<Hit> best;
+    for (int i = 0; i < n_roots; ++i) {
+        float t = roots[i];
+        if (t < 0.0f || t > 1.0f) continue;
+        Vec2 point = A * (t * t) + B_coeff * t + C;
+        float s = (point - ro).dot(rd) / rd.dot(rd); // ray parameter
+        if (s < INTERSECT_EPS) continue;
+        if (best && s >= best->t) continue;
+
+        Vec2 tangent = A * (2.0f * t) + B_coeff;
+        Vec2 normal = tangent.perp().normalized();
+        if (normal.dot(rd) > 0.0f) normal = -normal;
+
+        best = Hit{s, point, normal, &bez.material};
+    }
+    return best;
+}
+
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
     std::optional<Hit> closest;
 
@@ -55,6 +144,8 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
         auto hit = std::visit(overloaded{
                                   [&](const Circle& c) { return intersect(ray, c); },
                                   [&](const Segment& s) { return intersect(ray, s); },
+                                  [&](const Arc& a) { return intersect(ray, a); },
+                                  [&](const Bezier& b) { return intersect(ray, b); },
                               },
                               shape);
 
@@ -87,6 +178,27 @@ Bounds compute_bounds(const Scene& scene, float padding) {
                            expand(s.a);
                            expand(s.b);
                        },
+                       [&](const Arc& a) {
+                           // Include arc endpoints
+                           expand(a.center + Vec2{a.radius * std::cos(a.angle_start),
+                                                  a.radius * std::sin(a.angle_start)});
+                           expand(a.center + Vec2{a.radius * std::cos(a.angle_end),
+                                                  a.radius * std::sin(a.angle_end)});
+                           // Include extrema at cardinal directions if within arc range
+                           constexpr float cardinals[] = {0.0f, 1.5707963f, 3.1415927f, 4.7123890f};
+                           constexpr float dx[] = {1.0f, 0.0f, -1.0f, 0.0f};
+                           constexpr float dy[] = {0.0f, 1.0f, 0.0f, -1.0f};
+                           for (int i = 0; i < 4; ++i) {
+                               if (angle_in_arc(cardinals[i], a.angle_start, a.angle_end))
+                                   expand(a.center + Vec2{a.radius * dx[i], a.radius * dy[i]});
+                           }
+                       },
+                       [&](const Bezier& b) {
+                           // Convex hull of control points contains the curve
+                           expand(b.p0);
+                           expand(b.p1);
+                           expand(b.p2);
+                       },
                    },
                    shape);
     }
@@ -97,6 +209,11 @@ Bounds compute_bounds(const Scene& scene, float padding) {
                        [&](const SegmentLight& l) {
                            expand(l.a);
                            expand(l.b);
+                       },
+                       [&](const BeamLight& l) {
+                           expand(l.origin);
+                           // Beam extends far in direction
+                           expand(l.origin + l.direction * 10.0f);
                        },
                    },
                    light);
