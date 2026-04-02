@@ -5,12 +5,6 @@
 #include <random>
 #include <vector>
 
-struct LineSegment {
-    float x0, y0, x1, y1;
-    float r, g, b;
-    float intensity;
-};
-
 class Tracer {
 public:
     struct Config {
@@ -24,9 +18,13 @@ public:
 
 private:
     std::mt19937 rng_{std::random_device{}()};
+    std::uniform_real_distribution<float> unit_dist_{0.0f, 1.0f};
+    std::uniform_real_distribution<float> wavelength_dist_{380.0f, 780.0f};
+    std::discrete_distribution<int> light_dist_;
+    const Scene* prepared_scene_ = nullptr;
     int total_ = 0;
 
+    void prepare(const Scene& scene);
     Ray generate_ray(const Light& light);
-    float random_wavelength();
     Ray scatter(const Ray& ray, const Hit& hit, float wavelength, bool& alive);
 };

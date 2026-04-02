@@ -77,7 +77,6 @@ bool HeadlessGL::init() {
         return false;
     }
 
-    initialized_ = true;
     return true;
 }
 
@@ -95,7 +94,6 @@ void HeadlessGL::shutdown() {
         eglTerminate(display_);
         display_ = EGL_NO_DISPLAY;
     }
-    initialized_ = false;
 }
 
 bool HeadlessGL::make_current() { return eglMakeCurrent(display_, surface_, surface_, context_) == EGL_TRUE; }

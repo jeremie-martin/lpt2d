@@ -112,20 +112,7 @@ int main(int argc, char** argv) {
 
         for (int i = 0; i < batches; ++i) {
             auto segments = tracer.trace_batch(scene, tcfg);
-
-            Vec2 size = bounds.max - bounds.min;
-            float scale_x = (float)width / size.x;
-            float scale_y = (float)height / size.y;
-            float scale = std::min(scale_x, scale_y);
-            Vec2 offset = {(width - size.x * scale) * 0.5f, (height - size.y * scale) * 0.5f};
-
-            for (auto& s : segments) {
-                s.x0 = (s.x0 - bounds.min.x) * scale + offset.x;
-                s.y0 = (s.y0 - bounds.min.y) * scale + offset.y;
-                s.x1 = (s.x1 - bounds.min.x) * scale + offset.x;
-                s.y1 = (s.y1 - bounds.min.y) * scale + offset.y;
-            }
-
+            world_to_pixel(segments, bounds, width, height);
             renderer.draw_lines(segments);
             renderer.flush();
 

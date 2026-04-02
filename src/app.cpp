@@ -2,8 +2,7 @@
 
 #include "export.h"
 #include "renderer.h"
-#include "scenes.h"
-#include "spectrum.h"
+#include "tracer.h"
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -80,21 +79,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         // Trace a batch
         if (!paused) {
             auto segments = tracer.trace_batch(scene, tcfg);
-
-            // Convert world coords to pixel coords
-            Vec2 size = bounds.max - bounds.min;
-            float scale_x = (float)config.width / size.x;
-            float scale_y = (float)config.height / size.y;
-            float scale = std::min(scale_x, scale_y);
-            Vec2 offset = {(config.width - size.x * scale) * 0.5f, (config.height - size.y * scale) * 0.5f};
-
-            for (auto& s : segments) {
-                s.x0 = (s.x0 - bounds.min.x) * scale + offset.x;
-                s.y0 = (s.y0 - bounds.min.y) * scale + offset.y;
-                s.x1 = (s.x1 - bounds.min.x) * scale + offset.x;
-                s.y1 = (s.y1 - bounds.min.y) * scale + offset.y;
-            }
-
+            world_to_pixel(segments, bounds, config.width, config.height);
             renderer.draw_lines(segments);
             renderer.flush();
             batches_done++;

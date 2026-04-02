@@ -345,6 +345,8 @@ bool Renderer::create_line_shader() {
     if (!v || !f)
         return false;
     line_program_ = link_program(v, f);
+    if (line_program_)
+        loc_resolution_ = glGetUniformLocation(line_program_, "uResolution");
     return line_program_ != 0;
 }
 
@@ -354,6 +356,15 @@ bool Renderer::create_pp_shader() {
     if (!v || !f)
         return false;
     pp_program_ = link_program(v, f);
+    if (pp_program_) {
+        loc_max_val_ = glGetUniformLocation(pp_program_, "uMaxVal");
+        loc_exposure_ = glGetUniformLocation(pp_program_, "uExposureMult");
+        loc_contrast_ = glGetUniformLocation(pp_program_, "uContrast");
+        loc_inv_gamma_ = glGetUniformLocation(pp_program_, "uInvGamma");
+        loc_tone_map_ = glGetUniformLocation(pp_program_, "uToneMapOp");
+        loc_white_point_ = glGetUniformLocation(pp_program_, "uWhitePoint");
+        loc_float_tex_ = glGetUniformLocation(pp_program_, "uFloatTexture");
+    }
     return pp_program_ != 0;
 }
 
@@ -442,8 +453,8 @@ void Renderer::draw_lines(std::span<const LineSegment> segments, float thickness
     vertex_buffer_.reserve(vertex_buffer_.size() + segments.size() * 6 * 7);
 
     for (const auto& seg : segments) {
-        float dx = seg.x1 - seg.x0;
-        float dy = seg.y1 - seg.y0;
+        float dx = seg.p1.x - seg.p0.x;
+        float dy = seg.p1.y - seg.p0.y;
         float len = std::sqrt(dx * dx + dy * dy);
         if (len < 0.001f)
             continue;
@@ -451,16 +462,15 @@ void Renderer::draw_lines(std::span<const LineSegment> segments, float thickness
         float nx = -dy / len * thickness;
         float ny = dx / len * thickness;
 
-        float cr = seg.r * seg.intensity;
-        float cg = seg.g * seg.intensity;
-        float cb = seg.b * seg.intensity;
+        float cr = seg.color.r * seg.intensity;
+        float cg = seg.color.g * seg.intensity;
+        float cb = seg.color.b * seg.intensity;
         float ca = seg.intensity;
 
-        // Quad corners
-        float p0x = seg.x0 - nx, p0y = seg.y0 - ny;
-        float p1x = seg.x0 + nx, p1y = seg.y0 + ny;
-        float p2x = seg.x1 - nx, p2y = seg.y1 - ny;
-        float p3x = seg.x1 + nx, p3y = seg.y1 + ny;
+        float p0x = seg.p0.x - nx, p0y = seg.p0.y - ny;
+        float p1x = seg.p0.x + nx, p1y = seg.p0.y + ny;
+        float p2x = seg.p1.x - nx, p2y = seg.p1.y - ny;
+        float p3x = seg.p1.x + nx, p3y = seg.p1.y + ny;
 
         auto add = [&](float px, float py, float dist) {
             vertex_buffer_.push_back(px);
@@ -493,7 +503,7 @@ void Renderer::flush() {
     glBlendFunc(GL_ONE, GL_ONE);
 
     glUseProgram(line_program_);
-    glUniform2f(glGetUniformLocation(line_program_, "uResolution"), (float)width_, (float)height_);
+    glUniform2f(loc_resolution_, (float)width_, (float)height_);
 
     glBindVertexArray(line_vao_);
     glBindBuffer(GL_ARRAY_BUFFER, line_vbo_);
@@ -534,16 +544,16 @@ void Renderer::update_display(const PostProcess& pp) {
     glDisable(GL_BLEND);
 
     glUseProgram(pp_program_);
-    glUniform1f(glGetUniformLocation(pp_program_, "uMaxVal"), divisor);
-    glUniform1f(glGetUniformLocation(pp_program_, "uExposureMult"), exposure_mult);
-    glUniform1f(glGetUniformLocation(pp_program_, "uContrast"), pp.contrast);
-    glUniform1f(glGetUniformLocation(pp_program_, "uInvGamma"), inv_gamma);
-    glUniform1i(glGetUniformLocation(pp_program_, "uToneMapOp"), (int)pp.tone_map);
-    glUniform1f(glGetUniformLocation(pp_program_, "uWhitePoint"), pp.white_point);
+    glUniform1f(loc_max_val_, divisor);
+    glUniform1f(loc_exposure_, exposure_mult);
+    glUniform1f(loc_contrast_, pp.contrast);
+    glUniform1f(loc_inv_gamma_, inv_gamma);
+    glUniform1i(loc_tone_map_, (int)pp.tone_map);
+    glUniform1f(loc_white_point_, pp.white_point);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
-    glUniform1i(glGetUniformLocation(pp_program_, "uFloatTexture"), 0);
+    glUniform1i(loc_float_tex_, 0);
 
     glBindVertexArray(pp_vao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);

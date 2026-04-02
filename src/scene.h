@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <optional>
+#include <span>
 #include <string>
 #include <variant>
 #include <vector>
@@ -25,6 +26,7 @@ struct Vec2 {
         return l > 0 ? Vec2{x / l, y / l} : Vec2{0, 0};
     }
     Vec2 perp() const { return {-y, x}; }
+    Vec2 reflect(Vec2 n) const { return *this - n * (2.0f * dot(n)); }
 };
 
 inline Vec2 operator*(float s, Vec2 v) { return {s * v.x, s * v.y}; }
@@ -108,8 +110,39 @@ struct Bounds {
 };
 Bounds compute_bounds(const Scene& scene, float padding = 0.05f);
 
-// Variant helper
+// --- Rendering types ---
+
+struct LineSegment {
+    Vec2 p0, p1;
+    Vec3 color;
+    float intensity;
+};
+
+enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
+
+struct PostProcess {
+    float exposure = 0.0f;   // stops
+    float contrast = 1.0f;   // centered at 0.5
+    float gamma = 2.2f;      // sRGB
+    ToneMap tone_map = ToneMap::ACES;
+    float white_point = 1.0f;
+};
+
+// --- Constants ---
+
+inline constexpr float INTERSECT_EPS = 1e-5f;
+inline constexpr float SCATTER_EPS = 1e-4f;
+
+// --- Utilities ---
+
+// Variant dispatch helper
 template <class... Ts>
 struct overloaded : Ts... {
     using Ts::operator()...;
 };
+
+// Transform line segments from world coords to pixel coords
+void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int width, int height);
+
+// Add four axis-aligned walls forming a box
+void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);

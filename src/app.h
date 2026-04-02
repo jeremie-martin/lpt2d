@@ -1,8 +1,6 @@
 #pragma once
 
-#include "renderer.h"
 #include "scene.h"
-#include "tracer.h"
 
 #include <functional>
 #include <string>

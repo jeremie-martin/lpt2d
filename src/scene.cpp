@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <limits>
 
-static constexpr float EPS = 1e-5f;
-
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
     Vec2 oc = ray.origin - circle.center;
     float a = ray.dir.dot(ray.dir);
@@ -19,7 +17,7 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
     float t1 = (-b - sqrt_disc) / (2.0f * a);
     float t2 = (-b + sqrt_disc) / (2.0f * a);
 
-    float t = (t1 > EPS) ? t1 : ((t2 > EPS) ? t2 : -1.0f);
+    float t = (t1 > INTERSECT_EPS) ? t1 : ((t2 > INTERSECT_EPS) ? t2 : -1.0f);
     if (t < 0)
         return std::nullopt;
 
@@ -35,13 +33,13 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg) {
     Vec2 f = ray.origin - seg.a;
 
     float denom = e.x * d.y - e.y * d.x;
-    if (std::abs(denom) < EPS)
+    if (std::abs(denom) < INTERSECT_EPS)
         return std::nullopt;
 
     float t = (d.x * f.y - d.y * f.x) / denom;
     float s = (e.x * f.y - e.y * f.x) / denom;
 
-    if (t < EPS || s < 0.0f || s > 1.0f)
+    if (t < INTERSECT_EPS || s < 0.0f || s > 1.0f)
         return std::nullopt;
 
     Vec2 point = ray.origin + ray.dir * t;
@@ -107,4 +105,24 @@ Bounds compute_bounds(const Scene& scene, float padding) {
     Vec2 size = hi - lo;
     float pad = std::max(size.x, size.y) * padding;
     return {lo - Vec2{pad, pad}, hi + Vec2{pad, pad}};
+}
+
+void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int width, int height) {
+    Vec2 size = bounds.max - bounds.min;
+    float scale_x = (float)width / size.x;
+    float scale_y = (float)height / size.y;
+    float scale = std::min(scale_x, scale_y);
+    Vec2 offset = {(width - size.x * scale) * 0.5f, (height - size.y * scale) * 0.5f};
+
+    for (auto& s : segments) {
+        s.p0 = (s.p0 - bounds.min) * scale + offset;
+        s.p1 = (s.p1 - bounds.min) * scale + offset;
+    }
+}
+
+void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat) {
+    scene.shapes.push_back(Segment{{-half_w, -half_h}, {half_w, -half_h}, mat});
+    scene.shapes.push_back(Segment{{-half_w, half_h}, {half_w, half_h}, mat});
+    scene.shapes.push_back(Segment{{-half_w, -half_h}, {-half_w, half_h}, mat});
+    scene.shapes.push_back(Segment{{half_w, -half_h}, {half_w, half_h}, mat});
 }

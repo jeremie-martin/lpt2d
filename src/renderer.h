@@ -1,21 +1,10 @@
 #pragma once
 
-#include "tracer.h"
+#include "scene.h"
 
 #include <GL/glew.h>
 #include <cstdint>
-#include <span>
 #include <vector>
-
-enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
-
-struct PostProcess {
-    float exposure = 0.0f;   // stops
-    float contrast = 1.0f;   // centered at 0.5
-    float gamma = 2.2f;      // sRGB
-    ToneMap tone_map = ToneMap::None;
-    float white_point = 1.0f;
-};
 
 class Renderer {
 public:
@@ -63,7 +52,17 @@ private:
     bool has_compute_ = false;
 
     float last_max_ = 0.0f;
-    std::vector<float> float_buffer_; // CPU fallback readback
+    std::vector<float> float_buffer_;
+
+    // Cached uniform locations
+    GLint loc_resolution_ = -1;
+    GLint loc_max_val_ = -1;
+    GLint loc_exposure_ = -1;
+    GLint loc_contrast_ = -1;
+    GLint loc_inv_gamma_ = -1;
+    GLint loc_tone_map_ = -1;
+    GLint loc_white_point_ = -1;
+    GLint loc_float_tex_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();
