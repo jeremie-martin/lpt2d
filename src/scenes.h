@@ -9,12 +9,12 @@ inline Scene scene_three_spheres() {
     Scene s;
     s.name = "three_spheres";
 
-    Refractive glass{1.5f, 20000.0f, 0.5f};
+    Material glass = mat_glass(1.5f, 20000.0f, 0.5f);
     s.shapes.push_back(Circle{{-0.5f, 0.0f}, 0.2f, glass});
     s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.2f, glass});
     s.shapes.push_back(Circle{{0.5f, 0.0f}, 0.2f, glass});
 
-    add_box_walls(s, 1.2f, 0.8f, Specular{0.95f});
+    add_box_walls(s, 1.2f, 0.8f, mat_mirror(0.95f));
 
     s.lights.push_back(PointLight{{-0.8f, 0.5f}, 1.0f});
     s.lights.push_back(PointLight{{0.8f, -0.5f}, 1.0f});
@@ -31,19 +31,19 @@ inline Scene scene_prism() {
     Vec2 p0{-0.1f, -h * 0.6f};
     Vec2 p1{-0.1f - size, h * 0.4f};
     Vec2 p2{-0.1f + size, h * 0.4f};
-    Refractive glass{1.5f, 30000.0f, 0.3f};
+    Material glass = mat_glass(1.5f, 30000.0f, 0.3f);
 
     // CW winding → perp() gives outward normals
     s.shapes.push_back(Segment{p0, p1, glass});
     s.shapes.push_back(Segment{p1, p2, glass});
     s.shapes.push_back(Segment{p2, p0, glass});
 
-    add_box_walls(s, 1.2f, 0.8f, Diffuse{});
+    add_box_walls(s, 1.2f, 0.8f, mat_absorber());
 
     // Slit to collimate the beam
     float slit_x = -0.7f, slit_gap = 0.04f;
-    s.shapes.push_back(Segment{{slit_x, -0.8f}, {slit_x, -slit_gap}, Diffuse{}});
-    s.shapes.push_back(Segment{{slit_x, slit_gap}, {slit_x, 0.8f}, Diffuse{}});
+    s.shapes.push_back(Segment{{slit_x, -0.8f}, {slit_x, -slit_gap}, mat_absorber()});
+    s.shapes.push_back(Segment{{slit_x, slit_gap}, {slit_x, 0.8f}, mat_absorber()});
 
     s.lights.push_back(PointLight{{-1.0f, 0.0f}, 1.0f});
 
@@ -54,9 +54,9 @@ inline Scene scene_diamond() {
     Scene s;
     s.name = "diamond";
 
-    s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.35f, Refractive{2.42f, 30000.0f, 0.2f}});
+    s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.35f, mat_glass(2.42f, 30000.0f, 0.2f)});
 
-    add_box_walls(s, 1.0f, 0.7f, Specular{0.95f});
+    add_box_walls(s, 1.0f, 0.7f, mat_mirror(0.95f));
 
     s.lights.push_back(PointLight{{-0.7f, 0.4f}, 1.0f});
     s.lights.push_back(PointLight{{0.7f, 0.4f}, 1.0f});
@@ -69,11 +69,11 @@ inline Scene scene_lens() {
     Scene s;
     s.name = "lens";
 
-    Refractive glass{1.5f, 20000.0f, 0.3f};
+    Material glass = mat_glass(1.5f, 20000.0f, 0.3f);
     s.shapes.push_back(Circle{{-0.35f, 0.0f}, 0.4f, glass});
     s.shapes.push_back(Circle{{0.35f, 0.0f}, 0.4f, glass});
 
-    add_box_walls(s, 1.2f, 0.8f, Diffuse{0.1f});
+    add_box_walls(s, 1.2f, 0.8f, mat_diffuse(0.1f));
 
     s.lights.push_back(SegmentLight{{-1.0f, 0.3f}, {-1.0f, -0.3f}, 1.0f});
 
@@ -87,17 +87,17 @@ inline Scene scene_fiber() {
 
     // Outer mirrored walls forming a narrow channel
     float len = 1.5f, gap = 0.12f;
-    s.shapes.push_back(Segment{{-len, -gap}, {len, -gap}, Specular{0.98f}});
-    s.shapes.push_back(Segment{{-len, gap}, {len, gap}, Specular{0.98f}});
+    s.shapes.push_back(Segment{{-len, -gap}, {len, -gap}, mat_mirror(0.98f)});
+    s.shapes.push_back(Segment{{-len, gap}, {len, gap}, mat_mirror(0.98f)});
 
     // Glass core (slight curve via two large circles)
-    Refractive glass{1.5f, 15000.0f, 0.5f};
+    Material glass = mat_glass(1.5f, 15000.0f, 0.5f);
     s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.06f, glass});
     s.shapes.push_back(Circle{{0.5f, 0.0f}, 0.06f, glass});
     s.shapes.push_back(Circle{{-0.5f, 0.0f}, 0.06f, glass});
 
     // End caps
-    s.shapes.push_back(Segment{{len, -gap}, {len, gap}, Diffuse{}});
+    s.shapes.push_back(Segment{{len, -gap}, {len, gap}, mat_absorber()});
 
     s.lights.push_back(SegmentLight{{-len, gap}, {-len, -gap}, 1.0f});
 
@@ -109,12 +109,12 @@ inline Scene scene_mirror_box() {
     Scene s;
     s.name = "mirror_box";
 
-    add_box_walls(s, 0.9f, 0.6f, Specular{0.95f});
+    add_box_walls(s, 0.9f, 0.6f, mat_mirror(0.95f));
 
     // A few glass spheres of varying sizes
-    s.shapes.push_back(Circle{{-0.3f, 0.15f}, 0.15f, Refractive{1.8f, 25000.0f, 0.4f}});
-    s.shapes.push_back(Circle{{0.3f, -0.1f}, 0.1f, Refractive{1.5f, 20000.0f, 0.3f}});
-    s.shapes.push_back(Circle{{0.0f, -0.25f}, 0.08f, Refractive{2.0f, 30000.0f, 0.5f}});
+    s.shapes.push_back(Circle{{-0.3f, 0.15f}, 0.15f, mat_glass(1.8f, 25000.0f, 0.4f)});
+    s.shapes.push_back(Circle{{0.3f, -0.1f}, 0.1f, mat_glass(1.5f, 20000.0f, 0.3f)});
+    s.shapes.push_back(Circle{{0.0f, -0.25f}, 0.08f, mat_glass(2.0f, 30000.0f, 0.5f)});
 
     s.lights.push_back(PointLight{{-0.6f, -0.35f}, 1.0f});
     s.lights.push_back(PointLight{{0.6f, 0.35f}, 0.7f});
@@ -131,7 +131,7 @@ inline Scene scene_ring() {
     int n = 8;
     float ring_r = 0.5f;
     float sphere_r = 0.1f;
-    Refractive glass{1.5f, 20000.0f, 0.4f};
+    Material glass = mat_glass(1.5f, 20000.0f, 0.4f);
 
     for (int i = 0; i < n; ++i) {
         float angle = 2.0f * PI * i / n;
@@ -139,7 +139,7 @@ inline Scene scene_ring() {
         s.shapes.push_back(Circle{pos, sphere_r, glass});
     }
 
-    add_box_walls(s, 1.0f, 1.0f, Specular{0.95f});
+    add_box_walls(s, 1.0f, 1.0f, mat_mirror(0.95f));
 
     s.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
 
@@ -163,11 +163,11 @@ inline Scene scene_crystal_field() {
             float x = (c - (n_cols - 1) * 0.5f) * spacing + x_off;
             float y = (r - (rows - 1) * 0.5f) * spacing * (std::sqrt(3.0f) / 2.0f);
             float ior = iors[(c + r) % 4];
-            s.shapes.push_back(Circle{{x, y}, sphere_r, Refractive{ior, 20000.0f, 0.3f}});
+            s.shapes.push_back(Circle{{x, y}, sphere_r, mat_glass(ior, 20000.0f, 0.3f)});
         }
     }
 
-    add_box_walls(s, 1.2f, 0.8f, Specular{0.9f});
+    add_box_walls(s, 1.2f, 0.8f, mat_mirror(0.9f));
 
     s.lights.push_back(PointLight{{-1.0f, 0.6f}, 1.0f});
     s.lights.push_back(PointLight{{0.8f, -0.6f}, 0.7f});
@@ -198,10 +198,10 @@ inline Scene scene_mirrors() {
         Vec2 dir{std::cos(angle) * half_len, std::sin(angle) * half_len};
         Vec2 center{cx, cy};
         float refl = 0.3f + rng() * 0.5f;
-        s.shapes.push_back(Segment{center - dir, center + dir, Specular{refl}});
+        s.shapes.push_back(Segment{center - dir, center + dir, mat_mirror(refl)});
     }
 
-    add_box_walls(s, 1.0f, 0.7f, Specular{0.9f});
+    add_box_walls(s, 1.0f, 0.7f, mat_mirror(0.9f));
 
     s.lights.push_back(PointLight{{-0.7f, 0.0f}, 1.0f});
     s.lights.push_back(PointLight{{0.5f, 0.4f}, 0.8f});
@@ -219,11 +219,11 @@ inline Scene scene_double_slit() {
     float slit_sep = 0.15f;
 
     // Wall with two slits
-    s.shapes.push_back(Segment{{wall_x, -1.0f}, {wall_x, -slit_sep / 2 - slit_gap}, Diffuse{}});
-    s.shapes.push_back(Segment{{wall_x, -slit_sep / 2 + slit_gap}, {wall_x, slit_sep / 2 - slit_gap}, Diffuse{}});
-    s.shapes.push_back(Segment{{wall_x, slit_sep / 2 + slit_gap}, {wall_x, 1.0f}, Diffuse{}});
+    s.shapes.push_back(Segment{{wall_x, -1.0f}, {wall_x, -slit_sep / 2 - slit_gap}, mat_absorber()});
+    s.shapes.push_back(Segment{{wall_x, -slit_sep / 2 + slit_gap}, {wall_x, slit_sep / 2 - slit_gap}, mat_absorber()});
+    s.shapes.push_back(Segment{{wall_x, slit_sep / 2 + slit_gap}, {wall_x, 1.0f}, mat_absorber()});
 
-    add_box_walls(s, 1.2f, 0.8f, Diffuse{});
+    add_box_walls(s, 1.2f, 0.8f, mat_absorber());
 
     // Point light far to the left (approximate plane wave)
     s.lights.push_back(PointLight{{-1.0f, 0.0f}, 1.0f});

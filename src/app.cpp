@@ -100,37 +100,36 @@ static Selection hit_test(Vec2 wp, const Scene& scene, float threshold) {
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 static const char* material_name(const Material& m) {
-    return std::visit(overloaded{
-        [](const Diffuse&) -> const char* { return "Diffuse"; },
-        [](const Specular&) -> const char* { return "Mirror"; },
-        [](const Refractive&) -> const char* { return "Glass"; },
-    }, m);
+    if (m.albedo <= 0.0f) return "Absorber";
+    if (m.transmission > 0.5f && m.metallic < 0.5f && m.ior > 1.01f) return "Glass";
+    if (m.metallic > 0.5f) return "Mirror";
+    if (m.roughness > 0.5f) return "Diffuse";
+    return "Material";
 }
 
 // ─── Material editor ────────────────────────────────────────────────────
 
 static bool edit_material(Material& mat) {
     bool changed = false;
-    int idx = (int)mat.index();
-    const char* names[] = {"Diffuse", "Mirror", "Glass"};
-    if (ImGui::Combo("Material", &idx, names, 3) && idx != (int)mat.index()) {
-        if (idx == 0) mat = Diffuse{0.5f};
-        else if (idx == 1) mat = Specular{0.95f};
-        else mat = Refractive{1.5f, 20000.0f, 0.3f};
-        changed = true;
+
+    // Quick presets
+    const char* presets[] = {"(custom)", "Absorber", "Diffuse", "Mirror", "Glass"};
+    int preset = 0;
+    if (ImGui::Combo("Preset", &preset, presets, 5)) {
+        if (preset == 1) mat = mat_absorber();
+        else if (preset == 2) mat = mat_diffuse(0.5f);
+        else if (preset == 3) mat = mat_mirror(0.95f);
+        else if (preset == 4) mat = mat_glass(1.5f, 20000.0f, 0.3f);
+        if (preset > 0) changed = true;
     }
-    std::visit(overloaded{
-        [&](Diffuse& d)    { changed |= ImGui::SliderFloat("Reflectance", &d.reflectance, 0.0f, 1.0f); },
-        [&](Specular& s)   {
-            changed |= ImGui::SliderFloat("Reflectance", &s.reflectance, 0.0f, 1.0f);
-            changed |= ImGui::SliderFloat("Roughness", &s.roughness, 0.0f, 1.0f);
-        },
-        [&](Refractive& r) {
-            changed |= ImGui::SliderFloat("IOR", &r.ior, 1.0f, 3.0f);
-            changed |= ImGui::SliderFloat("Dispersion", &r.cauchy_b, 0.0f, 50000.0f, "%.0f");
-            changed |= ImGui::SliderFloat("Absorption", &r.absorption, 0.0f, 2.0f);
-        },
-    }, mat);
+
+    changed |= ImGui::SliderFloat("IOR", &mat.ior, 1.0f, 3.0f);
+    changed |= ImGui::SliderFloat("Roughness", &mat.roughness, 0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Metallic", &mat.metallic, 0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Transmission", &mat.transmission, 0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Absorption", &mat.absorption, 0.0f, 2.0f);
+    changed |= ImGui::SliderFloat("Dispersion", &mat.cauchy_b, 0.0f, 50000.0f, "%.0f");
+    changed |= ImGui::SliderFloat("Albedo", &mat.albedo, 0.0f, 1.0f);
     return changed;
 }
 
@@ -514,21 +513,21 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
 
                 if (tool == EditTool::Circle) {
                     float r = std::max(dist, 0.02f);
-                    scene.shapes.push_back(Circle{create_start, r, Refractive{1.5f, 20000.0f, 0.3f}});
+                    scene.shapes.push_back(Circle{create_start, r, mat_glass(1.5f, 20000.0f, 0.3f)});
                     sel = {Selection::Shape, (int)scene.shapes.size() - 1};
                     reload();
                 } else if (tool == EditTool::Segment && dist > 0.01f) {
-                    scene.shapes.push_back(Segment{create_start, end, Specular{0.95f}});
+                    scene.shapes.push_back(Segment{create_start, end, mat_mirror(0.95f)});
                     sel = {Selection::Shape, (int)scene.shapes.size() - 1};
                     reload();
                 } else if (tool == EditTool::Arc) {
                     float r = std::max(dist, 0.02f);
-                    scene.shapes.push_back(Arc{create_start, r, 0.0f, TWO_PI, Refractive{1.5f, 20000.0f, 0.3f}});
+                    scene.shapes.push_back(Arc{create_start, r, 0.0f, TWO_PI, mat_glass(1.5f, 20000.0f, 0.3f)});
                     sel = {Selection::Shape, (int)scene.shapes.size() - 1};
                     reload();
                 } else if (tool == EditTool::Bezier && dist > 0.01f) {
                     Vec2 mid = (create_start + end) * 0.5f;
-                    scene.shapes.push_back(Bezier{create_start, mid, end, Refractive{1.5f, 20000.0f, 0.3f}});
+                    scene.shapes.push_back(Bezier{create_start, mid, end, mat_glass(1.5f, 20000.0f, 0.3f)});
                     sel = {Selection::Shape, (int)scene.shapes.size() - 1};
                     reload();
                 } else if (tool == EditTool::SegmentLight && dist > 0.01f) {
@@ -569,7 +568,7 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 current_scene = -1;
                 scene = Scene{};
                 scene.name = "custom";
-                add_box_walls(scene, 1.0f, 0.7f, Specular{0.95f});
+                add_box_walls(scene, 1.0f, 0.7f, mat_mirror(0.95f));
                 scene.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
                 sel = {};
                 creating = false;

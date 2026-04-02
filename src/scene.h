@@ -43,24 +43,28 @@ struct Vec3 {
     Vec3 operator*(float s) const { return {r * s, g * s, b * s}; }
 };
 
-// --- Materials ---
+// --- Materials (Principled BSDF) ---
 
-struct Diffuse {
-    float reflectance = 0.0f; // 0 = absorb, >0 = probability of diffuse scatter
+struct Material {
+    float ior = 1.0f;          // Index of refraction (1.0 = no refraction boundary)
+    float roughness = 0.0f;    // 0 = perfect specular, 1 = fully diffuse
+    float metallic = 0.0f;     // 0 = dielectric (Fresnel), 1 = conductor (flat reflectance)
+    float transmission = 0.0f; // 0 = opaque, 1 = fully transmissive
+    float absorption = 0.0f;   // Beer-Lambert coefficient inside medium
+    float cauchy_b = 0.0f;     // Cauchy dispersion coefficient (nm^2)
+    float albedo = 1.0f;       // Scattering probability [0,1]
 };
 
-struct Specular {
-    float reflectance = 1.0f; // probability of reflection (else pass through)
-    float roughness = 0.0f;   // 0 = perfect mirror, >0 = glossy (angular spread)
-};
-
-struct Refractive {
-    float ior = 1.5f;
-    float cauchy_b = 0.0f;    // Cauchy dispersion coefficient (nm^2)
-    float absorption = 0.0f;  // Beer-Lambert absorption coefficient (per world unit)
-};
-
-using Material = std::variant<Diffuse, Specular, Refractive>;
+// Convenience constructors
+inline Material mat_absorber() { return {.albedo = 0.0f}; }
+inline Material mat_diffuse(float reflectance) { return {.albedo = reflectance}; }
+inline Material mat_mirror(float reflectance, float roughness = 0.0f) {
+    // transmission=1 so non-reflected rays pass through (ior=1 refraction = no bending)
+    return {.roughness = roughness, .metallic = 1.0f, .transmission = 1.0f, .albedo = reflectance};
+}
+inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0.0f) {
+    return {.ior = ior, .transmission = 1.0f, .absorption = absorption, .cauchy_b = cauchy_b};
+}
 
 // --- Geometry ---
 

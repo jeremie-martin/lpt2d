@@ -16,24 +16,17 @@ layout(local_size_x = 64) in;
 struct GPUCircle {
     vec2 center;
     float radius;
-    uint mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
-    float _pad;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad0, _pad1; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
 };
 
 struct GPUSeg {
     vec2 a;
     vec2 b;
-    uint mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad;
 };
 
 struct GPULight {
@@ -70,25 +63,19 @@ struct GPUArc {
     float radius;
     float angle_start;
     float angle_end;
-    uint mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
-    float _pad;
+    float _pad0;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad1;
 };
 
 struct GPUBezier {
     vec2 p0;
     vec2 p1;
     vec2 p2;
-    uint mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad;
 };
 
 layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
@@ -136,20 +123,36 @@ vec3 wavelength_rgb(float nm) {
     return texture(uWavelengthLUT, t).rgb;
 }
 
+// ── Scattering helpers ──
+
+vec2 cosine_scatter_2d(vec2 n) {
+    float u = rand01();
+    float sin_theta = 2.0 * u - 1.0;
+    float cos_theta = sqrt(1.0 - sin_theta * sin_theta);
+    vec2 tangent = vec2(-n.y, n.x);
+    return n * cos_theta + tangent * sin_theta;
+}
+
+vec2 rotate_2d(vec2 v, float angle) {
+    float cs = cos(angle), sn = sin(angle);
+    return vec2(v.x*cs - v.y*sn, v.x*sn + v.y*cs);
+}
+
 // ── Intersection ──
 struct Hit {
     float t;
     vec2 point;
     vec2 normal;
-    uint mat_type;
     float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
     float roughness;
+    float metallic;
+    float transmission;
+    float absorption;
+    float cauchy_b;
+    float albedo;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 0u, 0.0, 0.0, 0.0, 0.0, 0.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -166,7 +169,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.mat_type, c.ior, c.cauchy_b, c.reflectance, c.absorption, c.roughness);
+    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -181,7 +184,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.mat_type, s.ior, s.cauchy_b, s.reflectance, s.absorption, s.roughness);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo);
 }
 
 bool in_arc(float angle, float start, float end) {
@@ -212,7 +215,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.angle_end)) {
             return Hit(t, p, normalize(p - a.center),
-                       a.mat_type, a.ior, a.cauchy_b, a.reflectance, a.absorption, a.roughness);
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo);
         }
     }
     return NO_HIT;
@@ -257,7 +260,7 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = Hit(s, p, n, b.mat_type, b.ior, b.cauchy_b, b.reflectance, b.absorption, b.roughness);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo);
     }
     return best;
 }
@@ -350,46 +353,16 @@ void main() {
 
         emit(ro, h.point, color);
 
-        if (h.mat_type == 0u) {
-            // Diffuse: scatter with probability reflectance, else absorb
-            if (h.reflectance > 0.0 && rand01() < h.reflectance) {
-                vec2 n = h.normal;
-                if (dot(rd, n) > 0.0) n = -n;
-                // Cosine-weighted random direction in 2D half-plane (Malley's method)
-                float u = rand01();
-                float sin_theta = 2.0 * u - 1.0;
-                float cos_theta = sqrt(1.0 - sin_theta * sin_theta);
-                vec2 tangent = vec2(-n.y, n.x);
-                rd = n * cos_theta + tangent * sin_theta;
-                ro = h.point + n * SCATTER_EPS;
-            } else {
-                return;
-            }
-        } else if (h.mat_type == 1u) {
-            // Specular: reflect with probability reflectance, else pass through
-            vec2 n = h.normal;
-            if (dot(rd, n) > 0.0) n = -n;
-            if (rand01() < h.reflectance) {
-                rd = reflect(rd, n);
-                // Glossy perturbation (triangular distribution for smooth falloff)
-                if (h.roughness > 0.0) {
-                    float perturb = (rand01() + rand01() - 1.0) * PI * h.roughness;
-                    float cs = cos(perturb), sn = sin(perturb);
-                    vec2 new_rd = vec2(rd.x*cs - rd.y*sn, rd.x*sn + rd.y*cs);
-                    if (dot(new_rd, n) > 0.0) rd = new_rd;
-                }
-                ro = h.point + n * SCATTER_EPS;
-            } else {
-                ro = h.point - n * SCATTER_EPS;
-            }
-        } else {
-            // Refractive: Fresnel + Snell with Cauchy dispersion + absorption
+        // ── Unified Principled BSDF ──
+        {
             vec2 n = h.normal;
             float cos_i = dot(rd, n);
 
+            // Cauchy dispersion
             float lambda_um = wavelength * 0.001;
             float ior = h.ior + h.cauchy_b / (lambda_um * lambda_um * 1e6);
 
+            // Orient normal toward incoming ray, determine n1/n2
             float n1, n2;
             bool entering;
             if (cos_i > 0.0) {
@@ -402,28 +375,55 @@ void main() {
                 entering = true;
             }
 
+            // Fresnel reflectance (dielectric)
             float ratio = n1 / n2;
             float cos_t_sq = 1.0 - ratio * ratio * (1.0 - cos_i * cos_i);
 
+            float F_dielectric;
+            float cos_t = 0.0;
+            bool tir = false;
             if (cos_t_sq < 0.0) {
-                // Total internal reflection — stay in same medium
-                rd = reflect(rd, n);
-                ro = h.point + n * SCATTER_EPS;
+                F_dielectric = 1.0; // Total internal reflection
+                tir = true;
             } else {
-                float cos_t = sqrt(cos_t_sq);
+                cos_t = sqrt(cos_t_sq);
                 float rs = (n1 * cos_i - n2 * cos_t) / (n1 * cos_i + n2 * cos_t);
                 float rp = (n2 * cos_i - n1 * cos_t) / (n1 * cos_t + n2 * cos_i);
-                float R = 0.5 * (rs * rs + rp * rp);
+                F_dielectric = 0.5 * (rs * rs + rp * rp);
+            }
 
-                if (rand01() < R) {
-                    // Fresnel reflection — stay in same medium
-                    rd = reflect(rd, n);
-                    ro = h.point + n * SCATTER_EPS;
+            // Metallic blend: metals use albedo as flat reflectance
+            float F_eff = mix(F_dielectric, h.albedo, h.metallic);
+            if (tir) F_eff = 1.0;
+
+            if (rand01() < F_eff) {
+                // ── REFLECT ──
+                if (h.roughness >= 1.0) {
+                    rd = cosine_scatter_2d(n);
                 } else {
-                    // Refraction — cross boundary, update medium
+                    rd = reflect(rd, n);
+                    if (h.roughness > 0.0) {
+                        vec2 new_rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness);
+                        if (dot(new_rd, n) > 0.0) rd = new_rd;
+                    }
+                }
+                ro = h.point + n * SCATTER_EPS;
+            } else {
+                // ── NON-REFLECTED ──
+                if (h.transmission > 0.0 && rand01() < h.transmission) {
+                    // Refract (Snell's law)
                     rd = normalize(rd * ratio + n * (ratio * cos_i - cos_t));
+                    if (h.roughness > 0.0 && h.roughness < 1.0) {
+                        vec2 new_rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness * 0.5);
+                        if (dot(new_rd, n) < 0.0) rd = new_rd;
+                    }
                     ro = h.point - n * SCATTER_EPS;
                     current_absorption = entering ? h.absorption : 0.0;
+                } else if (rand01() < h.albedo) {
+                    rd = cosine_scatter_2d(n);
+                    ro = h.point + n * SCATTER_EPS;
+                } else {
+                    return; // absorb
                 }
             }
         }
@@ -681,27 +681,20 @@ static GLuint link_compute(GLuint cs) {
 struct GPUCircle {
     float center[2];
     float radius;
-    uint32_t mat_type; // 0=diffuse, 1=specular, 2=refractive
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
-    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad[2]; // std430: vec2 center gives alignment 8, stride must be multiple of 8
 };
-static_assert(sizeof(GPUCircle) == 40);
+static_assert(sizeof(GPUCircle) == 48);
 
 struct GPUSegment {
     float a[2];
     float b[2];
-    uint32_t mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad;
 };
-static_assert(sizeof(GPUSegment) == 40);
+static_assert(sizeof(GPUSegment) == 48);
 
 struct GPULight {
     uint32_t type; // 0=point, 1=segment, 2=beam
@@ -720,28 +713,22 @@ struct GPUArc {
     float radius;
     float angle_start;
     float angle_end;
-    uint32_t mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
-    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+    float _pad0;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad1;
 };
-static_assert(sizeof(GPUArc) == 48);
+static_assert(sizeof(GPUArc) == 56);
 
 struct GPUBezier {
     float p0[2];
     float p1[2]; // control point
     float p2[2];
-    uint32_t mat_type;
-    float ior;
-    float cauchy_b;
-    float reflectance;
-    float absorption;
-    float roughness;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo;
+    float _pad;
 };
-static_assert(sizeof(GPUBezier) == 48);
+static_assert(sizeof(GPUBezier) == 56);
 
 // ─── Renderer implementation ─────────────────────────────────────────
 
@@ -997,12 +984,13 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<GPUBezier> gpu_beziers;
 
     auto fill_material = [](auto& gpu, const Material& mat) {
-        gpu.roughness = 0.0f;
-        std::visit(overloaded{
-            [&](const Diffuse& d) { gpu.mat_type = 0; gpu.reflectance = d.reflectance; },
-            [&](const Specular& s) { gpu.mat_type = 1; gpu.reflectance = s.reflectance; gpu.roughness = s.roughness; },
-            [&](const Refractive& r) { gpu.mat_type = 2; gpu.ior = r.ior; gpu.cauchy_b = r.cauchy_b; gpu.absorption = r.absorption; },
-        }, mat);
+        gpu.ior = mat.ior;
+        gpu.roughness = mat.roughness;
+        gpu.metallic = mat.metallic;
+        gpu.transmission = mat.transmission;
+        gpu.absorption = mat.absorption;
+        gpu.cauchy_b = mat.cauchy_b;
+        gpu.albedo = mat.albedo;
     };
 
     for (const auto& shape : scene.shapes) {
