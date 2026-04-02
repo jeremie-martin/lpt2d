@@ -225,7 +225,7 @@ void main() {
             if (h.reflectance > 0.0 && rand01() < h.reflectance) {
                 vec2 n = h.normal;
                 if (dot(rd, n) > 0.0) n = -n;
-                // Uniform random direction in 2D half-plane
+                // Cosine-weighted random direction in 2D half-plane (Malley's method)
                 float u = rand01();
                 float sin_theta = 2.0 * u - 1.0;
                 float cos_theta = sqrt(1.0 - sin_theta * sin_theta);
@@ -257,7 +257,7 @@ void main() {
             bool entering;
             if (cos_i > 0.0) {
                 n1 = ior; n2 = 1.0;
-                n = -n;   cos_i = -cos_i;
+                n = -n;
                 entering = false;
             } else {
                 n1 = 1.0; n2 = ior;
