@@ -406,7 +406,8 @@ static constexpr char max_compute_src[] = R"(
 #version 430 core
 layout(local_size_x = 16, local_size_y = 16) in;
 
-layout(rgba32f, binding = 0) readonly uniform image2D uInputImage;
+uniform sampler2D uInputTexture;
+uniform ivec2 uTexSize;
 
 layout(std430, binding = 1) buffer MaxBuffer {
     uint maxValueBits;
@@ -415,13 +416,12 @@ layout(std430, binding = 1) buffer MaxBuffer {
 shared float sharedMax[256];
 
 void main() {
-    ivec2 texSize = imageSize(uInputImage);
     ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
     uint lid = gl_LocalInvocationIndex;
 
     float localMax = 0.0;
-    if (gid.x < texSize.x && gid.y < texSize.y) {
-        vec4 pixel = imageLoad(uInputImage, gid);
+    if (gid.x < uTexSize.x && gid.y < uTexSize.y) {
+        vec4 pixel = texelFetch(uInputTexture, gid, 0);
         localMax = max(pixel.r, max(pixel.g, pixel.b));
     }
 
@@ -740,25 +740,19 @@ void Renderer::create_wavelength_lut() {
 }
 
 float Renderer::compute_max_gpu() {
-    uint32_t zero = 0;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, max_ssbo_);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
+    // Read float FBO back via glReadPixels (reliable after framebuffer blending)
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    std::vector<float> buf(width_ * height_ * 4);
+    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_FLOAT, buf.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    glUseProgram(max_compute_);
-    glBindImageTexture(0, float_texture_, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, max_ssbo_);
-
-    GLuint gx = (width_ + 15) / 16;
-    GLuint gy = (height_ + 15) / 16;
-    glDispatchCompute(gx, gy, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-    uint32_t max_bits;
-    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &max_bits);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-    float max_val;
-    std::memcpy(&max_val, &max_bits, sizeof(float));
+    float max_val = 0.0f;
+    for (size_t i = 0; i < buf.size(); i += 4) {
+        max_val = std::max(max_val, buf[i]);
+        max_val = std::max(max_val, buf[i + 1]);
+        max_val = std::max(max_val, buf[i + 2]);
+    }
     return max_val;
 }
 
