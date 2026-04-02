@@ -1,0 +1,27 @@
+{
+  "defaults": {
+    "width": 1280,
+    "height": 720,
+    "rays": 10000000,
+    "batch": 50000,
+    "depth": 12,
+    "exposure": 2.0,
+    "contrast": 1.0,
+    "gamma": 2.2,
+    "tonemap": "aces"
+  },
+  "scenes": [
+    {"name": "bench_glass_sphere"},
+    {"name": "bench_prism_beam"},
+    {"name": "bench_mirror_hall"},
+    {"name": "bench_arc_focus"},
+    {"name": "bench_bezier_waveguide"},
+    {"name": "bench_dense_grid"},
+    {"name": "bench_deep_bounce", "depth": 20},
+    {"name": "bench_tir_trap"},
+    {"name": "bench_dispersion_fan"},
+    {"name": "bench_mixed_materials"},
+    {"name": "bench_grazing"},
+    {"name": "bench_all_shapes"}
+  ]
+}

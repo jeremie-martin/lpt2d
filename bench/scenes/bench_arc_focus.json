@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "name": "bench_arc_focus",
+  "shapes": [
+    {
+      "type": "arc",
+      "center": [0.9, 0],
+      "radius": 0.7,
+      "angle_start": 2.4,
+      "angle_end": 3.88,
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "arc",
+      "center": [-0.9, 0],
+      "radius": 0.7,
+      "angle_start": 5.54,
+      "angle_end": 0.74,
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "circle",
+      "center": [0, 0],
+      "radius": 0.12,
+      "material": {"ior": 1.7, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.4, "cauchy_b": 25000, "albedo": 1}
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, -0.8],
+      "b": [1.2, -0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [1.2, 0.8],
+      "b": [-1.2, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, 0.8],
+      "b": [-1.2, -0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [1.2, -0.8],
+      "b": [1.2, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    }
+  ],
+  "lights": [
+    {
+      "type": "point",
+      "pos": [-0.5, 0.2],
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}

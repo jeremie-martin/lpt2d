@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "name": "bench_mirror_hall",
+  "shapes": [
+    {
+      "type": "segment",
+      "a": [-0.8, -0.5],
+      "b": [0.8, -0.5],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "segment",
+      "a": [0.8, 0.5],
+      "b": [-0.8, 0.5],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "segment",
+      "a": [-0.8, 0.5],
+      "b": [-1.0, 0],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "segment",
+      "a": [-1.0, 0],
+      "b": [-0.8, -0.5],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "segment",
+      "a": [0.8, -0.5],
+      "b": [1.0, 0],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    },
+    {
+      "type": "segment",
+      "a": [1.0, 0],
+      "b": [0.8, 0.5],
+      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+    }
+  ],
+  "lights": [
+    {
+      "type": "point",
+      "pos": [0.1, 0.15],
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}

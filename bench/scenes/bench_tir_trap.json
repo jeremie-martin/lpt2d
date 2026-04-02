@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "name": "bench_tir_trap",
+  "shapes": [
+    {
+      "type": "circle",
+      "center": [-0.2, 0],
+      "radius": 0.35,
+      "material": {"ior": 2.42, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.2, "cauchy_b": 30000, "albedo": 1}
+    },
+    {
+      "type": "circle",
+      "center": [0.25, 0],
+      "radius": 0.3,
+      "material": {"ior": 2.0, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.25, "cauchy_b": 25000, "albedo": 1}
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, -0.8],
+      "b": [1.2, -0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [1.2, 0.8],
+      "b": [-1.2, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, 0.8],
+      "b": [-1.2, -0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [1.2, -0.8],
+      "b": [1.2, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    }
+  ],
+  "lights": [
+    {
+      "type": "point",
+      "pos": [-0.15, 0.05],
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}

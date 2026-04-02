@@ -1,6 +1,10 @@
 build/
 compile_commands.json
 *.png
+!bench/baseline/*.png
 *.ppm
 .cache/
 benchmarks/
+imgui.ini
+perf.data
+perf.data.old

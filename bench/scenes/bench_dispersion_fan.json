@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "name": "bench_dispersion_fan",
+  "shapes": [
+    {
+      "type": "circle",
+      "center": [-0.1, 0],
+      "radius": 0.3,
+      "material": {"ior": 1.5, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.2, "cauchy_b": 60000, "albedo": 1}
+    },
+    {
+      "type": "segment",
+      "a": [0.8, -0.8],
+      "b": [0.8, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0.1}
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, -0.8],
+      "b": [1.2, -0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    },
+    {
+      "type": "segment",
+      "a": [1.2, 0.8],
+      "b": [-1.2, 0.8],
+      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+    }
+  ],
+  "lights": [
+    {
+      "type": "beam",
+      "origin": [-1.0, 0.05],
+      "direction": [1, -0.05],
+      "angular_width": 0.01,
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ]
+}
