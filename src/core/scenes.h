@@ -3,7 +3,12 @@
 #include "scene.h"
 
 #include <cstdint>
+#include <functional>
 #include <numbers>
+#include <string>
+#include <vector>
+
+using SceneFactory = std::pair<std::string, std::function<Scene()>>;
 
 inline Scene scene_three_spheres() {
     Scene s;
@@ -229,4 +234,21 @@ inline Scene scene_double_slit() {
     s.lights.push_back(PointLight{{-1.0f, 0.0f}, 1.0f});
 
     return s;
+}
+
+// ─── Scene registry ─────────────────────────────────────────────────────
+
+inline std::vector<SceneFactory> get_all_scenes() {
+    return {
+        {"three_spheres", scene_three_spheres},
+        {"prism", scene_prism},
+        {"diamond", scene_diamond},
+        {"lens", scene_lens},
+        {"fiber", scene_fiber},
+        {"mirror_box", scene_mirror_box},
+        {"ring", scene_ring},
+        {"double_slit", scene_double_slit},
+        {"crystal_field", scene_crystal_field},
+        {"mirrors", scene_mirrors},
+    };
 }

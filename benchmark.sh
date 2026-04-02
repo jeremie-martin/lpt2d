@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────────────
-BINARY="${BINARY:-./build/lpt2d}"
+BINARY="${BINARY:-./build/lpt2d-cli}"
 WIDTH="${WIDTH:-1920}"
 HEIGHT="${HEIGHT:-1080}"
 RAYS="${RAYS:-10000000}"
@@ -25,7 +25,7 @@ OUTDIR="benchmarks/${COMMIT}_${TIMESTAMP}"
 mkdir -p "$OUTDIR"
 
 # Archive the binary for reproducibility
-cp "$BINARY" "$OUTDIR/lpt2d"
+cp "$BINARY" "$OUTDIR/lpt2d-cli"
 
 echo "═══════════════════════════════════════════════════════════"
 echo " lpt2d benchmark"
@@ -61,7 +61,7 @@ for SCENE in "${SCENES[@]}"; do
     echo -n "  $SCENE ... "
 
     START=$(date +%s%N)
-    $BINARY --headless \
+    $BINARY \
         --scene "$SCENE" \
         --width "$WIDTH" \
         --height "$HEIGHT" \

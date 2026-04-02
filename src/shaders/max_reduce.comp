@@ -1,0 +1,43 @@
+#version 430 core
+layout(local_size_x = 16, local_size_y = 16) in;
+
+uniform sampler2D uInputTexture;
+uniform ivec2 uTexSize;
+
+layout(std430, binding = 1) buffer MaxBuffer {
+    uint maxValueBits;
+};
+
+shared float sharedMax[256];
+
+void main() {
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+    uint lid = gl_LocalInvocationIndex;
+
+    float localMax = 0.0;
+    if (gid.x < uTexSize.x && gid.y < uTexSize.y) {
+        vec4 pixel = texelFetch(uInputTexture, gid, 0);
+        localMax = max(pixel.r, max(pixel.g, pixel.b));
+    }
+
+    sharedMax[lid] = localMax;
+    barrier();
+
+    for (uint stride = 128u; stride > 0u; stride >>= 1u) {
+        if (lid < stride) {
+            sharedMax[lid] = max(sharedMax[lid], sharedMax[lid + stride]);
+        }
+        barrier();
+    }
+
+    if (lid == 0u) {
+        float newVal = sharedMax[0];
+        uint newBits = floatBitsToUint(newVal);
+        uint oldBits = maxValueBits;
+        while (newVal > uintBitsToFloat(oldBits)) {
+            uint result = atomicCompSwap(maxValueBits, oldBits, newBits);
+            if (result == oldBits) break;
+            oldBits = result;
+        }
+    }
+}

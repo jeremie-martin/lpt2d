@@ -1,10 +1,8 @@
 #pragma once
 
-#include "scene.h"
+#include "scenes.h"
 
-#include <functional>
 #include <string>
-#include <vector>
 
 struct AppConfig {
     int width = 1280;
@@ -14,7 +12,5 @@ struct AppConfig {
 
 class App {
 public:
-    using SceneFactory = std::pair<std::string, std::function<Scene()>>;
-
     int run(const std::vector<SceneFactory>& scenes, const AppConfig& config);
 };

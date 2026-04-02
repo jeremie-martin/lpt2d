@@ -1,4 +1,3 @@
-#include "app.h"
 #include "export.h"
 #include "headless.h"
 #include "renderer.h"
@@ -9,14 +8,13 @@
 #include <string>
 #include <vector>
 
-static void print_usage(const std::vector<App::SceneFactory>& scenes) {
-    std::cerr << "Usage: lpt2d [options]\n"
-              << "  --headless               Run without window\n"
+static void print_usage(const std::vector<SceneFactory>& scenes) {
+    std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name>           Scene name (default: three_spheres)\n"
-              << "  --output <path>          Output PNG (headless, default: output.png)\n"
-              << "  --width <int>            Width (default: 1280)\n"
-              << "  --height <int>           Height (default: 720)\n"
-              << "  --rays <int>             Total rays (headless, default: 10000000)\n"
+              << "  --output <path>          Output PNG (default: output.png)\n"
+              << "  --width <int>            Width (default: 1920)\n"
+              << "  --height <int>           Height (default: 1080)\n"
+              << "  --rays <int>             Total rays (default: 10000000)\n"
               << "  --batch <int>            Rays per batch (default: 200000)\n"
               << "  --depth <int>            Max ray depth (default: 12)\n"
               << "  --exposure <float>       Exposure in stops (default: 2)\n"
@@ -29,22 +27,7 @@ static void print_usage(const std::vector<App::SceneFactory>& scenes) {
     std::cerr << "\n";
 }
 
-static std::vector<App::SceneFactory> get_scenes() {
-    return {
-        {"three_spheres", scene_three_spheres},
-        {"prism", scene_prism},
-        {"diamond", scene_diamond},
-        {"lens", scene_lens},
-        {"fiber", scene_fiber},
-        {"mirror_box", scene_mirror_box},
-        {"ring", scene_ring},
-        {"double_slit", scene_double_slit},
-        {"crystal_field", scene_crystal_field},
-        {"mirrors", scene_mirrors},
-    };
-}
-
-static Scene find_scene(const std::vector<App::SceneFactory>& scenes, const std::string& name) {
+static Scene find_scene(const std::vector<SceneFactory>& scenes, const std::string& name) {
     for (const auto& [n, f] : scenes) {
         if (n == name)
             return f();
@@ -58,20 +41,17 @@ static Scene find_scene(const std::vector<App::SceneFactory>& scenes, const std:
 }
 
 int main(int argc, char** argv) {
-    auto all_scenes = get_scenes();
+    auto all_scenes = get_all_scenes();
 
-    bool headless = false;
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
-    int width = 1280, height = 720;
+    int width = 1920, height = 1080;
     int total_rays = 10'000'000;
     TraceConfig tcfg;
     PostProcess pp;
 
     for (int i = 1; i < argc; ++i) {
-        if (std::strcmp(argv[i], "--headless") == 0)
-            headless = true;
-        else if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
+        if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
             scene_name = argv[++i];
         else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc)
             output = argv[++i];
@@ -107,50 +87,40 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (headless) {
-        HeadlessGL gl;
-        if (!gl.init())
-            return 1;
+    HeadlessGL gl;
+    if (!gl.init())
+        return 1;
 
-        Renderer renderer;
-        if (!renderer.init(width, height))
-            return 1;
+    Renderer renderer;
+    if (!renderer.init(width, height))
+        return 1;
 
-        Scene scene = find_scene(all_scenes, scene_name);
-        Bounds bounds = compute_bounds(scene);
-        renderer.upload_scene(scene, bounds);
-        renderer.clear();
+    Scene scene = find_scene(all_scenes, scene_name);
+    Bounds bounds = compute_bounds(scene);
+    renderer.upload_scene(scene, bounds);
+    renderer.clear();
 
-        int num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
-        for (int i = 0; i < num_batches; ++i) {
-            renderer.trace_and_draw(tcfg);
+    int num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
+    for (int i = 0; i < num_batches; ++i) {
+        renderer.trace_and_draw(tcfg);
 
-            int done = (i + 1) * tcfg.batch_size;
-            if (done > total_rays) done = total_rays;
-            std::cerr << "\r" << done << "/" << total_rays << " rays"
-                      << std::flush;
-        }
-        std::cerr << "\n";
+        int done = (i + 1) * tcfg.batch_size;
+        if (done > total_rays) done = total_rays;
+        std::cerr << "\r" << done << "/" << total_rays << " rays"
+                  << std::flush;
+    }
+    std::cerr << "\n";
 
-        std::vector<uint8_t> pixels;
-        renderer.read_pixels(pixels, pp);
+    std::vector<uint8_t> pixels;
+    renderer.read_pixels(pixels, pp);
 
-        if (export_png(output, pixels.data(), width, height)) {
-            std::cerr << "Saved: " << output << "\n";
-        } else {
-            std::cerr << "Failed to save: " << output << "\n";
-            return 1;
-        }
-
-        renderer.shutdown();
-        return 0;
+    if (export_png(output, pixels.data(), width, height)) {
+        std::cerr << "Saved: " << output << "\n";
+    } else {
+        std::cerr << "Failed to save: " << output << "\n";
+        return 1;
     }
 
-    // Windowed mode
-    App app;
-    AppConfig acfg;
-    acfg.width = width;
-    acfg.height = height;
-    acfg.initial_scene = scene_name;
-    return app.run(all_scenes, acfg);
+    renderer.shutdown();
+    return 0;
 }
