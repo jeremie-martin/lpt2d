@@ -609,6 +609,84 @@ void Renderer::trace_and_draw(const TraceConfig& cfg) {
     batch_counter_++;
 }
 
+void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) {
+    int max_segs = cfg.batch_size * cfg.max_depth * num_dispatches;
+
+    // Reallocate output SSBO if needed (sized for all dispatches)
+    if (max_segs > max_output_segments_) {
+        max_output_segments_ = max_segs;
+        if (!output_ssbo_) glGenBuffers(1, &output_ssbo_);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, output_ssbo_);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, (size_t)max_segs * 32, nullptr, GL_DYNAMIC_COPY);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+
+    // Initialize draw indirect command buffer
+    if (!draw_cmd_buffer_) {
+        glGenBuffers(1, &draw_cmd_buffer_);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer_);
+        uint32_t cmd[4] = {6, 0, 0, 0};
+        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), cmd, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+    }
+
+    // Reset instance count to 0
+    uint32_t zero = 0;
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, draw_cmd_buffer_);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(uint32_t), sizeof(uint32_t), &zero);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    // ── Dispatch N compute batches ──
+    glUseProgram(trace_program_);
+    glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
+    glUniform1f(trace_loc_intensity_, cfg.intensity);
+    glUniform1ui(trace_loc_max_segments_, max_segs);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_1D, wavelength_lut_);
+    glUniform1i(trace_loc_wavelength_lut_, 0);
+
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, circle_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, segment_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, light_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, output_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, draw_cmd_buffer_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, light_weights_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, arc_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
+
+    GLuint groups = (cfg.batch_size + 63) / 64;
+
+    for (int d = 0; d < num_dispatches; d++) {
+        glUniform1ui(trace_loc_seed_, batch_counter_ * 1000003u + 42u);
+        glDispatchCompute(groups, 1, 1);
+        // Barrier between dispatches to ensure atomic counter is visible
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        batch_counter_++;
+    }
+
+    // Final barrier before draw (need command barrier for indirect draw)
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+
+    // ── Single draw for all accumulated segments ──
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, width_, height_);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    glUseProgram(line_program_);
+    glUniform2f(loc_resolution_, (float)width_, (float)height_);
+    glUniform1f(loc_thickness_, 1.5f);
+
+    glBindVertexArray(line_vao_);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer_);
+    glDrawArraysIndirect(GL_TRIANGLES, nullptr);
+
+    glBindVertexArray(0);
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
 void Renderer::update_display(const PostProcess& pp) {

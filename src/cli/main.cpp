@@ -101,10 +101,16 @@ int main(int argc, char** argv) {
     renderer.clear();
 
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
-    for (int64_t i = 0; i < num_batches; ++i) {
-        renderer.trace_and_draw(tcfg);
 
-        int64_t done = (i + 1) * tcfg.batch_size;
+    // Multi-batch: group N compute dispatches per draw call to amortize draw overhead
+    const int dispatches_per_draw = 4;
+    int64_t i = 0;
+    while (i < num_batches) {
+        int n = std::min((int64_t)dispatches_per_draw, num_batches - i);
+        renderer.trace_and_draw_multi(tcfg, n);
+        i += n;
+
+        int64_t done = i * tcfg.batch_size;
         if (done > total_rays) done = total_rays;
         std::cerr << "\r" << done << "/" << total_rays << " rays"
                   << std::flush;
