@@ -2,6 +2,8 @@
 
 #include "scene.h"
 
+#include <numbers>
+
 inline Scene scene_three_spheres() {
     Scene s;
     s.name = "three_spheres";
@@ -30,6 +32,7 @@ inline Scene scene_prism() {
     Vec2 p2{-0.1f + size, h * 0.4f};
     Refractive glass{1.5f, 30000.0f};
 
+    // CW winding → perp() gives outward normals
     s.shapes.push_back(Segment{p0, p1, glass});
     s.shapes.push_back(Segment{p1, p2, glass});
     s.shapes.push_back(Segment{p2, p0, glass});
@@ -72,6 +75,94 @@ inline Scene scene_lens() {
     add_box_walls(s, 1.2f, 0.8f, Diffuse{});
 
     s.lights.push_back(SegmentLight{{-1.0f, 0.3f}, {-1.0f, -0.3f}, 1.0f});
+
+    return s;
+}
+
+// Fiber optic: light bouncing inside a mirrored channel with a glass core
+inline Scene scene_fiber() {
+    Scene s;
+    s.name = "fiber";
+
+    // Outer mirrored walls forming a narrow channel
+    float len = 1.5f, gap = 0.12f;
+    s.shapes.push_back(Segment{{-len, -gap}, {len, -gap}, Specular{}});
+    s.shapes.push_back(Segment{{-len, gap}, {len, gap}, Specular{}});
+
+    // Glass core (slight curve via two large circles)
+    Refractive glass{1.5f, 15000.0f};
+    s.shapes.push_back(Circle{{0.0f, 0.0f}, 0.06f, glass});
+    s.shapes.push_back(Circle{{0.5f, 0.0f}, 0.06f, glass});
+    s.shapes.push_back(Circle{{-0.5f, 0.0f}, 0.06f, glass});
+
+    // End caps
+    s.shapes.push_back(Segment{{len, -gap}, {len, gap}, Diffuse{}});
+
+    s.lights.push_back(SegmentLight{{-len, gap}, {-len, -gap}, 1.0f});
+
+    return s;
+}
+
+// Mirror box: two point lights in a reflective box — creates complex caustics
+inline Scene scene_mirror_box() {
+    Scene s;
+    s.name = "mirror_box";
+
+    add_box_walls(s, 0.9f, 0.6f, Specular{});
+
+    // A few glass spheres of varying sizes
+    s.shapes.push_back(Circle{{-0.3f, 0.15f}, 0.15f, Refractive{1.8f, 25000.0f}});
+    s.shapes.push_back(Circle{{0.3f, -0.1f}, 0.1f, Refractive{1.5f, 20000.0f}});
+    s.shapes.push_back(Circle{{0.0f, -0.25f}, 0.08f, Refractive{2.0f, 30000.0f}});
+
+    s.lights.push_back(PointLight{{-0.6f, -0.35f}, 1.0f});
+    s.lights.push_back(PointLight{{0.6f, 0.35f}, 0.7f});
+
+    return s;
+}
+
+// Ring of spheres around a central light
+inline Scene scene_ring() {
+    Scene s;
+    s.name = "ring";
+
+    constexpr float PI = std::numbers::pi_v<float>;
+    int n = 8;
+    float ring_r = 0.5f;
+    float sphere_r = 0.1f;
+    Refractive glass{1.5f, 20000.0f};
+
+    for (int i = 0; i < n; ++i) {
+        float angle = 2.0f * PI * i / n;
+        Vec2 pos{ring_r * std::cos(angle), ring_r * std::sin(angle)};
+        s.shapes.push_back(Circle{pos, sphere_r, glass});
+    }
+
+    add_box_walls(s, 1.0f, 1.0f, Specular{});
+
+    s.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
+
+    return s;
+}
+
+// Double slit experiment
+inline Scene scene_double_slit() {
+    Scene s;
+    s.name = "double_slit";
+
+    float wall_x = -0.2f;
+    float slit_gap = 0.03f;
+    float slit_sep = 0.15f;
+
+    // Wall with two slits
+    s.shapes.push_back(Segment{{wall_x, -1.0f}, {wall_x, -slit_sep / 2 - slit_gap}, Diffuse{}});
+    s.shapes.push_back(Segment{{wall_x, -slit_sep / 2 + slit_gap}, {wall_x, slit_sep / 2 - slit_gap}, Diffuse{}});
+    s.shapes.push_back(Segment{{wall_x, slit_sep / 2 + slit_gap}, {wall_x, 1.0f}, Diffuse{}});
+
+    add_box_walls(s, 1.2f, 0.8f, Diffuse{});
+
+    // Point light far to the left (approximate plane wave)
+    s.lights.push_back(PointLight{{-1.0f, 0.0f}, 1.0f});
 
     return s;
 }

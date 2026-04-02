@@ -53,6 +53,7 @@ private:
 
     float last_max_ = 0.0f;
     std::vector<float> float_buffer_;
+    std::vector<uint8_t> rgba_buffer_;
 
     // Cached uniform locations
     GLint loc_resolution_ = -1;

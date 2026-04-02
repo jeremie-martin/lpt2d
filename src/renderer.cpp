@@ -246,6 +246,7 @@ bool Renderer::init(int width, int height) {
 
     create_compute_shader();
     float_buffer_.resize(width * height * 4);
+    rgba_buffer_.resize(width * height * 4);
 
     return true;
 }
@@ -565,14 +566,13 @@ void Renderer::update_display(const PostProcess& pp) {
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp) {
     update_display(pp);
 
-    std::vector<uint8_t> rgba(width_ * height_ * 4);
     glBindTexture(GL_TEXTURE_2D, display_texture_);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
 
     out_rgb.resize(width_ * height_ * 3);
     for (int i = 0; i < width_ * height_; ++i) {
-        out_rgb[i * 3 + 0] = rgba[i * 4 + 0];
-        out_rgb[i * 3 + 1] = rgba[i * 4 + 1];
-        out_rgb[i * 3 + 2] = rgba[i * 4 + 2];
+        out_rgb[i * 3 + 0] = rgba_buffer_[i * 4 + 0];
+        out_rgb[i * 3 + 1] = rgba_buffer_[i * 4 + 1];
+        out_rgb[i * 3 + 2] = rgba_buffer_[i * 4 + 2];
     }
 }

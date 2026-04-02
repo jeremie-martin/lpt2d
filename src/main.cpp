@@ -10,16 +10,24 @@
 #include <string>
 #include <vector>
 
-static void print_usage() {
+static void print_usage(const std::vector<App::SceneFactory>& scenes) {
     std::cerr << "Usage: lpt2d [options]\n"
-              << "  --headless           Run without window\n"
-              << "  --scene <name>       Scene name (three_spheres, prism, diamond, lens)\n"
-              << "  --output <path>      Output PNG path (headless only, default: output.png)\n"
-              << "  --width <int>        Width (default: 1280)\n"
-              << "  --height <int>       Height (default: 720)\n"
-              << "  --batches <int>      Number of batches (headless, default: 300)\n"
-              << "  --batch <int>        Rays per batch (default: 30000)\n"
-              << "  --depth <int>        Max ray depth (default: 12)\n";
+              << "  --headless               Run without window\n"
+              << "  --scene <name>           Scene name (default: three_spheres)\n"
+              << "  --output <path>          Output PNG (headless, default: output.png)\n"
+              << "  --width <int>            Width (default: 1280)\n"
+              << "  --height <int>           Height (default: 720)\n"
+              << "  --batches <int>          Number of batches (headless, default: 300)\n"
+              << "  --batch <int>            Rays per batch (default: 30000)\n"
+              << "  --depth <int>            Max ray depth (default: 12)\n"
+              << "  --exposure <float>       Exposure in stops (default: 0)\n"
+              << "  --contrast <float>       Contrast (default: 1)\n"
+              << "  --gamma <float>          Gamma (default: 2.2)\n"
+              << "  --tonemap <name>         none|reinhard|aces|log (default: aces)\n"
+              << "\nScenes: ";
+    for (const auto& [name, _] : scenes)
+        std::cerr << name << " ";
+    std::cerr << "\n";
 }
 
 static std::vector<App::SceneFactory> get_scenes() {
@@ -28,6 +36,10 @@ static std::vector<App::SceneFactory> get_scenes() {
         {"prism", scene_prism},
         {"diamond", scene_diamond},
         {"lens", scene_lens},
+        {"fiber", scene_fiber},
+        {"mirror_box", scene_mirror_box},
+        {"ring", scene_ring},
+        {"double_slit", scene_double_slit},
     };
 }
 
@@ -45,6 +57,8 @@ static Scene find_scene(const std::vector<App::SceneFactory>& scenes, const std:
 }
 
 int main(int argc, char** argv) {
+    auto all_scenes = get_scenes();
+
     bool headless = false;
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
@@ -52,7 +66,6 @@ int main(int argc, char** argv) {
     int batches = 300;
     Tracer::Config tcfg;
     PostProcess pp;
-    pp.tone_map = ToneMap::ACES;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--headless") == 0)
@@ -84,16 +97,14 @@ int main(int argc, char** argv) {
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
-            print_usage();
+            print_usage(all_scenes);
             return 0;
         } else {
             std::cerr << "Unknown option: " << argv[i] << "\n";
-            print_usage();
+            print_usage(all_scenes);
             return 1;
         }
     }
-
-    auto all_scenes = get_scenes();
 
     if (headless) {
         HeadlessGL gl;
