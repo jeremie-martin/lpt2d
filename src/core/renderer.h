@@ -24,6 +24,9 @@ public:
     // Upload scene geometry, lights, and viewport transform to GPU
     void upload_scene(const Scene& scene, const Bounds& bounds);
 
+    // Update only the viewport transform (for pan/zoom without re-uploading geometry)
+    void update_viewport(const Bounds& bounds);
+
     // GPU compute trace + instanced draw (one batch)
     void trace_and_draw(const TraceConfig& cfg);
 

@@ -218,6 +218,6 @@ void compute_display_uvs(const Camera& cam, const Bounds& scene_bounds,
     float v_bottom = world_to_uv_y(vis.min.y);
     float v_top    = world_to_uv_y(vis.max.y);
 
-    uv0 = ImVec2(u_left, 1.0f - v_top);
-    uv1 = ImVec2(u_right, 1.0f - v_bottom);
+    uv0 = ImVec2(u_left, v_top);
+    uv1 = ImVec2(u_right, v_bottom);
 }

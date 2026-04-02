@@ -71,11 +71,11 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
     }
     ed.scene = scenes[current_scene].second();
     ed.scene_bounds = compute_bounds(ed.scene);
-
-    renderer.upload_scene(ed.scene, ed.scene_bounds);
-    renderer.clear();
-
     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+
+    Bounds initial_view = ed.camera.visible_bounds((float)win_w, (float)win_h);
+    renderer.upload_scene(ed.scene, initial_view);
+    renderer.clear();
     ed.undo.push(ed.scene); // initial state
 
     TraceConfig tcfg;
@@ -88,12 +88,14 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
     bool open_load_popup = false;
 
     // Reload: re-upload scene to GPU, clear accumulation
+    // Renderer viewport always tracks the camera's visible bounds.
     auto reload = [&]() {
         if (ed.scene.shapes.empty() && ed.scene.lights.empty())
             ed.scene_bounds = {{-1, -1}, {1, 1}};
         else
             ed.scene_bounds = compute_bounds(ed.scene);
-        renderer.upload_scene(ed.scene, ed.scene_bounds);
+        Bounds view = ed.camera.visible_bounds((float)win_w, (float)win_h);
+        renderer.upload_scene(ed.scene, view);
         renderer.clear();
         total_rays = 0;
         ed.dirty = true;
@@ -125,8 +127,11 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         ed.handle_dragging = false;
         ed.undo.clear();
         ed.undo.push(ed.scene);
-        reload();
+        // Fit camera before reload so renderer uses correct visible bounds
+        ed.scene_bounds = ed.scene.shapes.empty() && ed.scene.lights.empty()
+            ? Bounds{{-1, -1}, {1, 1}} : compute_bounds(ed.scene);
         ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+        reload();
         ed.dirty = false;
     };
 
@@ -206,11 +211,9 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
             ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings |
             ImGuiWindowFlags_NoBackground);
 
-        // Display rendered image with camera-based UV mapping
-        ImVec2 uv0, uv1;
-        compute_display_uvs(ed.camera, ed.scene_bounds, (float)win_w, (float)win_h, uv0, uv1);
+        // Display rendered image (FBO always matches camera view)
         ImGui::Image((ImTextureID)(intptr_t)renderer.display_texture(),
-                     ImVec2((float)win_w, (float)win_h), uv0, uv1);
+                     ImVec2((float)win_w, (float)win_h), ImVec2(0, 1), ImVec2(1, 0));
 
         bool vp_hovered = ImGui::IsWindowHovered();
 
@@ -349,14 +352,17 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
         // --- Viewport navigation: pan & zoom ---
 
         // Pan: middle mouse drag or Alt+LMB drag
-        if (vp_hovered && !io.WantCaptureMouse) {
+        if (vp_hovered) {
             bool middle_drag = ImGui::IsMouseDragging(2); // middle button
             bool alt_drag = io.KeyAlt && ImGui::IsMouseDragging(0);
 
             if (middle_drag || alt_drag) {
                 ImVec2 delta = io.MouseDelta;
                 ed.camera.center.x -= delta.x / ed.camera.zoom;
-                ed.camera.center.y += delta.y / ed.camera.zoom; // Y inverted
+                ed.camera.center.y += delta.y / ed.camera.zoom;
+                renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
+                renderer.clear();
+                total_rays = 0;
             }
 
             // Zoom: scroll wheel (cursor-centered)
@@ -370,6 +376,9 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                 Vec2 world_after = cv2.to_world(io.MousePos);
                 ed.camera.center = ed.camera.center + (world_before - world_after);
                 cv = CameraView{ed.camera, (float)win_w, (float)win_h};
+                renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
+                renderer.clear();
+                total_rays = 0;
             }
         }
 
@@ -1013,16 +1022,26 @@ int App::run(const std::vector<SceneFactory>& scenes, const AppConfig& config) {
                     if (!ed.selection.empty()) {
                         Bounds sb = ed.selection_bounds();
                         Vec2 sz = sb.max - sb.min;
-                        float pad = std::max(sz.x, sz.y) * 0.2f;
+                        // Minimum padding: 20% of selection size, but at least 20% of scene size
+                        // so that zero-extent selections (point lights) get a useful view
+                        Vec2 scene_sz = ed.scene_bounds.max - ed.scene_bounds.min;
+                        float min_pad = std::max(scene_sz.x, scene_sz.y) * 0.2f;
+                        float pad = std::max(std::max(sz.x, sz.y) * 0.2f, min_pad);
                         sb.min = sb.min - Vec2{pad, pad};
                         sb.max = sb.max + Vec2{pad, pad};
                         ed.camera.fit(sb, (float)win_w, (float)win_h);
                     } else {
                         ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
                     }
+                    renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
+                    renderer.clear();
+                    total_rays = 0;
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
+                    renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
+                    renderer.clear();
+                    total_rays = 0;
                 }
 
                 // Space: pause

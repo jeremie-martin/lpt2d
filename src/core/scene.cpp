@@ -212,8 +212,6 @@ Bounds compute_bounds(const Scene& scene, float padding) {
                        },
                        [&](const BeamLight& l) {
                            expand(l.origin);
-                           // Beam extends far in direction
-                           expand(l.origin + l.direction * 10.0f);
                        },
                    },
                    light);

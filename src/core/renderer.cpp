@@ -238,6 +238,10 @@ bool Renderer::create_framebuffers() {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    float black[] = {0.0f, 0.0f, 0.0f, 1.0f};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, black);
 
     glGenFramebuffers(1, &display_fbo_);
     glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
@@ -480,7 +484,19 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     upload(light_ssbo_, gpu_lights.data(), gpu_lights.size() * sizeof(GPULight));
     upload(light_weights_ssbo_, cum_weights.data(), cum_weights.size() * sizeof(float));
 
-    // Precompute viewport transform uniforms
+    update_viewport(bounds);
+
+    glUseProgram(trace_program_);
+    glUniform1ui(trace_loc_num_circles_, num_circles_);
+    glUniform1ui(trace_loc_num_segments_, num_segments_);
+    glUniform1ui(trace_loc_num_arcs_, num_arcs_);
+    glUniform1ui(trace_loc_num_beziers_, num_beziers_);
+    glUniform1ui(trace_loc_num_lights_, num_lights_);
+}
+
+// ─── Viewport update ────────────────────────────────────────────────
+
+void Renderer::update_viewport(const Bounds& bounds) {
     Vec2 size = bounds.max - bounds.min;
     float scale_x = (float)width_ / size.x;
     float scale_y = (float)height_ / size.y;
@@ -492,11 +508,6 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     glUniform2f(trace_loc_bounds_min_, bounds.min.x, bounds.min.y);
     glUniform2f(trace_loc_view_scale_, scale, scale);
     glUniform2f(trace_loc_view_offset_, offset_x, offset_y);
-    glUniform1ui(trace_loc_num_circles_, num_circles_);
-    glUniform1ui(trace_loc_num_segments_, num_segments_);
-    glUniform1ui(trace_loc_num_arcs_, num_arcs_);
-    glUniform1ui(trace_loc_num_beziers_, num_beziers_);
-    glUniform1ui(trace_loc_num_lights_, num_lights_);
 }
 
 // ─── GPU trace + draw ────────────────────────────────────────────────
