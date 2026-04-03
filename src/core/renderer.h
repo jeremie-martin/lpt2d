@@ -108,6 +108,8 @@ private:
     // Compute shader max reduction
     GLuint max_compute_ = 0;
     GLuint max_ssbo_ = 0;
+    GLint max_loc_input_texture_ = -1;
+    GLint max_loc_tex_size_ = -1;
 
     float last_max_ = 0.0f;
     float viewport_scale_ = 1.0f;
