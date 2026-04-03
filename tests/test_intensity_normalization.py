@@ -174,10 +174,11 @@ def test_intensity_scaling():
     print("\n=== Test 1: Single-light intensity scaling ===")
     print("Theory: 1 light → power_scale = intensity. max_hdr ~ intensity.\n")
 
+    # Use normalize="max" so compute_max_gpu runs and max_hdr is reported.
     results = {}
     for intensity in [0.5, 1.0, 2.0, 4.0]:
         scene = make_scene([point_light(*LIGHT_POS, intensity=intensity)])
-        r = render(json.dumps(scene), rays=RAYS, normalize="off")
+        r = render(json.dumps(scene), rays=RAYS, normalize="max")
         results[intensity] = r.max_hdr
         print(f"  intensity={intensity:<4}  max_hdr={r.max_hdr:>12.1f}")
 
@@ -196,10 +197,11 @@ def test_additive_lights():
     """
     print("\n=== Test 2: Additive lights (W = total intensity) ===\n")
 
+    # Use normalize="max" so compute_max_gpu runs and max_hdr is reported.
     results = {}
     for n in [1, 2, 3, 5]:
         lights = [point_light(*LIGHT_POS, intensity=1.0) for _ in range(n)]
-        r = render(json.dumps(make_scene(lights)), rays=RAYS, normalize="off")
+        r = render(json.dumps(make_scene(lights)), rays=RAYS, normalize="max")
         results[n] = r.max_hdr
         print(f"  N={n}  max_hdr={r.max_hdr:>12.1f}  expected={n}x")
 
@@ -218,15 +220,16 @@ def test_multi_light_total_power():
     """
     print("\n=== Test 3: Multi-light total power ===\n")
 
+    # Use normalize="max" so compute_max_gpu runs and max_hdr is reported.
     base = render(json.dumps(make_scene([
         point_light(*LIGHT_POS, 1.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="off")
+    ])), rays=RAYS, normalize="max")
     r21 = render(json.dumps(make_scene([
         point_light(*LIGHT_POS, 2.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="off")
+    ])), rays=RAYS, normalize="max")
     r31 = render(json.dumps(make_scene([
         point_light(*LIGHT_POS, 3.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="off")
+    ])), rays=RAYS, normalize="max")
 
     print(f"  (1,1): max_hdr={base.max_hdr:>12.1f}  W=2")
     print(f"  (2,1): max_hdr={r21.max_hdr:>12.1f}  W=3")
@@ -239,13 +242,16 @@ def test_multi_light_total_power():
 
 
 def test_ray_count_scaling():
-    """max_hdr ~ ray_count in Off mode (raw accumulation)."""
-    print("\n=== Test 4: Ray count scaling (Off mode) ===\n")
+    """max_hdr ~ ray_count with raw accumulation."""
+    print("\n=== Test 4: Ray count scaling ===\n")
 
+    # Use normalize="max" so compute_max_gpu runs and max_hdr is reported.
+    # max_hdr is the true HDR peak of the accumulation buffer, which scales
+    # linearly with ray count regardless of normalize mode.
     scene_json = json.dumps(make_scene([point_light(*LIGHT_POS)]))
     results = {}
     for rays in [1_000_000, 2_000_000, 5_000_000]:
-        r = render(scene_json, rays=rays, normalize="off")
+        r = render(scene_json, rays=rays, normalize="max")
         results[rays] = r.max_hdr
         print(f"  rays={rays:>10,}  max_hdr={r.max_hdr:>12.1f}")
 

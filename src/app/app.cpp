@@ -963,7 +963,10 @@ int App::run(const AppConfig& config) {
             else
                 std::snprintf(ray_str, sizeof(ray_str), "%lld", (long long)tr);
             ImGui::Text("Rays: %s", ray_str);
-            ImGui::Text("Max HDR: %.2f", renderer.last_max());
+            if (pp.normalize == NormalizeMode::Max)
+                ImGui::Text("Max HDR: %.2f", renderer.last_max());
+            else
+                ImGui::TextDisabled("Max HDR: —");
             ImGui::Text("%.1f FPS (%.1f ms)", 1000.0f / frame_ms, frame_ms);
             ImGui::Text("Zoom: %.0f%%", ed.camera.zoom / std::min((float)win_w / std::max(ed.scene_bounds.max.x - ed.scene_bounds.min.x, 0.01f), (float)win_h / std::max(ed.scene_bounds.max.y - ed.scene_bounds.min.y, 0.01f)) * 100.0f);
 

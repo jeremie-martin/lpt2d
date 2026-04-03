@@ -708,15 +708,16 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
 void Renderer::update_display(const PostProcess& pp) {
-    // compute_max_gpu sets last_max_ to the true max (always), and returns
-    // the percentile-based value (which equals max when normalize_pct >= 1.0).
-    float pct_val = compute_max_gpu(pp.normalize_pct);
-
+    // Only do the expensive glReadPixels + CPU scan when Max normalization
+    // actually needs it.  Other modes compute their divisor without GPU readback.
+    // compute_current_max() is still available on demand (e.g. GUI "Capture Ref").
     float divisor;
     switch (pp.normalize) {
-    case NormalizeMode::Max:
+    case NormalizeMode::Max: {
+        float pct_val = compute_max_gpu(pp.normalize_pct);
         divisor = (pct_val < 1e-6f) ? 1.0f : pct_val;
         break;
+    }
     case NormalizeMode::Rays:
         divisor = (total_rays_ > 0) ? (float)total_rays_ : 1.0f;
         break;

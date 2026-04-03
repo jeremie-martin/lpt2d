@@ -6,11 +6,14 @@ import json
 import math
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
 from .stats import FrameStats, frame_stats
-from .types import Camera2D, Frame, FrameContext, RenderSettings, Scene, Timeline
+from .types import Camera2D, Frame, FrameContext, FrameReport, RenderSettings, Scene, Timeline
+
+DEFAULT_BINARY = "./build/lpt2d-cli"
 
 
 def _require_pipe(pipe, name: str):
@@ -22,14 +25,16 @@ def _require_pipe(pipe, name: str):
 class Renderer:
     """Manages a persistent lpt2d-cli --stream subprocess."""
 
-    def __init__(self, settings: RenderSettings | None = None):
+    last_report: FrameReport | None = None
+
+    def __init__(self, settings: RenderSettings | None = None, binary: str = DEFAULT_BINARY):
         if settings is None:
             settings = RenderSettings()
         self.width = settings.width
         self.height = settings.height
         self.frame_bytes = settings.width * settings.height * 3
         cmd = [
-            settings.binary,
+            binary,
             "--stream",
             "--width",
             str(settings.width),
@@ -61,22 +66,50 @@ class Renderer:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=sys.stderr,
+            stderr=subprocess.PIPE,
         )
 
     def render_frame(self, wire_json: str) -> bytes:
-        """Send wire-format JSON, receive raw RGB8 pixels."""
+        """Send wire-format JSON, receive raw RGB8 pixels.
+
+        After each call, ``self.last_report`` holds the structured
+        :class:`FrameReport` parsed from the C++ renderer's stderr.
+        """
         proc = self._proc
         if proc is None:
             raise RuntimeError("Renderer process is not running")
         stdin = _require_pipe(proc.stdin, "stdin")
         stdout = _require_pipe(proc.stdout, "stdout")
+        stderr = _require_pipe(proc.stderr, "stderr")
         stdin.write((wire_json + "\n").encode())
         stdin.flush()
 
         data = stdout.read(self.frame_bytes)
         if len(data) != self.frame_bytes:
             raise RuntimeError(f"Renderer died after {len(data)}/{self.frame_bytes} bytes")
+
+        # Parse structured metadata from stderr (one line per frame).
+        # Format: "frame N: {JSON}\n"
+        self.last_report = None
+        line = stderr.readline().decode(errors="replace").strip()
+        if line:
+            colon_pos = line.find(": {")
+            if colon_pos >= 0:
+                try:
+                    meta = json.loads(line[colon_pos + 2 :])
+                    # Extract frame index from "frame N:" prefix
+                    prefix = line[:colon_pos]
+                    frame_idx = int(prefix.split()[-1]) if prefix.split() else 0
+                    self.last_report = FrameReport(
+                        frame=frame_idx,
+                        rays=meta.get("rays", 0),
+                        time_ms=meta.get("time_ms", 0),
+                        max_hdr=meta.get("max_hdr", 0.0),
+                        total_rays=meta.get("total_rays", 0),
+                    )
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
         return data
 
     def close(self):
@@ -157,6 +190,22 @@ class FFmpegOutput:
         self.close()
 
 
+def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
+    """Save raw RGB8 pixels to an image file.  Format inferred from extension.
+
+    ``.ppm`` uses the fast built-in writer (no dependencies).
+    Everything else (``.png``, ``.jpg``, ...) uses Pillow.
+    """
+    if path.lower().endswith(".ppm"):
+        with open(path, "wb") as f:
+            f.write(f"P6\n{width} {height}\n255\n".encode())
+            f.write(rgb)
+    else:
+        from PIL import Image
+
+        Image.frombytes("RGB", (width, height), rgb).save(path)
+
+
 class PpmOutput:
     """Saves individual PPM frames to a directory."""
 
@@ -168,10 +217,8 @@ class PpmOutput:
         self._frame = 0
 
     def write_frame(self, rgb_data: bytes):
-        path = self._dir / f"frame_{self._frame:06d}.ppm"
-        with open(path, "wb") as f:
-            f.write(f"P6\n{self._width} {self._height}\n255\n".encode())
-            f.write(rgb_data)
+        path = str(self._dir / f"frame_{self._frame:06d}.ppm")
+        _save_image(path, rgb_data, self._width, self._height)
         self._frame += 1
 
     def close(self):
@@ -210,9 +257,21 @@ def _build_wire_json(frame: Frame, session_camera: Camera2D | None, aspect: floa
     return json.dumps(d, separators=(",", ":"))
 
 
-# --- Main render function ---
+# --- Helpers ---
 
 AnimateFn = Callable[[FrameContext], Scene | Frame]
+
+
+def _resolve_args(
+    timeline: Timeline | float, settings: RenderSettings | str | None
+) -> tuple[Timeline, RenderSettings]:
+    if isinstance(timeline, (int, float)):
+        timeline = Timeline(duration=float(timeline))
+    if settings is None:
+        settings = RenderSettings()
+    elif isinstance(settings, str):
+        settings = RenderSettings.preset(settings)
+    return timeline, settings
 
 
 def render(
@@ -222,6 +281,7 @@ def render(
     *,
     settings: RenderSettings | str | None = None,
     camera: Camera2D | None = None,
+    binary: str = DEFAULT_BINARY,
     codec: str = "libx264",
     crf: int = 18,
     start: float = 0.0,
@@ -238,6 +298,7 @@ def render(
                 Trailing / or directory -> PPM sequence.
         settings: RenderSettings, Quality preset name (str), or None for defaults.
         camera: Session-level camera. Per-frame Frame.camera overrides this.
+        binary: Path to lpt2d-cli executable.
         codec: Video codec (default: libx264).
         crf: Video quality (default: 18, visually lossless).
         start: Start time in seconds (skip earlier frames).
@@ -245,19 +306,8 @@ def render(
         stride: Render every Nth frame (default: 1 = all frames).
         frame: Render a single frame by index. Overrides start/end/stride.
     """
-    # Resolve timeline
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-
-    # Resolve settings
-    if settings is None:
-        settings = RenderSettings()
-    elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
-
-    width = settings.width
-    height = settings.height
-    aspect = settings.aspect
+    timeline, settings = _resolve_args(timeline, settings)
+    width, height, aspect = settings.width, settings.height, settings.aspect
 
     # Choose output backend
     if output.endswith("/") or (Path(output).exists() and Path(output).is_dir()):
@@ -265,18 +315,10 @@ def render(
     else:
         out = FFmpegOutput(output, width, height, timeline.fps, codec, crf)
 
-    renderer = Renderer(settings)
+    renderer = Renderer(settings, binary=binary)
 
     def _render_frame(i: int) -> bytes:
-        ctx = FrameContext(
-            frame=i,
-            time=timeline.time_at(i),
-            progress=timeline.progress_at(i),
-            fps=timeline.fps,
-            dt=timeline.dt,
-            total_frames=timeline.total_frames,
-            duration=timeline.duration,
-        )
+        ctx = timeline.context_at(i)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
         wire = _build_wire_json(f, camera, aspect)
@@ -286,7 +328,9 @@ def render(
         if frame is not None:
             # Single-frame mode
             out.write_frame(_render_frame(frame))
-            sys.stderr.write(f"frame {frame} ({timeline.time_at(frame):.2f}s)\n")
+            rpt = renderer.last_report
+            ms = f", {rpt.time_ms}ms" if rpt else ""
+            sys.stderr.write(f"frame {frame} ({timeline.time_at(frame):.2f}s{ms})\n")
         else:
             # Range mode
             start_frame = int(start * timeline.fps)
@@ -298,7 +342,9 @@ def render(
 
             for idx, i in enumerate(frames):
                 out.write_frame(_render_frame(i))
-                sys.stderr.write(f"\rframe {idx + 1}/{total} ({timeline.time_at(i):.2f}s)")
+                rpt = renderer.last_report
+                ms = f" {rpt.time_ms}ms" if rpt else ""
+                sys.stderr.write(f"\rframe {idx + 1}/{total} ({timeline.time_at(i):.2f}s{ms})")
                 sys.stderr.flush()
             sys.stderr.write("\n")
     finally:
@@ -309,12 +355,6 @@ def render(
 # --- Convenience functions ---
 
 
-def _write_ppm(path: str, rgb: bytes, width: int, height: int) -> None:
-    with open(path, "wb") as f:
-        f.write(f"P6\n{width} {height}\n255\n".encode())
-        f.write(rgb)
-
-
 def render_still(
     animate: AnimateFn,
     timeline: Timeline | float,
@@ -323,40 +363,29 @@ def render_still(
     frame: int = 0,
     settings: RenderSettings | str | None = None,
     camera: Camera2D | None = None,
+    binary: str = DEFAULT_BINARY,
 ) -> None:
-    """Render a single frame to a PPM file. Fast way to preview a scene.
+    """Render a single frame to an image file.
 
     Args:
         animate: Callback receiving FrameContext, returning Scene or Frame.
         timeline: Timeline object, or duration in seconds.
-        output: Output PPM file path.
+        output: Output image path (.png, .ppm, .jpg, ...).
         frame: Frame index to render (default: 0).
         settings: RenderSettings, preset name, or None for defaults.
         camera: Session-level camera.
+        binary: Path to lpt2d-cli executable.
     """
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-    if settings is None:
-        settings = RenderSettings()
-    elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
+    timeline, settings = _resolve_args(timeline, settings)
 
-    renderer = Renderer(settings)
+    renderer = Renderer(settings, binary=binary)
     try:
-        ctx = FrameContext(
-            frame=frame,
-            time=timeline.time_at(frame),
-            progress=timeline.progress_at(frame),
-            fps=timeline.fps,
-            dt=timeline.dt,
-            total_frames=timeline.total_frames,
-            duration=timeline.duration,
-        )
+        ctx = timeline.context_at(frame)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
         wire = _build_wire_json(f, camera, settings.aspect)
         rgb = renderer.render_frame(wire)
-        _write_ppm(output, rgb, settings.width, settings.height)
+        _save_image(output, rgb, settings.width, settings.height)
         sys.stderr.write(f"wrote {output} ({settings.width}x{settings.height}, frame {frame})\n")
     finally:
         renderer.close()
@@ -371,8 +400,9 @@ def render_contact_sheet(
     count: int = 16,
     settings: RenderSettings | str | None = None,
     camera: Camera2D | None = None,
+    binary: str = DEFAULT_BINARY,
 ) -> None:
-    """Render a grid of frames spread across the timeline. Saves as PPM.
+    """Render a grid of frames spread across the timeline.
 
     Intended for human visual inspection during look development.
     For automated/agent workflows, use frame_stats() instead.
@@ -380,18 +410,14 @@ def render_contact_sheet(
     Args:
         animate: Callback receiving FrameContext, returning Scene or Frame.
         timeline: Timeline object, or duration in seconds.
-        output: Output PPM file path.
+        output: Output image path (.png, .ppm, .jpg, ...).
         cols: Number of columns in the grid (default: 4).
         count: Total number of frames to sample (default: 16).
         settings: RenderSettings, preset name, or None for defaults.
         camera: Session-level camera.
+        binary: Path to lpt2d-cli executable.
     """
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-    if settings is None:
-        settings = RenderSettings()
-    elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
+    timeline, settings = _resolve_args(timeline, settings)
 
     w, h = settings.width, settings.height
     rows = math.ceil(count / cols)
@@ -402,19 +428,11 @@ def render_contact_sheet(
     total = timeline.total_frames
     indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
 
-    renderer = Renderer(settings)
+    renderer = Renderer(settings, binary=binary)
     try:
         frames_rgb: list[bytes] = []
         for idx, fi in enumerate(indices):
-            ctx = FrameContext(
-                frame=fi,
-                time=timeline.time_at(fi),
-                progress=timeline.progress_at(fi),
-                fps=timeline.fps,
-                dt=timeline.dt,
-                total_frames=timeline.total_frames,
-                duration=timeline.duration,
-            )
+            ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
             wire = _build_wire_json(f, camera, settings.aspect)
@@ -425,7 +443,7 @@ def render_contact_sheet(
     finally:
         renderer.close()
 
-    # Assemble grid as PPM
+    # Assemble grid
     sheet = bytearray(sheet_w * sheet_h * 3)
     for idx, rgb in enumerate(frames_rgb):
         col = idx % cols
@@ -435,7 +453,7 @@ def render_contact_sheet(
             dst_off = ((row * h + y) * sheet_w + col * w) * 3
             sheet[dst_off : dst_off + w * 3] = rgb[src_off : src_off + w * 3]
 
-    _write_ppm(output, bytes(sheet), sheet_w, sheet_h)
+    _save_image(output, bytes(sheet), sheet_w, sheet_h)
     sys.stderr.write(f"wrote {output} ({sheet_w}x{sheet_h}, {count} frames, {cols}x{rows} grid)\n")
 
 
@@ -447,6 +465,7 @@ def render_stats(
     count: int = 8,
     settings: RenderSettings | str | None = None,
     camera: Camera2D | None = None,
+    binary: str = DEFAULT_BINARY,
 ) -> list[tuple[int, float, FrameStats]]:
     """Render frames and return their statistics. No file output.
 
@@ -461,13 +480,9 @@ def render_stats(
         count: Number of frames to sample when `frames` is None (default: 8).
         settings: RenderSettings, preset name, or None for defaults.
         camera: Session-level camera.
+        binary: Path to lpt2d-cli executable.
     """
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-    if settings is None:
-        settings = RenderSettings()
-    elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
+    timeline, settings = _resolve_args(timeline, settings)
 
     # Resolve frame indices
     total = timeline.total_frames
@@ -481,19 +496,11 @@ def render_stats(
     w, h = settings.width, settings.height
     aspect = settings.aspect
 
-    renderer = Renderer(settings)
+    renderer = Renderer(settings, binary=binary)
     results: list[tuple[int, float, FrameStats]] = []
     try:
         for fi in indices:
-            ctx = FrameContext(
-                frame=fi,
-                time=timeline.time_at(fi),
-                progress=timeline.progress_at(fi),
-                fps=timeline.fps,
-                dt=timeline.dt,
-                total_frames=timeline.total_frames,
-                duration=timeline.duration,
-            )
+            ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
             wire = _build_wire_json(f, camera, aspect)
@@ -510,86 +517,43 @@ def calibrate_normalize_ref(
     *,
     settings: RenderSettings | str | None = None,
     camera: Camera2D | None = None,
+    binary: str = DEFAULT_BINARY,
     frame: int = 0,
 ) -> float:
-    """Render one frame with auto-normalize to determine a good normalize_ref.
+    """Render one frame with max-normalize to determine a good normalize_ref.
 
-    Spawns a separate CLI process with ``normalize=true``, renders the specified
-    frame, and parses the ``max_hdr`` value from the enriched stderr metadata.
-    The returned value can be used as ``RenderSettings.normalize_ref`` for
-    temporally stable animation renders.
+    Uses the standard :class:`Renderer` with ``normalize="max"`` to capture
+    the HDR peak from the :class:`FrameReport` metadata.
+    The returned value can be used as ``RenderSettings(normalize="fixed",
+    normalize_ref=...)`` for temporally stable animation renders.
 
     Args:
         animate: Callback receiving FrameContext, returning Scene or Frame.
         timeline: Timeline object, or duration in seconds.
         settings: RenderSettings, preset name, or None for defaults.
         camera: Session-level camera.
+        binary: Path to lpt2d-cli executable.
         frame: Frame index to calibrate on (default: 0).
 
     Returns:
         The HDR max value suitable for use as ``normalize_ref``.
     """
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-    if settings is None:
-        settings = RenderSettings()
-    elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
+    timeline, settings = _resolve_args(timeline, settings)
 
-    # Build a calibration subprocess with normalize=true
-    cmd = [
-        settings.binary,
-        "--stream",
-        "--width", str(settings.width),
-        "--height", str(settings.height),
-        "--rays", str(settings.rays),
-        "--batch", str(settings.batch),
-        "--depth", str(settings.depth),
-        "--exposure", str(settings.exposure),
-        "--contrast", str(settings.contrast),
-        "--gamma", str(settings.gamma),
-        "--tonemap", settings.tonemap,
-        "--white-point", str(settings.white_point),
-        "--normalize", "max",  # force max mode so max_hdr is the real peak
-        "--normalize-pct", "1.0",  # ensure we get true max, not percentile
-    ]
+    # Force max mode so the C++ renderer computes and reports true HDR peak.
+    cal_settings = replace(settings, normalize="max", normalize_pct=1.0)
 
-    ctx = FrameContext(
-        frame=frame,
-        time=timeline.time_at(frame),
-        progress=timeline.progress_at(frame),
-        fps=timeline.fps,
-        dt=timeline.dt,
-        total_frames=timeline.total_frames,
-        duration=timeline.duration,
-    )
-    result = animate(ctx)
-    f = result if isinstance(result, Frame) else Frame(scene=result)
-    wire = _build_wire_json(f, camera, settings.aspect)
+    renderer = Renderer(cal_settings, binary=binary)
+    try:
+        ctx = timeline.context_at(frame)
+        result = animate(ctx)
+        f = result if isinstance(result, Frame) else Frame(scene=result)
+        wire = _build_wire_json(f, camera, cal_settings.aspect)
+        renderer.render_frame(wire)  # discard pixels, we want the report
 
-    proc = subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    stdin = _require_pipe(proc.stdin, "stdin")
-    stdout = _require_pipe(proc.stdout, "stdout")
-    stderr = _require_pipe(proc.stderr, "stderr")
-
-    stdin.write((wire + "\n").encode())
-    stdin.close()
-
-    # Read and discard the pixel data
-    frame_bytes = settings.width * settings.height * 3
-    stdout.read(frame_bytes)
-
-    stderr_text = stderr.read().decode()
-    proc.wait()
-
-    # Parse max_hdr from enriched stderr: "frame 0: {"rays": ..., "max_hdr": 1234.5}"
-    for line in stderr_text.splitlines():
-        if "max_hdr" in line:
-            colon_pos = line.find(": {")
-            if colon_pos >= 0:
-                data = json.loads(line[colon_pos + 2:])
-                return float(data["max_hdr"])
-
-    raise RuntimeError(f"Could not parse max_hdr from calibration output: {stderr_text!r}")
+        rpt = renderer.last_report
+        if rpt is None or rpt.max_hdr <= 0:
+            raise RuntimeError("Calibration failed: no max_hdr in renderer report")
+        return rpt.max_hdr
+    finally:
+        renderer.close()

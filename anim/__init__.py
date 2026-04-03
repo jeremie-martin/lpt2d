@@ -36,6 +36,9 @@ from .types import (
     FrameContext as FrameContext,
 )
 from .types import (
+    FrameReport as FrameReport,
+)
+from .types import (
     Group as Group,
 )
 from .types import (
@@ -72,6 +75,9 @@ from .types import (
     absorber as absorber,
 )
 from .types import (
+    beam_splitter as beam_splitter,
+)
+from .types import (
     diffuse as diffuse,
 )
 from .types import (
@@ -79,6 +85,9 @@ from .types import (
 )
 from .types import (
     mirror as mirror,
+)
+from .types import (
+    opaque_mirror as opaque_mirror,
 )
 
 __all__ = [
@@ -91,6 +100,7 @@ __all__ = [
     "FFmpegOutput",
     "Frame",
     "FrameContext",
+    "FrameReport",
     "Group",
     "Material",
     "PointLight",
@@ -107,11 +117,13 @@ __all__ = [
     "Track",
     "Wrap",
     "absorber",
+    "beam_splitter",
     "diffuse",
     "glass",
     "FrameStats",
     "frame_stats",
     "mirror",
+    "opaque_mirror",
     "calibrate_normalize_ref",
     "render",
     "render_contact_sheet",

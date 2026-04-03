@@ -36,6 +36,7 @@ WARN_SSIM = 0.98
 
 # ── Image metrics ────────────────────────────────────────────────────────
 
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -52,7 +53,7 @@ def load_image(path: Path) -> np.ndarray:
 
 def compute_mse(a: np.ndarray, b: np.ndarray) -> dict:
     diff = a.astype(np.float64) - b.astype(np.float64)
-    mse_ch = np.mean(diff ** 2, axis=(0, 1))  # per-channel
+    mse_ch = np.mean(diff**2, axis=(0, 1))  # per-channel
     return {
         "r": float(mse_ch[0]),
         "g": float(mse_ch[1]),
@@ -64,7 +65,7 @@ def compute_mse(a: np.ndarray, b: np.ndarray) -> dict:
 def compute_psnr(mse: float) -> float:
     if mse < 1e-10:
         return float("inf")
-    return 10.0 * math.log10(255.0 ** 2 / mse)
+    return 10.0 * math.log10(255.0**2 / mse)
 
 
 def box_filter(img: np.ndarray, win: int) -> np.ndarray:
@@ -101,7 +102,7 @@ def compute_ssim(a: np.ndarray, b: np.ndarray, win: int = 11) -> float:
         sigma_ab = box_filter(ac * bc, win) - mu_a * mu_b
 
         num = (2 * mu_a * mu_b + C1) * (2 * sigma_ab + C2)
-        den = (mu_a ** 2 + mu_b ** 2 + C1) * (sigma_a2 + sigma_b2 + C2)
+        den = (mu_a**2 + mu_b**2 + C1) * (sigma_a2 + sigma_b2 + C2)
 
         ssim_map = num / den
         ssim_channels.append(float(np.mean(ssim_map)))
@@ -182,6 +183,7 @@ def compare_images(run_path: Path, baseline_path: Path) -> dict:
 
 # ── Performance metrics ──────────────────────────────────────────────────
 
+
 def cv(times: list[float]) -> float:
     """Coefficient of variation (%)."""
     if len(times) < 2 or mean(times) < 1e-6:
@@ -256,10 +258,14 @@ def compare_performance(run_results: dict, baseline_results: dict) -> dict:
         for i in range(n_curr)
     ]
 
-    total_confidence = classify_speedup(
-        [t for t in all_base_totals if t > 0],
-        [t for t in all_curr_totals if t > 0],
-    ) if all_base_totals and all_curr_totals else "no_data"
+    total_confidence = (
+        classify_speedup(
+            [t for t in all_base_totals if t > 0],
+            [t for t in all_curr_totals if t > 0],
+        )
+        if all_base_totals and all_curr_totals
+        else "no_data"
+    )
 
     return {
         "total_baseline_ms": round(total_base, 1),
@@ -271,6 +277,7 @@ def compare_performance(run_results: dict, baseline_results: dict) -> dict:
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
+
 
 def main():
     if len(sys.argv) != 3:
@@ -350,9 +357,9 @@ def main():
     verdict_path.write_text(json.dumps(verdict, indent=2) + "\n")
 
     # Print summary
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f" Verdict: {verdict['overall']}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     for name in scene_names:
         fid = fidelity_results.get(name, {})
@@ -372,12 +379,14 @@ def main():
         print(f"  {name:30s} {fv:4s}{ident}{psnr_str}{perf_str}")
 
     if perf:
-        print(f"{'─'*60}")
+        print(f"{'─' * 60}")
         p = verdict["performance"]
-        print(f"  {'TOTAL':30s}      | {p['total_current_ms']:.0f}ms"
-              f" ({p['total_speedup']:.3f}x {p['total_confidence']})")
+        print(
+            f"  {'TOTAL':30s}      | {p['total_current_ms']:.0f}ms"
+            f" ({p['total_speedup']:.3f}x {p['total_confidence']})"
+        )
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f" Written: {verdict_path}")
 
     sys.exit(1 if any_fail else 0)

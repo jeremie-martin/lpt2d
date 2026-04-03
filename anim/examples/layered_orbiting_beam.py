@@ -143,8 +143,8 @@ EXPOSURE = Track(
 )
 
 
-def polar(radius: float, angle: float) -> list[float]:
-    return [radius * math.cos(angle), radius * math.sin(angle)]
+def polar(radius: float, angle: float) -> tuple[float, float]:
+    return (radius * math.cos(angle), radius * math.sin(angle))
 
 
 def vertical_position(progress: float) -> float:
@@ -181,7 +181,7 @@ def make_cluster_group(t: float) -> Group:
     scale = float(CLUSTER_SCALE(t))
     return Group(
         name="glass_triplet",
-        transform=Transform2D(rotate=float(CLUSTER_ROTATION(t)), scale=[scale, scale]),
+        transform=Transform2D.uniform(rotate=float(CLUSTER_ROTATION(t)), scale=scale),
         shapes=[
             Circle(center=[-0.46, 0.08], radius=0.18, material=GLASS_MATERIALS[0]),
             Circle(center=[0.0, -0.02], radius=0.2, material=GLASS_MATERIALS[1]),
@@ -247,10 +247,10 @@ def make_beam_group(
 ) -> Group:
     return Group(
         name=name,
-        transform=Transform2D(
+        transform=Transform2D.uniform(
             translate=polar(radius, angle),
             rotate=angle + math.pi,
-            scale=[scale, scale],
+            scale=scale,
         ),
         lights=[
             BeamLight(

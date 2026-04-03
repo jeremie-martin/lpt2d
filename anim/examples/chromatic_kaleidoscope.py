@@ -99,8 +99,8 @@ EXPOSURE = Track(
 )
 
 
-def polar(radius: float, angle: float) -> list[float]:
-    return [radius * math.cos(angle), radius * math.sin(angle)]
+def polar(radius: float, angle: float) -> tuple[float, float]:
+    return (radius * math.cos(angle), radius * math.sin(angle))
 
 
 def reveal(progress: float) -> float:
@@ -114,7 +114,7 @@ def make_core_group(t: float) -> Group:
     rotation = 0.22 * math.tau * t / DURATION
     return Group(
         name="core",
-        transform=Transform2D(rotate=rotation, scale=[scale, scale]),
+        transform=Transform2D.uniform(rotate=rotation, scale=scale),
         shapes=[
             Circle(center=[0.0, 0.0], radius=0.13, material=CORE_MATERIAL),
             Circle(center=[0.18, 0.0], radius=0.06, material=SATELLITE_MATERIAL),
@@ -134,10 +134,10 @@ def make_prism_group(index: int, t: float, crown_spin: float) -> Group:
 
     return Group(
         name=f"prism_{index}",
-        transform=Transform2D(
+        transform=Transform2D.uniform(
             translate=polar(radius, orbit_angle),
             rotate=twist,
-            scale=[scale, scale],
+            scale=scale,
         ),
         shapes=[
             Segment(a=[-0.22, -0.12], b=[0.22, -0.12], material=material),
@@ -158,10 +158,10 @@ def make_beam_group(
 ) -> Group:
     return Group(
         name=name,
-        transform=Transform2D(
+        transform=Transform2D.uniform(
             translate=polar(EMITTER_RADIUS, angle),
             rotate=angle + math.pi,
-            scale=[scale, scale],
+            scale=scale,
         ),
         lights=[
             BeamLight(

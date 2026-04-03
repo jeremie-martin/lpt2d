@@ -26,7 +26,7 @@ static void print_usage() {
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (default: aces)\n"
               << "  --white-point <float>    White point for reinhardx/log (default: 1)\n"
-              << "  --normalize <mode>       max|rays|fixed|off (default: max)\n"
+              << "  --normalize <mode>       max|rays|fixed|off (default: rays)\n"
               << "  --normalize-ref <float>  Fixed divisor (for --normalize fixed)\n"
               << "  --normalize-pct <float>  Percentile for max mode (default: 1.0, use 0.99 for P99)\n"
               << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"

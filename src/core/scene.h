@@ -72,9 +72,13 @@ struct Material {
 inline Material mat_absorber() { return {.albedo = 0.0f}; }
 inline Material mat_diffuse(float reflectance) { return {.albedo = reflectance}; }
 inline Material mat_mirror(float reflectance, float roughness = 0.0f) {
-    // Beam splitter: reflects (reflectance), transmits the rest (ior=1 = no bending).
-    // metallic=1 makes reflectance flat (angle-independent).
+    // Beam splitter behavior: reflects (reflectance), transmits the rest.
+    // metallic=1 makes reflectance flat (angle-independent), ior=1 = no bending.
     return {.roughness = roughness, .metallic = 1.0f, .transmission = 1.0f, .albedo = reflectance};
+}
+inline Material mat_opaque_mirror(float reflectance, float roughness = 0.0f) {
+    // Opaque mirror: reflects (reflectance), absorbs the rest (no transmission).
+    return {.roughness = roughness, .metallic = 1.0f, .transmission = 0.0f, .albedo = reflectance};
 }
 inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0.0f) {
     return {.ior = ior, .transmission = 1.0f, .absorption = absorption, .cauchy_b = cauchy_b};
@@ -217,8 +221,8 @@ struct LineSegment {
 enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 
 enum class NormalizeMode : int {
-    Max = 0,   // per-frame max pixel (or percentile) — interactive default
-    Rays = 1,  // total accumulated rays — stable across ray counts
+    Max = 0,   // per-frame max pixel (or percentile)
+    Rays = 1,  // total accumulated rays — stable across ray counts (default)
     Fixed = 2, // user-specified divisor (normalize_ref)
     Off = 3,   // no normalization (divisor = 1.0)
 };
@@ -229,7 +233,7 @@ struct PostProcess {
     float gamma = 2.2f;
     ToneMap tone_map = ToneMap::ACES;
     float white_point = 1.0f;
-    NormalizeMode normalize = NormalizeMode::Max;
+    NormalizeMode normalize = NormalizeMode::Rays;
     float normalize_ref = 0.0f; // divisor for Fixed mode
     float normalize_pct = 1.0f; // percentile for Max mode (1.0=max, 0.99=P99)
 };

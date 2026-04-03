@@ -50,7 +50,24 @@ def glass(ior: float, cauchy_b: float = 0.0, absorption: float = 0.0) -> Materia
 
 
 def mirror(reflectance: float, roughness: float = 0.0) -> Material:
+    """Reflective surface. Unreflected light transmits through (beam splitter behavior).
+
+    For an opaque mirror that absorbs unreflected light, use :func:`opaque_mirror`.
+    """
     return Material(roughness=roughness, metallic=1.0, transmission=1.0, albedo=reflectance)
+
+
+def beam_splitter(reflectance: float, roughness: float = 0.0) -> Material:
+    """Beam splitter: reflects *reflectance* fraction, transmits the rest.
+
+    Alias for :func:`mirror` -- identical physics.
+    """
+    return mirror(reflectance, roughness)
+
+
+def opaque_mirror(reflectance: float, roughness: float = 0.0) -> Material:
+    """Opaque reflective surface. Unreflected light is absorbed (not transmitted)."""
+    return Material(roughness=roughness, metallic=1.0, transmission=0.0, albedo=reflectance)
 
 
 def diffuse(reflectance: float) -> Material:
@@ -196,9 +213,23 @@ Light = PointLight | SegmentLight | BeamLight
 
 @dataclass
 class Transform2D:
+    """2D transform applied as scale -> rotate -> translate.
+
+    Note on non-uniform scale: circle and arc radii use the geometric mean of
+    (sx, sy), so they remain circular.  Non-uniform scale works exactly for
+    segments, beziers, and lights.
+    """
+
     translate: list[float] = field(default_factory=lambda: [0.0, 0.0])
     rotate: float = 0.0
     scale: list[float] = field(default_factory=lambda: [1.0, 1.0])
+
+    @staticmethod
+    def uniform(
+        translate: tuple[float, float] = (0.0, 0.0), rotate: float = 0.0, scale: float = 1.0
+    ) -> Transform2D:
+        """Convenience for uniform scale (safe for all shapes including circles/arcs)."""
+        return Transform2D(translate=list(translate), rotate=rotate, scale=[scale, scale])
 
     def to_dict(self) -> dict:
         return {"translate": self.translate, "rotate": self.rotate, "scale": self.scale}
@@ -405,10 +436,9 @@ class RenderSettings:
     gamma: float = 2.2
     tonemap: str = "aces"
     white_point: float = 1.0
-    normalize: str = "rays"       # "max" | "rays" | "fixed" | "off"
-    normalize_ref: float = 0.0    # divisor for "fixed" mode
-    normalize_pct: float = 1.0    # percentile for "max" mode (1.0=max, 0.99=P99)
-    binary: str = "./build/lpt2d-cli"
+    normalize: str = "rays"  # "max" | "rays" | "fixed" | "off"
+    normalize_ref: float = 0.0  # divisor for "fixed" mode
+    normalize_pct: float = 1.0  # percentile for "max" mode (1.0=max, 0.99=P99)
 
     @staticmethod
     def preset(quality: Quality | str, **overrides) -> RenderSettings:
@@ -436,7 +466,7 @@ class RenderOverrides:
     gamma: float | None = None
     tonemap: str | None = None
     white_point: float | None = None
-    normalize: str | None = None      # "max" | "rays" | "fixed" | "off"
+    normalize: str | None = None  # "max" | "rays" | "fixed" | "off"
     normalize_ref: float | None = None
     normalize_pct: float | None = None
 
@@ -470,15 +500,35 @@ class Timeline:
         return 1.0 / self.fps
 
     def time_at(self, frame: int) -> float:
-        """Wall-clock time for a given frame index."""
+        """Physical sample time in seconds.  Use for Track evaluation.
+
+        Note: ``time_at(last_frame) < duration`` (the endpoint is not sampled).
+        For a 1 s / 30 fps clip: ``time_at(29) = 0.9667 s``.
+        """
         return frame / self.fps
 
     def progress_at(self, frame: int) -> float:
-        """Normalized progress [0, 1]. Frame 0 = 0.0, last frame = 1.0."""
+        """Normalised clip position [0.0, 1.0].  Use for fade envelopes.
+
+        Frame 0 = 0.0, last frame = 1.0 exactly.
+        This is frame-index normalised, *not* ``time / duration``.
+        """
         n = self.total_frames
         if n <= 1:
             return 0.0
         return frame / (n - 1)
+
+    def context_at(self, frame: int) -> FrameContext:
+        """Build a :class:`FrameContext` for the given frame index."""
+        return FrameContext(
+            frame=frame,
+            time=self.time_at(frame),
+            progress=self.progress_at(frame),
+            fps=self.fps,
+            dt=self.dt,
+            total_frames=self.total_frames,
+            duration=self.duration,
+        )
 
 
 # --- Frame context & return types ---
@@ -504,3 +554,14 @@ class Frame:
     scene: Scene
     camera: Camera2D | None = None
     render: RenderOverrides | None = None
+
+
+@dataclass(frozen=True)
+class FrameReport:
+    """Structured per-frame metadata from the C++ renderer."""
+
+    frame: int
+    rays: int
+    time_ms: int
+    max_hdr: float
+    total_rays: int
