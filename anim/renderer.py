@@ -10,6 +10,12 @@ from typing import Callable
 from .types import Scene
 
 
+def _require_pipe(pipe, name: str):
+    if pipe is None:
+        raise RuntimeError(f"Subprocess {name} pipe is unavailable")
+    return pipe
+
+
 class Renderer:
     """Manages a persistent lpt2d-cli --stream subprocess."""
 
@@ -30,7 +36,7 @@ class Renderer:
         self.width = width
         self.height = height
         self.frame_bytes = width * height * 3
-        self._proc = subprocess.Popen(
+        self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             [
                 binary, "--stream",
                 "--width", str(width), "--height", str(height),
@@ -46,10 +52,15 @@ class Renderer:
 
     def render_frame(self, scene: Scene) -> bytes:
         """Send scene JSON, receive raw RGB8 pixels."""
-        self._proc.stdin.write((scene.to_json() + "\n").encode())
-        self._proc.stdin.flush()
+        proc = self._proc
+        if proc is None:
+            raise RuntimeError("Renderer process is not running")
+        stdin = _require_pipe(proc.stdin, "stdin")
+        stdout = _require_pipe(proc.stdout, "stdout")
+        stdin.write((scene.to_json() + "\n").encode())
+        stdin.flush()
 
-        data = self._proc.stdout.read(self.frame_bytes)
+        data = stdout.read(self.frame_bytes)
         if len(data) != self.frame_bytes:
             raise RuntimeError(
                 f"Renderer died after {len(data)}/{self.frame_bytes} bytes"
@@ -58,7 +69,7 @@ class Renderer:
 
     def close(self):
         if self._proc and self._proc.poll() is None:
-            self._proc.stdin.close()
+            _require_pipe(self._proc.stdin, "stdin").close()
             self._proc.wait()
         self._proc = None
 
@@ -95,11 +106,14 @@ class FFmpegOutput:
         )
 
     def write_frame(self, rgb_data: bytes):
-        self._proc.stdin.write(rgb_data)
+        proc = self._proc
+        if proc is None:
+            raise RuntimeError("FFmpeg process is not running")
+        _require_pipe(proc.stdin, "stdin").write(rgb_data)
 
     def close(self):
         if self._proc and self._proc.poll() is None:
-            self._proc.stdin.close()
+            _require_pipe(self._proc.stdin, "stdin").close()
             self._proc.wait()
         self._proc = None
 

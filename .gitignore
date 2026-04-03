@@ -4,6 +4,12 @@
 
 # Local caches
 /.cache/
+.venv/
+.egg-info/
+*.egg-info/
+.pytest_cache/
+.pyright/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 

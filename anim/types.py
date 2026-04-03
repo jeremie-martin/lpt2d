@@ -6,7 +6,6 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-
 # --- Materials ---
 
 @dataclass
@@ -172,7 +171,7 @@ class Group:
         return {
             "name": self.name, "transform": self.transform.to_dict(),
             "shapes": [s.to_dict() for s in self.shapes],
-            "lights": [l.to_dict() for l in self.lights],
+            "lights": [light.to_dict() for light in self.lights],
         }
 
 
@@ -251,7 +250,7 @@ class Scene:
         """Compact single-line JSON for streaming."""
         d: dict = {"version": 2, "name": self.name}
         d["shapes"] = [s.to_dict() for s in self.shapes]
-        d["lights"] = [l.to_dict() for l in self.lights]
+        d["lights"] = [light.to_dict() for light in self.lights]
         if self.groups:
             d["groups"] = [g.to_dict() for g in self.groups]
         if self.render:

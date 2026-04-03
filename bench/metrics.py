@@ -19,7 +19,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from statistics import median, stdev, mean
+from statistics import mean, median, stdev
 
 import numpy as np
 from PIL import Image

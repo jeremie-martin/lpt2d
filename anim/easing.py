@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from typing import Callable
 
-
 # --- Easing functions: [0, 1] -> [0, 1] ---
 
 def linear(t: float) -> float:
