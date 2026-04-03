@@ -131,21 +131,13 @@ CAMERA_WIDTH = Track(
     ],
     wrap=Wrap.PINGPONG,
 )
+# Exposure tuned for normalize="rays" + reinhardx wp=0.5
 EXPOSURE = Track(
     [
-        Key(0.0, -0.25),
-        Key(4.0, -0.04, ease="ease_in_out_sine"),
-        Key(8.0, -0.12, ease="ease_in_out_sine"),
-        Key(DURATION, 0.02, ease="ease_in_out_cubic"),
-    ],
-    wrap=Wrap.PINGPONG,
-)
-WHITE_POINT = Track(
-    [
-        Key(0.0, 1.24),
-        Key(4.0, 1.38, ease="ease_in_out_sine"),
-        Key(8.0, 1.3, ease="ease_in_out_sine"),
-        Key(DURATION, 1.42, ease="ease_in_out_cubic"),
+        Key(0.0, 3.75),
+        Key(4.0, 3.96, ease="ease_in_out_sine"),
+        Key(8.0, 3.88, ease="ease_in_out_sine"),
+        Key(DURATION, 4.02, ease="ease_in_out_cubic"),
     ],
     wrap=Wrap.PINGPONG,
 )
@@ -276,7 +268,7 @@ def make_beam_group(
 def animate(ctx: FrameContext) -> Frame:
     fade = reveal(ctx.progress)
     radius = float(BEAM_RADIUS(ctx.time))
-    exposure = -2.6 + (float(EXPOSURE(ctx.time)) + 2.6) * fade
+    exposure = 1.0 + (float(EXPOSURE(ctx.time)) - 1.0) * fade
     groups = [
         make_box_group(),
         make_cluster_group(ctx.time),
@@ -318,9 +310,8 @@ def animate(ctx: FrameContext) -> Frame:
         render=RenderOverrides(
             exposure=exposure,
             contrast=1.0,
-            normalize="max",
             tonemap="reinhardx",
-            white_point=float(WHITE_POINT(ctx.time)),
+            white_point=0.5,
         ),
     )
 

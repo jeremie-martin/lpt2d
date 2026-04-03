@@ -1,15 +1,20 @@
-"""Static reflective field with a single scanning beam.
+"""Clean scanning reflective field.
 
-Design goals:
-- very readable
-- no object motion except the beam source
-- fixed segment field
-- camera almost fixed, with a tiny linear diagonal drift
-- many small reflective/transmissive segments
-- normalize="max" for stable output
-- preview render uses 100K rays
+Inspired by the exported middle_frame draft, but rebuilt to be:
+- cleaner
+- more aligned
+- more legible
+- more architectural
+
+Scene language:
+- fixed outer frame
+- fixed top rail light
+- one scanning beam moving left -> right
+- structured reflector field below
+- tiny camera drift and zoom only
 """
 
+import math
 import sys
 
 from anim import (
@@ -23,6 +28,7 @@ from anim import (
     RenderSettings,
     Scene,
     Segment,
+    SegmentLight,
     Timeline,
     Track,
     Transform2D,
@@ -31,51 +37,25 @@ from anim import (
     render,
 )
 
-import json
-from anim import Frame, FrameContext, Timeline
-
-def export_frame_json(animate, timeline, frame_index: int, path: str):
-    if isinstance(timeline, (int, float)):
-        timeline = Timeline(duration=float(timeline))
-
-    ctx = FrameContext(
-        frame=frame_index,
-        time=timeline.time_at(frame_index),
-        progress=timeline.progress_at(frame_index),
-        fps=timeline.fps,
-        dt=timeline.dt,
-        total_frames=timeline.total_frames,
-        duration=timeline.duration,
-    )
-
-    result = animate(ctx)
-    frame = result if isinstance(result, Frame) else Frame(scene=result)
-
-    scene_dict = frame.scene.to_dict()
-
-    with open(path, "w") as f:
-        json.dump(scene_dict, f, indent=2)
-
-    print(f"Exported frame {frame_index} → {path}")
-
-NAME = "scanning_reflective_field"
+NAME = "clean_scanning_reflective_field"
 DURATION = 10.0
 
-# Semi-reflective / semi-transmissive mirror feel with slight softness.
-SEGMENT_MATERIAL = mirror(0.88, roughness=0.04)
+# Materials
+FRAME_MATERIAL = mirror(0.95, roughness=0.01)
+FIELD_MATERIAL = mirror(0.88, roughness=0.035)
 
-# Beam path: left -> right near the top, with a slight downward drift.
+# Beam path: left -> right near the top, gently descending.
 BEAM_X = Track(
     [
-        Key(0.0, -1.55),
-        Key(DURATION, 1.45, ease="linear"),
+        Key(0.0, -1.45),
+        Key(DURATION, 1.42, ease="linear"),
     ],
     wrap=Wrap.CLAMP,
 )
 BEAM_Y = Track(
     [
-        Key(0.0, 1.10),
-        Key(DURATION, 0.98, ease="linear"),
+        Key(0.0, 0.93),
+        Key(DURATION, 0.85, ease="linear"),
     ],
     wrap=Wrap.CLAMP,
 )
@@ -83,99 +63,58 @@ BEAM_Y = Track(
 # Camera: almost fixed, tiny diagonal drift and tiny zoom-out.
 CAMERA_CENTER = Track(
     [
-        Key(0.0, (-0.02, 0.18)),
-        Key(DURATION, (0.05, 0.14), ease="linear"),
+        Key(0.0, (0.00, 0.10)),
+        Key(DURATION, (0.05, 0.07), ease="linear"),
     ],
     wrap=Wrap.CLAMP,
 )
 CAMERA_WIDTH = Track(
     [
-        Key(0.0, 3.55),
-        Key(DURATION, 3.70, ease="linear"),
+        Key(0.0, 3.62),
+        Key(DURATION, 3.76, ease="linear"),
     ],
     wrap=Wrap.CLAMP,
 )
 
-# Gentle look shaping only.
+# Look shaping (tuned for normalize="rays" + reinhardx wp=0.5)
 EXPOSURE = Track(
     [
-        Key(0.0, -1.20, ease="linear"),
-        Key(DURATION, -1.05, ease="linear"),
-    ],
-    wrap=Wrap.CLAMP,
-)
-WHITE_POINT = Track(
-    [
-        Key(0.0, 1.14, ease="linear"),
-        Key(DURATION, 1.26, ease="linear"),
+        Key(0.0, 3.80, ease="linear"),
+        Key(DURATION, 4.10, ease="linear"),
     ],
     wrap=Wrap.CLAMP,
 )
 
 
-def make_segment(a, b):
-    return Segment(a=list(a), b=list(b), material=SEGMENT_MATERIAL)
+def seg(a, b, material=FIELD_MATERIAL):
+    return Segment(a=list(a), b=list(b), material=material)
 
 
-def make_reflector_field() -> Group:
+def make_frame_group() -> Group:
+    # Clean, aligned outer box.
+    left = -1.72
+    right = 1.72
+    top = 1.03
+    bottom = -0.88
+
     shapes = [
-        # far left cluster
-        make_segment((-1.42, -0.05), (-1.08, -0.22)),
-        make_segment((-1.48,  0.10), (-1.22,  0.00)),
-        make_segment((-1.30,  0.28), (-1.02,  0.18)),
-        make_segment((-1.42, -0.42), (-1.18, -0.62)),
-
-        # left cluster
-        make_segment((-0.96, -0.04), (-0.62, -0.10)),
-        make_segment((-0.86,  0.02), (-0.48, -0.02)),
-        make_segment((-0.82,  0.36), (-0.60,  0.28)),
-        make_segment((-0.86, -0.36), (-0.50, -0.40)),
-        make_segment((-0.72, -0.66), (-0.38, -0.67)),
-
-        # left-mid
-        make_segment((-0.42, -0.22), (-0.18, -0.25)),
-        make_segment((-0.24, -0.46), ( 0.06, -0.38)),
-        make_segment((-0.22,  0.02), ( 0.04,  0.00)),
-        make_segment((-0.28,  0.18), (-0.02,  0.17)),
-        make_segment((-0.18, -0.74), ( 0.18, -0.76)),
-
-        # center
-        make_segment(( 0.10, -0.16), ( 0.38, -0.22)),
-        make_segment(( 0.06, -0.48), ( 0.42, -0.58)),
-        make_segment(( 0.10, -0.64), ( 0.48, -0.66)),
-        make_segment(( 0.02,  0.06), ( 0.32,  0.05)),
-        make_segment(( 0.16, -0.08), ( 0.42, -0.10)),
-
-        # right-mid
-        make_segment(( 0.56, -0.44), ( 1.02, -0.43)),
-        make_segment(( 0.74, -0.18), ( 1.16, -0.14)),
-        make_segment(( 0.72, -0.72), ( 1.08, -0.64)),
-        make_segment(( 0.70, -0.34), ( 1.22, -0.30)),
-        make_segment(( 0.66,  0.12), ( 1.06,  0.20)),
-
-        # right cluster
-        make_segment(( 1.16, -0.28), ( 1.48, -0.18)),
-        make_segment(( 1.20, -0.72), ( 1.46, -0.66)),
-        make_segment(( 1.26, -0.56), ( 1.48, -0.48)),
-        make_segment(( 1.18, -0.02), ( 1.50,  0.02)),
-        make_segment(( 1.20,  0.22), ( 1.56,  0.30)),
+        seg((left, top), (right, top), FRAME_MATERIAL),
+        seg((left, top), (left, bottom), FRAME_MATERIAL),
+        seg((left, bottom), (right, bottom), FRAME_MATERIAL),
+        seg((right, bottom), (right, top), FRAME_MATERIAL),
     ]
-    return Group(name="reflector_field", shapes=shapes)
+    return Group(name="frame", shapes=shapes)
 
 
-def make_beam(ctx: FrameContext) -> Group:
+def make_top_rail_light() -> Group:
+    # Very soft structural fill, inspired by your segment light in the draft.
     return Group(
-        name="scanning_beam",
-        transform=Transform2D(
-            translate=[float(BEAM_X(ctx.time)), float(BEAM_Y(ctx.time))],
-            rotate=-0.42,  # downward-right so rays actually hit the field
-        ),
+        name="top_rail_light",
         lights=[
-            BeamLight(
-                origin=[0.0, 0.0],
-                direction=[1.0, 0.0],
-                angular_width=0.09,
-                intensity=1.15,
+            SegmentLight(
+                a=[-1.68, 0.99],
+                b=[1.68, 0.99],
+                intensity=0.28,
                 wavelength_min=430.0,
                 wavelength_max=700.0,
             )
@@ -183,19 +122,97 @@ def make_beam(ctx: FrameContext) -> Group:
     )
 
 
+def make_reflector_field() -> Group:
+    # Rebuilt as ordered loose columns: cleaner spacing, stronger rhythm.
+    shapes = [
+        # Column 1
+        seg((-1.46, 0.18), (-1.20, 0.08)),
+        seg((-1.42, -0.02), (-1.10, -0.14)),
+        seg((-1.36, -0.28), (-1.12, -0.42)),
+        seg((-1.32, -0.56), (-1.10, -0.68)),
+
+        # Column 2
+        seg((-0.98, 0.26), (-0.74, 0.18)),
+        seg((-1.00, 0.02), (-0.62, -0.02)),
+        seg((-0.94, -0.26), (-0.58, -0.30)),
+        seg((-0.88, -0.56), (-0.54, -0.57)),
+
+        # Column 3
+        seg((-0.52, 0.20), (-0.24, 0.18)),
+        seg((-0.44, -0.02), (-0.14, -0.04)),
+        seg((-0.42, -0.26), (-0.18, -0.30)),
+        seg((-0.34, -0.60), (-0.02, -0.62)),
+
+        # Column 4
+        seg((0.02, 0.14), (0.30, 0.12)),
+        seg((0.08, -0.06), (0.38, -0.10)),
+        seg((0.10, -0.34), (0.42, -0.42)),
+        seg((0.12, -0.62), (0.48, -0.64)),
+
+        # Column 5
+        seg((0.56, 0.10), (0.92, 0.18)),
+        seg((0.66, -0.10), (1.02, -0.06)),
+        seg((0.68, -0.34), (1.14, -0.30)),
+        seg((0.72, -0.62), (1.08, -0.54)),
+
+        # Column 6
+        seg((1.14, 0.18), (1.48, 0.28)),
+        seg((1.18, -0.02), (1.50, 0.02)),
+        seg((1.22, -0.28), (1.50, -0.20)),
+        seg((1.24, -0.54), (1.50, -0.46)),
+
+        # Smaller linking accents for density and rhythm
+        seg((-1.18, 0.42), (-0.96, 0.34)),
+        seg((-0.72, 0.40), (-0.50, 0.34)),
+        seg((-0.20, 0.34), (0.04, 0.32)),
+        seg((0.36, 0.28), (0.62, 0.28)),
+        seg((0.94, 0.34), (1.22, 0.40)),
+
+        seg((-1.06, -0.74), (-0.78, -0.76)),
+        seg((-0.52, -0.74), (-0.22, -0.76)),
+        seg((0.10, -0.76), (0.42, -0.78)),
+        seg((0.78, -0.74), (1.06, -0.70)),
+    ]
+    return Group(name="reflector_field", shapes=shapes)
+
+
+def make_scanning_beam(ctx: FrameContext) -> Group:
+    return Group(
+        name="scanning_beam",
+        transform=Transform2D(
+            translate=[float(BEAM_X(ctx.time)), float(BEAM_Y(ctx.time))],
+            rotate=-0.34,  # downward-right into the field
+        ),
+        lights=[
+            BeamLight(
+                origin=[0.0, 0.0],
+                direction=[1.0, 0.0],
+                angular_width=0.070,
+                intensity=1.08,
+                wavelength_min=430.0,
+                wavelength_max=700.0,
+            )
+        ],
+    )
+
+
+FRAME_GROUP = make_frame_group()
+RAIL_LIGHT_GROUP = make_top_rail_light()
 FIELD_GROUP = make_reflector_field()
 
 
 def animate(ctx: FrameContext) -> Frame:
-    center_x, center_y = CAMERA_CENTER(ctx.time)
-    camera = Camera2D(center=[center_x, center_y], width=float(CAMERA_WIDTH(ctx.time)))
+    cx, cy = CAMERA_CENTER(ctx.time)
+    camera = Camera2D(center=[cx, cy], width=float(CAMERA_WIDTH(ctx.time)))
 
     return Frame(
         scene=Scene(
             name=NAME,
             groups=[
+                FRAME_GROUP,
                 FIELD_GROUP,
-                make_beam(ctx),
+                RAIL_LIGHT_GROUP,
+                make_scanning_beam(ctx),
             ],
         ),
         camera=camera,
@@ -203,8 +220,7 @@ def animate(ctx: FrameContext) -> Frame:
             exposure=float(EXPOSURE(ctx.time)),
             contrast=1.0,
             tonemap="reinhardx",
-            white_point=float(WHITE_POINT(ctx.time)),
-            normalize="max",
+            white_point=0.5,
         ),
     )
 
@@ -219,19 +235,6 @@ if __name__ == "__main__":
         batch=300_000 if hq else 100_000,
         depth=14 if hq else 10,
     )
-    timeline = Timeline(DURATION, fps=30)
-
-    mid_frame = timeline.total_frames // 2
-
-    export_frame_json(
-        animate,
-        timeline,
-        frame_index=mid_frame,
-        path="middle_frame.json",
-    )
-
-    exit()
-
     render(
         animate,
         Timeline(DURATION, fps=60 if hq else 30),

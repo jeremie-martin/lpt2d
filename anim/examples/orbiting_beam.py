@@ -63,12 +63,13 @@ BEAM_WIDTH = Track(
     ],
     wrap=Wrap.PINGPONG,
 )
+# Exposure tuned for normalize="rays" + reinhardx wp=0.5
 EXPOSURE = Track(
     [
-        Key(0.0, 2.0),
-        Key(3.0, 2.3, ease="ease_in_out_sine"),
-        Key(7.0, 2.1, ease="ease_in_out_sine"),
-        Key(DURATION, 2.2, ease="ease_in_out_sine"),
+        Key(0.0, 3.0),
+        Key(3.0, 3.3, ease="ease_in_out_sine"),
+        Key(7.0, 3.1, ease="ease_in_out_sine"),
+        Key(DURATION, 3.2, ease="ease_in_out_sine"),
     ],
     wrap=Wrap.PINGPONG,
 )
@@ -135,7 +136,7 @@ def animate(ctx: FrameContext) -> Frame:
             groups=[make_box(), make_spheres(), make_fill_light(), make_beam(ctx.time)],
         ),
         render=RenderOverrides(
-            exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.4, normalize="max"
+            exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.5
         ),
     )
 
