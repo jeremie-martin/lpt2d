@@ -501,6 +501,9 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
                 {v->arr[2].as_float(), v->arr[3].as_float()}};
         }
     }
+    if (auto* v = render->get("normalize")) {
+        fo.normalize = v->number != 0;
+    }
 
     return fo;
 }

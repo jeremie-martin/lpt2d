@@ -23,6 +23,7 @@ struct FrameOverrides {
     std::optional<float> exposure, contrast, gamma, white_point;
     std::optional<ToneMap> tonemap;
     std::optional<Bounds> bounds; // fixed camera
+    std::optional<bool> normalize; // auto-normalize by max luminance
 };
 
 // Extract optional "render" overrides from a scene JSON string.

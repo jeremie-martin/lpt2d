@@ -25,6 +25,7 @@ static void print_usage() {
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (default: aces)\n"
               << "  --white-point <float>    White point for reinhardx/log (default: 1)\n"
+              << "  --no-normalize           Disable per-frame auto-normalization (fixed exposure for animation)\n"
               << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -37,7 +38,7 @@ static Scene resolve_scene(const std::string& arg) {
     if (auto s = find_builtin_scene(arg)) return *s;
     // Then try as a file path
     Scene s = load_scene_json(arg);
-    if (!s.shapes.empty() || !s.lights.empty()) return s;
+    if (!s.shapes.empty() || !s.lights.empty() || !s.groups.empty()) return s;
     std::cerr << "Unknown scene: " << arg << "\n";
     std::cerr << "Available: ";
     for (auto& entry : get_builtin_scenes())
@@ -90,19 +91,29 @@ static int run_stream(int width, int height, int64_t default_rays,
         if (fo.gamma) pp.gamma = *fo.gamma;
         if (fo.white_point) pp.white_point = *fo.white_point;
         if (fo.tonemap) pp.tone_map = *fo.tonemap;
+        if (fo.normalize.has_value()) pp.normalize = *fo.normalize;
 
-        Bounds bounds = fo.bounds ? *fo.bounds : compute_bounds(scene);
+        Bounds bounds;
+        if (fo.bounds) {
+            bounds = *fo.bounds;
+        } else if (scene.shapes.empty() && scene.lights.empty() && scene.groups.empty()) {
+            bounds = {{-1, -1}, {1, 1}};
+        } else {
+            bounds = compute_bounds(scene);
+        }
         renderer.upload_scene(scene, bounds);
         renderer.clear();
 
-        // Trace rays in batched dispatches
-        int64_t num_batches = (rays + tcfg.batch_size - 1) / tcfg.batch_size;
-        const int dispatches_per_draw = 4;
-        int64_t b = 0;
-        while (b < num_batches) {
-            int n = std::min((int64_t)dispatches_per_draw, num_batches - b);
-            renderer.trace_and_draw_multi(tcfg, n);
-            b += n;
+        // Trace rays in batched dispatches (skip if no lights)
+        if (renderer.num_lights() > 0) {
+            int64_t num_batches = (rays + tcfg.batch_size - 1) / tcfg.batch_size;
+            const int dispatches_per_draw = 4;
+            int64_t b = 0;
+            while (b < num_batches) {
+                int n = std::min((int64_t)dispatches_per_draw, num_batches - b);
+                renderer.trace_and_draw_multi(tcfg, n);
+                b += n;
+            }
         }
 
         // Read pixels and write raw RGB to stdout
@@ -160,6 +171,8 @@ int main(int argc, char** argv) {
                 pp.tone_map = ToneMap::ReinhardExtended;
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
+        } else if (std::strcmp(argv[i], "--no-normalize") == 0) {
+            pp.normalize = false;
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {

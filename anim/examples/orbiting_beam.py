@@ -1,14 +1,18 @@
 """Beam light orbiting three glass spheres."""
 
 import math
+import sys
 
 from anim import (
     BeamLight,
+    Camera2D,
     Circle,
-    RenderConfig,
+    Frame,
+    RenderOverrides,
     Scene,
     Segment,
     SegmentLight,
+    Timeline,
     glass,
     mirror,
     render,
@@ -31,6 +35,8 @@ VIEW_BOUNDS = [
 SEGMENT_LIGHT_WIDTH_RATIO = 0.8
 SEGMENT_LIGHT_VERTICAL_PROGRESS = 0.9
 SEGMENT_LIGHT_INTENSITY = 1.5
+
+CAMERA = Camera2D(bounds=VIEW_BOUNDS)
 
 
 def clamp(value, lo, hi):
@@ -69,10 +75,10 @@ def orbit_progress(t):
     return accel_distance + max_speed * (u - ramp)
 
 
-def animate(t):
+def animate(ctx):
     scene = Scene(name="orbiting_beam")
 
-    # Three glass spheres (same as three_spheres scene)
+    # Three glass spheres
     for x in (-0.5, 0.0, 0.5):
         scene.shapes.append(
             Circle(
@@ -93,7 +99,6 @@ def animate(t):
     segment_half_width = BOX_HALF_EXTENT * SEGMENT_LIGHT_WIDTH_RATIO
     segment_y = vertical_position(BOX_BOUNDS, SEGMENT_LIGHT_VERTICAL_PROGRESS)
 
-    # Left-to-right winding keeps the segment normal pointing upward.
     scene.lights.append(
         SegmentLight(
             a=[-segment_half_width, segment_y],
@@ -103,12 +108,9 @@ def animate(t):
     )
 
     # Beam orbiting on a circle, always aimed at center
-    angle = START_ANGLE + FULL_TURN * orbit_progress(t)
-
+    angle = START_ANGLE + FULL_TURN * orbit_progress(ctx.time)
     ox = math.cos(angle) * ORBIT_RADIUS
     oy = math.sin(angle) * ORBIT_RADIUS
-
-    # Direction: from origin toward center (0,0)
     dx, dy = -ox, -oy
     length = math.hypot(dx, dy)
     dx /= length
@@ -123,40 +125,19 @@ def animate(t):
         )
     )
 
-    # Fix camera so it doesn't jump around
-    scene.render = RenderConfig(
-        exposure=2.2,
-        bounds=VIEW_BOUNDS,
-        tonemap="reinhardx",
-        white_point=0.4,
+    return Frame(
+        scene=scene,
+        render=RenderOverrides(exposure=2.2, tonemap="reinhardx", white_point=0.4),
     )
-
-    return scene
 
 
 if __name__ == "__main__":
-    import sys
-
-    # Quick preview: low res, few rays
-    if "--hq" in sys.argv:
-        render(
-            animate,
-            duration=ORBIT_DURATION,
-            output="orbiting_beam_hq.mp4",
-            fps=60,
-            width=1080,
-            height=1080,
-            rays=5_000_000,
-            binary="./build/lpt2d-cli",
-        )
-    else:
-        render(
-            animate,
-            duration=ORBIT_DURATION,
-            output="orbiting_beam.mp4",
-            fps=1,
-            width=1080,
-            height=1080,
-            rays=1_000_000,
-            binary="./build/lpt2d-cli",
-        )
+    preset = "final" if "--hq" in sys.argv else "draft"
+    fps = 60 if "--hq" in sys.argv else 2
+    render(
+        animate,
+        Timeline(ORBIT_DURATION, fps=fps),
+        f"orbiting_beam_{preset}.mp4",
+        settings=preset,
+        camera=CAMERA,
+    )

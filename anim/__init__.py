@@ -1,10 +1,13 @@
-"""lpt2d animation library — f(t) -> Scene -> video."""
+"""lpt2d animation library — f(ctx) -> Scene -> video."""
 
-from .easing import keyframe as keyframe
-from .easing import keyframe2 as keyframe2
+from .easing import EASINGS as EASINGS
+from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
 from .renderer import render as render
+from .track import Key as Key
+from .track import Track as Track
+from .track import Wrap as Wrap
 from .types import (
     Arc as Arc,
 )
@@ -15,7 +18,16 @@ from .types import (
     Bezier as Bezier,
 )
 from .types import (
+    Camera2D as Camera2D,
+)
+from .types import (
     Circle as Circle,
+)
+from .types import (
+    Frame as Frame,
+)
+from .types import (
+    FrameContext as FrameContext,
 )
 from .types import (
     Group as Group,
@@ -27,7 +39,13 @@ from .types import (
     PointLight as PointLight,
 )
 from .types import (
-    RenderConfig as RenderConfig,
+    Quality as Quality,
+)
+from .types import (
+    RenderOverrides as RenderOverrides,
+)
+from .types import (
+    RenderSettings as RenderSettings,
 )
 from .types import (
     Scene as Scene,
@@ -37,6 +55,9 @@ from .types import (
 )
 from .types import (
     SegmentLight as SegmentLight,
+)
+from .types import (
+    Timeline as Timeline,
 )
 from .types import (
     Transform2D as Transform2D,
@@ -58,22 +79,31 @@ __all__ = [
     "Arc",
     "BeamLight",
     "Bezier",
+    "Camera2D",
     "Circle",
+    "EASINGS",
     "FFmpegOutput",
+    "Frame",
+    "FrameContext",
     "Group",
     "Material",
     "PointLight",
-    "RenderConfig",
+    "Quality",
+    "RenderOverrides",
+    "RenderSettings",
     "Renderer",
     "Scene",
     "Segment",
     "SegmentLight",
+    "Timeline",
     "Transform2D",
+    "Key",
+    "Track",
+    "Wrap",
     "absorber",
     "diffuse",
     "glass",
-    "keyframe",
-    "keyframe2",
     "mirror",
     "render",
+    "smoothstep",
 ]

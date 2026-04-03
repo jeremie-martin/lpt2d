@@ -222,6 +222,7 @@ struct PostProcess {
     float gamma = 2.2f;      // sRGB
     ToneMap tone_map = ToneMap::ACES;
     float white_point = 1.0f;
+    bool normalize = true;   // auto-normalize by max luminance (disable for animation)
 };
 
 // --- Utilities ---

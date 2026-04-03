@@ -1,9 +1,11 @@
-"""Wire-format dataclasses mirroring the C++ scene model."""
+"""Scene model and animation types for lpt2d."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass, field, fields
+from enum import Enum
 from pathlib import Path
 
 # --- Materials ---
@@ -226,41 +228,7 @@ class Group:
         }
 
 
-# --- Per-frame render overrides ---
-
-
-@dataclass
-class RenderConfig:
-    rays: int | None = None
-    batch: int | None = None
-    depth: int | None = None
-    exposure: float | None = None
-    contrast: float | None = None
-    gamma: float | None = None
-    tonemap: str | None = None
-    white_point: float | None = None
-    bounds: list[float] | None = None  # [xmin, ymin, xmax, ymax]
-
-    def to_dict(self) -> dict:
-        d: dict = {}
-        for k in (
-            "rays",
-            "batch",
-            "depth",
-            "exposure",
-            "contrast",
-            "gamma",
-            "tonemap",
-            "white_point",
-            "bounds",
-        ):
-            v = getattr(self, k)
-            if v is not None:
-                d[k] = v
-        return d
-
-
-# --- Scene ---
+# --- Scene (pure scene data — no render/camera config) ---
 
 _SHAPE_PARSERS = {
     "circle": lambda d: Circle(
@@ -330,20 +298,19 @@ class Scene:
     lights: list[Light] = field(default_factory=list)
     groups: list[Group] = field(default_factory=list)
     name: str = ""
-    render: RenderConfig | None = None
 
-    def to_json(self) -> str:
-        """Compact single-line JSON for streaming."""
+    def to_dict(self) -> dict:
+        """Scene as a dict (version 2 wire format)."""
         d: dict = {"version": 2, "name": self.name}
         d["shapes"] = [s.to_dict() for s in self.shapes]
         d["lights"] = [light.to_dict() for light in self.lights]
         if self.groups:
             d["groups"] = [g.to_dict() for g in self.groups]
-        if self.render:
-            rd = self.render.to_dict()
-            if rd:
-                d["render"] = rd
-        return json.dumps(d, separators=(",", ":"))
+        return d
+
+    def to_json(self) -> str:
+        """Compact single-line JSON for streaming."""
+        return json.dumps(self.to_dict(), separators=(",", ":"))
 
     @staticmethod
     def load(path: str | Path) -> Scene:
@@ -366,3 +333,170 @@ class Scene:
             group.lights = _parse_lights(gd.get("lights", []))
             scene.groups.append(group)
         return scene
+
+
+# --- Camera ---
+
+
+@dataclass
+class Camera2D:
+    """Viewport framing for the 2D scene.
+
+    Specify either `bounds` directly or `center` + `width` (height derived from aspect ratio).
+    Leave all None for auto-fit (C++ computes bounds from scene content).
+    """
+
+    bounds: list[float] | None = None  # [xmin, ymin, xmax, ymax]
+    center: list[float] | None = None  # [cx, cy]
+    width: float | None = None  # world units
+
+    def resolve(self, aspect: float) -> list[float] | None:
+        """Resolve to [xmin, ymin, xmax, ymax] or None for auto-fit."""
+        if self.bounds is not None:
+            return list(self.bounds)
+        if self.center is not None and self.width is not None:
+            cx, cy = self.center
+            hw = self.width / 2.0
+            hh = hw / aspect
+            return [cx - hw, cy - hh, cx + hw, cy + hh]
+        if self.center is not None or self.width is not None:
+            raise ValueError("Camera2D requires both center and width, or bounds, or neither")
+        return None
+
+
+# --- Render settings & overrides ---
+
+
+class Quality(Enum):
+    DRAFT = "draft"
+    PREVIEW = "preview"
+    PRODUCTION = "production"
+    FINAL = "final"
+
+
+_QUALITY_PRESETS: dict[Quality, dict] = {
+    Quality.DRAFT: dict(width=480, height=480, rays=200_000, batch=100_000, depth=6),
+    Quality.PREVIEW: dict(width=720, height=720, rays=1_000_000, batch=200_000, depth=10),
+    Quality.PRODUCTION: dict(width=1080, height=1080, rays=5_000_000, batch=200_000, depth=12),
+    Quality.FINAL: dict(width=1920, height=1080, rays=50_000_000, batch=500_000, depth=16),
+}
+
+
+@dataclass
+class RenderSettings:
+    """Rendering quality and tone mapping parameters.
+
+    Construct from a preset, then override individual fields::
+
+        settings = RenderSettings.preset(Quality.PREVIEW, width=1080)
+
+    Or build from scratch::
+
+        settings = RenderSettings(width=1920, height=1080, rays=10_000_000)
+    """
+
+    width: int = 1920
+    height: int = 1080
+    rays: int = 10_000_000
+    batch: int = 200_000
+    depth: int = 12
+    exposure: float = 2.0
+    contrast: float = 1.0
+    gamma: float = 2.2
+    tonemap: str = "aces"
+    white_point: float = 1.0
+    normalize: bool = False  # False = fixed exposure (animation default)
+    binary: str = "./build/lpt2d-cli"
+
+    @staticmethod
+    def preset(quality: Quality | str, **overrides) -> RenderSettings:
+        """Create settings from a named quality preset with optional overrides."""
+        if isinstance(quality, str):
+            quality = Quality(quality)
+        values = dict(_QUALITY_PRESETS[quality])
+        values.update(overrides)
+        return RenderSettings(**values)
+
+    @property
+    def aspect(self) -> float:
+        return self.width / self.height
+
+
+@dataclass
+class RenderOverrides:
+    """Sparse per-frame render overrides. Only non-None fields are sent to C++."""
+
+    rays: int | None = None
+    batch: int | None = None
+    depth: int | None = None
+    exposure: float | None = None
+    contrast: float | None = None
+    gamma: float | None = None
+    tonemap: str | None = None
+    white_point: float | None = None
+    normalize: bool | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            f.name: getattr(self, f.name) for f in fields(self) if getattr(self, f.name) is not None
+        }
+
+
+# --- Timeline ---
+
+
+@dataclass
+class Timeline:
+    """Frame timing: duration and fps.
+
+    Rounding policy: total_frames = ceil(duration * fps).
+    This ensures the full duration is always covered.
+    """
+
+    duration: float
+    fps: int = 30
+
+    @property
+    def total_frames(self) -> int:
+        return math.ceil(self.duration * self.fps)
+
+    @property
+    def dt(self) -> float:
+        """Time step between frames (seconds)."""
+        return 1.0 / self.fps
+
+    def time_at(self, frame: int) -> float:
+        """Wall-clock time for a given frame index."""
+        return frame / self.fps
+
+    def progress_at(self, frame: int) -> float:
+        """Normalized progress [0, 1]. Frame 0 = 0.0, last frame = 1.0."""
+        n = self.total_frames
+        if n <= 1:
+            return 0.0
+        return frame / (n - 1)
+
+
+# --- Frame context & return types ---
+
+
+@dataclass(frozen=True)
+class FrameContext:
+    """Immutable context passed to the animate callback each frame."""
+
+    frame: int  # 0-based frame index
+    time: float  # seconds
+    progress: float  # 0..1
+    fps: int
+    dt: float  # 1/fps
+    total_frames: int
+    duration: float
+
+
+@dataclass
+class Frame:
+    """Return type for animate callbacks that need per-frame camera or render control."""
+
+    scene: Scene
+    camera: Camera2D | None = None
+    render: RenderOverrides | None = None

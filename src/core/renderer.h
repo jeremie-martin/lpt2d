@@ -42,6 +42,7 @@ public:
     float last_max() const { return last_max_; }
     int width() const { return width_; }
     int height() const { return height_; }
+    int num_lights() const { return num_lights_; }
 
 private:
     int width_ = 0, height_ = 0;

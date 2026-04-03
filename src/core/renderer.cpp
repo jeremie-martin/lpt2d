@@ -685,9 +685,14 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
 void Renderer::update_display(const PostProcess& pp) {
-    float divisor = compute_max_gpu();
-    if (divisor < 1e-6f)
+    float divisor;
+    if (pp.normalize) {
+        divisor = compute_max_gpu();
+        if (divisor < 1e-6f)
+            divisor = 1.0f;
+    } else {
         divisor = 1.0f;
+    }
     last_max_ = divisor;
 
     float exposure_mult = std::pow(2.0f, pp.exposure);

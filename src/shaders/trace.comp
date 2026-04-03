@@ -283,6 +283,8 @@ void emit(vec2 p0, vec2 p1, vec4 color) {
 }
 
 void main() {
+    if (uNumLights == 0u) return;
+
     uint gid = gl_GlobalInvocationID.x;
     rng_state = gid * 1099087573u + uSeed;
     pcg_next(); pcg_next();
