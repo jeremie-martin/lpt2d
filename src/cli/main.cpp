@@ -4,6 +4,8 @@
 #include "scenes.h"
 #include "serialize.h"
 
+#include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -22,6 +24,7 @@ static void print_usage() {
               << "  --contrast <float>       Contrast (default: 1)\n"
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|aces|log (default: aces)\n"
+              << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
         std::cerr << entry.name << " ";
@@ -42,6 +45,79 @@ static Scene resolve_scene(const std::string& arg) {
     std::exit(1);
 }
 
+static int run_stream(int width, int height, int64_t default_rays,
+                      TraceConfig default_tcfg, PostProcess default_pp) {
+    HeadlessGL gl;
+    if (!gl.init()) return 1;
+
+    Renderer renderer;
+    if (!renderer.init(width, height)) return 1;
+
+    const size_t frame_bytes = (size_t)width * height * 3;
+    std::vector<uint8_t> pixels;
+    std::vector<uint8_t> black(frame_bytes, 0);
+
+    // Ensure stdout is fully buffered for binary output
+    std::setvbuf(stdout, nullptr, _IOFBF, frame_bytes);
+
+    std::string line;
+    int frame = 0;
+    while (std::getline(std::cin, line)) {
+        auto t0 = std::chrono::steady_clock::now();
+
+        if (line.empty()) {
+            std::cerr << "frame " << frame << ": empty line, emitting black frame\n";
+            std::fwrite(black.data(), 1, frame_bytes, stdout);
+            std::fflush(stdout);
+            ++frame;
+            continue;
+        }
+
+        Scene scene = load_scene_json_string(line);
+
+        // Parse per-frame render overrides
+        FrameOverrides fo = parse_frame_overrides(line);
+
+        int64_t rays = fo.rays.value_or(default_rays);
+        TraceConfig tcfg = default_tcfg;
+        if (fo.batch) tcfg.batch_size = *fo.batch;
+        if (fo.depth) tcfg.max_depth = *fo.depth;
+
+        PostProcess pp = default_pp;
+        if (fo.exposure) pp.exposure = *fo.exposure;
+        if (fo.contrast) pp.contrast = *fo.contrast;
+        if (fo.gamma) pp.gamma = *fo.gamma;
+        if (fo.tonemap) pp.tone_map = *fo.tonemap;
+
+        Bounds bounds = fo.bounds ? *fo.bounds : compute_bounds(scene);
+        renderer.upload_scene(scene, bounds);
+        renderer.clear();
+
+        // Trace rays in batched dispatches
+        int64_t num_batches = (rays + tcfg.batch_size - 1) / tcfg.batch_size;
+        const int dispatches_per_draw = 4;
+        int64_t b = 0;
+        while (b < num_batches) {
+            int n = std::min((int64_t)dispatches_per_draw, num_batches - b);
+            renderer.trace_and_draw_multi(tcfg, n);
+            b += n;
+        }
+
+        // Read pixels and write raw RGB to stdout
+        renderer.read_pixels(pixels, pp);
+        std::fwrite(pixels.data(), 1, frame_bytes, stdout);
+        std::fflush(stdout);
+
+        auto t1 = std::chrono::steady_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        std::cerr << "frame " << frame << ": " << rays << " rays, " << ms << "ms\n";
+        ++frame;
+    }
+
+    renderer.shutdown();
+    return 0;
+}
+
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
@@ -49,6 +125,7 @@ int main(int argc, char** argv) {
     int64_t total_rays = 10'000'000;
     TraceConfig tcfg;
     PostProcess pp;
+    bool stream_mode = false;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
@@ -77,6 +154,8 @@ int main(int argc, char** argv) {
             else if (tm == "reinhard") pp.tone_map = ToneMap::Reinhard;
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
+        } else if (std::strcmp(argv[i], "--stream") == 0) {
+            stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
             print_usage();
             return 0;
@@ -86,6 +165,9 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+
+    if (stream_mode)
+        return run_stream(width, height, total_rays, tcfg, pp);
 
     HeadlessGL gl;
     if (!gl.init())
