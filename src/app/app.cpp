@@ -142,6 +142,8 @@ int App::run(const AppConfig& config) {
         ed.creating = false;
         ed.dragging = false;
         ed.handle_dragging = false;
+        ed.cam_handle_dragging = CameraHandle::None;
+        ed.cam_handle_hovered = CameraHandle::None;
         ed.undo.clear();
         ed.undo.push(ed.shot.scene);
         // reload() updates ed.scene_bounds, then fit camera
@@ -239,7 +241,6 @@ int App::run(const AppConfig& config) {
         if (show_wireframe) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            Vec2 mouse_w = cv.to_world(io.MousePos);
             for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
                 ObjectId id{ObjectId::Shape, i};
                 bool is_sel = ed.is_selected(id);
@@ -249,11 +250,9 @@ int App::run(const AppConfig& config) {
 
                 if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.shapes.size()) {
                     // Ghost at original position (dim)
-                    draw_shape_overlay(dl, cv, ed.transform.snapshot.shapes[i], IM_COL32(100, 100, 110, 60), 1.0f * dpi_scale);
-                    // Preview at transformed position
-                    Shape preview = ed.transform.snapshot.shapes[i];
-                    apply_transform_shape(preview, ed.transform.snapshot.shapes[i], ed.transform, mouse_w, io.KeyShift);
-                    draw_shape_overlay(dl, cv, preview, IM_COL32(120, 180, 255, 220), 2.5f * dpi_scale);
+                    draw_shape_overlay(dl, cv, ed.transform.snapshot.shapes[i], COL_GHOST_SHAPE, 1.0f * dpi_scale);
+                    // Live scene already has the transformed position
+                    draw_shape_overlay(dl, cv, ed.shot.scene.shapes[i], COL_SHAPE_SEL, 2.5f * dpi_scale);
                 } else {
                     draw_shape_overlay(dl, cv, ed.shot.scene.shapes[i], col, th);
                 }
@@ -267,10 +266,10 @@ int App::run(const AppConfig& config) {
                 float th = (is_sel ? 3.0f : 2.0f) * dpi_scale;
 
                 if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.lights.size()) {
-                    draw_light_overlay(dl, cv, ed.transform.snapshot.lights[i], IM_COL32(200, 180, 40, 60), 1.0f * dpi_scale, dpi_scale);
-                    Light preview = ed.transform.snapshot.lights[i];
-                    apply_transform_light(preview, ed.transform.snapshot.lights[i], ed.transform, mouse_w, io.KeyShift);
-                    draw_light_overlay(dl, cv, preview, IM_COL32(255, 240, 100, 220), 3.0f * dpi_scale, dpi_scale);
+                    // Ghost at original position (dim)
+                    draw_light_overlay(dl, cv, ed.transform.snapshot.lights[i], COL_GHOST_LIGHT, 1.0f * dpi_scale, dpi_scale);
+                    // Live scene already has the transformed position
+                    draw_light_overlay(dl, cv, ed.shot.scene.lights[i], COL_LIGHT_SEL, 3.0f * dpi_scale, dpi_scale);
                 } else {
                     draw_light_overlay(dl, cv, ed.shot.scene.lights[i], col, th, dpi_scale);
                 }
@@ -283,23 +282,18 @@ int App::run(const AppConfig& config) {
                 bool is_hov = (ed.hovered == gid);
 
                 const auto& group = ed.shot.scene.groups[g];
-                const Group* draw_group = &group;
-                Group preview_group;
 
                 if (ed.transform.active() && is_sel && g < (int)ed.transform.snapshot.groups.size()) {
-                    // Ghost at original position
+                    // Ghost at original position (dim)
                     const auto& snap_group = ed.transform.snapshot.groups[g];
                     for (const auto& s : snap_group.shapes) {
                         Shape ws = transform_shape(s, snap_group.transform);
-                        draw_shape_overlay(dl, cv, ws, IM_COL32(100, 100, 110, 60), 1.0f * dpi_scale);
+                        draw_shape_overlay(dl, cv, ws, COL_GHOST_SHAPE, 1.0f * dpi_scale);
                     }
                     for (const auto& l : snap_group.lights) {
                         Light wl = transform_light(l, snap_group.transform);
-                        draw_light_overlay(dl, cv, wl, IM_COL32(200, 180, 40, 60), 1.0f * dpi_scale, dpi_scale);
+                        draw_light_overlay(dl, cv, wl, COL_GHOST_LIGHT, 1.0f * dpi_scale, dpi_scale);
                     }
-                    // Preview at transformed position
-                    apply_transform_group(preview_group, snap_group, ed.transform, mouse_w, io.KeyShift);
-                    draw_group = &preview_group;
                 }
 
                 ImU32 shape_col = is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE);
@@ -307,12 +301,12 @@ int App::run(const AppConfig& config) {
                 float s_th = (is_sel ? 2.5f : 1.5f) * dpi_scale;
                 float l_th = (is_sel ? 3.0f : 2.0f) * dpi_scale;
 
-                for (const auto& s : draw_group->shapes) {
-                    Shape ws = transform_shape(s, draw_group->transform);
+                for (const auto& s : group.shapes) {
+                    Shape ws = transform_shape(s, group.transform);
                     draw_shape_overlay(dl, cv, ws, shape_col, s_th);
                 }
-                for (const auto& l : draw_group->lights) {
-                    Light wl = transform_light(l, draw_group->transform);
+                for (const auto& l : group.lights) {
+                    Light wl = transform_light(l, group.transform);
                     draw_light_overlay(dl, cv, wl, light_col, l_th, dpi_scale);
                 }
 
@@ -407,6 +401,53 @@ int App::run(const AppConfig& config) {
             }
         }
 
+        // ── Camera frame overlay ───────────────────────────────────────
+        // Resolve camera bounds once per frame for both drawing and interaction
+        struct CamHandlePt { CameraHandle id; Vec2 pos; };
+        Bounds cam_frame{};
+        CamHandlePt cam_handle_pts[8] = {};
+        int n_cam_handles = 0;
+        bool cam_active = ed.show_camera_frame && !ed.shot.camera.empty();
+
+        if (cam_active) {
+            cam_frame = ed.shot.camera.resolve(ed.shot.canvas.aspect(), ed.scene_bounds);
+            Vec2 mn = cam_frame.min, mx = cam_frame.max, mid = (mn + mx) * 0.5f;
+            cam_handle_pts[0] = {CameraHandle::TopLeft,     {mn.x, mx.y}};
+            cam_handle_pts[1] = {CameraHandle::TopRight,    mx};
+            cam_handle_pts[2] = {CameraHandle::BottomLeft,  mn};
+            cam_handle_pts[3] = {CameraHandle::BottomRight, {mx.x, mn.y}};
+            cam_handle_pts[4] = {CameraHandle::Top,         {mid.x, mx.y}};
+            cam_handle_pts[5] = {CameraHandle::Bottom,      {mid.x, mn.y}};
+            cam_handle_pts[6] = {CameraHandle::Left,        {mn.x, mid.y}};
+            cam_handle_pts[7] = {CameraHandle::Right,       {mx.x, mid.y}};
+            n_cam_handles = 8;
+
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 scr_max = cv.to_screen(cam_frame.max);
+            ImVec2 scr_min = cv.to_screen(cam_frame.min);
+            float sl = scr_min.x, sr = scr_max.x;
+            float st = scr_max.y, sb = scr_min.y;
+
+            if (ed.dim_outside_camera) {
+                float vr = (float)win_w, vb = (float)win_h;
+                dl->AddRectFilled(ImVec2(0, 0), ImVec2(vr, st), COL_CAMERA_DIM);
+                dl->AddRectFilled(ImVec2(0, sb), ImVec2(vr, vb), COL_CAMERA_DIM);
+                dl->AddRectFilled(ImVec2(0, st), ImVec2(sl, sb), COL_CAMERA_DIM);
+                dl->AddRectFilled(ImVec2(sr, st), ImVec2(vr, sb), COL_CAMERA_DIM);
+            }
+
+            dl->AddRect(ImVec2(sl, st), ImVec2(sr, sb), COL_CAMERA_FRAME, 0, 0, 1.5f * dpi_scale);
+
+            if (ed.selection.empty() && ed.tool == EditTool::Select && !ed.transform.active()) {
+                float hs = 4.0f * dpi_scale;
+                for (int h = 0; h < n_cam_handles; ++h) {
+                    ImVec2 sp = cv.to_screen(cam_handle_pts[h].pos);
+                    ImU32 col = (ed.cam_handle_hovered == cam_handle_pts[h].id) ? COL_HANDLE_HOV : COL_CAMERA_HANDLE;
+                    dl->AddRectFilled(ImVec2(sp.x - hs, sp.y - hs), ImVec2(sp.x + hs, sp.y + hs), col);
+                }
+            }
+        }
+
         ImGui::End();
         ImGui::PopStyleVar();
 
@@ -415,8 +456,65 @@ int App::run(const AppConfig& config) {
         Vec2 mw = cv.to_world(io.MousePos);
         float hit_thresh = 8.0f / cv.cam.zoom;
 
-        // Hover detection (Select tool only)
-        if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()) {
+        // Camera handle interaction (hover + start drag)
+        if (vp_hovered && ed.selection.empty() && ed.tool == EditTool::Select
+            && !ed.transform.active() && cam_active
+            && ed.cam_handle_dragging == CameraHandle::None) {
+
+            ed.cam_handle_hovered = CameraHandle::None;
+            for (int h = 0; h < n_cam_handles; ++h) {
+                if ((mw - cam_handle_pts[h].pos).length() < hit_thresh) {
+                    ed.cam_handle_hovered = cam_handle_pts[h].id;
+                    break;
+                }
+            }
+
+            if (ed.cam_handle_hovered != CameraHandle::None && ImGui::IsMouseClicked(0)) {
+                ed.cam_handle_dragging = ed.cam_handle_hovered;
+                ed.cam_drag_start_bounds = cam_frame;
+            }
+        } else if (ed.cam_handle_dragging == CameraHandle::None) {
+            ed.cam_handle_hovered = CameraHandle::None;
+        }
+
+        // Camera handle drag (continues even outside viewport)
+        if (ed.cam_handle_dragging != CameraHandle::None) {
+            if (ImGui::IsMouseDragging(0)) {
+                Bounds b = ed.cam_drag_start_bounds;
+                Vec2 drag_origin = cv.to_world(io.MouseClickedPos[0]);
+                Vec2 drag_offset = mw - drag_origin;
+
+                switch (ed.cam_handle_dragging) {
+                case CameraHandle::Move:        b.min = b.min + drag_offset;
+                                                b.max = b.max + drag_offset; break;
+                case CameraHandle::TopLeft:     b.min.x = mw.x; b.max.y = mw.y; break;
+                case CameraHandle::Top:         b.max.y = mw.y; break;
+                case CameraHandle::TopRight:    b.max.x = mw.x; b.max.y = mw.y; break;
+                case CameraHandle::Right:       b.max.x = mw.x; break;
+                case CameraHandle::BottomRight: b.max.x = mw.x; b.min.y = mw.y; break;
+                case CameraHandle::Bottom:      b.min.y = mw.y; break;
+                case CameraHandle::BottomLeft:  b.min.x = mw.x; b.min.y = mw.y; break;
+                case CameraHandle::Left:        b.min.x = mw.x; break;
+                default: break;
+                }
+
+                // Normalize if dragged past opposite edge
+                if (b.min.x > b.max.x) std::swap(b.min.x, b.max.x);
+                if (b.min.y > b.max.y) std::swap(b.min.y, b.max.y);
+
+                ed.shot.camera.bounds = b;
+                ed.shot.camera.center.reset();
+                ed.shot.camera.width.reset();
+                ed.dirty = true;
+            }
+            if (ImGui::IsMouseReleased(0)) {
+                ed.cam_handle_dragging = CameraHandle::None;
+            }
+        }
+
+        // Hover detection (Select tool only, skip during camera drag)
+        if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()
+            && ed.cam_handle_dragging == CameraHandle::None) {
             ObjectId hit = hit_test(mw, ed.shot.scene, hit_thresh, ed.editing_group);
             ed.hovered = hit;
         } else if (!vp_hovered) {
@@ -459,7 +557,8 @@ int App::run(const AppConfig& config) {
         // Skip tool interactions during alt-drag (pan) or middle drag
         bool panning = (io.KeyAlt && ImGui::IsMouseDown(0)) || ImGui::IsMouseDown(2);
 
-        if (vp_hovered && !panning && !ed.transform.active()) {
+        if (vp_hovered && !panning && !ed.transform.active()
+            && ed.cam_handle_dragging == CameraHandle::None) {
             // Double-click: enter group editing mode
             if (ImGui::IsMouseDoubleClicked(0) && ed.tool == EditTool::Select) {
                 if (ed.editing_group < 0) {
@@ -752,6 +851,58 @@ int App::run(const AppConfig& config) {
             ImGui::PopID();
         }
 
+        // -- Camera --
+        if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushID("Camera");
+
+            if (ImGui::Button("Set from View")) {
+                ed.shot.camera.bounds = ed.camera.visible_bounds((float)win_w, (float)win_h);
+                ed.shot.camera.center.reset();
+                ed.shot.camera.width.reset();
+                ed.dirty = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear") && !ed.shot.camera.empty()) {
+                ed.shot.camera = Camera2D{};
+                ed.dirty = true;
+            }
+
+            ImGui::Checkbox("Show frame", &ed.show_camera_frame);
+            ImGui::SameLine();
+            ImGui::Checkbox("Dim outside", &ed.dim_outside_camera);
+
+            if (!ed.shot.camera.empty()) {
+                Bounds cam = ed.shot.camera.resolve(ed.shot.canvas.aspect(), ed.scene_bounds);
+                bool cam_changed = false;
+                cam_changed |= ImGui::DragFloat("Min X", &cam.min.x, 0.01f);
+                cam_changed |= ImGui::DragFloat("Min Y", &cam.min.y, 0.01f);
+                cam_changed |= ImGui::DragFloat("Max X", &cam.max.x, 0.01f);
+                cam_changed |= ImGui::DragFloat("Max Y", &cam.max.y, 0.01f);
+                if (cam_changed) {
+                    ed.shot.camera.bounds = cam;
+                    ed.shot.camera.center.reset();
+                    ed.shot.camera.width.reset();
+                    ed.dirty = true;
+                }
+            } else {
+                ImGui::TextDisabled("Camera: auto (from scene bounds)");
+            }
+
+            ImGui::Separator();
+            ImGui::TextDisabled("Output resolution for export/CLI");
+            int cw = ed.shot.canvas.width, ch = ed.shot.canvas.height;
+            bool canvas_changed = false;
+            canvas_changed |= ImGui::InputInt("Width##canvas", &cw, 0, 0);
+            canvas_changed |= ImGui::InputInt("Height##canvas", &ch, 0, 0);
+            if (canvas_changed) {
+                ed.shot.canvas.width = std::clamp(cw, 64, 7680);
+                ed.shot.canvas.height = std::clamp(ch, 64, 4320);
+                ed.dirty = true;
+            }
+            ImGui::Text("Aspect: %.3f", ed.shot.canvas.aspect());
+            ImGui::PopID();
+        }
+
         // -- Objects --
         if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Objects");
@@ -778,6 +929,12 @@ int App::run(const AppConfig& config) {
                         std::snprintf(lbl, sizeof(lbl), "Bezier %d (%s)", i, material_name(b.material));
                     },
                 }, ed.shot.scene.shapes[i]);
+                // Material color swatch
+                ImVec4 mc = std::visit([](const auto& s) { return material_color(s.material); }, ed.shot.scene.shapes[i]);
+                ImGui::PushID(i);
+                ImGui::ColorButton("##sw", mc, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(10, 10));
+                ImGui::PopID();
+                ImGui::SameLine();
                 if (ImGui::Selectable(lbl, is_sel)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
@@ -877,6 +1034,29 @@ int App::run(const AppConfig& config) {
                 ImGui::Separator();
             }
 
+            // Named material dropdown for shape properties
+            auto show_material_match = [&](Material& shape_mat) {
+                std::string match;
+                for (auto& [name, m] : ed.shot.scene.materials)
+                    if (shape_mat == m) { match = name; break; }
+
+                if (!match.empty())
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "= %s", match.c_str());
+
+                if (!ed.shot.scene.materials.empty()) {
+                    if (ImGui::BeginCombo("Material##named", match.empty() ? "(custom)" : match.c_str())) {
+                        for (auto& [name, m] : ed.shot.scene.materials) {
+                            if (ImGui::Selectable(name.c_str(), shape_mat == m)) {
+                                if (!ed.prop_editing) { ed.undo.push(ed.shot.scene); ed.prop_editing = true; }
+                                shape_mat = m;
+                                changed = true;
+                            }
+                        }
+                        ImGui::EndCombo();
+                    }
+                }
+            };
+
             if (Shape* sp = resolve_shape(ed.shot.scene, sid)) {
                 auto& shape = *sp;
                 std::visit(overloaded{
@@ -884,11 +1064,13 @@ int App::run(const AppConfig& config) {
                         changed |= ImGui::DragFloat2("Center", &c.center.x, 0.01f);
                         changed |= ImGui::DragFloat("Radius", &c.radius, 0.005f, 0.01f, 5.0f);
                         changed |= edit_material(c.material);
+                        show_material_match(c.material);
                     },
                     [&](Segment& s) {
                         changed |= ImGui::DragFloat2("Point A", &s.a.x, 0.01f);
                         changed |= ImGui::DragFloat2("Point B", &s.b.x, 0.01f);
                         changed |= edit_material(s.material);
+                        show_material_match(s.material);
                     },
                     [&](Arc& a) {
                         changed |= ImGui::DragFloat2("Center", &a.center.x, 0.01f);
@@ -898,12 +1080,14 @@ int App::run(const AppConfig& config) {
                         a.angle_start = normalize_angle(a.angle_start);
                         a.sweep = clamp_arc_sweep(a.sweep);
                         changed |= edit_material(a.material);
+                        show_material_match(a.material);
                     },
                     [&](Bezier& b) {
                         changed |= ImGui::DragFloat2("P0", &b.p0.x, 0.01f);
                         changed |= ImGui::DragFloat2("P1 (ctrl)", &b.p1.x, 0.01f);
                         changed |= ImGui::DragFloat2("P2", &b.p2.x, 0.01f);
                         changed |= edit_material(b.material);
+                        show_material_match(b.material);
                     },
                 }, shape);
             }
@@ -996,11 +1180,45 @@ int App::run(const AppConfig& config) {
                 }
             }
 
+            // Track material snapshot for "Update Matching" feature
+            static Material mat_snapshot;
+            static std::string last_selected_name;
+            if (selected_mat_name != last_selected_name) {
+                last_selected_name = selected_mat_name;
+                if (mats.count(selected_mat_name))
+                    mat_snapshot = mats[selected_mat_name];
+            }
+
             // Edit selected material
             if (!selected_mat_name.empty() && mats.count(selected_mat_name)) {
                 auto& mat = mats[selected_mat_name];
-                if (edit_material(mat)) {
-                    // Apply changes to all shapes using this material by explicit user action
+                edit_material(mat);
+
+                // Count shapes matching this material's original value
+                int match_count = 0;
+                auto count_mat = [&](const auto& shapes) {
+                    for (auto& s : shapes)
+                        std::visit([&](const auto& shape) { if (shape.material == mat_snapshot) ++match_count; }, s);
+                };
+                count_mat(ed.shot.scene.shapes);
+                for (auto& g : ed.shot.scene.groups) count_mat(g.shapes);
+
+                if (match_count > 0) {
+                    ImGui::Text("%d shape(s) use this material", match_count);
+                    ImGui::SameLine();
+                    if (ImGui::Button("Update Matching")) {
+                        ed.undo.push(ed.shot.scene);
+                        auto apply_mat = [&](auto& shapes) {
+                            for (auto& s : shapes)
+                                std::visit([&](auto& shape) {
+                                    if (shape.material == mat_snapshot) shape.material = mat;
+                                }, s);
+                        };
+                        apply_mat(ed.shot.scene.shapes);
+                        for (auto& g : ed.shot.scene.groups) apply_mat(g.shapes);
+                        mat_snapshot = mat;
+                        reload();
+                    }
                 }
 
                 // Apply buttons
@@ -1166,26 +1384,26 @@ int App::run(const AppConfig& config) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && !ed.transform.numeric_buf.empty())
                     ed.transform.numeric_buf.pop_back();
 
+                // Live-apply transform every frame for real-time re-tracing
+                for (auto& sid : ed.selection) {
+                    if (Shape* live = resolve_shape(ed.shot.scene, sid)) {
+                        if (const Shape* snap = resolve_shape(ed.transform.snapshot, sid))
+                            apply_transform_shape(*live, *snap, ed.transform, mw, io.KeyShift);
+                    } else if (Light* live = resolve_light(ed.shot.scene, sid)) {
+                        if (const Light* snap = resolve_light(ed.transform.snapshot, sid))
+                            apply_transform_light(*live, *snap, ed.transform, mw, io.KeyShift);
+                    } else if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()
+                               && sid.index < (int)ed.transform.snapshot.groups.size()) {
+                        apply_transform_group(ed.shot.scene.groups[sid.index],
+                            ed.transform.snapshot.groups[sid.index], ed.transform, mw, io.KeyShift);
+                    }
+                }
+                reload();
+
                 // Confirm
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsMouseClicked(0)) {
-                    // Apply transform to scene
-                    for (auto& sid : ed.selection) {
-                        if (Shape* live_shape = resolve_shape(ed.shot.scene, sid)) {
-                            if (const Shape* snap_shape = resolve_shape(ed.transform.snapshot, sid)) {
-                                apply_transform_shape(*live_shape, *snap_shape, ed.transform, mw, io.KeyShift);
-                            }
-                        } else if (Light* live_light = resolve_light(ed.shot.scene, sid)) {
-                            if (const Light* snap_light = resolve_light(ed.transform.snapshot, sid)) {
-                                apply_transform_light(*live_light, *snap_light, ed.transform, mw, io.KeyShift);
-                            }
-                        } else if (sid.type == ObjectId::Group && sid.index < (int)ed.transform.snapshot.groups.size()) {
-                            apply_transform_group(ed.shot.scene.groups[sid.index],
-                                ed.transform.snapshot.groups[sid.index], ed.transform, mw, io.KeyShift);
-                        }
-                    }
                     ed.transform.type = TransformMode::None;
                     ed.transform.snapshot = {};
-                    reload();
                 }
 
                 // Cancel

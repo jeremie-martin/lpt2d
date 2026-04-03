@@ -129,6 +129,11 @@ struct Clipboard {
 
 enum class EditTool { Select, Circle, Segment, Arc, Bezier, PointLight, SegmentLight, BeamLight, Erase };
 
+// Camera handle identifiers for interactive frame editing
+enum class CameraHandle : int {
+    None, TopLeft, Top, TopRight, Right, BottomRight, Bottom, BottomLeft, Left, Move
+};
+
 // ─── Editor state ──────────────────────────────────────────────────────
 
 struct EditorState {
@@ -173,6 +178,13 @@ struct EditorState {
 
     // Property editing state (for undo grouping)
     bool prop_editing = false;
+
+    // Camera frame overlay
+    CameraHandle cam_handle_hovered = CameraHandle::None;
+    CameraHandle cam_handle_dragging = CameraHandle::None;
+    Bounds cam_drag_start_bounds{};
+    bool show_camera_frame = true;
+    bool dim_outside_camera = true;
 
     // Dirty flag (unsaved changes)
     bool dirty = false;

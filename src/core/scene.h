@@ -69,6 +69,8 @@ struct Material {
     float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
     float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
     float emission = 0.0f;     // Emissive intensity (adds energy at hit wavelength)
+
+    bool operator==(const Material&) const = default;
 };
 
 // Convenience constructors

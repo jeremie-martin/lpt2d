@@ -13,6 +13,14 @@ const char* material_name(const Material& m) {
     return "Material";
 }
 
+ImVec4 material_color(const Material& m) {
+    if (m.emission > 0.0f) return {1.0f, 0.95f, 0.3f, 1.0f};
+    if (m.albedo <= 0.01f) return {0.05f, 0.05f, 0.05f, 1.0f};
+    if (m.transmission > 0.5f && m.ior > 1.01f) return {0.6f, 0.85f, 1.0f, 0.7f};
+    if (m.metallic > 0.5f) return {0.85f, 0.85f, 0.9f, 1.0f};
+    return {m.albedo, m.albedo, m.albedo, 1.0f};
+}
+
 // ─── Material editor ────────────────────────────────────────────────────
 
 bool edit_material(Material& mat) {
