@@ -5,6 +5,8 @@ from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
 from .renderer import render as render
+from .renderer import render_contact_sheet as render_contact_sheet
+from .renderer import render_still as render_still
 from .track import Key as Key
 from .track import Track as Track
 from .track import Wrap as Wrap
@@ -105,5 +107,7 @@ __all__ = [
     "glass",
     "mirror",
     "render",
+    "render_contact_sheet",
+    "render_still",
     "smoothstep",
 ]

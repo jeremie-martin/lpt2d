@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -299,3 +300,133 @@ def render(
     finally:
         out.close()
         renderer.close()
+
+
+# --- Convenience functions ---
+
+
+def _write_ppm(path: str, rgb: bytes, width: int, height: int) -> None:
+    with open(path, "wb") as f:
+        f.write(f"P6\n{width} {height}\n255\n".encode())
+        f.write(rgb)
+
+
+def render_still(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    output: str,
+    *,
+    frame: int = 0,
+    settings: RenderSettings | str | None = None,
+    camera: Camera2D | None = None,
+) -> None:
+    """Render a single frame to a PPM file. Fast way to preview a scene.
+
+    Args:
+        animate: Callback receiving FrameContext, returning Scene or Frame.
+        timeline: Timeline object, or duration in seconds.
+        output: Output PPM file path.
+        frame: Frame index to render (default: 0).
+        settings: RenderSettings, preset name, or None for defaults.
+        camera: Session-level camera.
+    """
+    if isinstance(timeline, (int, float)):
+        timeline = Timeline(duration=float(timeline))
+    if settings is None:
+        settings = RenderSettings()
+    elif isinstance(settings, str):
+        settings = RenderSettings.preset(settings)
+
+    renderer = Renderer(settings)
+    try:
+        ctx = FrameContext(
+            frame=frame,
+            time=timeline.time_at(frame),
+            progress=timeline.progress_at(frame),
+            fps=timeline.fps,
+            dt=timeline.dt,
+            total_frames=timeline.total_frames,
+            duration=timeline.duration,
+        )
+        result = animate(ctx)
+        f = result if isinstance(result, Frame) else Frame(scene=result)
+        wire = _build_wire_json(f, camera, settings.aspect)
+        rgb = renderer.render_frame(wire)
+        _write_ppm(output, rgb, settings.width, settings.height)
+        sys.stderr.write(f"wrote {output} ({settings.width}x{settings.height}, frame {frame})\n")
+    finally:
+        renderer.close()
+
+
+def render_contact_sheet(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    output: str,
+    *,
+    cols: int = 4,
+    count: int = 16,
+    settings: RenderSettings | str | None = None,
+    camera: Camera2D | None = None,
+) -> None:
+    """Render a grid of frames spread across the timeline. Saves as PPM.
+
+    Args:
+        animate: Callback receiving FrameContext, returning Scene or Frame.
+        timeline: Timeline object, or duration in seconds.
+        output: Output PPM file path.
+        cols: Number of columns in the grid (default: 4).
+        count: Total number of frames to sample (default: 16).
+        settings: RenderSettings, preset name, or None for defaults.
+        camera: Session-level camera.
+    """
+    if isinstance(timeline, (int, float)):
+        timeline = Timeline(duration=float(timeline))
+    if settings is None:
+        settings = RenderSettings()
+    elif isinstance(settings, str):
+        settings = RenderSettings.preset(settings)
+
+    w, h = settings.width, settings.height
+    rows = math.ceil(count / cols)
+    sheet_w = w * cols
+    sheet_h = h * rows
+
+    # Sample frames evenly across timeline
+    total = timeline.total_frames
+    indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
+
+    renderer = Renderer(settings)
+    try:
+        frames_rgb: list[bytes] = []
+        for idx, fi in enumerate(indices):
+            ctx = FrameContext(
+                frame=fi,
+                time=timeline.time_at(fi),
+                progress=timeline.progress_at(fi),
+                fps=timeline.fps,
+                dt=timeline.dt,
+                total_frames=timeline.total_frames,
+                duration=timeline.duration,
+            )
+            result = animate(ctx)
+            f = result if isinstance(result, Frame) else Frame(scene=result)
+            wire = _build_wire_json(f, camera, settings.aspect)
+            frames_rgb.append(renderer.render_frame(wire))
+            sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
+            sys.stderr.flush()
+        sys.stderr.write("\n")
+    finally:
+        renderer.close()
+
+    # Assemble grid as PPM
+    sheet = bytearray(sheet_w * sheet_h * 3)
+    for idx, rgb in enumerate(frames_rgb):
+        col = idx % cols
+        row = idx // cols
+        for y in range(h):
+            src_off = y * w * 3
+            dst_off = ((row * h + y) * sheet_w + col * w) * 3
+            sheet[dst_off : dst_off + w * 3] = rgb[src_off : src_off + w * 3]
+
+    _write_ppm(output, bytes(sheet), sheet_w, sheet_h)
+    sys.stderr.write(f"wrote {output} ({sheet_w}x{sheet_h}, {count} frames, {cols}x{rows} grid)\n")
