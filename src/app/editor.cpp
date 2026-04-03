@@ -134,9 +134,27 @@ static float light_distance(Vec2 wp, const Light& light) {
     }, light);
 }
 
-ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold) {
+ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group) {
     ObjectId result{ObjectId::Shape, -1};
     float best = threshold;
+
+    if (editing_group >= 0 && editing_group < (int)scene.groups.size()) {
+        // Inside a group: only hit-test members of the editing group
+        const auto& group = scene.groups[editing_group];
+        for (int i = 0; i < (int)group.shapes.size(); ++i) {
+            Shape ws = transform_shape(group.shapes[i], group.transform);
+            float d = shape_distance(wp, ws);
+            if (d < best) { best = d; result = {ObjectId::Shape, i, editing_group}; }
+        }
+        for (int i = 0; i < (int)group.lights.size(); ++i) {
+            Light wl = transform_light(group.lights[i], group.transform);
+            float d = light_distance(wp, wl);
+            if (d < best) { best = d; result = {ObjectId::Light, i, editing_group}; }
+        }
+        return result;
+    }
+
+    // Normal mode: hit-test top-level objects
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
         float d = shape_distance(wp, scene.shapes[i]);
         if (d < best) { best = d; result = {ObjectId::Shape, i}; }
@@ -145,7 +163,7 @@ ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold) {
         float d = light_distance(wp, scene.lights[i]);
         if (d < best) { best = d; result = {ObjectId::Light, i}; }
     }
-    // Test group members (in world space)
+    // Test group members (in world space) — return group, not individual member
     for (int g = 0; g < (int)scene.groups.size(); ++g) {
         const auto& group = scene.groups[g];
         for (const auto& shape : group.shapes) {

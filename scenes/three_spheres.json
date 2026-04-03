@@ -1,120 +1,30 @@
 {
   "version": 2,
   "name": "three_spheres",
-  "shapes": [
-    {
-      "type": "circle",
-      "center": [-0.5, 0],
-      "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
+  "materials": {
+    "glass": {
+      "ior": 1.5,
+      "transmission": 1,
+      "absorption": 0.5,
+      "cauchy_b": 20000
     },
-    {
-      "type": "circle",
-      "center": [0, 0],
-      "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
-    },
-    {
-      "type": "circle",
-      "center": [0.5, 0],
-      "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
-    },
-    {
-      "type": "segment",
-      "a": [-1.2, -0.8],
-      "b": [1.2, -0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [1.2, 0.8],
-      "b": [-1.2, 0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [-1.2, 0.8],
-      "b": [-1.2, -0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [1.2, -0.8],
-      "b": [1.2, 0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+    "mirror_wall": {
+      "metallic": 1,
+      "transmission": 1,
+      "albedo": 0.95
     }
+  },
+  "shapes": [
+    { "type": "circle", "center": [-0.5, 0], "radius": 0.2, "material": "glass" },
+    { "type": "circle", "center": [0, 0], "radius": 0.2, "material": "glass" },
+    { "type": "circle", "center": [0.5, 0], "radius": 0.2, "material": "glass" },
+    { "type": "segment", "a": [-1.2, -0.8], "b": [1.2, -0.8], "material": "mirror_wall" },
+    { "type": "segment", "a": [1.2, 0.8], "b": [-1.2, 0.8], "material": "mirror_wall" },
+    { "type": "segment", "a": [-1.2, 0.8], "b": [-1.2, -0.8], "material": "mirror_wall" },
+    { "type": "segment", "a": [1.2, -0.8], "b": [1.2, 0.8], "material": "mirror_wall" }
   ],
   "lights": [
-    {
-      "type": "point",
-      "pos": [-0.8, 0.5],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
-    },
-    {
-      "type": "point",
-      "pos": [0.8, -0.5],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
-    }
+    { "type": "point", "pos": [-0.8, 0.5], "intensity": 1 },
+    { "type": "point", "pos": [0.8, -0.5], "intensity": 1 }
   ]
 }

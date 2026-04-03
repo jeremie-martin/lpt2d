@@ -63,6 +63,30 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
     f << "  \"version\": 2,\n";
     f << "  \"name\": "; write_json_string(f, scene.name); f << ",\n";
 
+    // Materials library
+    if (!scene.materials.empty()) {
+        f << "  \"materials\": {\n";
+        int mi = 0;
+        for (const auto& [name, mat] : scene.materials) {
+            f << "    "; write_json_string(f, name); f << ": {\n";
+            write_indent(f, 3); f << "\"ior\": " << fmt(mat.ior) << ",\n";
+            write_indent(f, 3); f << "\"roughness\": " << fmt(mat.roughness) << ",\n";
+            write_indent(f, 3); f << "\"metallic\": " << fmt(mat.metallic) << ",\n";
+            write_indent(f, 3); f << "\"transmission\": " << fmt(mat.transmission) << ",\n";
+            write_indent(f, 3); f << "\"absorption\": " << fmt(mat.absorption) << ",\n";
+            write_indent(f, 3); f << "\"cauchy_b\": " << fmt(mat.cauchy_b) << ",\n";
+            write_indent(f, 3); f << "\"albedo\": " << fmt(mat.albedo);
+            if (mat.emission > 0.0f) {
+                f << ",\n";
+                write_indent(f, 3); f << "\"emission\": " << fmt(mat.emission) << "\n";
+            } else {
+                f << "\n";
+            }
+            f << "    }" << (++mi < (int)scene.materials.size() ? "," : "") << "\n";
+        }
+        f << "  },\n";
+    }
+
     // Shapes
     f << "  \"shapes\": [\n";
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
@@ -340,7 +364,7 @@ static Vec2 read_vec2(const JsonValue* v) {
     return {v->arr[0].as_float(), v->arr[1].as_float()};
 }
 
-static Material read_material(const JsonValue* v) {
+static Material read_material_obj(const JsonValue* v) {
     Material m;
     if (!v) return m;
     if (auto* f = v->get("ior")) m.ior = f->as_float(1.0f);
@@ -354,7 +378,20 @@ static Material read_material(const JsonValue* v) {
     return m;
 }
 
-static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out) {
+// Resolve a material from JSON: string → lookup in materials dict, object → inline parse
+static Material read_material(const JsonValue* v, const std::map<std::string, Material>& materials) {
+    if (!v) return {};
+    if (v->type == JsonValue::String) {
+        auto it = materials.find(v->str);
+        if (it != materials.end()) return it->second;
+        std::cerr << "Unknown material: " << v->str << "\n";
+        return {};
+    }
+    return read_material_obj(v);
+}
+
+static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out,
+                         const std::map<std::string, Material>& materials = {}) {
     if (!shapes_arr) return;
     for (auto& sv : shapes_arr->arr) {
         if (sv.type != JsonValue::Object) continue;
@@ -366,13 +403,13 @@ static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out) {
             Circle c;
             c.center = read_vec2(sv.get("center"));
             if (auto* r = sv.get("radius")) c.radius = r->as_float(0.1f);
-            c.material = read_material(sv.get("material"));
+            c.material = read_material(sv.get("material"), materials);
             out.push_back(c);
         } else if (t == "segment") {
             Segment s;
             s.a = read_vec2(sv.get("a"));
             s.b = read_vec2(sv.get("b"));
-            s.material = read_material(sv.get("material"));
+            s.material = read_material(sv.get("material"), materials);
             out.push_back(s);
         } else if (t == "arc") {
             Arc a;
@@ -380,14 +417,14 @@ static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out) {
             if (auto* r = sv.get("radius")) a.radius = r->as_float(0.1f);
             if (auto* v = sv.get("angle_start")) a.angle_start = v->as_float();
             if (auto* v = sv.get("angle_end")) a.angle_end = v->as_float(TWO_PI);
-            a.material = read_material(sv.get("material"));
+            a.material = read_material(sv.get("material"), materials);
             out.push_back(a);
         } else if (t == "bezier") {
             Bezier b;
             b.p0 = read_vec2(sv.get("p0"));
             b.p1 = read_vec2(sv.get("p1"));
             b.p2 = read_vec2(sv.get("p2"));
-            b.material = read_material(sv.get("material"));
+            b.material = read_material(sv.get("material"), materials);
             out.push_back(b);
         }
     }
@@ -442,7 +479,15 @@ Scene load_scene_json_string(std::string_view json_content) {
     Scene scene;
     if (auto* n = root.get("name")) scene.name = n->as_string();
 
-    read_shapes(root.get("shapes"), scene.shapes);
+    // Parse named materials library (must come before shapes to resolve references)
+    if (auto* mats = root.get("materials")) {
+        if (mats->type == JsonValue::Object) {
+            for (int i = 0; i < (int)mats->obj_keys.size(); ++i)
+                scene.materials[mats->obj_keys[i]] = read_material_obj(&mats->obj_vals[i]);
+        }
+    }
+
+    read_shapes(root.get("shapes"), scene.shapes, scene.materials);
     read_lights(root.get("lights"), scene.lights);
 
     // Groups (version 2+)
@@ -458,7 +503,7 @@ Scene load_scene_json_string(std::string_view json_content) {
                 if (group.transform.scale.x == 0) group.transform.scale.x = 1;
                 if (group.transform.scale.y == 0) group.transform.scale.y = 1;
             }
-            read_shapes(gv.get("shapes"), group.shapes);
+            read_shapes(gv.get("shapes"), group.shapes, scene.materials);
             read_lights(gv.get("lights"), group.lights);
             if (!group.shapes.empty() || !group.lights.empty())
                 scene.groups.push_back(std::move(group));

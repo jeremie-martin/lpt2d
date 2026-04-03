@@ -321,9 +321,20 @@ _LIGHT_PARSERS = {
 }
 
 
-def _parse_shapes(arr: list[dict]) -> list[Shape]:
+def _resolve_material(d: dict, materials: dict[str, Material]) -> dict:
+    """If d["material"] is a string, resolve from the materials dict."""
+    mat = d.get("material")
+    if isinstance(mat, str) and mat in materials:
+        d = dict(d)  # shallow copy to avoid mutating original
+        d["material"] = materials[mat].to_dict()
+    return d
+
+
+def _parse_shapes(arr: list[dict], materials: dict[str, Material] | None = None) -> list[Shape]:
     shapes = []
+    mats = materials or {}
     for d in arr:
+        d = _resolve_material(d, mats)
         parser = _SHAPE_PARSERS.get(d.get("type", ""))
         if parser:
             shapes.append(parser(d))
@@ -344,11 +355,14 @@ class Scene:
     shapes: list[Shape] = field(default_factory=list)
     lights: list[Light] = field(default_factory=list)
     groups: list[Group] = field(default_factory=list)
+    materials: dict[str, Material] = field(default_factory=dict)
     name: str = ""
 
     def to_dict(self) -> dict:
         """Scene as a dict (version 2 wire format)."""
         d: dict = {"version": 2, "name": self.name}
+        if self.materials:
+            d["materials"] = {name: mat.to_dict() for name, mat in self.materials.items()}
         d["shapes"] = [s.to_dict() for s in self.shapes]
         d["lights"] = [light.to_dict() for light in self.lights]
         if self.groups:
@@ -370,13 +384,16 @@ class Scene:
         """Parse scene from a JSON string."""
         d = json.loads(s)
         scene = Scene(name=d.get("name", ""))
-        scene.shapes = _parse_shapes(d.get("shapes", []))
+        # Parse materials library first (needed for resolving string references)
+        for name, mat_d in d.get("materials", {}).items():
+            scene.materials[name] = Material.from_dict(mat_d)
+        scene.shapes = _parse_shapes(d.get("shapes", []), scene.materials)
         scene.lights = _parse_lights(d.get("lights", []))
         for gd in d.get("groups", []):
             group = Group(name=gd.get("name", ""))
             if "transform" in gd:
                 group.transform = Transform2D.from_dict(gd["transform"])
-            group.shapes = _parse_shapes(gd.get("shapes", []))
+            group.shapes = _parse_shapes(gd.get("shapes", []), scene.materials)
             group.lights = _parse_lights(gd.get("lights", []))
             scene.groups.append(group)
         return scene

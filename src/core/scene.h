@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -84,6 +85,10 @@ inline Material mat_opaque_mirror(float reflectance, float roughness = 0.0f) {
 inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0.0f) {
     return {.ior = ior, .transmission = 1.0f, .absorption = absorption, .cauchy_b = cauchy_b};
 }
+inline Material mat_emissive(float emission, Material base = {}) {
+    base.emission = emission;
+    return base;
+}
 
 // --- Transform ---
 
@@ -128,8 +133,8 @@ struct Segment {
 struct Arc {
     Vec2 center;
     float radius;
-    float angle_start = 0.0f;                   // radians [0, 2π]
-    float angle_end = TWO_PI;  // radians [0, 2π]
+    float angle_start = 0.0f; // radians [0, 2π)
+    float sweep = TWO_PI;     // radians [0, 2π], CCW from angle_start
     Material material;
 };
 
@@ -195,6 +200,7 @@ struct Scene {
     std::vector<Shape> shapes;   // ungrouped shapes (world coords)
     std::vector<Light> lights;   // ungrouped lights (world coords)
     std::vector<Group> groups;
+    std::map<std::string, Material> materials; // named material library
     std::string name;
 };
 
@@ -210,6 +216,23 @@ struct Bounds {
     Vec2 min, max;
 };
 Bounds compute_bounds(const Scene& scene, float padding = 0.05f);
+
+// Arc geometry helpers
+float normalize_angle(float angle);
+float clamp_arc_sweep(float sweep);
+float arc_end_angle(const Arc& arc);
+float arc_mid_angle(const Arc& arc);
+Vec2 arc_point(const Arc& arc, float angle);
+Vec2 arc_start_point(const Arc& arc);
+Vec2 arc_end_point(const Arc& arc);
+Vec2 arc_mid_point(const Arc& arc);
+bool angle_in_arc(float angle, const Arc& arc);
+Bounds arc_bounds(const Arc& arc);
+float point_arc_distance(Vec2 p, const Arc& arc);
+
+// Primitive bounds helpers
+Bounds shape_bounds(const Shape& s);
+Bounds light_bounds(const Light& l);
 
 // --- Rendering types ---
 
@@ -277,3 +300,10 @@ void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat
 // Transform a shape/light from local to world coordinates using a Transform2D
 Shape transform_shape(const Shape& s, const Transform2D& t);
 Light transform_light(const Light& l, const Transform2D& t);
+
+// Perimeter (arc length) of a shape — used for emission light intensity scaling
+float shape_perimeter(const Shape& s);
+
+// Generate a Light that approximates emission from an emissive shape.
+// Returns nullopt if the shape's material has no emission.
+std::optional<Light> emission_light(const Shape& s);

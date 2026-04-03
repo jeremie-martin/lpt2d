@@ -4,6 +4,135 @@
 #include <cmath>
 #include <limits>
 
+float normalize_angle(float angle) {
+    angle = std::fmod(angle, TWO_PI);
+    if (angle < 0.0f) angle += TWO_PI;
+    return angle;
+}
+
+float clamp_arc_sweep(float sweep) {
+    return std::clamp(sweep, 0.0f, TWO_PI);
+}
+
+float arc_end_angle(const Arc& arc) {
+    return normalize_angle(arc.angle_start + clamp_arc_sweep(arc.sweep));
+}
+
+float arc_mid_angle(const Arc& arc) {
+    return normalize_angle(arc.angle_start + 0.5f * clamp_arc_sweep(arc.sweep));
+}
+
+Vec2 arc_point(const Arc& arc, float angle) {
+    return arc.center + Vec2{arc.radius * std::cos(angle), arc.radius * std::sin(angle)};
+}
+
+Vec2 arc_start_point(const Arc& arc) {
+    return arc_point(arc, arc.angle_start);
+}
+
+Vec2 arc_end_point(const Arc& arc) {
+    return arc_point(arc, arc_end_angle(arc));
+}
+
+Vec2 arc_mid_point(const Arc& arc) {
+    return arc_point(arc, arc_mid_angle(arc));
+}
+
+bool angle_in_arc(float angle, const Arc& arc) {
+    float sweep = clamp_arc_sweep(arc.sweep);
+    if (sweep >= TWO_PI - INTERSECT_EPS)
+        return true;
+    float delta = normalize_angle(angle - arc.angle_start);
+    return delta <= sweep + INTERSECT_EPS;
+}
+
+Bounds arc_bounds(const Arc& arc) {
+    if (clamp_arc_sweep(arc.sweep) >= TWO_PI - INTERSECT_EPS) {
+        return {arc.center - Vec2{arc.radius, arc.radius},
+                arc.center + Vec2{arc.radius, arc.radius}};
+    }
+
+    float inf = std::numeric_limits<float>::max();
+    Vec2 lo{inf, inf}, hi{-inf, -inf};
+    auto expand = [&](Vec2 p) {
+        lo.x = std::min(lo.x, p.x);
+        lo.y = std::min(lo.y, p.y);
+        hi.x = std::max(hi.x, p.x);
+        hi.y = std::max(hi.y, p.y);
+    };
+
+    expand(arc_start_point(arc));
+    expand(arc_end_point(arc));
+
+    constexpr float cardinals[] = {0.0f, 0.5f * PI, PI, 1.5f * PI};
+    for (float angle : cardinals) {
+        if (angle_in_arc(angle, arc))
+            expand(arc_point(arc, angle));
+    }
+
+    return {lo, hi};
+}
+
+float point_arc_distance(Vec2 p, const Arc& arc) {
+    Vec2 d = p - arc.center;
+    float dc = d.length();
+    if (dc < 1e-10f)
+        return arc.radius;
+
+    float angle = std::atan2(d.y, d.x);
+    if (angle_in_arc(angle, arc))
+        return std::abs(dc - arc.radius);
+
+    return std::min((p - arc_start_point(arc)).length(),
+                    (p - arc_end_point(arc)).length());
+}
+
+Bounds shape_bounds(const Shape& s) {
+    return std::visit(overloaded{
+                          [](const Circle& c) {
+                              return Bounds{c.center - Vec2{c.radius, c.radius},
+                                            c.center + Vec2{c.radius, c.radius}};
+                          },
+                          [](const Segment& seg) {
+                              return Bounds{
+                                  {std::min(seg.a.x, seg.b.x), std::min(seg.a.y, seg.b.y)},
+                                  {std::max(seg.a.x, seg.b.x), std::max(seg.a.y, seg.b.y)},
+                              };
+                          },
+                          [](const Arc& arc) { return arc_bounds(arc); },
+                          [](const Bezier& bez) {
+                              Vec2 lo{
+                                  std::min({bez.p0.x, bez.p1.x, bez.p2.x}),
+                                  std::min({bez.p0.y, bez.p1.y, bez.p2.y}),
+                              };
+                              Vec2 hi{
+                                  std::max({bez.p0.x, bez.p1.x, bez.p2.x}),
+                                  std::max({bez.p0.y, bez.p1.y, bez.p2.y}),
+                              };
+                              return Bounds{lo, hi};
+                          },
+                      },
+                      s);
+}
+
+Bounds light_bounds(const Light& l) {
+    return std::visit(overloaded{
+                          [](const PointLight& light) {
+                              return Bounds{light.pos, light.pos};
+                          },
+                          [](const SegmentLight& light) {
+                              return Bounds{
+                                  {std::min(light.a.x, light.b.x), std::min(light.a.y, light.b.y)},
+                                  {std::max(light.a.x, light.b.x), std::max(light.a.y, light.b.y)},
+                              };
+                          },
+                          [](const BeamLight& light) {
+                              return Bounds{light.origin, light.origin};
+                          },
+                      },
+                      l);
+}
+
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
     Vec2 oc = ray.origin - circle.center;
     float a = ray.dir.dot(ray.dir);
@@ -49,15 +178,6 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg) {
     return Hit{t, point, normal, &seg.material};
 }
 
-static bool angle_in_arc(float angle, float start, float end) {
-    while (angle < 0.0f) angle += TWO_PI;
-    while (angle >= TWO_PI) angle -= TWO_PI;
-    if (start <= end)
-        return angle >= start && angle <= end;
-    else
-        return angle >= start || angle <= end;
-}
-
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc) {
     Vec2 oc = ray.origin - arc.center;
     float a = ray.dir.dot(ray.dir);
@@ -78,7 +198,7 @@ std::optional<Hit> intersect(const Ray& ray, const Arc& arc) {
         if (t < INTERSECT_EPS) continue;
         Vec2 point = ray.origin + ray.dir * t;
         float angle = std::atan2(point.y - arc.center.y, point.x - arc.center.x);
-        if (angle_in_arc(angle, arc.angle_start, arc.angle_end)) {
+        if (angle_in_arc(angle, arc)) {
             Vec2 normal = (point - arc.center).normalized();
             return Hit{t, point, normal, &arc.material};
         }
@@ -169,85 +289,30 @@ Bounds compute_bounds(const Scene& scene, float padding) {
     };
 
     for (const auto& shape : scene.shapes) {
-        std::visit(overloaded{
-                       [&](const Circle& c) {
-                           expand(c.center - Vec2{c.radius, c.radius});
-                           expand(c.center + Vec2{c.radius, c.radius});
-                       },
-                       [&](const Segment& s) {
-                           expand(s.a);
-                           expand(s.b);
-                       },
-                       [&](const Arc& a) {
-                           // Include arc endpoints
-                           expand(a.center + Vec2{a.radius * std::cos(a.angle_start),
-                                                  a.radius * std::sin(a.angle_start)});
-                           expand(a.center + Vec2{a.radius * std::cos(a.angle_end),
-                                                  a.radius * std::sin(a.angle_end)});
-                           // Include extrema at cardinal directions if within arc range
-                           constexpr float cardinals[] = {0.0f, 1.5707963f, 3.1415927f, 4.7123890f};
-                           constexpr float dx[] = {1.0f, 0.0f, -1.0f, 0.0f};
-                           constexpr float dy[] = {0.0f, 1.0f, 0.0f, -1.0f};
-                           for (int i = 0; i < 4; ++i) {
-                               if (angle_in_arc(cardinals[i], a.angle_start, a.angle_end))
-                                   expand(a.center + Vec2{a.radius * dx[i], a.radius * dy[i]});
-                           }
-                       },
-                       [&](const Bezier& b) {
-                           // Convex hull of control points contains the curve
-                           expand(b.p0);
-                           expand(b.p1);
-                           expand(b.p2);
-                       },
-                   },
-                   shape);
+        Bounds b = shape_bounds(shape);
+        expand(b.min);
+        expand(b.max);
     }
 
     for (const auto& light : scene.lights) {
-        std::visit(overloaded{
-                       [&](const PointLight& l) { expand(l.pos); },
-                       [&](const SegmentLight& l) {
-                           expand(l.a);
-                           expand(l.b);
-                       },
-                       [&](const BeamLight& l) {
-                           expand(l.origin);
-                       },
-                   },
-                   light);
+        Bounds b = light_bounds(light);
+        expand(b.min);
+        expand(b.max);
     }
 
     // Groups: expand with world-space transformed shapes/lights
     for (const auto& group : scene.groups) {
         for (const auto& shape : group.shapes) {
             Shape ws = transform_shape(shape, group.transform);
-            std::visit(overloaded{
-                [&](const Circle& c) {
-                    expand(c.center - Vec2{c.radius, c.radius});
-                    expand(c.center + Vec2{c.radius, c.radius});
-                },
-                [&](const Segment& s) { expand(s.a); expand(s.b); },
-                [&](const Arc& a) {
-                    expand(a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)});
-                    expand(a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)});
-                    constexpr float cardinals[] = {0.0f, 1.5707963f, 3.1415927f, 4.7123890f};
-                    constexpr float dx[] = {1.0f, 0.0f, -1.0f, 0.0f};
-                    constexpr float dy[] = {0.0f, 1.0f, 0.0f, -1.0f};
-                    for (int i = 0; i < 4; ++i) {
-                        if (angle_in_arc(cardinals[i], a.angle_start, a.angle_end))
-                            expand(a.center + Vec2{a.radius * dx[i], a.radius * dy[i]});
-                    }
-                },
-                [&](const Bezier& b) { expand(b.p0); expand(b.p1); expand(b.p2); },
-            }, ws);
+            Bounds b = shape_bounds(ws);
+            expand(b.min);
+            expand(b.max);
         }
         for (const auto& light : group.lights) {
             Light wl = transform_light(light, group.transform);
-            std::visit(overloaded{
-                [&](const PointLight& l) { expand(l.pos); },
-                [&](const SegmentLight& l) { expand(l.a); expand(l.b); },
-                [&](const BeamLight& l) { expand(l.origin); },
-            }, wl);
+            Bounds b = light_bounds(wl);
+            expand(b.min);
+            expand(b.max);
         }
     }
 
@@ -291,8 +356,8 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
             Arc r = a;
             r.center = t.apply(a.center);
             r.radius = std::max(a.radius * uniform_scale, 0.01f);
-            r.angle_start = std::fmod(std::fmod(a.angle_start + t.rotate, TWO_PI) + TWO_PI, TWO_PI);
-            r.angle_end = std::fmod(std::fmod(a.angle_end + t.rotate, TWO_PI) + TWO_PI, TWO_PI);
+            r.angle_start = normalize_angle(a.angle_start + t.rotate);
+            r.sweep = clamp_arc_sweep(a.sweep);
             return r;
         },
         [&](const Bezier& b) -> Shape {
@@ -336,4 +401,43 @@ void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat
     scene.shapes.push_back(Segment{{half_w, half_h}, {-half_w, half_h}, mat});    // top → normal down
     scene.shapes.push_back(Segment{{-half_w, half_h}, {-half_w, -half_h}, mat});  // left → normal right
     scene.shapes.push_back(Segment{{half_w, -half_h}, {half_w, half_h}, mat});    // right → normal left
+}
+
+float shape_perimeter(const Shape& s) {
+    return std::visit(overloaded{
+        [](const Circle& c) { return TWO_PI * c.radius; },
+        [](const Segment& seg) { return (seg.b - seg.a).length(); },
+        [](const Arc& a) { return a.radius * clamp_arc_sweep(a.sweep); },
+        [](const Bezier& b) {
+            // Chord length approximation (p0→p2)
+            return (b.p2 - b.p0).length();
+        },
+    }, s);
+}
+
+static const Material& get_material(const Shape& s) {
+    return std::visit([](const auto& shape) -> const Material& { return shape.material; }, s);
+}
+
+std::optional<Light> emission_light(const Shape& s) {
+    const Material& mat = get_material(s);
+    if (mat.emission <= 0.0f) return std::nullopt;
+
+    float intensity = mat.emission * shape_perimeter(s);
+
+    return std::visit(overloaded{
+        [&](const Circle& c) -> Light {
+            return PointLight{c.center, intensity};
+        },
+        [&](const Segment& seg) -> Light {
+            return SegmentLight{seg.a, seg.b, intensity};
+        },
+        [&](const Arc& a) -> Light {
+            // Chord approximation: segment from start-point to end-point
+            return SegmentLight{arc_start_point(a), arc_end_point(a), intensity};
+        },
+        [&](const Bezier& b) -> Light {
+            return SegmentLight{b.p0, b.p2, intensity};
+        },
+    }, s);
 }

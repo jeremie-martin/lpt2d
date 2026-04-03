@@ -468,6 +468,14 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         for (const auto& light : group.lights)
             all_lights.push_back(transform_light(light, group.transform));
 
+    // Auto-generate lights from emissive surfaces.
+    // TODO: compare with shader-only emission (sample emissive surfaces directly
+    // in the compute shader) — may converge differently for complex scenes.
+    for (const auto& shape : all_shapes) {
+        if (auto light = emission_light(shape))
+            all_lights.push_back(*light);
+    }
+
     std::vector<GPULight> gpu_lights;
     std::vector<float> cum_weights;
     float total = 0.0f;

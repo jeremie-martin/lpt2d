@@ -14,6 +14,7 @@
 struct ObjectId {
     enum Type { Shape, Light, Group } type;
     int index;
+    int group = -1; // -1 = top-level, >= 0 = member of scene.groups[group]
     bool operator==(const ObjectId&) const = default;
 };
 
@@ -141,6 +142,7 @@ struct EditorState {
     // Selection
     std::vector<ObjectId> selection;
     ObjectId hovered{ObjectId::Shape, -1};
+    int editing_group = -1; // -1 = normal mode, >= 0 = editing inside group[i]
 
     // Tool
     EditTool tool = EditTool::Select;
@@ -217,19 +219,32 @@ struct EditorState {
     void validate_selection() {
         selection.erase(
             std::remove_if(selection.begin(), selection.end(), [&](const ObjectId& id) {
+                if (id.group >= 0) {
+                    // Group member: validate group exists and member index is in range
+                    if (id.group >= (int)scene.groups.size()) return true;
+                    const auto& g = scene.groups[id.group];
+                    if (id.type == ObjectId::Shape) return id.index >= (int)g.shapes.size();
+                    if (id.type == ObjectId::Light) return id.index >= (int)g.lights.size();
+                    return true;
+                }
                 if (id.type == ObjectId::Shape) return id.index >= (int)scene.shapes.size();
                 if (id.type == ObjectId::Light) return id.index >= (int)scene.lights.size();
                 if (id.type == ObjectId::Group) return id.index >= (int)scene.groups.size();
                 return true;
             }),
             selection.end());
+        // Validate editing_group
+        if (editing_group >= (int)scene.groups.size()) {
+            editing_group = -1;
+        }
     }
 };
 
 // ─── Hit testing ───────────────────────────────────────────────────────
 
-// Returns ObjectId with index=-1 if nothing hit
-ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold);
+// Returns ObjectId with index=-1 if nothing hit.
+// When editing_group >= 0, only tests members of that group (returns group-scoped ObjectIds).
+ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group = -1);
 
 // Test if an object's geometry intersects a world-space rectangle
 bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max);

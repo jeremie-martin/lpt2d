@@ -1,99 +1,29 @@
 {
   "version": 2,
   "name": "diamond",
-  "shapes": [
-    {
-      "type": "circle",
-      "center": [0, 0],
-      "radius": 0.35,
-      "material": {
-        "ior": 2.42,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.2,
-        "cauchy_b": 30000,
-        "albedo": 1
-      }
+  "materials": {
+    "diamond": {
+      "ior": 2.42,
+      "transmission": 1,
+      "absorption": 0.2,
+      "cauchy_b": 30000
     },
-    {
-      "type": "segment",
-      "a": [-1, -0.7],
-      "b": [1, -0.7],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [1, 0.7],
-      "b": [-1, 0.7],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [-1, 0.7],
-      "b": [-1, -0.7],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
-    },
-    {
-      "type": "segment",
-      "a": [1, -0.7],
-      "b": [1, 0.7],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+    "mirror_wall": {
+      "metallic": 1,
+      "transmission": 1,
+      "albedo": 0.95
     }
+  },
+  "shapes": [
+    { "type": "circle", "center": [0, 0], "radius": 0.35, "material": "diamond" },
+    { "type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": "mirror_wall" },
+    { "type": "segment", "a": [1, 0.7], "b": [-1, 0.7], "material": "mirror_wall" },
+    { "type": "segment", "a": [-1, 0.7], "b": [-1, -0.7], "material": "mirror_wall" },
+    { "type": "segment", "a": [1, -0.7], "b": [1, 0.7], "material": "mirror_wall" }
   ],
   "lights": [
-    {
-      "type": "point",
-      "pos": [-0.7, 0.4],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
-    },
-    {
-      "type": "point",
-      "pos": [0.7, 0.4],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
-    },
-    {
-      "type": "point",
-      "pos": [0, -0.5],
-      "intensity": 0.5,
-      "wavelength_min": 380,
-      "wavelength_max": 780
-    }
+    { "type": "point", "pos": [-0.7, 0.4], "intensity": 1 },
+    { "type": "point", "pos": [0.7, 0.4], "intensity": 1 },
+    { "type": "point", "pos": [0, -0.5], "intensity": 0.5 }
   ]
 }
