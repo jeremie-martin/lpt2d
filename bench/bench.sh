@@ -291,7 +291,7 @@ with open(baseline / 'manifest.json', 'w') as f:
     echo "═══════════════════════════════════════════════════════════"
     echo " Baseline saved to: $BASELINE_DIR/"
     echo " Images: $(ls "$BASELINE_DIR"/*.png 2>/dev/null | wc -l)"
-    echo " Remember to commit bench/baseline/ to git."
+    echo " This baseline is local-only and ignored by git."
     echo "═══════════════════════════════════════════════════════════"
     exit 0
 fi

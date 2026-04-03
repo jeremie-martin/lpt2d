@@ -3,7 +3,7 @@
 ## Reference Baseline
 - Date: 2026-04-03 00:06
 - Commit: e8da824
-- Run dir: bench/baseline/
+- Run dir: bench/baseline/ (local, git-ignored)
 - Total median: 30750ms
 - Per-scene:
 
@@ -236,4 +236,3 @@ This is a fundamental architectural constraint of the current pipeline. The line
 6. **Resolution reduction**: Lower internal resolution with upscaling (changes output).
 
 ---
-

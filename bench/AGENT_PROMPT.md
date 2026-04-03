@@ -70,9 +70,9 @@ The harness renders 12 purpose-built scenes at 1280x720 with 10M rays each. It m
 
 There are two baselines. They serve different purposes.
 
-**Reference baseline** (`bench/baseline/`): The original trusted standard, captured before any optimization work begins. This never changes during an optimization campaign. All cumulative speedup numbers are reported against this. It is the ground truth for fidelity — if you are ever unsure whether a change is safe, compare against the reference baseline.
+**Reference baseline** (`bench/baseline/`, local-only): The trusted standard captured before any optimization work begins. It is intentionally ignored by git. This never changes during an optimization campaign. All cumulative speedup numbers are reported against this. It is the ground truth for fidelity. If you need to preserve it long-term or share it, archive it outside the repository.
 
-**Working baseline**: The current accepted state on the master branch. When you merge a successful optimization to master, the working baseline moves forward. Subsequent attempts compare fidelity and performance against this working baseline. To update it:
+**Working baseline**: The current accepted state on the master branch, stored locally in `bench/baseline/`. When you merge a successful optimization to master, the working baseline moves forward. Subsequent attempts compare fidelity and performance against this working baseline. To update it:
 ```bash
 bench/bench.sh --capture-baseline
 ```
