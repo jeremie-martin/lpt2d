@@ -32,8 +32,10 @@ Each current scene folder under `clean_room/<family>/` is expected to contain:
 Current library policy:
 
 - The full registry should have canonical `frame_000.json` exports and a current `manifest.json`.
+- The manifest should reflect the full current registry after any promoted-render pass; if a curated subset is rendered separately, rerun the full no-render export afterward to refresh inventory.
 - Full-library quality control is primarily driven by `library_audit.json` and targeted follow-up audit reports.
 - Image/video renders are curated and staged, not blindly generated for every scene in a large library wave.
+- Preview renders are intentionally a little cleaner than before (`640x360` by current default), while HQ renders remain opt-in promotions.
 
 ## Archive Policy
 

@@ -1,81 +1,109 @@
 {
   "canonical_root": "renders/clean_room",
   "overview": "overview_sheet.png",
-  "overview_pages": [
-    "overview_pages/overview_01.png"
-  ],
-  "scene_count": 572,
-  "family_count": 10,
+  "overview_pages": [],
+  "scene_count": 1064,
+  "family_count": 20,
   "families": [
     {
       "name": "arcs",
       "scene_count": 77,
-      "overview_pages": [
-        "arcs/overview_pages/arcs_overview_01.png"
-      ]
+      "overview_pages": []
+    },
+    {
+      "name": "beacons",
+      "scene_count": 54,
+      "overview_pages": []
+    },
+    {
+      "name": "canopies",
+      "scene_count": 48,
+      "overview_pages": []
+    },
+    {
+      "name": "cloisters",
+      "scene_count": 48,
+      "overview_pages": []
     },
     {
       "name": "crossfires",
       "scene_count": 2,
-      "overview_pages": [
-        "crossfires/overview_pages/crossfires_overview_01.png"
-      ]
+      "overview_pages": []
+    },
+    {
+      "name": "fins",
+      "scene_count": 48,
+      "overview_pages": []
+    },
+    {
+      "name": "gates",
+      "scene_count": 48,
+      "overview_pages": []
     },
     {
       "name": "hybrids",
       "scene_count": 50,
-      "overview_pages": [
-        "hybrids/overview_pages/hybrids_overview_01.png"
-      ]
+      "overview_pages": []
     },
     {
       "name": "lenses",
       "scene_count": 78,
-      "overview_pages": [
-        "lenses/overview_pages/lenses_overview_01.png"
-      ]
+      "overview_pages": []
+    },
+    {
+      "name": "mandalas",
+      "scene_count": 54,
+      "overview_pages": []
     },
     {
       "name": "mirrors",
       "scene_count": 3,
-      "overview_pages": [
-        "mirrors/overview_pages/mirrors_overview_01.png"
-      ]
+      "overview_pages": []
     },
     {
       "name": "orbits",
       "scene_count": 60,
-      "overview_pages": [
-        "orbits/overview_pages/orbits_overview_01.png"
-      ]
+      "overview_pages": []
     },
     {
       "name": "prisms",
       "scene_count": 76,
-      "overview_pages": [
-        "prisms/overview_pages/prisms_overview_01.png"
-      ]
+      "overview_pages": []
     },
     {
       "name": "ribbons",
       "scene_count": 76,
-      "overview_pages": [
-        "ribbons/overview_pages/ribbons_overview_01.png"
-      ]
+      "overview_pages": []
     },
     {
       "name": "rotors",
       "scene_count": 75,
-      "overview_pages": [
-        "rotors/overview_pages/rotors_overview_01.png"
-      ]
+      "overview_pages": []
+    },
+    {
+      "name": "spines",
+      "scene_count": 56,
+      "overview_pages": []
     },
     {
       "name": "splitters",
       "scene_count": 75,
-      "overview_pages": [
-        "splitters/overview_pages/splitters_overview_01.png"
-      ]
+      "overview_pages": []
+    },
+    {
+      "name": "trusses",
+      "scene_count": 48,
+      "overview_pages": []
+    },
+    {
+      "name": "vaults",
+      "scene_count": 48,
+      "overview_pages": []
+    },
+    {
+      "name": "wells",
+      "scene_count": 40,
+      "overview_pages": []
     }
   ],
   "scenes": [
@@ -1336,6 +1364,2730 @@
       "family": "arcs",
       "description": "A tall arc stack climbs through the center under a subtle warm-white wash.",
       "directory": "arcs/arc_stack_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_spire_warm",
+      "family": "beacons",
+      "description": "A narrow beacon spire climbs cleanly under a warm-white lane.",
+      "directory": "beacons/beacon_spire_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_spire_dual",
+      "family": "beacons",
+      "description": "A narrow beacon spire climbs cleanly with balanced dual-side beams.",
+      "directory": "beacons/beacon_spire_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_spire_triad",
+      "family": "beacons",
+      "description": "A narrow beacon spire climbs cleanly under a bright triad cap.",
+      "directory": "beacons/beacon_spire_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_tower_warm",
+      "family": "beacons",
+      "description": "A paired tower stack keeps the rails close under a warm-white lane.",
+      "directory": "beacons/beacon_tower_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_tower_dual",
+      "family": "beacons",
+      "description": "A paired tower stack keeps the rails close with balanced dual-side beams.",
+      "directory": "beacons/beacon_tower_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_tower_triad",
+      "family": "beacons",
+      "description": "A paired tower stack keeps the rails close under a bright triad cap.",
+      "directory": "beacons/beacon_tower_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_pier_warm",
+      "family": "beacons",
+      "description": "A low pier of lights reaches outward without crowding the room under a warm-white lane.",
+      "directory": "beacons/beacon_pier_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_pier_dual",
+      "family": "beacons",
+      "description": "A low pier of lights reaches outward without crowding the room with balanced dual-side beams.",
+      "directory": "beacons/beacon_pier_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_pier_triad",
+      "family": "beacons",
+      "description": "A low pier of lights reaches outward without crowding the room under a bright triad cap.",
+      "directory": "beacons/beacon_pier_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_ladder_warm",
+      "family": "beacons",
+      "description": "A clean ladder of beacons rises in stepped order under a warm-white lane.",
+      "directory": "beacons/beacon_ladder_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_ladder_dual",
+      "family": "beacons",
+      "description": "A clean ladder of beacons rises in stepped order with balanced dual-side beams.",
+      "directory": "beacons/beacon_ladder_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_ladder_triad",
+      "family": "beacons",
+      "description": "A clean ladder of beacons rises in stepped order under a bright triad cap.",
+      "directory": "beacons/beacon_ladder_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_nave_warm",
+      "family": "beacons",
+      "description": "A nave-like beacon hall keeps the center bright under a warm-white lane.",
+      "directory": "beacons/beacon_nave_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_nave_dual",
+      "family": "beacons",
+      "description": "A nave-like beacon hall keeps the center bright with balanced dual-side beams.",
+      "directory": "beacons/beacon_nave_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_nave_triad",
+      "family": "beacons",
+      "description": "A nave-like beacon hall keeps the center bright under a bright triad cap.",
+      "directory": "beacons/beacon_nave_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_axis_warm",
+      "family": "beacons",
+      "description": "A single axis tower reads like a bright marker under a warm-white lane.",
+      "directory": "beacons/beacon_axis_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_axis_dual",
+      "family": "beacons",
+      "description": "A single axis tower reads like a bright marker with balanced dual-side beams.",
+      "directory": "beacons/beacon_axis_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_axis_triad",
+      "family": "beacons",
+      "description": "A single axis tower reads like a bright marker under a bright triad cap.",
+      "directory": "beacons/beacon_axis_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_harbor_warm",
+      "family": "beacons",
+      "description": "A harbor of short towers balances left and right under a warm-white lane.",
+      "directory": "beacons/beacon_harbor_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_harbor_dual",
+      "family": "beacons",
+      "description": "A harbor of short towers balances left and right with balanced dual-side beams.",
+      "directory": "beacons/beacon_harbor_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_harbor_triad",
+      "family": "beacons",
+      "description": "A harbor of short towers balances left and right under a bright triad cap.",
+      "directory": "beacons/beacon_harbor_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_crown_warm",
+      "family": "beacons",
+      "description": "A compact crown of beacons opens overhead under a warm-white lane.",
+      "directory": "beacons/beacon_crown_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_crown_dual",
+      "family": "beacons",
+      "description": "A compact crown of beacons opens overhead with balanced dual-side beams.",
+      "directory": "beacons/beacon_crown_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_crown_triad",
+      "family": "beacons",
+      "description": "A compact crown of beacons opens overhead under a bright triad cap.",
+      "directory": "beacons/beacon_crown_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_quay_warm",
+      "family": "beacons",
+      "description": "A quay of rails and stacked optics stays broad but contained under a warm-white lane.",
+      "directory": "beacons/beacon_quay_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_quay_dual",
+      "family": "beacons",
+      "description": "A quay of rails and stacked optics stays broad but contained with balanced dual-side beams.",
+      "directory": "beacons/beacon_quay_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_quay_triad",
+      "family": "beacons",
+      "description": "A quay of rails and stacked optics stays broad but contained under a bright triad cap.",
+      "directory": "beacons/beacon_quay_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rail_warm",
+      "family": "beacons",
+      "description": "A rail-focused stack keeps the beam path disciplined under a warm-white lane.",
+      "directory": "beacons/beacon_rail_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rail_dual",
+      "family": "beacons",
+      "description": "A rail-focused stack keeps the beam path disciplined with balanced dual-side beams.",
+      "directory": "beacons/beacon_rail_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rail_triad",
+      "family": "beacons",
+      "description": "A rail-focused stack keeps the beam path disciplined under a bright triad cap.",
+      "directory": "beacons/beacon_rail_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_sentinel_warm",
+      "family": "beacons",
+      "description": "A sentinel pair guards the room with a bright core under a warm-white lane.",
+      "directory": "beacons/beacon_sentinel_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_sentinel_dual",
+      "family": "beacons",
+      "description": "A sentinel pair guards the room with a bright core with balanced dual-side beams.",
+      "directory": "beacons/beacon_sentinel_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_sentinel_triad",
+      "family": "beacons",
+      "description": "A sentinel pair guards the room with a bright core under a bright triad cap.",
+      "directory": "beacons/beacon_sentinel_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_column_warm",
+      "family": "beacons",
+      "description": "A centered column of beacons reads from wall to wall under a warm-white lane.",
+      "directory": "beacons/beacon_column_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_column_dual",
+      "family": "beacons",
+      "description": "A centered column of beacons reads from wall to wall with balanced dual-side beams.",
+      "directory": "beacons/beacon_column_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_column_triad",
+      "family": "beacons",
+      "description": "A centered column of beacons reads from wall to wall under a bright triad cap.",
+      "directory": "beacons/beacon_column_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rampart_warm",
+      "family": "beacons",
+      "description": "A staggered rampart of lights keeps a firm silhouette under a warm-white lane.",
+      "directory": "beacons/beacon_rampart_warm",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rampart_dual",
+      "family": "beacons",
+      "description": "A staggered rampart of lights keeps a firm silhouette with balanced dual-side beams.",
+      "directory": "beacons/beacon_rampart_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_rampart_triad",
+      "family": "beacons",
+      "description": "A staggered rampart of lights keeps a firm silhouette under a bright triad cap.",
+      "directory": "beacons/beacon_rampart_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_corridor_warm",
+      "family": "beacons",
+      "description": "A corridor of towers runs cleanly through the middle under a warm-white lane.",
+      "directory": "beacons/beacon_corridor_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_corridor_dual",
+      "family": "beacons",
+      "description": "A corridor of towers runs cleanly through the middle with balanced dual-side beams.",
+      "directory": "beacons/beacon_corridor_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_corridor_triad",
+      "family": "beacons",
+      "description": "A corridor of towers runs cleanly through the middle under a bright triad cap.",
+      "directory": "beacons/beacon_corridor_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_mast_warm",
+      "family": "beacons",
+      "description": "A clustered mast keeps the beacons tightly aligned under a warm-white lane.",
+      "directory": "beacons/beacon_mast_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_mast_dual",
+      "family": "beacons",
+      "description": "A clustered mast keeps the beacons tightly aligned with balanced dual-side beams.",
+      "directory": "beacons/beacon_mast_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_mast_triad",
+      "family": "beacons",
+      "description": "A clustered mast keeps the beacons tightly aligned under a bright triad cap.",
+      "directory": "beacons/beacon_mast_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_plinth_warm",
+      "family": "beacons",
+      "description": "A small plinth of optics stays simple and luminous under a warm-white lane.",
+      "directory": "beacons/beacon_plinth_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_plinth_dual",
+      "family": "beacons",
+      "description": "A small plinth of optics stays simple and luminous with balanced dual-side beams.",
+      "directory": "beacons/beacon_plinth_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_plinth_triad",
+      "family": "beacons",
+      "description": "A small plinth of optics stays simple and luminous under a bright triad cap.",
+      "directory": "beacons/beacon_plinth_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_gallery_warm",
+      "family": "beacons",
+      "description": "A shallow gallery of beacons uses width without clutter under a warm-white lane.",
+      "directory": "beacons/beacon_gallery_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_gallery_dual",
+      "family": "beacons",
+      "description": "A shallow gallery of beacons uses width without clutter with balanced dual-side beams.",
+      "directory": "beacons/beacon_gallery_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_gallery_triad",
+      "family": "beacons",
+      "description": "A shallow gallery of beacons uses width without clutter under a bright triad cap.",
+      "directory": "beacons/beacon_gallery_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_lantern_warm",
+      "family": "beacons",
+      "description": "A lantern-like beacon pair keeps the room open under a warm-white lane.",
+      "directory": "beacons/beacon_lantern_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_lantern_dual",
+      "family": "beacons",
+      "description": "A lantern-like beacon pair keeps the room open with balanced dual-side beams.",
+      "directory": "beacons/beacon_lantern_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beacon_lantern_triad",
+      "family": "beacons",
+      "description": "A lantern-like beacon pair keeps the room open under a bright triad cap.",
+      "directory": "beacons/beacon_lantern_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_awning_warm",
+      "family": "canopies",
+      "description": "Awning canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_awning_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_awning_crest",
+      "family": "canopies",
+      "description": "Awning canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_awning_crest",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_awning_triad",
+      "family": "canopies",
+      "description": "Awning canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_awning_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_fringe_warm",
+      "family": "canopies",
+      "description": "Fringe canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_fringe_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_fringe_crest",
+      "family": "canopies",
+      "description": "Fringe canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_fringe_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_fringe_triad",
+      "family": "canopies",
+      "description": "Fringe canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_fringe_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_eave_warm",
+      "family": "canopies",
+      "description": "Eave canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_eave_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_eave_crest",
+      "family": "canopies",
+      "description": "Eave canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_eave_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_eave_triad",
+      "family": "canopies",
+      "description": "Eave canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_eave_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_veil_warm",
+      "family": "canopies",
+      "description": "Veil canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_veil_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_veil_crest",
+      "family": "canopies",
+      "description": "Veil canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_veil_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_veil_triad",
+      "family": "canopies",
+      "description": "Veil canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_veil_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_harbor_warm",
+      "family": "canopies",
+      "description": "Harbor canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_harbor_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_harbor_crest",
+      "family": "canopies",
+      "description": "Harbor canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_harbor_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_harbor_triad",
+      "family": "canopies",
+      "description": "Harbor canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_harbor_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_cornice_warm",
+      "family": "canopies",
+      "description": "Cornice canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_cornice_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_cornice_crest",
+      "family": "canopies",
+      "description": "Cornice canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_cornice_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_cornice_triad",
+      "family": "canopies",
+      "description": "Cornice canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_cornice_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_shade_warm",
+      "family": "canopies",
+      "description": "Shade canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_shade_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_shade_crest",
+      "family": "canopies",
+      "description": "Shade canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_shade_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_shade_triad",
+      "family": "canopies",
+      "description": "Shade canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_shade_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_frond_warm",
+      "family": "canopies",
+      "description": "Frond canopy fins hang in a bright warm room.",
+      "directory": "canopies/canopy_fin_frond_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_frond_crest",
+      "family": "canopies",
+      "description": "Frond canopy fins hang in a bright crest room.",
+      "directory": "canopies/canopy_fin_frond_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_fin_frond_triad",
+      "family": "canopies",
+      "description": "Frond canopy fins hang in a bright triad room.",
+      "directory": "canopies/canopy_fin_frond_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_halo_warm",
+      "family": "canopies",
+      "description": "Halo canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_halo_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_halo_crest",
+      "family": "canopies",
+      "description": "Halo canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_halo_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_halo_triad",
+      "family": "canopies",
+      "description": "Halo canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_halo_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crown_warm",
+      "family": "canopies",
+      "description": "Crown canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crown_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crown_crest",
+      "family": "canopies",
+      "description": "Crown canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crown_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crown_triad",
+      "family": "canopies",
+      "description": "Crown canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crown_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_frill_warm",
+      "family": "canopies",
+      "description": "Frill canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_frill_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_frill_crest",
+      "family": "canopies",
+      "description": "Frill canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_frill_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_frill_triad",
+      "family": "canopies",
+      "description": "Frill canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_frill_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_spray_warm",
+      "family": "canopies",
+      "description": "Spray canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_spray_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_spray_crest",
+      "family": "canopies",
+      "description": "Spray canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_spray_crest",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_spray_triad",
+      "family": "canopies",
+      "description": "Spray canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_spray_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_tiara_warm",
+      "family": "canopies",
+      "description": "Tiara canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_tiara_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_tiara_crest",
+      "family": "canopies",
+      "description": "Tiara canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_tiara_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_tiara_triad",
+      "family": "canopies",
+      "description": "Tiara canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_tiara_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_wreath_warm",
+      "family": "canopies",
+      "description": "Wreath canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_wreath_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_wreath_crest",
+      "family": "canopies",
+      "description": "Wreath canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_wreath_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_wreath_triad",
+      "family": "canopies",
+      "description": "Wreath canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_wreath_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crest_warm",
+      "family": "canopies",
+      "description": "Crest canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crest_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crest_crest",
+      "family": "canopies",
+      "description": "Crest canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crest_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_crest_triad",
+      "family": "canopies",
+      "description": "Crest canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_crest_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_sweep_warm",
+      "family": "canopies",
+      "description": "Sweep canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_sweep_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_sweep_crest",
+      "family": "canopies",
+      "description": "Sweep canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_sweep_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "canopy_spoke_sweep_triad",
+      "family": "canopies",
+      "description": "Sweep canopy spokes crown the scene with warm and white light.",
+      "directory": "canopies/canopy_spoke_sweep_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_aisle_warm",
+      "family": "cloisters",
+      "description": "Aisle cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_aisle_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_aisle_triad",
+      "family": "cloisters",
+      "description": "Aisle cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_aisle_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_aisle_guiding",
+      "family": "cloisters",
+      "description": "Aisle cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_aisle_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_nave_warm",
+      "family": "cloisters",
+      "description": "Nave cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_nave_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_nave_triad",
+      "family": "cloisters",
+      "description": "Nave cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_nave_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_nave_guiding",
+      "family": "cloisters",
+      "description": "Nave cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_nave_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_ambulatory_warm",
+      "family": "cloisters",
+      "description": "Ambulatory cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_ambulatory_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_ambulatory_triad",
+      "family": "cloisters",
+      "description": "Ambulatory cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_ambulatory_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_ambulatory_guiding",
+      "family": "cloisters",
+      "description": "Ambulatory cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_ambulatory_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_arcade_warm",
+      "family": "cloisters",
+      "description": "Arcade cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_arcade_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_arcade_triad",
+      "family": "cloisters",
+      "description": "Arcade cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_arcade_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_arcade_guiding",
+      "family": "cloisters",
+      "description": "Arcade cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_arcade_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_gallery_warm",
+      "family": "cloisters",
+      "description": "Gallery cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_gallery_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_gallery_triad",
+      "family": "cloisters",
+      "description": "Gallery cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_gallery_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_gallery_guiding",
+      "family": "cloisters",
+      "description": "Gallery cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_gallery_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_transept_warm",
+      "family": "cloisters",
+      "description": "Transept cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_transept_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_transept_triad",
+      "family": "cloisters",
+      "description": "Transept cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_transept_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_transept_guiding",
+      "family": "cloisters",
+      "description": "Transept cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_transept_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_quad_warm",
+      "family": "cloisters",
+      "description": "Quad cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_quad_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_quad_triad",
+      "family": "cloisters",
+      "description": "Quad cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_quad_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_quad_guiding",
+      "family": "cloisters",
+      "description": "Quad cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_quad_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_portico_warm",
+      "family": "cloisters",
+      "description": "Portico cloister rails frame a clean warm beam aisle.",
+      "directory": "cloisters/cloister_stack_portico_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_portico_triad",
+      "family": "cloisters",
+      "description": "Portico cloister rails frame a clean triad beam aisle.",
+      "directory": "cloisters/cloister_stack_portico_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_stack_portico_guiding",
+      "family": "cloisters",
+      "description": "Portico cloister rails frame a clean guiding beam aisle.",
+      "directory": "cloisters/cloister_stack_portico_guiding",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_passage_warm",
+      "family": "cloisters",
+      "description": "Passage splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_passage_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_passage_crest",
+      "family": "cloisters",
+      "description": "Passage splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_passage_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_passage_triad",
+      "family": "cloisters",
+      "description": "Passage splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_passage_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_apse_warm",
+      "family": "cloisters",
+      "description": "Apse splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_apse_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_apse_crest",
+      "family": "cloisters",
+      "description": "Apse splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_apse_crest",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_apse_triad",
+      "family": "cloisters",
+      "description": "Apse splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_apse_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_walk_warm",
+      "family": "cloisters",
+      "description": "Walk splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_walk_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_walk_crest",
+      "family": "cloisters",
+      "description": "Walk splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_walk_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_walk_triad",
+      "family": "cloisters",
+      "description": "Walk splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_walk_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_axis_warm",
+      "family": "cloisters",
+      "description": "Axis splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_axis_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_axis_crest",
+      "family": "cloisters",
+      "description": "Axis splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_axis_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_axis_triad",
+      "family": "cloisters",
+      "description": "Axis splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_axis_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_oratory_warm",
+      "family": "cloisters",
+      "description": "Oratory splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_oratory_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_oratory_crest",
+      "family": "cloisters",
+      "description": "Oratory splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_oratory_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_oratory_triad",
+      "family": "cloisters",
+      "description": "Oratory splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_oratory_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_court_warm",
+      "family": "cloisters",
+      "description": "Court splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_court_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_court_crest",
+      "family": "cloisters",
+      "description": "Court splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_court_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_court_triad",
+      "family": "cloisters",
+      "description": "Court splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_court_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_choir_warm",
+      "family": "cloisters",
+      "description": "Choir splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_choir_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_choir_crest",
+      "family": "cloisters",
+      "description": "Choir splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_choir_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_choir_triad",
+      "family": "cloisters",
+      "description": "Choir splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_choir_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_crossing_warm",
+      "family": "cloisters",
+      "description": "Crossing splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_crossing_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_crossing_crest",
+      "family": "cloisters",
+      "description": "Crossing splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_crossing_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "cloister_web_crossing_triad",
+      "family": "cloisters",
+      "description": "Crossing splitter aisles redirect warm and white light through a mirror cloister.",
+      "directory": "cloisters/cloister_web_crossing_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_louver_warm",
+      "family": "fins",
+      "description": "Louver mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_louver_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_louver_triad",
+      "family": "fins",
+      "description": "Louver mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_louver_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_louver_crest",
+      "family": "fins",
+      "description": "Louver mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_louver_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_wicket_warm",
+      "family": "fins",
+      "description": "Wicket mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_wicket_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_wicket_triad",
+      "family": "fins",
+      "description": "Wicket mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_wicket_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_wicket_crest",
+      "family": "fins",
+      "description": "Wicket mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_wicket_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_comb_warm",
+      "family": "fins",
+      "description": "Comb mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_comb_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_comb_triad",
+      "family": "fins",
+      "description": "Comb mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_comb_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_comb_crest",
+      "family": "fins",
+      "description": "Comb mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_comb_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_blind_warm",
+      "family": "fins",
+      "description": "Blind mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_blind_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_blind_triad",
+      "family": "fins",
+      "description": "Blind mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_blind_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_blind_crest",
+      "family": "fins",
+      "description": "Blind mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_blind_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_quill_warm",
+      "family": "fins",
+      "description": "Quill mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_quill_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_quill_triad",
+      "family": "fins",
+      "description": "Quill mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_quill_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_quill_crest",
+      "family": "fins",
+      "description": "Quill mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_quill_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bracket_warm",
+      "family": "fins",
+      "description": "Bracket mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_bracket_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bracket_triad",
+      "family": "fins",
+      "description": "Bracket mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_bracket_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bracket_crest",
+      "family": "fins",
+      "description": "Bracket mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_bracket_crest",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cascade_warm",
+      "family": "fins",
+      "description": "Cascade mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_cascade_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cascade_triad",
+      "family": "fins",
+      "description": "Cascade mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_cascade_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cascade_crest",
+      "family": "fins",
+      "description": "Cascade mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_cascade_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_fanline_warm",
+      "family": "fins",
+      "description": "Fanline mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_fanline_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_fanline_triad",
+      "family": "fins",
+      "description": "Fanline mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_fanline_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_fanline_crest",
+      "family": "fins",
+      "description": "Fanline mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_fanline_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_sash_warm",
+      "family": "fins",
+      "description": "Sash mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_sash_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_sash_triad",
+      "family": "fins",
+      "description": "Sash mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_sash_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_sash_crest",
+      "family": "fins",
+      "description": "Sash mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_sash_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cleft_warm",
+      "family": "fins",
+      "description": "Cleft mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_cleft_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cleft_triad",
+      "family": "fins",
+      "description": "Cleft mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_cleft_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_cleft_crest",
+      "family": "fins",
+      "description": "Cleft mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_cleft_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_arcade_warm",
+      "family": "fins",
+      "description": "Arcade mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_arcade_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_arcade_triad",
+      "family": "fins",
+      "description": "Arcade mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_arcade_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_arcade_crest",
+      "family": "fins",
+      "description": "Arcade mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_arcade_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_lantern_warm",
+      "family": "fins",
+      "description": "Lantern mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_lantern_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_lantern_triad",
+      "family": "fins",
+      "description": "Lantern mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_lantern_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_lantern_crest",
+      "family": "fins",
+      "description": "Lantern mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_lantern_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_portico_warm",
+      "family": "fins",
+      "description": "Portico mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_portico_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_portico_triad",
+      "family": "fins",
+      "description": "Portico mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_portico_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_portico_crest",
+      "family": "fins",
+      "description": "Portico mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_portico_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bastion_warm",
+      "family": "fins",
+      "description": "Bastion mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_bastion_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bastion_triad",
+      "family": "fins",
+      "description": "Bastion mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_bastion_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_bastion_crest",
+      "family": "fins",
+      "description": "Bastion mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_bastion_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_hush_warm",
+      "family": "fins",
+      "description": "Hush mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_hush_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_hush_triad",
+      "family": "fins",
+      "description": "Hush mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_hush_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_hush_crest",
+      "family": "fins",
+      "description": "Hush mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_hush_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_veil_warm",
+      "family": "fins",
+      "description": "Veil mirror fins sweep a clean warm beam field.",
+      "directory": "fins/fin_veil_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_veil_triad",
+      "family": "fins",
+      "description": "Veil mirror fins sweep a clean triad beam field.",
+      "directory": "fins/fin_veil_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "fin_veil_crest",
+      "family": "fins",
+      "description": "Veil mirror fins sweep a clean crest beam field.",
+      "directory": "fins/fin_veil_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_shutter_pair_dual",
+      "family": "gates",
+      "description": "Twin shutters breathe around a central slot. dual-side beams.",
+      "directory": "gates/gate_shutter_pair_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_shutter_pair_warm",
+      "family": "gates",
+      "description": "Twin shutters breathe around a central slot. warm-white beams.",
+      "directory": "gates/gate_shutter_pair_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_shutter_pair_triad",
+      "family": "gates",
+      "description": "Twin shutters breathe around a central slot. triad beams.",
+      "directory": "gates/gate_shutter_pair_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_pair_dual",
+      "family": "gates",
+      "description": "A narrow wicket opens on a bright side beam. dual-side beams.",
+      "directory": "gates/gate_wicket_pair_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_pair_warm",
+      "family": "gates",
+      "description": "A narrow wicket opens on a bright side beam. warm-white beams.",
+      "directory": "gates/gate_wicket_pair_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_pair_triad",
+      "family": "gates",
+      "description": "A narrow wicket opens on a bright side beam. triad beams.",
+      "directory": "gates/gate_wicket_pair_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_row_dual",
+      "family": "gates",
+      "description": "A low threshold row slides across the room. dual-side beams.",
+      "directory": "gates/gate_threshold_row_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_row_warm",
+      "family": "gates",
+      "description": "A low threshold row slides across the room. warm-white beams.",
+      "directory": "gates/gate_threshold_row_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_row_triad",
+      "family": "gates",
+      "description": "A low threshold row slides across the room. triad beams.",
+      "directory": "gates/gate_threshold_row_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_louver_stack_dual",
+      "family": "gates",
+      "description": "A louvered gate fans open under warm and white beams. dual-side beams.",
+      "directory": "gates/gate_louver_stack_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_louver_stack_warm",
+      "family": "gates",
+      "description": "A louvered gate fans open under warm and white beams. warm-white beams.",
+      "directory": "gates/gate_louver_stack_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_louver_stack_triad",
+      "family": "gates",
+      "description": "A louvered gate fans open under warm and white beams. triad beams.",
+      "directory": "gates/gate_louver_stack_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_gatefold_dual",
+      "family": "gates",
+      "description": "A folded gate keeps a clean central gap. dual-side beams.",
+      "directory": "gates/gate_gatefold_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_gatefold_warm",
+      "family": "gates",
+      "description": "A folded gate keeps a clean central gap. warm-white beams.",
+      "directory": "gates/gate_gatefold_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_gatefold_triad",
+      "family": "gates",
+      "description": "A folded gate keeps a clean central gap. triad beams.",
+      "directory": "gates/gate_gatefold_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_portcullis_dual",
+      "family": "gates",
+      "description": "A portcullis grid rises in a calm, readable lattice. dual-side beams.",
+      "directory": "gates/gate_portcullis_dual",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_portcullis_warm",
+      "family": "gates",
+      "description": "A portcullis grid rises in a calm, readable lattice. warm-white beams.",
+      "directory": "gates/gate_portcullis_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_portcullis_triad",
+      "family": "gates",
+      "description": "A portcullis grid rises in a calm, readable lattice. triad beams.",
+      "directory": "gates/gate_portcullis_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_aperture_gate_dual",
+      "family": "gates",
+      "description": "A ring of gate fins turns like an aperture. dual-side beams.",
+      "directory": "gates/gate_aperture_gate_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_aperture_gate_warm",
+      "family": "gates",
+      "description": "A ring of gate fins turns like an aperture. warm-white beams.",
+      "directory": "gates/gate_aperture_gate_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_aperture_gate_triad",
+      "family": "gates",
+      "description": "A ring of gate fins turns like an aperture. triad beams.",
+      "directory": "gates/gate_aperture_gate_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_blade_gate_dual",
+      "family": "gates",
+      "description": "A diagonal blade gate cuts the room with a clean opening. dual-side beams.",
+      "directory": "gates/gate_blade_gate_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_blade_gate_warm",
+      "family": "gates",
+      "description": "A diagonal blade gate cuts the room with a clean opening. warm-white beams.",
+      "directory": "gates/gate_blade_gate_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_blade_gate_triad",
+      "family": "gates",
+      "description": "A diagonal blade gate cuts the room with a clean opening. triad beams.",
+      "directory": "gates/gate_blade_gate_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_rosette_dual",
+      "family": "gates",
+      "description": "A rosette aperture turns like a clean iris. dual-side beams.",
+      "directory": "gates/gate_rosette_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_rosette_warm",
+      "family": "gates",
+      "description": "A rosette aperture turns like a clean iris. warm-white beams.",
+      "directory": "gates/gate_rosette_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_rosette_triad",
+      "family": "gates",
+      "description": "A rosette aperture turns like a clean iris. triad beams.",
+      "directory": "gates/gate_rosette_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_halo_dual",
+      "family": "gates",
+      "description": "A halo wheel breathes under the beam pair. dual-side beams.",
+      "directory": "gates/gate_halo_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_halo_warm",
+      "family": "gates",
+      "description": "A halo wheel breathes under the beam pair. warm-white beams.",
+      "directory": "gates/gate_halo_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_halo_triad",
+      "family": "gates",
+      "description": "A halo wheel breathes under the beam pair. triad beams.",
+      "directory": "gates/gate_halo_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_compass_dual",
+      "family": "gates",
+      "description": "A compass aperture keeps a bright axial cross. dual-side beams.",
+      "directory": "gates/gate_compass_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_compass_warm",
+      "family": "gates",
+      "description": "A compass aperture keeps a bright axial cross. warm-white beams.",
+      "directory": "gates/gate_compass_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_compass_triad",
+      "family": "gates",
+      "description": "A compass aperture keeps a bright axial cross. triad beams.",
+      "directory": "gates/gate_compass_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wreath_dual",
+      "family": "gates",
+      "description": "A wreath of spokes locks around a white center. dual-side beams.",
+      "directory": "gates/gate_wreath_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wreath_warm",
+      "family": "gates",
+      "description": "A wreath of spokes locks around a white center. warm-white beams.",
+      "directory": "gates/gate_wreath_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wreath_triad",
+      "family": "gates",
+      "description": "A wreath of spokes locks around a white center. triad beams.",
+      "directory": "gates/gate_wreath_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_sluice_stack_dual",
+      "family": "gates",
+      "description": "A stacked sluice gate keeps its rails narrow and bright. dual-side beams.",
+      "directory": "gates/gate_sluice_stack_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_sluice_stack_warm",
+      "family": "gates",
+      "description": "A stacked sluice gate keeps its rails narrow and bright. warm-white beams.",
+      "directory": "gates/gate_sluice_stack_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_sluice_stack_triad",
+      "family": "gates",
+      "description": "A stacked sluice gate keeps its rails narrow and bright. triad beams.",
+      "directory": "gates/gate_sluice_stack_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_rails_dual",
+      "family": "gates",
+      "description": "A wicket gate ripples between soft rails. dual-side beams.",
+      "directory": "gates/gate_wicket_rails_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_rails_warm",
+      "family": "gates",
+      "description": "A wicket gate ripples between soft rails. warm-white beams.",
+      "directory": "gates/gate_wicket_rails_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_wicket_rails_triad",
+      "family": "gates",
+      "description": "A wicket gate ripples between soft rails. triad beams.",
+      "directory": "gates/gate_wicket_rails_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_drawbridge_dual",
+      "family": "gates",
+      "description": "A drawbridge lane sweeps through a measured threshold. dual-side beams.",
+      "directory": "gates/gate_drawbridge_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_drawbridge_warm",
+      "family": "gates",
+      "description": "A drawbridge lane sweeps through a measured threshold. warm-white beams.",
+      "directory": "gates/gate_drawbridge_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_drawbridge_triad",
+      "family": "gates",
+      "description": "A drawbridge lane sweeps through a measured threshold. triad beams.",
+      "directory": "gates/gate_drawbridge_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_spine_dual",
+      "family": "gates",
+      "description": "A spine of threshold posts climbs the room center. dual-side beams.",
+      "directory": "gates/gate_threshold_spine_dual",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_spine_warm",
+      "family": "gates",
+      "description": "A spine of threshold posts climbs the room center. warm-white beams.",
+      "directory": "gates/gate_threshold_spine_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "gate_threshold_spine_triad",
+      "family": "gates",
+      "description": "A spine of threshold posts climbs the room center. triad beams.",
+      "directory": "gates/gate_threshold_spine_triad",
       "assets": [
         "frame_000.json"
       ],
@@ -2659,6 +5411,603 @@
       "family": "lenses",
       "description": "Airy ring window with warm-white pair.",
       "directory": "lenses/ring_window_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_petal",
+      "family": "mandalas",
+      "description": "Petal forms a rosette mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_rosette_petal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_bloom",
+      "family": "mandalas",
+      "description": "Bloom forms a rosette mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_rosette_bloom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_lace",
+      "family": "mandalas",
+      "description": "Lace forms a rosette mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_rosette_lace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_halo",
+      "family": "mandalas",
+      "description": "Halo forms a rosette mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_rosette_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_crest",
+      "family": "mandalas",
+      "description": "Crest forms a rosette mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_rosette_crest",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_rosette_medallion",
+      "family": "mandalas",
+      "description": "Medallion forms a rosette mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_rosette_medallion",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_aureole",
+      "family": "mandalas",
+      "description": "Aureole forms a halo mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_halo_aureole",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_corona",
+      "family": "mandalas",
+      "description": "Corona forms a halo mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_halo_corona",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_ringlet",
+      "family": "mandalas",
+      "description": "Ringlet forms a halo mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_halo_ringlet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_wreath",
+      "family": "mandalas",
+      "description": "Wreath forms a halo mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_halo_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_nimbus",
+      "family": "mandalas",
+      "description": "Nimbus forms a halo mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_halo_nimbus",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_halo_glow",
+      "family": "mandalas",
+      "description": "Glow forms a halo mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_halo_glow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_diadem",
+      "family": "mandalas",
+      "description": "Diadem forms a crown mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_crown_diadem",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_circlet",
+      "family": "mandalas",
+      "description": "Circlet forms a crown mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_crown_circlet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_tiara",
+      "family": "mandalas",
+      "description": "Tiara forms a crown mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_crown_tiara",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_coronet",
+      "family": "mandalas",
+      "description": "Coronet forms a crown mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_crown_coronet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_aureate",
+      "family": "mandalas",
+      "description": "Aureate forms a crown mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_crown_aureate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_crown_regalia",
+      "family": "mandalas",
+      "description": "Regalia forms a crown mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_crown_regalia",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_lattice",
+      "family": "mandalas",
+      "description": "Lattice forms a web mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_web_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_mesh",
+      "family": "mandalas",
+      "description": "Mesh forms a web mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_web_mesh",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_filigree",
+      "family": "mandalas",
+      "description": "Filigree forms a web mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_web_filigree",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_tracery",
+      "family": "mandalas",
+      "description": "Tracery forms a web mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_web_tracery",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_net",
+      "family": "mandalas",
+      "description": "Net forms a web mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_web_net",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_web_webwork",
+      "family": "mandalas",
+      "description": "Webwork forms a web mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_web_webwork",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_northstar",
+      "family": "mandalas",
+      "description": "Northstar forms a compass mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_compass_northstar",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_bearing",
+      "family": "mandalas",
+      "description": "Bearing forms a compass mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_compass_bearing",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_quadrant",
+      "family": "mandalas",
+      "description": "Quadrant forms a compass mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_compass_quadrant",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_radius",
+      "family": "mandalas",
+      "description": "Radius forms a compass mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_compass_radius",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_needle",
+      "family": "mandalas",
+      "description": "Needle forms a compass mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_compass_needle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_compass_cardinal",
+      "family": "mandalas",
+      "description": "Cardinal forms a compass mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_compass_cardinal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_blossom",
+      "family": "mandalas",
+      "description": "Blossom forms a bloom mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_bloom_blossom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_petal_ring",
+      "family": "mandalas",
+      "description": "Petal ring forms a bloom mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_bloom_petal_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_flare",
+      "family": "mandalas",
+      "description": "Flare forms a bloom mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_bloom_flare",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_seed",
+      "family": "mandalas",
+      "description": "Seed forms a bloom mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_bloom_seed",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_pollen",
+      "family": "mandalas",
+      "description": "Pollen forms a bloom mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_bloom_pollen",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_bloom_sprig",
+      "family": "mandalas",
+      "description": "Sprig forms a bloom mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_bloom_sprig",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_ring",
+      "family": "mandalas",
+      "description": "Ring forms a lattice mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_lattice_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_star",
+      "family": "mandalas",
+      "description": "Star forms a lattice mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_lattice_star",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_crown",
+      "family": "mandalas",
+      "description": "Crown forms a lattice mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_lattice_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_lace",
+      "family": "mandalas",
+      "description": "Lace forms a lattice mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_lattice_lace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_open",
+      "family": "mandalas",
+      "description": "Open forms a lattice mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_lattice_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_lattice_bright",
+      "family": "mandalas",
+      "description": "Bright forms a lattice mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_lattice_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_rosette",
+      "family": "mandalas",
+      "description": "Rosette forms a arc rosette mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_arc_rosette",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_halo",
+      "family": "mandalas",
+      "description": "Halo forms a arc halo mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_arc_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_crown",
+      "family": "mandalas",
+      "description": "Crown forms a arc crown mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_arc_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_wreath",
+      "family": "mandalas",
+      "description": "Wreath forms a arc wreath mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_arc_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_filigree",
+      "family": "mandalas",
+      "description": "Filigree forms a arc filigree mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_arc_filigree",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_arc_bloom",
+      "family": "mandalas",
+      "description": "Bloom forms a arc bloom mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_arc_bloom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_rosette",
+      "family": "mandalas",
+      "description": "Rosette forms a prism rosette mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_prism_rosette",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_halo",
+      "family": "mandalas",
+      "description": "Halo forms a prism halo mandala under balanced warm and white side beams.",
+      "directory": "mandalas/mandala_prism_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_crown",
+      "family": "mandalas",
+      "description": "Crown forms a prism crown mandala under a warm-white triad of beams.",
+      "directory": "mandalas/mandala_prism_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_wreath",
+      "family": "mandalas",
+      "description": "Wreath forms a prism wreath mandala under crossing warm and white beams.",
+      "directory": "mandalas/mandala_prism_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_compass",
+      "family": "mandalas",
+      "description": "Compass forms a prism compass mandala under a warm side beam and a soft top support beam.",
+      "directory": "mandalas/mandala_prism_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mandala_prism_bloom",
+      "family": "mandalas",
+      "description": "Bloom forms a prism bloom mandala under paired warm and white beams.",
+      "directory": "mandalas/mandala_prism_bloom",
       "assets": [
         "frame_000.json"
       ],
@@ -5639,6 +8988,625 @@
       "max_overrun": 0.0
     },
     {
+      "name": "spine_axis_pillar",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under warm-white beams.",
+      "directory": "spines/spine_axis_pillar",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_vertebra",
+      "family": "spines",
+      "description": "Stacked spine columns with biconvex nodes and mixed rails under triad beams.",
+      "directory": "spines/spine_axis_vertebra",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_core",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mirror rails under dual-side beams.",
+      "directory": "spines/spine_axis_core",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_lattice",
+      "family": "spines",
+      "description": "Zigzagged spine columns with plano nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_axis_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_mast",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_axis_mast",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_rivet",
+      "family": "spines",
+      "description": "Swaying spine columns with round nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_axis_rivet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_beam",
+      "family": "spines",
+      "description": "Stacked spine columns with focus nodes and mirror rails under top beam.",
+      "directory": "spines/spine_axis_beam",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_axis_spindle",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and soft mirror rails under warm-white beams.",
+      "directory": "spines/spine_axis_spindle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_pair",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under dual-side beams.",
+      "directory": "spines/spine_column_pair",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_gate",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under warm-white beams.",
+      "directory": "spines/spine_column_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_rib",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_column_rib",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_sleeve",
+      "family": "spines",
+      "description": "Stacked spine columns with round nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_column_sleeve",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_rail",
+      "family": "spines",
+      "description": "Swaying spine columns with plano nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_column_rail",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_joint",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_column_joint",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_narrow",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under left beam.",
+      "directory": "spines/spine_column_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_column_clear",
+      "family": "spines",
+      "description": "Swaying spine columns with biconvex nodes and splitter rails under warm-white beams.",
+      "directory": "spines/spine_column_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_span",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under dual-side beams.",
+      "directory": "spines/spine_bridge_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_arch",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under warm-white beams.",
+      "directory": "spines/spine_bridge_arch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_brace",
+      "family": "spines",
+      "description": "Swaying spine columns with round nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_bridge_brace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_cross",
+      "family": "spines",
+      "description": "Stacked spine columns with plano nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_bridge_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_hinge",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_bridge_hinge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_frame",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_bridge_frame",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_latch",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under warm-white beams.",
+      "directory": "spines/spine_bridge_latch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_bridge_beamline",
+      "family": "spines",
+      "description": "Zigzagged spine columns with round nodes and mirror rails under top beam.",
+      "directory": "spines/spine_bridge_beamline",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_crest",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_triple_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_cable",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under warm-white beams.",
+      "directory": "spines/spine_triple_cable",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_joints",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and splitter rails under dual-side beams.",
+      "directory": "spines/spine_triple_joints",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_ladder",
+      "family": "spines",
+      "description": "Stacked spine columns with round nodes and soft mirror rails under left-plus-top beams.",
+      "directory": "spines/spine_triple_ladder",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_braid",
+      "family": "spines",
+      "description": "Swaying spine columns with plano nodes and mirror rails under exchange beams.",
+      "directory": "spines/spine_triple_braid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_hinged",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_triple_hinged",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_channel",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under warm-white beams.",
+      "directory": "spines/spine_triple_channel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_triple_suture",
+      "family": "spines",
+      "description": "Swaying spine columns with biconvex nodes and mirror rails under top beam.",
+      "directory": "spines/spine_triple_suture",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_sacrum",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under warm-white beams.",
+      "directory": "spines/spine_stack_sacrum",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_cervix",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under dual-side beams.",
+      "directory": "spines/spine_stack_cervix",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_thorax",
+      "family": "spines",
+      "description": "Swaying spine columns with biconvex nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_stack_thorax",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_lumbar",
+      "family": "spines",
+      "description": "Stacked spine columns with round nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_stack_lumbar",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_neck",
+      "family": "spines",
+      "description": "Zigzagged spine columns with plano nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_stack_neck",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_atlas",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_stack_atlas",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_axis",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under top beam.",
+      "directory": "spines/spine_stack_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_stack_spine",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and mirror rails under warm-white beams.",
+      "directory": "spines/spine_stack_spine",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_rung",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under dual-side beams.",
+      "directory": "spines/spine_ladder_rung",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_rail",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under warm-white beams.",
+      "directory": "spines/spine_ladder_rail",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_brace",
+      "family": "spines",
+      "description": "Swaying spine columns with round nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_ladder_brace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_climb",
+      "family": "spines",
+      "description": "Stacked spine columns with plano nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_ladder_climb",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_step",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_ladder_step",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_rise",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_ladder_rise",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_span",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under warm-white beams.",
+      "directory": "spines/spine_ladder_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_ladder_quiet",
+      "family": "spines",
+      "description": "Zigzagged spine columns with round nodes and mirror rails under top beam.",
+      "directory": "spines/spine_ladder_quiet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_tilt",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and mirror rails under warm-white beams.",
+      "directory": "spines/spine_slope_tilt",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_drift",
+      "family": "spines",
+      "description": "Swaying spine columns with focus nodes and mixed rails under dual-side beams.",
+      "directory": "spines/spine_slope_drift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_lean",
+      "family": "spines",
+      "description": "Zigzagged spine columns with biconvex nodes and splitter rails under left-plus-top beams.",
+      "directory": "spines/spine_slope_lean",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_hinge",
+      "family": "spines",
+      "description": "Stacked spine columns with round nodes and soft mirror rails under exchange beams.",
+      "directory": "spines/spine_slope_hinge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_arc",
+      "family": "spines",
+      "description": "Swaying spine columns with plano nodes and mirror rails under triad beams.",
+      "directory": "spines/spine_slope_arc",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_rise",
+      "family": "spines",
+      "description": "Zigzagged spine columns with focus nodes and mixed rails under trident beams.",
+      "directory": "spines/spine_slope_rise",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_slant",
+      "family": "spines",
+      "description": "Stacked spine columns with prism nodes and soft mirror rails under warm-white beams.",
+      "directory": "spines/spine_slope_slant",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "spine_slope_edge",
+      "family": "spines",
+      "description": "Swaying spine columns with biconvex nodes and mirror rails under top beam.",
+      "directory": "spines/spine_slope_edge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
       "name": "splitter_hallway",
       "family": "splitters",
       "description": "A long corridor split by a centered warm-white beam.",
@@ -6402,6 +10370,1514 @@
       "family": "splitters",
       "description": "An overpass web leaves a clean underbeam lane.",
       "directory": "splitters/splitter_overpass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lattice_span",
+      "family": "trusses",
+      "description": "A compact lattice span stays bright under warm-white light.",
+      "directory": "trusses/truss_lattice_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lattice_bay",
+      "family": "trusses",
+      "description": "A wider lattice bay keeps the bridge path easy to read.",
+      "directory": "trusses/truss_lattice_bay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_trellis_wall",
+      "family": "trusses",
+      "description": "A trellis wall of fins opens toward a left-top support beam.",
+      "directory": "trusses/truss_trellis_wall",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_brace_run",
+      "family": "trusses",
+      "description": "A straight brace run crosses the room with a clean exchange.",
+      "directory": "trusses/truss_brace_run",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_brace_reverse",
+      "family": "trusses",
+      "description": "A reverse brace run mirrors the same path with warm-white light.",
+      "directory": "trusses/truss_brace_reverse",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_overpass_frame",
+      "family": "trusses",
+      "description": "A diagonal overpass frame keeps the structural read simple.",
+      "directory": "trusses/truss_overpass_frame",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_cantilever_pair",
+      "family": "trusses",
+      "description": "A cantilever pair hangs from a bright left-side beam.",
+      "directory": "trusses/truss_cantilever_pair",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_viaduct_span",
+      "family": "trusses",
+      "description": "A three-by-three viaduct grid keeps the center open and bright.",
+      "directory": "trusses/truss_viaduct_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_arched_span",
+      "family": "trusses",
+      "description": "An arched span keeps the warm beam moving through a clear vault.",
+      "directory": "trusses/truss_arched_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lintel",
+      "family": "trusses",
+      "description": "A lintel line reads like a simple structural beam path.",
+      "directory": "trusses/truss_lintel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_purlin_bay",
+      "family": "trusses",
+      "description": "A purlin bay stacks structure without crowding the room.",
+      "directory": "trusses/truss_purlin_bay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_crossbrace",
+      "family": "trusses",
+      "description": "A cross-braced span stays legible under a left-top wash.",
+      "directory": "trusses/truss_crossbrace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_hatchwork",
+      "family": "trusses",
+      "description": "A hatchwork of fins keeps the bridge rhythm restrained.",
+      "directory": "trusses/truss_hatchwork",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_skybridge",
+      "family": "trusses",
+      "description": "A skybridge line opens a clean path between both side beams.",
+      "directory": "trusses/truss_skybridge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_rampart",
+      "family": "trusses",
+      "description": "A rampart of fins protects a bright central beam path.",
+      "directory": "trusses/truss_rampart",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_switchback",
+      "family": "trusses",
+      "description": "A switchback arch keeps the structure airy and readable.",
+      "directory": "trusses/truss_switchback",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_gate_overpass",
+      "family": "trusses",
+      "description": "A gate-like overpass leaves a clear lane under warm-white light.",
+      "directory": "trusses/truss_gate_overpass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_threshold_web",
+      "family": "trusses",
+      "description": "A threshold web keeps both sides in balance.",
+      "directory": "trusses/truss_threshold_web",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_underpass",
+      "family": "trusses",
+      "description": "An underpass web opens the center while a top beam skims above.",
+      "directory": "trusses/truss_underpass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_causeway",
+      "family": "trusses",
+      "description": "A causeway web stays bright with a triad of structural beams.",
+      "directory": "trusses/truss_causeway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_trestle",
+      "family": "trusses",
+      "description": "A trestle web keeps the centerline open and low-clutter.",
+      "directory": "trusses/truss_trestle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_crib",
+      "family": "trusses",
+      "description": "A crib-like frame catches a side beam without crowding the room.",
+      "directory": "trusses/truss_crib",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lintel_crossing",
+      "family": "trusses",
+      "description": "A lintel crossing keeps the structural geometry crisp.",
+      "directory": "trusses/truss_lintel_crossing",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_pierwork",
+      "family": "trusses",
+      "description": "Pierwork splitters keep the beam path narrow and legible.",
+      "directory": "trusses/truss_pierwork",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_bastion",
+      "family": "trusses",
+      "description": "A bastion web anchors the bright central path.",
+      "directory": "trusses/truss_bastion",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_ramp",
+      "family": "trusses",
+      "description": "A shallow ramp keeps the crossing easy to read.",
+      "directory": "trusses/truss_ramp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_quay",
+      "family": "trusses",
+      "description": "A quay web holds the beam corridor open on both sides.",
+      "directory": "trusses/truss_quay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_sluice",
+      "family": "trusses",
+      "description": "A sluice-like gate channels the warm beam through a clean slot.",
+      "directory": "trusses/truss_sluice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_overbridge",
+      "family": "trusses",
+      "description": "An overbridge web leaves a readable underbeam passage.",
+      "directory": "trusses/truss_overbridge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_keelway",
+      "family": "trusses",
+      "description": "A keelway web stays bright under a centered warm beam.",
+      "directory": "trusses/truss_keelway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_nave_grid",
+      "family": "trusses",
+      "description": "A nave grid feels like a structural aisle in a mirror room.",
+      "directory": "trusses/truss_nave_grid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_flyover",
+      "family": "trusses",
+      "description": "A flyover web keeps the crossing path light and balanced.",
+      "directory": "trusses/truss_flyover",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_cable_run",
+      "family": "trusses",
+      "description": "A cable run braids through a structural truss lane.",
+      "directory": "trusses/truss_cable_run",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_tieback",
+      "family": "trusses",
+      "description": "A tieback pair keeps the beam path taut and bright.",
+      "directory": "trusses/truss_tieback",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_spanline",
+      "family": "trusses",
+      "description": "A spanline of ribbons stays clean between both walls.",
+      "directory": "trusses/truss_spanline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_bridle",
+      "family": "trusses",
+      "description": "A bridle-like ribbon pair keeps the center lane open.",
+      "directory": "trusses/truss_bridle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lacebridge",
+      "family": "trusses",
+      "description": "A lace bridge of ribbons holds warm and white light in balance.",
+      "directory": "trusses/truss_lacebridge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_harness",
+      "family": "trusses",
+      "description": "A harness of five ribbons keeps the structural read open.",
+      "directory": "trusses/truss_harness",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_overhang",
+      "family": "trusses",
+      "description": "An overhang ribbon set leaves a clean beam corridor below.",
+      "directory": "trusses/truss_overhang",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_chainway",
+      "family": "trusses",
+      "description": "A chainway of ribbons stays compact and easy to parse.",
+      "directory": "trusses/truss_chainway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_parapet",
+      "family": "trusses",
+      "description": "A parapet ribbon pair keeps the warm beam centered.",
+      "directory": "trusses/truss_parapet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_lattice_ribbon",
+      "family": "trusses",
+      "description": "A lattice ribbon stack feels like a light truss diagram.",
+      "directory": "trusses/truss_lattice_ribbon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_bridge_tape",
+      "family": "trusses",
+      "description": "A bridge of ribbons stays low and clear under side light.",
+      "directory": "trusses/truss_bridge_tape",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_suspension",
+      "family": "trusses",
+      "description": "A suspension ribbon stack keeps both beams in play.",
+      "directory": "trusses/truss_suspension",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_girdle",
+      "family": "trusses",
+      "description": "A girdle of ribbons tightens the room into a clean frame.",
+      "directory": "trusses/truss_girdle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_stayline",
+      "family": "trusses",
+      "description": "A stayline of ribbons stays bright under paired beams.",
+      "directory": "trusses/truss_stayline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_trellis_ribbon",
+      "family": "trusses",
+      "description": "A trellis ribbon frame reads like a clean structural sketch.",
+      "directory": "trusses/truss_trellis_ribbon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "truss_overlace",
+      "family": "trusses",
+      "description": "An overlace of ribbons crosses a bright truss corridor.",
+      "directory": "trusses/truss_overlace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_nave_warm",
+      "family": "vaults",
+      "description": "Nave vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_nave_warm",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_nave_crown",
+      "family": "vaults",
+      "description": "Nave vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_nave_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_bay_warm",
+      "family": "vaults",
+      "description": "Bay vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_bay_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_bay_crown",
+      "family": "vaults",
+      "description": "Bay vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_bay_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_apse_warm",
+      "family": "vaults",
+      "description": "Apse vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_apse_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_apse_crown",
+      "family": "vaults",
+      "description": "Apse vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_apse_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_transept_warm",
+      "family": "vaults",
+      "description": "Transept vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_transept_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_transept_crown",
+      "family": "vaults",
+      "description": "Transept vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_transept_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_clerestory_warm",
+      "family": "vaults",
+      "description": "Clerestory vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_clerestory_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_clerestory_crown",
+      "family": "vaults",
+      "description": "Clerestory vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_clerestory_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_ribbed_warm",
+      "family": "vaults",
+      "description": "Ribbed vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_ribbed_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_ribbed_crown",
+      "family": "vaults",
+      "description": "Ribbed vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_ribbed_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_lantern_warm",
+      "family": "vaults",
+      "description": "Lantern vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_lantern_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_lantern_crown",
+      "family": "vaults",
+      "description": "Lantern vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_lantern_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_oculus_warm",
+      "family": "vaults",
+      "description": "Oculus vaulted arcs gather a clean warm beam relay.",
+      "directory": "vaults/vault_arc_oculus_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_arc_oculus_crown",
+      "family": "vaults",
+      "description": "Oculus vaulted arcs gather a clean crown beam relay.",
+      "directory": "vaults/vault_arc_oculus_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_arcade_warm",
+      "family": "vaults",
+      "description": "Arcade vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_arcade_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_arcade_triad",
+      "family": "vaults",
+      "description": "Arcade vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_arcade_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_buttress_warm",
+      "family": "vaults",
+      "description": "Buttress vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_buttress_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_buttress_triad",
+      "family": "vaults",
+      "description": "Buttress vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_buttress_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_coffer_warm",
+      "family": "vaults",
+      "description": "Coffer vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_coffer_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_coffer_triad",
+      "family": "vaults",
+      "description": "Coffer vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_coffer_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_ribway_warm",
+      "family": "vaults",
+      "description": "Ribway vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_ribway_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_ribway_triad",
+      "family": "vaults",
+      "description": "Ribway vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_ribway_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_cleric_warm",
+      "family": "vaults",
+      "description": "Cleric vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_cleric_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_cleric_triad",
+      "family": "vaults",
+      "description": "Cleric vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_cleric_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_span_warm",
+      "family": "vaults",
+      "description": "Span vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_span_warm",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_span_triad",
+      "family": "vaults",
+      "description": "Span vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_span_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_portal_warm",
+      "family": "vaults",
+      "description": "Portal vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_portal_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_portal_triad",
+      "family": "vaults",
+      "description": "Portal vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_portal_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_vaultline_warm",
+      "family": "vaults",
+      "description": "Vaultline vault ribs open under a bright warm beam field.",
+      "directory": "vaults/vault_fin_vaultline_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_fin_vaultline_triad",
+      "family": "vaults",
+      "description": "Vaultline vault ribs open under a bright triad beam field.",
+      "directory": "vaults/vault_fin_vaultline_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_cupola_warm",
+      "family": "vaults",
+      "description": "Cupola radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_cupola_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_cupola_triad",
+      "family": "vaults",
+      "description": "Cupola radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_cupola_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_dome_warm",
+      "family": "vaults",
+      "description": "Dome radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_dome_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_dome_triad",
+      "family": "vaults",
+      "description": "Dome radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_dome_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_rose_warm",
+      "family": "vaults",
+      "description": "Rose radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_rose_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_rose_triad",
+      "family": "vaults",
+      "description": "Rose radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_rose_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_rotunda_warm",
+      "family": "vaults",
+      "description": "Rotunda radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_rotunda_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_rotunda_triad",
+      "family": "vaults",
+      "description": "Rotunda radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_rotunda_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_halo_warm",
+      "family": "vaults",
+      "description": "Halo radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_halo_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_halo_triad",
+      "family": "vaults",
+      "description": "Halo radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_halo_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_ciborium_warm",
+      "family": "vaults",
+      "description": "Ciborium radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_ciborium_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_ciborium_triad",
+      "family": "vaults",
+      "description": "Ciborium radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_ciborium_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_lanthorn_warm",
+      "family": "vaults",
+      "description": "Lanthorn radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_lanthorn_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_lanthorn_triad",
+      "family": "vaults",
+      "description": "Lanthorn radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_lanthorn_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_crownwell_warm",
+      "family": "vaults",
+      "description": "Crownwell radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_crownwell_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "vault_spoke_crownwell_triad",
+      "family": "vaults",
+      "description": "Crownwell radial ribs crown a vaulted mirror room.",
+      "directory": "vaults/vault_spoke_crownwell_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_open",
+      "family": "wells",
+      "description": "Open well core with warm-white pair.",
+      "directory": "wells/well_core_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_bright",
+      "family": "wells",
+      "description": "Bright well core with dual-side beams.",
+      "directory": "wells/well_core_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_calm",
+      "family": "wells",
+      "description": "Calm well core with exchange beams.",
+      "directory": "wells/well_core_calm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_lifted",
+      "family": "wells",
+      "description": "Lifted well core with left-plus-top beams.",
+      "directory": "wells/well_core_lifted",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_clear",
+      "family": "wells",
+      "description": "Clear well core with triad beams.",
+      "directory": "wells/well_core_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_amber",
+      "family": "wells",
+      "description": "Amber well core with warm-white pair.",
+      "directory": "wells/well_core_amber",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_white",
+      "family": "wells",
+      "description": "White well core with dual-side beams.",
+      "directory": "wells/well_core_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_core_narrow",
+      "family": "wells",
+      "description": "Narrow well core with left beam.",
+      "directory": "wells/well_core_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_ring",
+      "family": "wells",
+      "description": "Ring well collar with warm-white pair.",
+      "directory": "wells/well_collar_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_brace",
+      "family": "wells",
+      "description": "Brace well collar with dual-side beams.",
+      "directory": "wells/well_collar_brace",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_halo",
+      "family": "wells",
+      "description": "Halo well collar with triad beams.",
+      "directory": "wells/well_collar_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_crown",
+      "family": "wells",
+      "description": "Crown well collar with left-plus-top beams.",
+      "directory": "wells/well_collar_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_rim",
+      "family": "wells",
+      "description": "Rim well collar with exchange beams.",
+      "directory": "wells/well_collar_rim",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_shell",
+      "family": "wells",
+      "description": "Shell well collar with warm-white pair.",
+      "directory": "wells/well_collar_shell",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_arc",
+      "family": "wells",
+      "description": "Arc well collar with dual-side beams.",
+      "directory": "wells/well_collar_arc",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_collar_veil",
+      "family": "wells",
+      "description": "Veil well collar with left-plus-top beams.",
+      "directory": "wells/well_collar_veil",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_column",
+      "family": "wells",
+      "description": "Column well spine with warm-white pair.",
+      "directory": "wells/well_spine_column",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_axis",
+      "family": "wells",
+      "description": "Axis well spine with dual-side beams.",
+      "directory": "wells/well_spine_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_stack",
+      "family": "wells",
+      "description": "Stack well spine with triad beams.",
+      "directory": "wells/well_spine_stack",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_lattice",
+      "family": "wells",
+      "description": "Lattice well spine with exchange beams.",
+      "directory": "wells/well_spine_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_rail",
+      "family": "wells",
+      "description": "Rail well spine with left-plus-top beams.",
+      "directory": "wells/well_spine_rail",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_keel",
+      "family": "wells",
+      "description": "Keel well spine with warm-white pair.",
+      "directory": "wells/well_spine_keel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_needle",
+      "family": "wells",
+      "description": "Needle well spine with dual-side beams.",
+      "directory": "wells/well_spine_needle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_spine_spoke",
+      "family": "wells",
+      "description": "Spoke well spine with left beam.",
+      "directory": "wells/well_spine_spoke",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_iris",
+      "family": "wells",
+      "description": "Iris well aperture with triad beams.",
+      "directory": "wells/well_aperture_iris",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_slit",
+      "family": "wells",
+      "description": "Slit well aperture with left-plus-top beams.",
+      "directory": "wells/well_aperture_slit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_gate",
+      "family": "wells",
+      "description": "Gate well aperture with warm-white pair.",
+      "directory": "wells/well_aperture_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_wicket",
+      "family": "wells",
+      "description": "Wicket well aperture with exchange beams.",
+      "directory": "wells/well_aperture_wicket",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_threshold",
+      "family": "wells",
+      "description": "Threshold well aperture with dual-side beams.",
+      "directory": "wells/well_aperture_threshold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_passage",
+      "family": "wells",
+      "description": "Passage well aperture with warm-white pair.",
+      "directory": "wells/well_aperture_passage",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_window",
+      "family": "wells",
+      "description": "Window well aperture with left-plus-top beams.",
+      "directory": "wells/well_aperture_window",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_aperture_notch",
+      "family": "wells",
+      "description": "Notch well aperture with triad beams.",
+      "directory": "wells/well_aperture_notch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_rim_crown",
+      "family": "wells",
+      "description": "Crown well rim with warm-white pair.",
+      "directory": "wells/well_rim_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_rim_gate",
+      "family": "wells",
+      "description": "Gate well rim with dual-side beams.",
+      "directory": "wells/well_rim_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_rim_halo",
+      "family": "wells",
+      "description": "Halo well rim with triad beams.",
+      "directory": "wells/well_rim_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_rim_shell",
+      "family": "wells",
+      "description": "Shell well rim with left-plus-top beams.",
+      "directory": "wells/well_rim_shell",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_window_ring",
+      "family": "wells",
+      "description": "Ring well window with warm-white pair.",
+      "directory": "wells/well_window_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_window_diamond",
+      "family": "wells",
+      "description": "Diamond well window with dual-side beams.",
+      "directory": "wells/well_window_diamond",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_window_grid",
+      "family": "wells",
+      "description": "Grid well window with triad beams.",
+      "directory": "wells/well_window_grid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "well_window_stair",
+      "family": "wells",
+      "description": "Stair well window with left-plus-top beams.",
+      "directory": "wells/well_window_stair",
       "assets": [
         "frame_000.json"
       ],

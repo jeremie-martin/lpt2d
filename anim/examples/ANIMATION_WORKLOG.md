@@ -18,6 +18,8 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
 
 - `_clean_room_shared.py`
   Shared example-only utilities: room/material constants, tuning, bounds audit, rendering/export helpers.
+- `_clean_room_factories.py`
+  Reusable scene-construction helpers for large family waves, including arc, prism, ribbon, fin, spoke, and beacon patterns.
 - `_clean_room_registry.py`
   Batch registry for clean-room examples.
 - `clean_room_families/`
@@ -100,9 +102,12 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
 
 ## Library Expansion Notes
 
-- The library now sits at `572` registry scenes across `10` families:
-  `arcs`, `crossfires`, `hybrids`, `lenses`, `mirrors`, `orbits`, `prisms`, `ribbons`, `rotors`, and `splitters`.
-- Preview defaults were raised slightly to `560x315` so promoted previews stay a bit cleaner without making the bulk pipeline too expensive.
+- The library now sits at `1,064` registry scenes across `20` families:
+  `arcs`, `beacons`, `canopies`, `cloisters`, `crossfires`, `fins`, `gates`, `hybrids`, `lenses`, `mandalas`, `mirrors`, `orbits`, `prisms`, `ribbons`, `rotors`, `spines`, `splitters`, `trusses`, `vaults`, and `wells`.
+- Preview defaults were raised slightly to `640x360` so promoted previews stay cleaner without turning the promotion pass into an HQ-only workflow.
+- The large-wave expansion is now driven by reusable pattern helpers rather than only by top-level one-off scene files.
+- The newest structural helpers that paid off are:
+  `make_fin_array_spec`, `make_spoke_array_spec`, and `make_beacon_stack_spec`.
 - The current canonical render tree is family-based under `renders/clean_room/<family>/<scene>/`.
 - Full-library baseline assets are now:
   `frame_000.json`, `manifest.json`, and `library_audit*.json`.
@@ -114,7 +119,19 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
 - `lens_family` was the main clipping hotspot; layout-aware exposure trims brought it down materially, but it still runs hotter than the rest of the library.
 - A mild family-wide lift helped `splitter_family` and `prism_family` avoid the dimmest tails without causing a new clipping spike.
 - `ribbon_family` remains acceptable overall, but some `left` and `exchange` motifs still read moodier than the house preference.
+- In the third-wave structural families, `mandalas` and `wells` currently give the cleanest brightness/clipping balance, while `beacons`, `fins`, and `vaults` still run hotter in their triad-heavy variants.
+- `make_beacon_stack_spec` initially spaced rows too tall for the largest lens nodes; tightening the row span and rail height fixed the whole beacon/spine cluster in one place.
+- Targeted scene-side bounds trims were needed for `gate_threshold_spine_*` and `mandala_lattice_open`.
 - For mirror-room work, clipping diagnostics are still harsher than the artistic target; the current numeric thresholds are useful for ranking outliers but not as absolute accept/reject gates.
+
+## Promotion Notes
+
+- New-wave scenes promoted to rendered sheet/preview status in the current pass:
+  `beacon_rampart_warm`, `canopy_fin_awning_crest`, `canopy_spoke_spray_crest`, `cloister_web_apse_crest`, `fin_bracket_crest`, `gate_portcullis_dual`, `mandala_rosette_crest`, `spine_bridge_beamline`, `truss_bastion`, `vault_arc_nave_warm`, `vault_fin_span_warm`, and `well_aperture_window`.
+- Families that are currently strongest for clean readable expansion work:
+  `mandalas`, `wells`, `canopies`, and `trusses`.
+- Families that likely need another brightness/clipping pass before broad promotion:
+  `beacons`, `fins`, `vaults`, and the hotter `spines` variants.
 
 ## Scaling Direction
 

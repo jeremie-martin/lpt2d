@@ -1,4 +1,4 @@
-"""Factory helpers for the second wave of clean-room animations."""
+"""Factory helpers for scalable clean-room animation families."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from anim.examples._clean_room_shared import (
     blade,
     fill_group,
     frame_for,
+    polar,
     room_group,
     tau,
 )
@@ -589,6 +590,264 @@ def make_splitter_web_spec(
         )
         if support_fill > 0.0:
             groups.append(fill_group("fill", -0.8, intensity=support_fill, width=1.04))
+        return frame_for(groups)
+
+    return SceneSpec(
+        name=name,
+        duration=6.0,
+        build=build,
+        base_exposure=base_exposure,
+        description=description,
+    )
+
+
+def _node_shapes(kind: str, index: int):
+    material = GLASS_CYCLE[index % len(GLASS_CYCLE)]
+    if kind == "prism":
+        return regular_polygon(
+            center=(0.0, 0.0),
+            radius=0.11,
+            n=3,
+            material=material,
+            rotation=math.pi / 2,
+        )
+    if kind == "ball":
+        return ball_lens((0.0, 0.0), 0.09, material)
+    if kind == "focus":
+        return ball_lens((0.0, 0.0), 0.08, GLASS_FOCUS)
+    if kind == "biconvex":
+        return _lens_shapes("biconvex", material)
+    if kind == "plano":
+        return _lens_shapes("plano", material)
+    return []
+
+
+def _segment_material(kind: str, index: int):
+    if kind == "splitter":
+        return SPLITTER
+    if kind == "soft":
+        return SOFT_MIRROR
+    if kind == "mixed":
+        return SPLITTER if index % 3 == 1 else FACET_MIRROR
+    return FACET_MIRROR
+
+
+def make_fin_array_spec(
+    name: str,
+    description: str,
+    *,
+    centers: Sequence[tuple[float, float]],
+    beam_layout: str,
+    base_exposure: float,
+    base_angle: float = math.pi * 0.5,
+    fin_length: float = 0.62,
+    swing: float = 0.26,
+    material_kind: str = "mirror",
+    core_kind: str = "prism",
+    support_fill: float = 0.0,
+) -> SceneSpec:
+    def build(ctx: FrameContext) -> Frame:
+        phase = tau(ctx.progress)
+        groups = [room_group()]
+
+        for index, center in enumerate(centers):
+            cx, cy = _wobble(phase, center, ax=0.035, ay=0.04, rate=0.72, offset=index * 0.5)
+            length = fin_length * (0.94 + 0.08 * math.sin(phase + index * 0.6))
+            groups.append(
+                Group(
+                    name=f"fin_{index}",
+                    transform=Transform2D.uniform(
+                        translate=(cx, cy),
+                        rotate=base_angle
+                        + (-1.0 if index % 2 else 1.0) * swing * math.sin(phase + index * 0.55),
+                    ),
+                    shapes=[
+                        Segment(
+                            a=[-0.5 * length, 0.0],
+                            b=[0.5 * length, 0.0],
+                            material=_segment_material(material_kind, index),
+                        )
+                    ],
+                )
+            )
+
+        if core_kind != "none":
+            groups.append(Group(name="core", shapes=_node_shapes(core_kind, len(centers))))
+
+        avg_x = sum(center[0] for center in centers) / max(len(centers), 1)
+        avg_y = sum(center[1] for center in centers) / max(len(centers), 1)
+        groups.extend(
+            _beam_stack(
+                phase,
+                layout=beam_layout,
+                warm_target=(0.18 * avg_x, 0.12 * avg_y),
+                white_target=(-0.16 * avg_x, -0.1 * avg_y),
+                top_target=(0.0, min(0.1, avg_y - 0.06)),
+                bottom_target=(0.0, max(-0.1, avg_y + 0.06)),
+            )
+        )
+        if support_fill > 0.0:
+            groups.append(fill_group("fill", -0.8, intensity=support_fill, width=1.08))
+        return frame_for(groups)
+
+    return SceneSpec(
+        name=name,
+        duration=6.0,
+        build=build,
+        base_exposure=base_exposure,
+        description=description,
+    )
+
+
+def make_spoke_array_spec(
+    name: str,
+    description: str,
+    *,
+    count: int,
+    radius_inner: float,
+    radius_outer: float,
+    beam_layout: str,
+    base_exposure: float,
+    segment_kind: str = "mixed",
+    node_kind: str = "prism",
+    twist: float = 0.22,
+    support_fill: float = 0.0,
+) -> SceneSpec:
+    def build(ctx: FrameContext) -> Frame:
+        phase = tau(ctx.progress)
+        groups = [room_group()]
+
+        for index in range(count):
+            angle = index * math.tau / count + twist * math.sin(phase + index * 0.48)
+            inner = polar(radius_inner + 0.02 * math.sin(phase + index * 0.7), angle)
+            outer = polar(radius_outer + 0.04 * math.sin(phase + index * 0.6 + 0.4), angle)
+            groups.append(
+                Group(
+                    name=f"spoke_{index}",
+                    shapes=[
+                        Segment(
+                            a=[inner[0], inner[1]],
+                            b=[outer[0], outer[1]],
+                            material=_segment_material(segment_kind, index),
+                        )
+                    ],
+                )
+            )
+            if node_kind != "none":
+                groups.append(
+                    Group(
+                        name=f"node_{index}",
+                        transform=Transform2D.uniform(
+                            translate=outer,
+                            rotate=angle + 0.18 * math.sin(phase + index * 0.3),
+                            scale=0.96 + 0.06 * math.sin(phase + index * 0.4),
+                        ),
+                        shapes=_node_shapes(node_kind, index),
+                    )
+                )
+
+        groups.append(Group(name="core", shapes=ball_lens((0.0, 0.0), 0.06, GLASS_FOCUS)))
+        groups.extend(
+            _beam_stack(
+                phase,
+                layout=beam_layout,
+                warm_target=(0.06 * math.sin(phase), 0.06 * math.sin(phase + 0.3)),
+                white_target=(-0.06 * math.sin(phase + 0.6), -0.06 * math.sin(phase)),
+                top_target=(0.0, -0.08),
+                bottom_target=(0.0, 0.08),
+            )
+        )
+        if support_fill > 0.0:
+            groups.append(fill_group("fill", -0.78, intensity=support_fill, width=1.16))
+        return frame_for(groups)
+
+    return SceneSpec(
+        name=name,
+        duration=6.0,
+        build=build,
+        base_exposure=base_exposure,
+        description=description,
+    )
+
+
+def make_beacon_stack_spec(
+    name: str,
+    description: str,
+    *,
+    lanes: Sequence[float],
+    rows: int,
+    beam_layout: str,
+    base_exposure: float,
+    node_kind: str = "prism",
+    rail_kind: str = "mirror",
+    layout: str = "stack",
+    support_fill: float = 0.0,
+) -> SceneSpec:
+    def build(ctx: FrameContext) -> Frame:
+        phase = tau(ctx.progress)
+        groups = [room_group()]
+        ys = [(-0.56 + 1.12 * row / max(rows - 1, 1)) for row in range(rows)]
+
+        for lane_index, lane_x in enumerate(lanes):
+            rail_offset = 0.12 + 0.02 * math.sin(phase + lane_index * 0.8)
+            rail_material = _segment_material(rail_kind, lane_index)
+            groups.append(
+                Group(
+                    name=f"rail_{lane_index}_left",
+                    shapes=[
+                        Segment(
+                            a=[lane_x - rail_offset, -0.74],
+                            b=[lane_x - rail_offset, 0.74],
+                            material=rail_material,
+                        )
+                    ],
+                )
+            )
+            groups.append(
+                Group(
+                    name=f"rail_{lane_index}_right",
+                    shapes=[
+                        Segment(
+                            a=[lane_x + rail_offset, -0.74],
+                            b=[lane_x + rail_offset, 0.74],
+                            material=rail_material,
+                        )
+                    ],
+                )
+            )
+
+            for row_index, y in enumerate(ys):
+                if layout == "zigzag":
+                    cx = lane_x + 0.06 * (-1 if row_index % 2 else 1) * math.sin(phase + lane_index * 0.5)
+                elif layout == "sway":
+                    cx = lane_x + 0.08 * math.sin(phase + row_index * 0.4 + lane_index * 0.6)
+                else:
+                    cx = lane_x
+                cy = y + 0.04 * math.sin(phase + row_index * 0.55 + lane_index * 0.4)
+                groups.append(
+                    Group(
+                        name=f"node_{lane_index}_{row_index}",
+                        transform=Transform2D.uniform(
+                            translate=(cx, cy),
+                            rotate=0.2 * math.sin(phase + row_index * 0.45 + lane_index),
+                            scale=0.94 + 0.08 * math.sin(phase + row_index * 0.3),
+                        ),
+                        shapes=_node_shapes(node_kind, lane_index + row_index),
+                    )
+                )
+
+        groups.extend(
+            _beam_stack(
+                phase,
+                layout=beam_layout,
+                warm_target=(0.08 * math.sin(phase), 0.0),
+                white_target=(-0.08 * math.sin(phase + 0.4), 0.04 * math.sin(phase)),
+                top_target=(0.0, -0.1),
+                bottom_target=(0.0, 0.1),
+            )
+        )
+        if support_fill > 0.0:
+            groups.append(fill_group("fill", -0.8, intensity=support_fill, width=1.1))
         return frame_for(groups)
 
     return SceneSpec(

@@ -150,7 +150,7 @@ SHEET_MODE = RenderMode(
 )
 PREVIEW_MODE = RenderMode(
     name="preview",
-    canvas=Canvas(576, 324),
+    canvas=Canvas(640, 360),
     trace=TraceDefaults(rays=260_000, batch=120_000, depth=12),
     fps=16,
 )
