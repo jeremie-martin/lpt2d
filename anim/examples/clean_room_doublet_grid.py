@@ -11,8 +11,8 @@ SPEC = make_lens_field_spec(
     layout="grid",
     count=6,
     beam_layout="warm_white",
-    base_exposure=3.35,
-    support_fill=0.05,
+    base_exposure=3.12,
+    support_fill=0.03,
 )
 
 

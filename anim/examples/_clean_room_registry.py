@@ -1,5 +1,12 @@
 """Registry for clean-room example animations."""
 
+from __future__ import annotations
+
+import importlib
+import pkgutil
+from pathlib import Path
+
+from anim.examples._clean_room_shared import SceneSpec, with_family
 from anim.examples.clean_room_aperture_waltz import SPEC as APERTURE_WALTZ
 from anim.examples.clean_room_arc_bloom import SPEC as ARC_BLOOM
 from anim.examples.clean_room_arc_lantern import SPEC as ARC_LANTERN
@@ -43,49 +50,63 @@ from anim.examples.clean_room_tri_ribbon import SPEC as TRI_RIBBON
 from anim.examples.clean_room_trident_crossfire import SPEC as TRIDENT_CROSSFIRE
 from anim.examples.clean_room_waveguide_ribbon import SPEC as WAVEGUIDE_RIBBON
 
-SCENES = [
-    ORBITING_TRIPLET,
-    SPLITTER_BRAID,
-    BREATHING_LENSES,
-    MIRROR_SHUTTERS,
-    PRISM_CROWN,
-    WAVEGUIDE_RIBBON,
-    CORNER_CROSSFIRE,
-    CAUSTIC_LADDER,
-    APERTURE_WALTZ,
-    ARC_RESONATOR,
-    ARC_RESONATOR_DUAL_BEAM,
-    MIRROR_FAN,
-    ARC_BLOOM,
-    CRESCENT_DUET,
-    RESONATOR_WEAVE,
-    ARC_LANTERN,
-    ORBITING_CRESCENTS,
-    PRISM_BRIDGE,
-    PRISM_DRUM,
-    PRISM_SWEEP,
-    PRISM_CONSTELLATION,
-    PRISM_PARADE,
-    COUNTER_ROTOR,
-    IRIS_GATE,
-    LOUVER_FAN,
-    MIRROR_COMPASS,
-    ROTOR_CASCADE,
-    DUAL_RIBBON,
-    BRIDGE_RIBBON,
-    RIBBON_EXCHANGE,
-    SILK_WAVEGUIDE,
-    TRI_RIBBON,
-    FOCUS_COLUMNS,
-    CAUSTIC_STAIR,
-    LENS_QUARTET,
-    DOUBLET_GRID,
-    HALO_LENSES,
-    SPLITTER_CORRIDOR,
-    SPLITTER_COMPASS,
-    TRIDENT_CROSSFIRE,
-    BEAM_EXCHANGE,
-    SPLITTER_CROWN,
+
+def _load_family_scenes() -> list[SceneSpec]:
+    family_dir = Path(__file__).with_name("clean_room_families")
+    scenes: list[SceneSpec] = []
+    for module_info in sorted(pkgutil.iter_modules([str(family_dir)]), key=lambda item: item.name):
+        module = importlib.import_module(f"anim.examples.clean_room_families.{module_info.name}")
+        family = getattr(module, "FAMILY", module_info.name.removesuffix("_family"))
+        for spec in getattr(module, "SCENES", []):
+            scenes.append(spec if spec.family else with_family(spec, family))
+    return scenes
+
+
+LEGACY_SCENES = [
+    with_family(ORBITING_TRIPLET, "lenses"),
+    with_family(SPLITTER_BRAID, "splitters"),
+    with_family(BREATHING_LENSES, "lenses"),
+    with_family(MIRROR_SHUTTERS, "mirrors"),
+    with_family(PRISM_CROWN, "prisms"),
+    with_family(WAVEGUIDE_RIBBON, "ribbons"),
+    with_family(CORNER_CROSSFIRE, "crossfires"),
+    with_family(CAUSTIC_LADDER, "lenses"),
+    with_family(APERTURE_WALTZ, "mirrors"),
+    with_family(ARC_RESONATOR, "arcs"),
+    with_family(ARC_RESONATOR_DUAL_BEAM, "arcs"),
+    with_family(MIRROR_FAN, "mirrors"),
+    with_family(ARC_BLOOM, "arcs"),
+    with_family(CRESCENT_DUET, "arcs"),
+    with_family(RESONATOR_WEAVE, "arcs"),
+    with_family(ARC_LANTERN, "arcs"),
+    with_family(ORBITING_CRESCENTS, "arcs"),
+    with_family(PRISM_BRIDGE, "prisms"),
+    with_family(PRISM_DRUM, "prisms"),
+    with_family(PRISM_SWEEP, "prisms"),
+    with_family(PRISM_CONSTELLATION, "prisms"),
+    with_family(PRISM_PARADE, "prisms"),
+    with_family(COUNTER_ROTOR, "rotors"),
+    with_family(IRIS_GATE, "rotors"),
+    with_family(LOUVER_FAN, "rotors"),
+    with_family(MIRROR_COMPASS, "rotors"),
+    with_family(ROTOR_CASCADE, "rotors"),
+    with_family(DUAL_RIBBON, "ribbons"),
+    with_family(BRIDGE_RIBBON, "ribbons"),
+    with_family(RIBBON_EXCHANGE, "ribbons"),
+    with_family(SILK_WAVEGUIDE, "ribbons"),
+    with_family(TRI_RIBBON, "ribbons"),
+    with_family(FOCUS_COLUMNS, "lenses"),
+    with_family(CAUSTIC_STAIR, "lenses"),
+    with_family(LENS_QUARTET, "lenses"),
+    with_family(DOUBLET_GRID, "lenses"),
+    with_family(HALO_LENSES, "lenses"),
+    with_family(SPLITTER_CORRIDOR, "splitters"),
+    with_family(SPLITTER_COMPASS, "splitters"),
+    with_family(TRIDENT_CROSSFIRE, "crossfires"),
+    with_family(BEAM_EXCHANGE, "splitters"),
+    with_family(SPLITTER_CROWN, "splitters"),
 ]
 
+
+SCENES = LEGACY_SCENES + _load_family_scenes()
 SCENE_MAP = {spec.name: spec for spec in SCENES}

@@ -11,8 +11,8 @@ SPEC = make_lens_field_spec(
     layout="columns",
     count=4,
     beam_layout="dual_side",
-    base_exposure=3.20,
-    support_fill=0.04,
+    base_exposure=2.90,
+    support_fill=0.02,
 )
 
 

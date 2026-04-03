@@ -11,8 +11,8 @@ SPEC = make_lens_field_spec(
     layout="halo",
     count=5,
     beam_layout="triad",
-    base_exposure=3.15,
-    support_fill=0.03,
+    base_exposure=3.02,
+    support_fill=0.02,
 )
 
 

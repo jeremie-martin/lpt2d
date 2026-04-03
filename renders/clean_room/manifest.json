@@ -1,11 +1,89 @@
 {
   "canonical_root": "renders/clean_room",
   "overview": "overview_sheet.png",
-  "scene_count": 42,
+  "overview_pages": [
+    "overview_pages/overview_01.png"
+  ],
+  "scene_count": 572,
+  "family_count": 10,
+  "families": [
+    {
+      "name": "arcs",
+      "scene_count": 77,
+      "overview_pages": [
+        "arcs/overview_pages/arcs_overview_01.png"
+      ]
+    },
+    {
+      "name": "crossfires",
+      "scene_count": 2,
+      "overview_pages": [
+        "crossfires/overview_pages/crossfires_overview_01.png"
+      ]
+    },
+    {
+      "name": "hybrids",
+      "scene_count": 50,
+      "overview_pages": [
+        "hybrids/overview_pages/hybrids_overview_01.png"
+      ]
+    },
+    {
+      "name": "lenses",
+      "scene_count": 78,
+      "overview_pages": [
+        "lenses/overview_pages/lenses_overview_01.png"
+      ]
+    },
+    {
+      "name": "mirrors",
+      "scene_count": 3,
+      "overview_pages": [
+        "mirrors/overview_pages/mirrors_overview_01.png"
+      ]
+    },
+    {
+      "name": "orbits",
+      "scene_count": 60,
+      "overview_pages": [
+        "orbits/overview_pages/orbits_overview_01.png"
+      ]
+    },
+    {
+      "name": "prisms",
+      "scene_count": 76,
+      "overview_pages": [
+        "prisms/overview_pages/prisms_overview_01.png"
+      ]
+    },
+    {
+      "name": "ribbons",
+      "scene_count": 76,
+      "overview_pages": [
+        "ribbons/overview_pages/ribbons_overview_01.png"
+      ]
+    },
+    {
+      "name": "rotors",
+      "scene_count": 75,
+      "overview_pages": [
+        "rotors/overview_pages/rotors_overview_01.png"
+      ]
+    },
+    {
+      "name": "splitters",
+      "scene_count": 75,
+      "overview_pages": [
+        "splitters/overview_pages/splitters_overview_01.png"
+      ]
+    }
+  ],
   "scenes": [
     {
       "name": "orbiting_triplet",
+      "family": "lenses",
       "description": "Three-lens cluster with a wall-safe orbiting beam.",
+      "directory": "lenses/orbiting_triplet",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -17,7 +95,9 @@
     },
     {
       "name": "splitter_braid",
+      "family": "splitters",
       "description": "Two beams braid through a reflective beam-splitter cross.",
+      "directory": "splitters/splitter_braid",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -29,19 +109,20 @@
     },
     {
       "name": "breathing_lenses",
+      "family": "lenses",
       "description": "A simplified two-lens scan with restrained breathing motion.",
+      "directory": "lenses/breathing_lenses",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "mirror_shutters",
+      "family": "mirrors",
       "description": "Opposed mirror shutters open and close around a downward beam.",
+      "directory": "mirrors/mirror_shutters",
       "assets": [
         "frame_000.json",
         "hq.mp4",
@@ -54,19 +135,20 @@
     },
     {
       "name": "prism_crown",
+      "family": "prisms",
       "description": "A slow prism crown with a lead beam and a softer trailing echo.",
+      "directory": "prisms/prism_crown",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "waveguide_ribbon",
+      "family": "ribbons",
       "description": "A clean bezier ribbon waveguide fed by a narrow beam.",
+      "directory": "ribbons/waveguide_ribbon",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -78,7 +160,9 @@
     },
     {
       "name": "corner_crossfire",
+      "family": "crossfires",
       "description": "Cool and warm corner beams cross through a simple glass doublet.",
+      "directory": "crossfires/corner_crossfire",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -90,7 +174,9 @@
     },
     {
       "name": "caustic_ladder",
+      "family": "lenses",
       "description": "A scanning beam walks across a vertical ladder of lenses.",
+      "directory": "lenses/caustic_ladder",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -102,31 +188,31 @@
     },
     {
       "name": "aperture_waltz",
+      "family": "mirrors",
       "description": "Mirror slats open and close into a rhythmic gated field.",
+      "directory": "mirrors/aperture_waltz",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "arc_resonator",
+      "family": "arcs",
       "description": "A curved resonator cavity with a wall-safe warm beam through the center gap.",
+      "directory": "arcs/arc_resonator",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "arc_resonator_dual_beam",
+      "family": "arcs",
       "description": "Warm and white beams crossing a resonator gap with independently animated arcs.",
+      "directory": "arcs/arc_resonator_dual_beam",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -138,43 +224,42 @@
     },
     {
       "name": "mirror_fan",
+      "family": "mirrors",
       "description": "A five-blade mirror fan catches a beam through a small prism.",
+      "directory": "mirrors/mirror_fan",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "arc_bloom",
+      "family": "arcs",
       "description": "Four mirrored crescents orbit around warm and white beams.",
+      "directory": "arcs/arc_bloom",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "crescent_duet",
+      "family": "arcs",
       "description": "Two large crescents trade the spotlight between a side beam and a top beam.",
+      "directory": "arcs/crescent_duet",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "resonator_weave",
+      "family": "arcs",
       "description": "Three offset resonator arcs weave under a warm-white triad of beams.",
+      "directory": "arcs/resonator_weave",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -186,43 +271,42 @@
     },
     {
       "name": "arc_lantern",
+      "family": "arcs",
       "description": "A lantern-like cage of crescents is lit from the side and from above.",
+      "directory": "arcs/arc_lantern",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "orbiting_crescents",
+      "family": "arcs",
       "description": "Five small crescents circulate around a bright dual-beam core.",
+      "directory": "arcs/orbiting_crescents",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "prism_bridge",
+      "family": "prisms",
       "description": "A bridge of prisms floats between warm and white side beams.",
+      "directory": "prisms/prism_bridge",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "prism_drum",
+      "family": "prisms",
       "description": "A ring of prisms turns like a drum under a warm lead beam.",
+      "directory": "prisms/prism_drum",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -234,55 +318,53 @@
     },
     {
       "name": "prism_sweep",
+      "family": "prisms",
       "description": "A diagonal prism sweep catches light from both side walls.",
+      "directory": "prisms/prism_sweep",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "prism_constellation",
+      "family": "prisms",
       "description": "A loose constellation of prisms sparkles under side and top beams.",
+      "directory": "prisms/prism_constellation",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "prism_parade",
+      "family": "prisms",
       "description": "A straight parade of prisms glows between a warm beam and white support light.",
+      "directory": "prisms/prism_parade",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "counter_rotor",
+      "family": "rotors",
       "description": "Two opposing rotor fans trade warm and white light across the room.",
+      "directory": "rotors/counter_rotor",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "iris_gate",
+      "family": "rotors",
       "description": "An iris of mirror blades opens and closes under a bright top beam.",
+      "directory": "rotors/iris_gate",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -294,199 +376,1428 @@
     },
     {
       "name": "louver_fan",
+      "family": "rotors",
       "description": "A wide right-wall fan throws mirror slats across a warm side beam.",
+      "directory": "rotors/louver_fan",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "mirror_compass",
+      "family": "rotors",
       "description": "A four-point mirror compass catches light from both sides and above.",
+      "directory": "rotors/mirror_compass",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "rotor_cascade",
+      "family": "rotors",
       "description": "Three small rotors climb diagonally through a warm-white beam exchange.",
+      "directory": "rotors/rotor_cascade",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "dual_ribbon",
+      "family": "ribbons",
       "description": "Two wide ribbons exchange a warm beam and white support light.",
+      "directory": "ribbons/dual_ribbon",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "bridge_ribbon",
+      "family": "ribbons",
       "description": "Three ribbons form a gentle bridge beneath a side beam and a top wash.",
+      "directory": "ribbons/bridge_ribbon",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "ribbon_exchange",
+      "family": "ribbons",
       "description": "A ribbon pair bends into an off-center beam exchange.",
+      "directory": "ribbons/ribbon_exchange",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "silk_waveguide",
+      "family": "ribbons",
       "description": "Four fine ribbons create a brighter silk-like waveguide sheet.",
+      "directory": "ribbons/silk_waveguide",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "tri_ribbon",
+      "family": "ribbons",
       "description": "Three ribbon lanes braid through warm and white side beams.",
+      "directory": "ribbons/tri_ribbon",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "focus_columns",
+      "family": "lenses",
       "description": "Two bright columns of lenses are scanned by warm and white side beams.",
+      "directory": "lenses/focus_columns",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "caustic_stair",
+      "family": "lenses",
       "description": "A stair of lenses climbs diagonally through a warm scan beam.",
+      "directory": "lenses/caustic_stair",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "lens_quartet",
+      "family": "lenses",
       "description": "A diamond quartet of lenses is lit by a side beam and a top wash.",
+      "directory": "lenses/lens_quartet",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "doublet_grid",
+      "family": "lenses",
       "description": "A small grid of mixed lenses glows between warm and white side beams.",
+      "directory": "lenses/doublet_grid",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "halo_lenses",
+      "family": "lenses",
       "description": "A ring of lenses forms a halo beneath a three-way beam setup.",
+      "directory": "lenses/halo_lenses",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "splitter_corridor",
+      "family": "splitters",
       "description": "A short corridor of splitters carries light from both side walls.",
+      "directory": "splitters/splitter_corridor",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "splitter_compass",
+      "family": "splitters",
       "description": "A compass of splitters catches a warm-white trident of beams.",
+      "directory": "splitters/splitter_compass",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "trident_crossfire",
+      "family": "crossfires",
       "description": "Three beams strike a staggered splitter trident through the room center.",
+      "directory": "crossfires/trident_crossfire",
       "assets": [
-        "frame_000.json",
-        "preview.mp4",
-        "sheet.png",
-        "tuning.json"
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
     },
     {
       "name": "beam_exchange",
+      "family": "splitters",
       "description": "Two diagonal splitters stage a clean warm-white beam exchange.",
+      "directory": "splitters/beam_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_crown",
+      "family": "splitters",
+      "description": "A crown of splitters sits under a side beam and a top wash.",
+      "directory": "splitters/splitter_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_compact",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core in a compact dual-side beam layout.",
+      "directory": "arcs/arc_bloom_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_wide",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core with a wider warm-white pair.",
+      "directory": "arcs/arc_bloom_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_triad",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core with a triad and a soft top support.",
+      "directory": "arcs/arc_bloom_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_toplit",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core with a left-top support beam.",
+      "directory": "arcs/arc_bloom_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_exchange",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core with crossing side beams that stay legible.",
+      "directory": "arcs/arc_bloom_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_trident",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_bloom_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom_wash",
+      "family": "arcs",
+      "description": "Four mirrored crescents orbit a bright core under a subtle warm-white wash.",
+      "directory": "arcs/arc_bloom_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_compact",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam in a compact dual-side beam layout.",
+      "directory": "arcs/arc_lantern_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_wide",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam with a wider warm-white pair.",
+      "directory": "arcs/arc_lantern_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_triad",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam with a triad and a soft top support.",
+      "directory": "arcs/arc_lantern_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_toplit",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam with a left-top support beam.",
+      "directory": "arcs/arc_lantern_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_exchange",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam with crossing side beams that stay legible.",
+      "directory": "arcs/arc_lantern_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_trident",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_lantern_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern_wash",
+      "family": "arcs",
+      "description": "A lantern cage of arcs frames the beam under a subtle warm-white wash.",
+      "directory": "arcs/arc_lantern_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_compact",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead in a compact dual-side beam layout.",
+      "directory": "arcs/arc_crown_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_wide",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead with a wider warm-white pair.",
+      "directory": "arcs/arc_crown_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_triad",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead with a triad and a soft top support.",
+      "directory": "arcs/arc_crown_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_toplit",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead with a left-top support beam.",
+      "directory": "arcs/arc_crown_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_exchange",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead with crossing side beams that stay legible.",
+      "directory": "arcs/arc_crown_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_trident",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_crown_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crown_wash",
+      "family": "arcs",
+      "description": "A shallow crown of crescents opens overhead under a subtle warm-white wash.",
+      "directory": "arcs/arc_crown_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_compact",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap in a compact dual-side beam layout.",
+      "directory": "arcs/arc_bridge_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_wide",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap with a wider warm-white pair.",
+      "directory": "arcs/arc_bridge_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_triad",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap with a triad and a soft top support.",
+      "directory": "arcs/arc_bridge_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_toplit",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap with a left-top support beam.",
+      "directory": "arcs/arc_bridge_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_exchange",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap with crossing side beams that stay legible.",
+      "directory": "arcs/arc_bridge_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_trident",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_bridge_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bridge_wash",
+      "family": "arcs",
+      "description": "A compact arc bridge spans the center gap under a subtle warm-white wash.",
+      "directory": "arcs/arc_bridge_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_compact",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room in a compact dual-side beam layout.",
+      "directory": "arcs/arc_exchange_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_wide",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room with a wider warm-white pair.",
+      "directory": "arcs/arc_exchange_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_triad",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room with a triad and a soft top support.",
+      "directory": "arcs/arc_exchange_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_toplit",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room with a left-top support beam.",
+      "directory": "arcs/arc_exchange_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_exchange",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room with crossing side beams that stay legible.",
+      "directory": "arcs/arc_exchange_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_trident",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_exchange_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_exchange_wash",
+      "family": "arcs",
+      "description": "Two arc families trade the spotlight across the room under a subtle warm-white wash.",
+      "directory": "arcs/arc_exchange_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_compact",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash in a compact dual-side beam layout.",
+      "directory": "arcs/arc_weave_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_wide",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash with a wider warm-white pair.",
+      "directory": "arcs/arc_weave_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_triad",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash with a triad and a soft top support.",
+      "directory": "arcs/arc_weave_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_toplit",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash with a left-top support beam.",
+      "directory": "arcs/arc_weave_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_exchange",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash with crossing side beams that stay legible.",
+      "directory": "arcs/arc_weave_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_trident",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_weave_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_weave_wash",
+      "family": "arcs",
+      "description": "A crescent weave bends through a warm-white wash under a subtle warm-white wash.",
+      "directory": "arcs/arc_weave_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_compact",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core in a compact dual-side beam layout.",
+      "directory": "arcs/arc_halo_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_wide",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core with a wider warm-white pair.",
+      "directory": "arcs/arc_halo_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_triad",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core with a triad and a soft top support.",
+      "directory": "arcs/arc_halo_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_toplit",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core with a left-top support beam.",
+      "directory": "arcs/arc_halo_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_exchange",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core with crossing side beams that stay legible.",
+      "directory": "arcs/arc_halo_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_trident",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_halo_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_halo_wash",
+      "family": "arcs",
+      "description": "A halo of arcs rotates around a glass core under a subtle warm-white wash.",
+      "directory": "arcs/arc_halo_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_compact",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed in a compact dual-side beam layout.",
+      "directory": "arcs/arc_gate_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_wide",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed with a wider warm-white pair.",
+      "directory": "arcs/arc_gate_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_triad",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed with a triad and a soft top support.",
+      "directory": "arcs/arc_gate_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_toplit",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed with a left-top support beam.",
+      "directory": "arcs/arc_gate_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_exchange",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed with crossing side beams that stay legible.",
+      "directory": "arcs/arc_gate_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_trident",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_gate_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_gate_wash",
+      "family": "arcs",
+      "description": "A shutter-like arc set breathes open and closed under a subtle warm-white wash.",
+      "directory": "arcs/arc_gate_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_compact",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit in a compact dual-side beam layout.",
+      "directory": "arcs/arc_crossfire_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_wide",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit with a wider warm-white pair.",
+      "directory": "arcs/arc_crossfire_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_triad",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit with a triad and a soft top support.",
+      "directory": "arcs/arc_crossfire_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_toplit",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit with a left-top support beam.",
+      "directory": "arcs/arc_crossfire_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_exchange",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit with crossing side beams that stay legible.",
+      "directory": "arcs/arc_crossfire_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_trident",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_crossfire_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_crossfire_wash",
+      "family": "arcs",
+      "description": "A crossfire of crescents keeps the room lit under a subtle warm-white wash.",
+      "directory": "arcs/arc_crossfire_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_compact",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center in a compact dual-side beam layout.",
+      "directory": "arcs/arc_stack_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_wide",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center with a wider warm-white pair.",
+      "directory": "arcs/arc_stack_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_triad",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center with a triad and a soft top support.",
+      "directory": "arcs/arc_stack_triad",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_toplit",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center with a left-top support beam.",
+      "directory": "arcs/arc_stack_toplit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_exchange",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center with crossing side beams that stay legible.",
+      "directory": "arcs/arc_stack_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_trident",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center with a warm-white trident and extra wall light.",
+      "directory": "arcs/arc_stack_trident",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_stack_wash",
+      "family": "arcs",
+      "description": "A tall arc stack climbs through the center under a subtle warm-white wash.",
+      "directory": "arcs/arc_stack_wash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_crownbridge",
+      "family": "hybrids",
+      "description": "Hybrid Arc Crownbridge mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_crownbridge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_lanternweave",
+      "family": "hybrids",
+      "description": "Hybrid Arc Lanternweave mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_lanternweave",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_crosshalo",
+      "family": "hybrids",
+      "description": "Hybrid Arc Crosshalo mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_crosshalo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_veilrelay",
+      "family": "hybrids",
+      "description": "Hybrid Arc Veilrelay mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_veilrelay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_gatelattice",
+      "family": "hybrids",
+      "description": "Hybrid Arc Gatelattice mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_gatelattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_orbitbraid",
+      "family": "hybrids",
+      "description": "Hybrid Arc Orbitbraid mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_orbitbraid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_compassreef",
+      "family": "hybrids",
+      "description": "Hybrid Arc Compassreef mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_compassreef",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_arc_petalshield",
+      "family": "hybrids",
+      "description": "Hybrid Arc Petalshield mixes arc motion with a bright beam-led core.",
+      "directory": "hybrids/hybrid_arc_petalshield",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_arcade",
+      "family": "hybrids",
+      "description": "Hybrid Prism Arcade blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_lantern",
+      "family": "hybrids",
+      "description": "Hybrid Prism Lantern blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_lantern",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_compass",
+      "family": "hybrids",
+      "description": "Hybrid Prism Compass blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_braid",
+      "family": "hybrids",
+      "description": "Hybrid Prism Braid blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_braid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_sash",
+      "family": "hybrids",
+      "description": "Hybrid Prism Sash blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_sash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_relay",
+      "family": "hybrids",
+      "description": "Hybrid Prism Relay blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_relay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_exchange",
+      "family": "hybrids",
+      "description": "Hybrid Prism Exchange blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_prism_halo",
+      "family": "hybrids",
+      "description": "Hybrid Prism Halo blends prism rhythm with a mirror-room beam relay.",
+      "directory": "hybrids/hybrid_prism_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_compassgate",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Compassgate layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_compassgate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_lanternfan",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Lanternfan layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_lanternfan",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_shutterbraid",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Shutterbraid layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_shutterbraid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_crownrelay",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Crownrelay layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_crownrelay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_arcade",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Arcade layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_meridian",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Meridian layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_harbor",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Harbor layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_harbor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_rotor_orbitgate",
+      "family": "hybrids",
+      "description": "Hybrid Rotor Orbitgate layers rotor motion into a clean warm-white light field.",
+      "directory": "hybrids/hybrid_rotor_orbitgate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_arcade",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Arcade crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_exchange",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Exchange crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_lattice",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Lattice crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_meridian",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Meridian crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_crownpath",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Crownpath crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_crownpath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_shield",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Shield crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_shield",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_halo",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Halo crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_ribbon_braid",
+      "family": "hybrids",
+      "description": "Hybrid Ribbon Braid crosses ribbons under bright side-lit beams.",
+      "directory": "hybrids/hybrid_ribbon_braid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_compass",
+      "family": "hybrids",
+      "description": "Hybrid Lens Compass arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_corridor",
+      "family": "hybrids",
+      "description": "Hybrid Lens Corridor arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_corridor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_halo",
+      "family": "hybrids",
+      "description": "Hybrid Lens Halo arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_lattice",
+      "family": "hybrids",
+      "description": "Hybrid Lens Lattice arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_meridian",
+      "family": "hybrids",
+      "description": "Hybrid Lens Meridian arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_arcade",
+      "family": "hybrids",
+      "description": "Hybrid Lens Arcade arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_exchange",
+      "family": "hybrids",
+      "description": "Hybrid Lens Exchange arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_lens_beacon",
+      "family": "hybrids",
+      "description": "Hybrid Lens Beacon arranges lenses as a bright hybrid optical study.",
+      "directory": "hybrids/hybrid_lens_beacon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_crownline",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Crownline redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_crownline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_compassline",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Compassline redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_compassline",
       "assets": [
         "frame_000.json",
         "preview.mp4",
@@ -497,13 +1808,4602 @@
       "max_overrun": 0.0
     },
     {
-      "name": "splitter_crown",
-      "description": "A crown of splitters sits under a side beam and a top wash.",
+      "name": "hybrid_splitter_braidline",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Braidline redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_braidline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_lanternline",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Lanternline redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_lanternline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_gate",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Gate redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_halo",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Halo redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_meridian",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Meridian redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_exchange",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Exchange redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_arcade",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Arcade redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "hybrid_splitter_signal",
+      "family": "hybrids",
+      "description": "Hybrid Splitter Signal redirects warm and white beams through a clean splitter web.",
+      "directory": "hybrids/hybrid_splitter_signal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_soft",
+      "family": "lenses",
+      "description": "Soft column wash with warm-white pair.",
+      "directory": "lenses/column_wash_soft",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_bright",
+      "family": "lenses",
+      "description": "Bright column wash with dual-side beams.",
+      "directory": "lenses/column_wash_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_lifted",
+      "family": "lenses",
+      "description": "Lifted column wash with left-plus-top beams.",
+      "directory": "lenses/column_wash_lifted",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_split",
+      "family": "lenses",
+      "description": "Split column wash with triad beams.",
+      "directory": "lenses/column_wash_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_narrow",
+      "family": "lenses",
+      "description": "Narrow column wash with left beam.",
+      "directory": "lenses/column_wash_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_airy",
+      "family": "lenses",
+      "description": "Airy column wash with warm-white pair.",
+      "directory": "lenses/column_wash_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_crisp",
+      "family": "lenses",
+      "description": "Crisp column wash with dual-side beams.",
+      "directory": "lenses/column_wash_crisp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_white",
+      "family": "lenses",
+      "description": "White column wash with top beam.",
+      "directory": "lenses/column_wash_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_warm",
+      "family": "lenses",
+      "description": "Warm column wash with triad beams.",
+      "directory": "lenses/column_wash_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_wash_open",
+      "family": "lenses",
+      "description": "Open column wash with warm-white pair.",
+      "directory": "lenses/column_wash_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_soft",
+      "family": "lenses",
+      "description": "Soft column edge with dual-side beams.",
+      "directory": "lenses/column_edge_soft",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_tall",
+      "family": "lenses",
+      "description": "Tall column edge with left-plus-top beams.",
+      "directory": "lenses/column_edge_tall",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_bright",
+      "family": "lenses",
+      "description": "Bright column edge with warm-white pair.",
+      "directory": "lenses/column_edge_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_split",
+      "family": "lenses",
+      "description": "Split column edge with triad beams.",
+      "directory": "lenses/column_edge_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_sleek",
+      "family": "lenses",
+      "description": "Sleek column edge with left beam.",
+      "directory": "lenses/column_edge_sleek",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_open",
+      "family": "lenses",
+      "description": "Open column edge with top beam.",
+      "directory": "lenses/column_edge_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_calm",
+      "family": "lenses",
+      "description": "Calm column edge with dual-side beams.",
+      "directory": "lenses/column_edge_calm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_white",
+      "family": "lenses",
+      "description": "White column edge with warm-white pair.",
+      "directory": "lenses/column_edge_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_lit",
+      "family": "lenses",
+      "description": "Lit column edge with left-plus-top beams.",
+      "directory": "lenses/column_edge_lit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "column_edge_clear",
+      "family": "lenses",
+      "description": "Clear column edge with triad beams.",
+      "directory": "lenses/column_edge_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_ascending",
+      "family": "lenses",
+      "description": "Ascending stair scan with left-plus-top beams.",
+      "directory": "lenses/stair_scan_ascending",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_descending",
+      "family": "lenses",
+      "description": "Descending stair scan with warm-white pair.",
+      "directory": "lenses/stair_scan_descending",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_stepped",
+      "family": "lenses",
+      "description": "Stepped stair scan with triad beams.",
+      "directory": "lenses/stair_scan_stepped",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_shallow",
+      "family": "lenses",
+      "description": "Shallow stair scan with dual-side beams.",
+      "directory": "lenses/stair_scan_shallow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_bright",
+      "family": "lenses",
+      "description": "Bright stair scan with left-plus-top beams.",
+      "directory": "lenses/stair_scan_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_open",
+      "family": "lenses",
+      "description": "Open stair scan with warm-white pair.",
+      "directory": "lenses/stair_scan_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_tight",
+      "family": "lenses",
+      "description": "Tight stair scan with left beam.",
+      "directory": "lenses/stair_scan_tight",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_white",
+      "family": "lenses",
+      "description": "White stair scan with top beam.",
+      "directory": "lenses/stair_scan_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_airy",
+      "family": "lenses",
+      "description": "Airy stair scan with triad beams.",
+      "directory": "lenses/stair_scan_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "stair_scan_balanced",
+      "family": "lenses",
+      "description": "Balanced stair scan with dual-side beams.",
+      "directory": "lenses/stair_scan_balanced",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_centered",
+      "family": "lenses",
+      "description": "Centered diamond gate with warm-white pair.",
+      "directory": "lenses/diamond_gate_centered",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_lifted",
+      "family": "lenses",
+      "description": "Lifted diamond gate with dual-side beams.",
+      "directory": "lenses/diamond_gate_lifted",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_bright",
+      "family": "lenses",
+      "description": "Bright diamond gate with triad beams.",
+      "directory": "lenses/diamond_gate_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_soft",
+      "family": "lenses",
+      "description": "Soft diamond gate with left-plus-top beams.",
+      "directory": "lenses/diamond_gate_soft",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_open",
+      "family": "lenses",
+      "description": "Open diamond gate with warm-white pair.",
+      "directory": "lenses/diamond_gate_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_white",
+      "family": "lenses",
+      "description": "White diamond gate with top beam.",
+      "directory": "lenses/diamond_gate_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_clear",
+      "family": "lenses",
+      "description": "Clear diamond gate with triad beams.",
+      "directory": "lenses/diamond_gate_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_paired",
+      "family": "lenses",
+      "description": "Paired diamond gate with dual-side beams.",
+      "directory": "lenses/diamond_gate_paired",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_narrow",
+      "family": "lenses",
+      "description": "Narrow diamond gate with left beam.",
+      "directory": "lenses/diamond_gate_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "diamond_gate_airy",
+      "family": "lenses",
+      "description": "Airy diamond gate with warm-white pair.",
+      "directory": "lenses/diamond_gate_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_square",
+      "family": "lenses",
+      "description": "Square grid lattice with warm-white pair.",
+      "directory": "lenses/grid_lattice_square",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_cross",
+      "family": "lenses",
+      "description": "Cross grid lattice with dual-side beams.",
+      "directory": "lenses/grid_lattice_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_layered",
+      "family": "lenses",
+      "description": "Layered grid lattice with triad beams.",
+      "directory": "lenses/grid_lattice_layered",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_bright",
+      "family": "lenses",
+      "description": "Bright grid lattice with left-plus-top beams.",
+      "directory": "lenses/grid_lattice_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_open",
+      "family": "lenses",
+      "description": "Open grid lattice with top beam.",
+      "directory": "lenses/grid_lattice_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_white",
+      "family": "lenses",
+      "description": "White grid lattice with warm-white pair.",
+      "directory": "lenses/grid_lattice_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_compact",
+      "family": "lenses",
+      "description": "Compact grid lattice with left beam.",
+      "directory": "lenses/grid_lattice_compact",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_airy",
+      "family": "lenses",
+      "description": "Airy grid lattice with dual-side beams.",
+      "directory": "lenses/grid_lattice_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_crisp",
+      "family": "lenses",
+      "description": "Crisp grid lattice with triad beams.",
+      "directory": "lenses/grid_lattice_crisp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "grid_lattice_balanced",
+      "family": "lenses",
+      "description": "Balanced grid lattice with warm-white pair.",
+      "directory": "lenses/grid_lattice_balanced",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_soft",
+      "family": "lenses",
+      "description": "Soft ring halo with warm-white pair.",
+      "directory": "lenses/ring_halo_soft",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_bright",
+      "family": "lenses",
+      "description": "Bright ring halo with dual-side beams.",
+      "directory": "lenses/ring_halo_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_lifted",
+      "family": "lenses",
+      "description": "Lifted ring halo with left-plus-top beams.",
+      "directory": "lenses/ring_halo_lifted",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_split",
+      "family": "lenses",
+      "description": "Split ring halo with triad beams.",
+      "directory": "lenses/ring_halo_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_white",
+      "family": "lenses",
+      "description": "White ring halo with top beam.",
+      "directory": "lenses/ring_halo_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_open",
+      "family": "lenses",
+      "description": "Open ring halo with warm-white pair.",
+      "directory": "lenses/ring_halo_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_airy",
+      "family": "lenses",
+      "description": "Airy ring halo with dual-side beams.",
+      "directory": "lenses/ring_halo_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_crisp",
+      "family": "lenses",
+      "description": "Crisp ring halo with left beam.",
+      "directory": "lenses/ring_halo_crisp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_clear",
+      "family": "lenses",
+      "description": "Clear ring halo with triad beams.",
+      "directory": "lenses/ring_halo_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_halo_warm",
+      "family": "lenses",
+      "description": "Warm ring halo with warm-white pair.",
+      "directory": "lenses/ring_halo_warm",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_windowed",
+      "family": "lenses",
+      "description": "Windowed ring window with left-plus-top beams.",
+      "directory": "lenses/ring_window_windowed",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_amber",
+      "family": "lenses",
+      "description": "Amber ring window with warm-white pair.",
+      "directory": "lenses/ring_window_amber",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_white",
+      "family": "lenses",
+      "description": "White ring window with dual-side beams.",
+      "directory": "lenses/ring_window_white",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_lifted",
+      "family": "lenses",
+      "description": "Lifted ring window with triad beams.",
+      "directory": "lenses/ring_window_lifted",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_narrow",
+      "family": "lenses",
+      "description": "Narrow ring window with left beam.",
+      "directory": "lenses/ring_window_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_open",
+      "family": "lenses",
+      "description": "Open ring window with top beam.",
+      "directory": "lenses/ring_window_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_bright",
+      "family": "lenses",
+      "description": "Bright ring window with warm-white pair.",
+      "directory": "lenses/ring_window_bright",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_paired",
+      "family": "lenses",
+      "description": "Paired ring window with dual-side beams.",
+      "directory": "lenses/ring_window_paired",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_clear",
+      "family": "lenses",
+      "description": "Clear ring window with triad beams.",
+      "directory": "lenses/ring_window_clear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ring_window_airy",
+      "family": "lenses",
+      "description": "Airy ring window with warm-white pair.",
+      "directory": "lenses/ring_window_airy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_aureole",
+      "family": "orbits",
+      "description": "Aureole arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_aureole",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_calyx",
+      "family": "orbits",
+      "description": "Calyx arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_calyx",
       "assets": [
         "frame_000.json",
         "preview.mp4",
         "sheet.png",
         "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_petal",
+      "family": "orbits",
+      "description": "Petal arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_petal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_diadem",
+      "family": "orbits",
+      "description": "Diadem arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_diadem",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_lantern",
+      "family": "orbits",
+      "description": "Lantern arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_lantern",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_garland",
+      "family": "orbits",
+      "description": "Garland arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_garland",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_crown",
+      "family": "orbits",
+      "description": "Crown arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_sundial",
+      "family": "orbits",
+      "description": "Sundial arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_sundial",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_harbor",
+      "family": "orbits",
+      "description": "Harbor arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_harbor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_filigree",
+      "family": "orbits",
+      "description": "Filigree arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_filigree",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_oval",
+      "family": "orbits",
+      "description": "Oval arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_oval",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_harp",
+      "family": "orbits",
+      "description": "Harp arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_harp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_reef",
+      "family": "orbits",
+      "description": "Reef arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_reef",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_parasol",
+      "family": "orbits",
+      "description": "Parasol arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_parasol",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_spire",
+      "family": "orbits",
+      "description": "Spire arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_spire",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_wreath",
+      "family": "orbits",
+      "description": "Wreath arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_orbit",
+      "family": "orbits",
+      "description": "Orbit arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_orbit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_veil",
+      "family": "orbits",
+      "description": "Veil arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_veil",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_rondel",
+      "family": "orbits",
+      "description": "Rondel arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_rondel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_arc_corona",
+      "family": "orbits",
+      "description": "Corona arcs circle a warm-white core.",
+      "directory": "orbits/orbital_arc_corona",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_halo",
+      "family": "orbits",
+      "description": "Halo prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_wreath",
+      "family": "orbits",
+      "description": "Wreath prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_garland",
+      "family": "orbits",
+      "description": "Garland prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_garland",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_crown",
+      "family": "orbits",
+      "description": "Crown prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_bracelet",
+      "family": "orbits",
+      "description": "Bracelet prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_bracelet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_tiara",
+      "family": "orbits",
+      "description": "Tiara prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_tiara",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_ripple",
+      "family": "orbits",
+      "description": "Ripple prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_ripple",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_sash",
+      "family": "orbits",
+      "description": "Sash prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_sash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_compass",
+      "family": "orbits",
+      "description": "Compass prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_meridian",
+      "family": "orbits",
+      "description": "Meridian prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_parade",
+      "family": "orbits",
+      "description": "Parade prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_parade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_aurora",
+      "family": "orbits",
+      "description": "Aurora prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_aurora",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_braid",
+      "family": "orbits",
+      "description": "Braid prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_braid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_relay",
+      "family": "orbits",
+      "description": "Relay prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_relay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_sundial",
+      "family": "orbits",
+      "description": "Sundial prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_sundial",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_drift",
+      "family": "orbits",
+      "description": "Drift prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_drift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_vane",
+      "family": "orbits",
+      "description": "Vane prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_vane",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_bloom",
+      "family": "orbits",
+      "description": "Bloom prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_bloom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_silhouette",
+      "family": "orbits",
+      "description": "Silhouette prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_silhouette",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_prism_echo",
+      "family": "orbits",
+      "description": "Echo prisms orbit a bright mirror-room center.",
+      "directory": "orbits/orbital_prism_echo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_halo",
+      "family": "orbits",
+      "description": "Halo lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_crown",
+      "family": "orbits",
+      "description": "Crown lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_meridian",
+      "family": "orbits",
+      "description": "Meridian lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_meridian",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_satellite",
+      "family": "orbits",
+      "description": "Satellite lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_satellite",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_ring",
+      "family": "orbits",
+      "description": "Ring lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_cartwheel",
+      "family": "orbits",
+      "description": "Cartwheel lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_cartwheel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_constellation",
+      "family": "orbits",
+      "description": "Constellation lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_constellation",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_quartet",
+      "family": "orbits",
+      "description": "Quartet lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_quartet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_sweep",
+      "family": "orbits",
+      "description": "Sweep lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_sweep",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_arcade",
+      "family": "orbits",
+      "description": "Arcade lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_parasol",
+      "family": "orbits",
+      "description": "Parasol lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_parasol",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_compass",
+      "family": "orbits",
+      "description": "Compass lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_drift",
+      "family": "orbits",
+      "description": "Drift lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_drift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_lantern",
+      "family": "orbits",
+      "description": "Lantern lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_lantern",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_parade",
+      "family": "orbits",
+      "description": "Parade lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_parade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_ripple",
+      "family": "orbits",
+      "description": "Ripple lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_ripple",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_echo",
+      "family": "orbits",
+      "description": "Echo lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_echo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_beacon",
+      "family": "orbits",
+      "description": "Beacon lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_beacon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_glide",
+      "family": "orbits",
+      "description": "Glide lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_glide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbital_lens_wreath",
+      "family": "orbits",
+      "description": "Wreath lenses circle a warm-and-white beam field.",
+      "directory": "orbits/orbital_lens_wreath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_ledger",
+      "family": "prisms",
+      "description": "Three prisms line up under a warm-white side wash.",
+      "directory": "prisms/prism_ledger",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_veil",
+      "family": "prisms",
+      "description": "A soft prism veil catches a dual beam from both sides.",
+      "directory": "prisms/prism_veil",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_cascade",
+      "family": "prisms",
+      "description": "A staggered prism cascade drifts through a narrow beam lane.",
+      "directory": "prisms/prism_cascade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_helix",
+      "family": "prisms",
+      "description": "Two prism lanes trade light in a gentle helix.",
+      "directory": "prisms/prism_helix",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_podium",
+      "family": "prisms",
+      "description": "A compact prism podium stands in a bright two-beam room.",
+      "directory": "prisms/prism_podium",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_orbit",
+      "family": "prisms",
+      "description": "Prisms orbit a calm core with balanced warm and white light.",
+      "directory": "prisms/prism_orbit",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_current",
+      "family": "prisms",
+      "description": "A prism current runs diagonally through the room.",
+      "directory": "prisms/prism_current",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_barrier",
+      "family": "prisms",
+      "description": "A bright prism barrier holds the center of the room.",
+      "directory": "prisms/prism_barrier",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_lattice",
+      "family": "prisms",
+      "description": "A small prism lattice reflects a warm-white triad.",
+      "directory": "prisms/prism_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_bay",
+      "family": "prisms",
+      "description": "A prism bay opens toward a soft supporting top beam.",
+      "directory": "prisms/prism_bay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_lilt",
+      "family": "prisms",
+      "description": "Light steps across a loose prism ring with a white echo.",
+      "directory": "prisms/prism_lilt",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_rampart",
+      "family": "prisms",
+      "description": "A prism rampart turns slowly under a bright side pair.",
+      "directory": "prisms/prism_rampart",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_galley",
+      "family": "prisms",
+      "description": "A narrow prism galley keeps the light path clean.",
+      "directory": "prisms/prism_galley",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_crest",
+      "family": "prisms",
+      "description": "A crest of prisms rises into a white-topped wash.",
+      "directory": "prisms/prism_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_harbor",
+      "family": "prisms",
+      "description": "Prisms settle in a quiet harbor of warm and white beams.",
+      "directory": "prisms/prism_harbor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_motif",
+      "family": "prisms",
+      "description": "A minimal prism motif stays centered and readable.",
+      "directory": "prisms/prism_motif",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_parlor",
+      "family": "prisms",
+      "description": "A small prism parlor pairs a side beam with a top wash.",
+      "directory": "prisms/prism_parlor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_fan",
+      "family": "prisms",
+      "description": "Prisms fan outward from a bright dual-source core.",
+      "directory": "prisms/prism_fan",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_plinth",
+      "family": "prisms",
+      "description": "A centered prism plinth keeps the geometry clear.",
+      "directory": "prisms/prism_plinth",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_gauge",
+      "family": "prisms",
+      "description": "A prism gauge reads cleanly beneath a warm-white sweep.",
+      "directory": "prisms/prism_gauge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_ribbon",
+      "family": "prisms",
+      "description": "A prism ribbon turns through a bright exchange beam.",
+      "directory": "prisms/prism_ribbon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_clock",
+      "family": "prisms",
+      "description": "A prism clock keeps a steady bright rhythm.",
+      "directory": "prisms/prism_clock",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_field",
+      "family": "prisms",
+      "description": "A clean prism field stays open to the walls.",
+      "directory": "prisms/prism_field",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_shelf",
+      "family": "prisms",
+      "description": "A prism shelf leans into a warm-and-white crossfade.",
+      "directory": "prisms/prism_shelf",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_foil",
+      "family": "prisms",
+      "description": "A thin prism foil catches a bright side beam.",
+      "directory": "prisms/prism_foil",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_spire",
+      "family": "prisms",
+      "description": "A prism spire lifts into a restrained top support beam.",
+      "directory": "prisms/prism_spire",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_arcade",
+      "family": "prisms",
+      "description": "A prism arcade reads like a bright mirrored passage.",
+      "directory": "prisms/prism_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_lumen",
+      "family": "prisms",
+      "description": "A luminous prism set favors clarity over density.",
+      "directory": "prisms/prism_lumen",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_celeste",
+      "family": "prisms",
+      "description": "A soft prism constellation opens under a white cap.",
+      "directory": "prisms/prism_celeste",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_corridor",
+      "family": "prisms",
+      "description": "A prism corridor keeps the beam path long and legible.",
+      "directory": "prisms/prism_corridor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_trellis",
+      "family": "prisms",
+      "description": "A prism trellis catches a warm-white side pair.",
+      "directory": "prisms/prism_trellis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_drift",
+      "family": "prisms",
+      "description": "A drifting prism row stays bright and restrained.",
+      "directory": "prisms/prism_drift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_gleam",
+      "family": "prisms",
+      "description": "A gentle gleam runs across a minimal prism ring.",
+      "directory": "prisms/prism_gleam",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_span",
+      "family": "prisms",
+      "description": "A prism span bridges the room with balanced light.",
+      "directory": "prisms/prism_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_window",
+      "family": "prisms",
+      "description": "A prism window keeps the silhouette open and calm.",
+      "directory": "prisms/prism_window",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_lantern",
+      "family": "prisms",
+      "description": "A lantern-like prism cluster glows from a top wash.",
+      "directory": "prisms/prism_lantern",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_bastion",
+      "family": "prisms",
+      "description": "A compact prism bastion resists clutter.",
+      "directory": "prisms/prism_bastion",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_sonar",
+      "family": "prisms",
+      "description": "A prism sonar sweep traces the mirrored room.",
+      "directory": "prisms/prism_sonar",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_alloy",
+      "family": "prisms",
+      "description": "A prism alloy blends a warm lead beam with a white echo.",
+      "directory": "prisms/prism_alloy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_dome",
+      "family": "prisms",
+      "description": "A low prism dome keeps the center bright and simple.",
+      "directory": "prisms/prism_dome",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_ladder",
+      "family": "prisms",
+      "description": "A diagonal prism ladder holds a clean beam slope.",
+      "directory": "prisms/prism_ladder",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_courtyard",
+      "family": "prisms",
+      "description": "A prism courtyard stays open under side lighting.",
+      "directory": "prisms/prism_courtyard",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_march",
+      "family": "prisms",
+      "description": "A measured prism march keeps the motion disciplined.",
+      "directory": "prisms/prism_march",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_niche",
+      "family": "prisms",
+      "description": "A prism niche uses a small top beam for readability.",
+      "directory": "prisms/prism_niche",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_knot",
+      "family": "prisms",
+      "description": "A prism knot stays readable by holding a compact layout.",
+      "directory": "prisms/prism_knot",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_glint",
+      "family": "prisms",
+      "description": "A bright prism glint favors the white source slightly.",
+      "directory": "prisms/prism_glint",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_rill",
+      "family": "prisms",
+      "description": "A prism rill runs in a narrow and luminous channel.",
+      "directory": "prisms/prism_rill",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_beacon",
+      "family": "prisms",
+      "description": "A prism beacon lands a strong warm-white pair.",
+      "directory": "prisms/prism_beacon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_spark",
+      "family": "prisms",
+      "description": "A prism spark keeps the geometry small and bright.",
+      "directory": "prisms/prism_spark",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_halo",
+      "family": "prisms",
+      "description": "A halo of prisms opens around a centered beam cross.",
+      "directory": "prisms/prism_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_pier",
+      "family": "prisms",
+      "description": "A prism pier reaches into a soft top-lit room.",
+      "directory": "prisms/prism_pier",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_loom",
+      "family": "prisms",
+      "description": "A prism loom weaves a clear warm and white exchange.",
+      "directory": "prisms/prism_loom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_tangent",
+      "family": "prisms",
+      "description": "A tangent prism group keeps the motion side-on and crisp.",
+      "directory": "prisms/prism_tangent",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_solid",
+      "family": "prisms",
+      "description": "A solid prism pack stays centered under clean light.",
+      "directory": "prisms/prism_solid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_flux",
+      "family": "prisms",
+      "description": "A bright prism flux uses a gentle top support wash.",
+      "directory": "prisms/prism_flux",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_hush",
+      "family": "prisms",
+      "description": "A quiet prism hush favors form over clutter.",
+      "directory": "prisms/prism_hush",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_axis",
+      "family": "prisms",
+      "description": "A prism axis keeps the beam path honest.",
+      "directory": "prisms/prism_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_driftline",
+      "family": "prisms",
+      "description": "A prism driftline tilts under a warm-white pair.",
+      "directory": "prisms/prism_driftline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_rosette",
+      "family": "prisms",
+      "description": "A prism rosette gives the room a soft bright center.",
+      "directory": "prisms/prism_rosette",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_passage",
+      "family": "prisms",
+      "description": "A prism passage uses the room width without crowding it.",
+      "directory": "prisms/prism_passage",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_compass",
+      "family": "prisms",
+      "description": "A prism compass points the light cleanly through the room.",
+      "directory": "prisms/prism_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_margin",
+      "family": "prisms",
+      "description": "A prism margin leaves plenty of room around the subject.",
+      "directory": "prisms/prism_margin",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_slate",
+      "family": "prisms",
+      "description": "A prism slate keeps the shapes broad and readable.",
+      "directory": "prisms/prism_slate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_fence",
+      "family": "prisms",
+      "description": "A prism fence screens a clean white support beam.",
+      "directory": "prisms/prism_fence",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_ion",
+      "family": "prisms",
+      "description": "A prism ion composition stays compact and luminous.",
+      "directory": "prisms/prism_ion",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_channel",
+      "family": "prisms",
+      "description": "A prism channel guides the beam without excess motion.",
+      "directory": "prisms/prism_channel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_keystone",
+      "family": "prisms",
+      "description": "A prism keystone settles under a balanced dual beam.",
+      "directory": "prisms/prism_keystone",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_ledgerline",
+      "family": "prisms",
+      "description": "A prism ledgerline keeps the horizon clear.",
+      "directory": "prisms/prism_ledgerline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_breath",
+      "family": "prisms",
+      "description": "A prism breath scene stays light, open, and bright.",
+      "directory": "prisms/prism_breath",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_mosaic",
+      "family": "prisms",
+      "description": "A small prism mosaic reads well from the walls inward.",
+      "directory": "prisms/prism_mosaic",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_hallway",
+      "family": "ribbons",
+      "description": "Two ribbons run a bright hallway under warm and white side light.",
+      "directory": "ribbons/ribbon_hallway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_passage",
+      "family": "ribbons",
+      "description": "Three lanes cross a shallow passage with balanced side beams.",
+      "directory": "ribbons/ribbon_passage",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_channel",
+      "family": "ribbons",
+      "description": "Four ribbons thread a narrow channel beneath a top wash.",
+      "directory": "ribbons/ribbon_channel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_spine",
+      "family": "ribbons",
+      "description": "A compact pair holds a luminous spine through a single beam.",
+      "directory": "ribbons/ribbon_spine",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_canal",
+      "family": "ribbons",
+      "description": "Three lanes drift through a calm canal and meet at center light.",
+      "directory": "ribbons/ribbon_canal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_runway",
+      "family": "ribbons",
+      "description": "Four ribbons open into a bright runway with a triad of beams.",
+      "directory": "ribbons/ribbon_runway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lane",
+      "family": "ribbons",
+      "description": "Two ribbons stay wide apart for a simple warm-white lane.",
+      "directory": "ribbons/ribbon_lane",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_traverse",
+      "family": "ribbons",
+      "description": "Five lanes traverse the room in a broad mirrored sweep.",
+      "directory": "ribbons/ribbon_traverse",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_axis",
+      "family": "ribbons",
+      "description": "Three ribbons settle on a centered axis beneath a side-and-top wash.",
+      "directory": "ribbons/ribbon_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lattice",
+      "family": "ribbons",
+      "description": "Four ribbons make a restrained lattice with warm and white light.",
+      "directory": "ribbons/ribbon_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_pair",
+      "family": "ribbons",
+      "description": "A narrow pair braids through an off-center exchange beam.",
+      "directory": "ribbons/ribbon_braid_pair",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_triple",
+      "family": "ribbons",
+      "description": "Three ribbons braid under a warm-white side pairing.",
+      "directory": "ribbons/ribbon_braid_triple",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_fold",
+      "family": "ribbons",
+      "description": "Four ribbons fold into a mirrored braid with dual side beams.",
+      "directory": "ribbons/ribbon_braid_fold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_stitch",
+      "family": "ribbons",
+      "description": "Three lanes stitch together under a soft top wash.",
+      "directory": "ribbons/ribbon_braid_stitch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_shear",
+      "family": "ribbons",
+      "description": "Four ribbons shear across a luminous triad of beams.",
+      "directory": "ribbons/ribbon_braid_shear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_turn",
+      "family": "ribbons",
+      "description": "A pair turns inward under a bright exchange crossing.",
+      "directory": "ribbons/ribbon_braid_turn",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_echo",
+      "family": "ribbons",
+      "description": "Five lanes echo each other through a warm-white corridor.",
+      "directory": "ribbons/ribbon_braid_echo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_tilt",
+      "family": "ribbons",
+      "description": "Three ribbons tilt toward a mirrored dual-side pairing.",
+      "directory": "ribbons/ribbon_braid_tilt",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_shell",
+      "family": "ribbons",
+      "description": "Four ribbons form a shallow shell under a single beam.",
+      "directory": "ribbons/ribbon_braid_shell",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_braid_thread",
+      "family": "ribbons",
+      "description": "Two ribbons thread a narrow gap with a warm top wash.",
+      "directory": "ribbons/ribbon_braid_thread",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_arc",
+      "family": "ribbons",
+      "description": "Two ribbons arc through a centered exchange of warm light.",
+      "directory": "ribbons/ribbon_exchange_arc",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_lift",
+      "family": "ribbons",
+      "description": "Three ribbons lift into a balanced dual-side exchange.",
+      "directory": "ribbons/ribbon_exchange_lift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_swerve",
+      "family": "ribbons",
+      "description": "Four ribbons swerve through a warm-white exchange lane.",
+      "directory": "ribbons/ribbon_exchange_swerve",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_offset",
+      "family": "ribbons",
+      "description": "Three ribbons offset around a left-top exchange beam.",
+      "directory": "ribbons/ribbon_exchange_offset",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_tandem",
+      "family": "ribbons",
+      "description": "Five lanes move in tandem under a bright beam triad.",
+      "directory": "ribbons/ribbon_exchange_tandem",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_split",
+      "family": "ribbons",
+      "description": "A pair splits cleanly through a centered exchange crossing.",
+      "directory": "ribbons/ribbon_exchange_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_return",
+      "family": "ribbons",
+      "description": "Three ribbons return along the same bright side channels.",
+      "directory": "ribbons/ribbon_exchange_return",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_glide",
+      "family": "ribbons",
+      "description": "Four ribbons glide through a warm-white exchange corridor.",
+      "directory": "ribbons/ribbon_exchange_glide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_gate",
+      "family": "ribbons",
+      "description": "Three ribbons open a gate under a narrow left beam.",
+      "directory": "ribbons/ribbon_exchange_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange_cross",
+      "family": "ribbons",
+      "description": "Four ribbons cross at center under a bright exchange pair.",
+      "directory": "ribbons/ribbon_exchange_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_span",
+      "family": "ribbons",
+      "description": "Three ribbons span the room beneath a side and top wash.",
+      "directory": "ribbons/ribbon_bridge_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_arch",
+      "family": "ribbons",
+      "description": "Four ribbons arch through warm-white mirrored walls.",
+      "directory": "ribbons/ribbon_bridge_arch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_step",
+      "family": "ribbons",
+      "description": "Three ribbons step across a bright triad-lit bridge.",
+      "directory": "ribbons/ribbon_bridge_step",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_riser",
+      "family": "ribbons",
+      "description": "A pair rises into a clear left-top bridge crossing.",
+      "directory": "ribbons/ribbon_bridge_riser",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_sheen",
+      "family": "ribbons",
+      "description": "Four ribbons catch a mirrored sheen from both side walls.",
+      "directory": "ribbons/ribbon_bridge_sheen",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_sway",
+      "family": "ribbons",
+      "description": "Three ribbons sway under a warm-white bridge light.",
+      "directory": "ribbons/ribbon_bridge_sway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_fold",
+      "family": "ribbons",
+      "description": "Five ribbons fold into a bright bridge lattice.",
+      "directory": "ribbons/ribbon_bridge_fold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_knot",
+      "family": "ribbons",
+      "description": "A pair knots itself under a compact exchange beam.",
+      "directory": "ribbons/ribbon_bridge_knot",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_pier",
+      "family": "ribbons",
+      "description": "Four ribbons anchor a bridge pier with a single side beam.",
+      "directory": "ribbons/ribbon_bridge_pier",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_bridge_crest",
+      "family": "ribbons",
+      "description": "Three ribbons crest into a luminous warm-white arch.",
+      "directory": "ribbons/ribbon_bridge_crest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_box",
+      "family": "ribbons",
+      "description": "Three ribbons frame a boxy lantern of warm and white light.",
+      "directory": "ribbons/ribbon_lantern_box",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_rim",
+      "family": "ribbons",
+      "description": "Four ribbons hold a bright rim under mirrored side beams.",
+      "directory": "ribbons/ribbon_lantern_rim",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_slot",
+      "family": "ribbons",
+      "description": "A narrow pair slots into a clean left-top lantern opening.",
+      "directory": "ribbons/ribbon_lantern_slot",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_cage",
+      "family": "ribbons",
+      "description": "Five ribbons form a cage lit by warm-white walls.",
+      "directory": "ribbons/ribbon_lantern_cage",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_bay",
+      "family": "ribbons",
+      "description": "Three ribbons settle into a bay lit from the left.",
+      "directory": "ribbons/ribbon_lantern_bay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_frame",
+      "family": "ribbons",
+      "description": "Four ribbons trace a frame under a bright triad wash.",
+      "directory": "ribbons/ribbon_lantern_frame",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_hold",
+      "family": "ribbons",
+      "description": "Two ribbons hold a compact lantern around an exchange beam.",
+      "directory": "ribbons/ribbon_lantern_hold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_glow",
+      "family": "ribbons",
+      "description": "Three ribbons glow evenly under a warm-white corridor light.",
+      "directory": "ribbons/ribbon_lantern_glow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_niche",
+      "family": "ribbons",
+      "description": "Four ribbons sit in a shallow niche with a left-top wash.",
+      "directory": "ribbons/ribbon_lantern_niche",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_lantern_core",
+      "family": "ribbons",
+      "description": "Five ribbons keep a luminous core under a dual-side pair.",
+      "directory": "ribbons/ribbon_lantern_core",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_tight",
+      "family": "ribbons",
+      "description": "Four ribbons weave tightly through warm-white crossings.",
+      "directory": "ribbons/ribbon_weave_tight",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_loose",
+      "family": "ribbons",
+      "description": "Three ribbons weave loosely under a balanced side pair.",
+      "directory": "ribbons/ribbon_weave_loose",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_pulse",
+      "family": "ribbons",
+      "description": "Five ribbons pulse through a bright triad-lit weave.",
+      "directory": "ribbons/ribbon_weave_pulse",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_bend",
+      "family": "ribbons",
+      "description": "Three ribbons bend under a clean left-top wash.",
+      "directory": "ribbons/ribbon_weave_bend",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_shift",
+      "family": "ribbons",
+      "description": "Four ribbons shift in an off-center exchange lane.",
+      "directory": "ribbons/ribbon_weave_shift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_stack",
+      "family": "ribbons",
+      "description": "A pair stacks into a simple beam-led ribbon column.",
+      "directory": "ribbons/ribbon_weave_stack",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_curl",
+      "family": "ribbons",
+      "description": "Three ribbons curl through a bright warm-white weave.",
+      "directory": "ribbons/ribbon_weave_curl",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_gate",
+      "family": "ribbons",
+      "description": "Four ribbons gate a mirrored corridor with a top wash.",
+      "directory": "ribbons/ribbon_weave_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_mesh",
+      "family": "ribbons",
+      "description": "Five ribbons form a bright mesh under dual side beams.",
+      "directory": "ribbons/ribbon_weave_mesh",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_weave_draw",
+      "family": "ribbons",
+      "description": "Two ribbons draw clean lines through an exchange crossing.",
+      "directory": "ribbons/ribbon_weave_draw",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_open",
+      "family": "ribbons",
+      "description": "A pair opens a bright gate under dual-side light.",
+      "directory": "ribbons/ribbon_gate_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_narrow",
+      "family": "ribbons",
+      "description": "Three ribbons narrow into a left-top gate crossing.",
+      "directory": "ribbons/ribbon_gate_narrow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_wide",
+      "family": "ribbons",
+      "description": "Four ribbons widen into a bright triad-lit gate.",
+      "directory": "ribbons/ribbon_gate_wide",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_shear",
+      "family": "ribbons",
+      "description": "Three ribbons shear under a warm-white gate beam.",
+      "directory": "ribbons/ribbon_gate_shear",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_swing",
+      "family": "ribbons",
+      "description": "Five ribbons swing through a roomy dual-side gate.",
+      "directory": "ribbons/ribbon_gate_swing",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_cleft",
+      "family": "ribbons",
+      "description": "A pair clefts a central opening with an exchange beam.",
+      "directory": "ribbons/ribbon_gate_cleft",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_arc",
+      "family": "ribbons",
+      "description": "Four ribbons arc through a narrow left-lit gate.",
+      "directory": "ribbons/ribbon_gate_arc",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_hold",
+      "family": "ribbons",
+      "description": "Three ribbons hold still under a top-and-side wash.",
+      "directory": "ribbons/ribbon_gate_hold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_tower",
+      "family": "ribbons",
+      "description": "Four ribbons stack into a tall gate with triad beams.",
+      "directory": "ribbons/ribbon_gate_tower",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_gate_cross",
+      "family": "ribbons",
+      "description": "Two ribbons cross a bright gate in a compact exchange.",
+      "directory": "ribbons/ribbon_gate_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_iris",
+      "family": "rotors",
+      "description": "An iris compass opens under warm-white beams.",
+      "directory": "rotors/rotor_compass_iris",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_star",
+      "family": "rotors",
+      "description": "A six-point compass turns through a bright side wash.",
+      "directory": "rotors/rotor_compass_star",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_gate",
+      "family": "rotors",
+      "description": "A four-blade compass gate breathes around a soft core.",
+      "directory": "rotors/rotor_compass_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_split",
+      "family": "rotors",
+      "description": "Twin compass hubs hold a narrow center gap.",
+      "directory": "rotors/rotor_compass_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_crown",
+      "family": "rotors",
+      "description": "A three-point crown opens above a lens core.",
+      "directory": "rotors/rotor_compass_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_fork",
+      "family": "rotors",
+      "description": "Forked blades catch a warm beam from the side.",
+      "directory": "rotors/rotor_compass_fork",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_radar",
+      "family": "rotors",
+      "description": "A radar compass keeps a steady, readable sweep.",
+      "directory": "rotors/rotor_compass_radar",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_latch",
+      "family": "rotors",
+      "description": "A latch-like compass alternates two bright phases.",
+      "directory": "rotors/rotor_compass_latch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_quadrant",
+      "family": "rotors",
+      "description": "Four quadrants turn in a clean mirrored square.",
+      "directory": "rotors/rotor_compass_quadrant",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_compass_bloom",
+      "family": "rotors",
+      "description": "A bloom of spokes stays open and bright.",
+      "directory": "rotors/rotor_compass_bloom",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_gate",
+      "family": "rotors",
+      "description": "A shutter gate opens on a warm top beam.",
+      "directory": "rotors/rotor_shutter_gate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_stack",
+      "family": "rotors",
+      "description": "Stacked blades stagger across a bright side wash.",
+      "directory": "rotors/rotor_shutter_stack",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_fan",
+      "family": "rotors",
+      "description": "A broad shutter fan keeps a clean diagonal flow.",
+      "directory": "rotors/rotor_shutter_fan",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_lift",
+      "family": "rotors",
+      "description": "Lifted slats expose a narrow center corridor.",
+      "directory": "rotors/rotor_shutter_lift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_rib",
+      "family": "rotors",
+      "description": "Ribbed shutters swing through a soft triad.",
+      "directory": "rotors/rotor_shutter_rib",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_sweep",
+      "family": "rotors",
+      "description": "Long blades sweep a bright mirrored field.",
+      "directory": "rotors/rotor_shutter_sweep",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_clasp",
+      "family": "rotors",
+      "description": "A clasp of shutters locks onto a white beam.",
+      "directory": "rotors/rotor_shutter_clasp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_fold",
+      "family": "rotors",
+      "description": "Folded blades open like a slow mechanical petal.",
+      "directory": "rotors/rotor_shutter_fold",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_baffle",
+      "family": "rotors",
+      "description": "Baffles filter the room without losing clarity.",
+      "directory": "rotors/rotor_shutter_baffle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_shutter_tilt",
+      "family": "rotors",
+      "description": "Tilted shutters trade symmetry for a cleaner view.",
+      "directory": "rotors/rotor_shutter_tilt",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_dual_axis",
+      "family": "rotors",
+      "description": "Two rotors counter-rotate across the center line.",
+      "directory": "rotors/rotor_dual_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_triplet_axis",
+      "family": "rotors",
+      "description": "Three staggered rotors climb across the room.",
+      "directory": "rotors/rotor_triplet_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_cascade_axis",
+      "family": "rotors",
+      "description": "A small rotor cascade keeps each blade legible.",
+      "directory": "rotors/rotor_cascade_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_bridge_axis",
+      "family": "rotors",
+      "description": "Paired rotors bridge a narrow mirrored gap.",
+      "directory": "rotors/rotor_bridge_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_offset_axis",
+      "family": "rotors",
+      "description": "Offset hubs keep the motion asymmetrical but clear.",
+      "directory": "rotors/rotor_offset_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_ladder_axis",
+      "family": "rotors",
+      "description": "Rotor rungs step diagonally through the room.",
+      "directory": "rotors/rotor_ladder_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_hinge_axis",
+      "family": "rotors",
+      "description": "A hinged pair opens and closes in place.",
+      "directory": "rotors/rotor_hinge_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_echo_axis",
+      "family": "rotors",
+      "description": "Echo rotors repeat the main sweep with restraint.",
+      "directory": "rotors/rotor_echo_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_rail_axis",
+      "family": "rotors",
+      "description": "Rail-mounted blades keep the centerline bright.",
+      "directory": "rotors/rotor_rail_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_anchor_axis",
+      "family": "rotors",
+      "description": "Anchored rotors hold the room composition steady.",
+      "directory": "rotors/rotor_anchor_axis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_left",
+      "family": "rotors",
+      "description": "A left-wall fan throws clean slats across the room.",
+      "directory": "rotors/rotor_fan_left",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_right",
+      "family": "rotors",
+      "description": "A right-wall fan mirrors the same sweep in reverse.",
+      "directory": "rotors/rotor_fan_right",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_pair",
+      "family": "rotors",
+      "description": "Twin fans cross in a bright warm-white exchange.",
+      "directory": "rotors/rotor_fan_pair",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_cross",
+      "family": "rotors",
+      "description": "Crossing fans keep the center readable.",
+      "directory": "rotors/rotor_fan_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_braid",
+      "family": "rotors",
+      "description": "Braided fans interleave without crowding the frame.",
+      "directory": "rotors/rotor_fan_braid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_halo",
+      "family": "rotors",
+      "description": "A halo fan wraps the room with even motion.",
+      "directory": "rotors/rotor_fan_halo",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_lane",
+      "family": "rotors",
+      "description": "A lane of fan blades stays bright and direct.",
+      "directory": "rotors/rotor_fan_lane",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_arc",
+      "family": "rotors",
+      "description": "Arc fans lean into the beam instead of blocking it.",
+      "directory": "rotors/rotor_fan_arc",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_plate",
+      "family": "rotors",
+      "description": "Flat fan plates hold a crisp mirrored edge.",
+      "directory": "rotors/rotor_fan_plate",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_fan_drift",
+      "family": "rotors",
+      "description": "Drifting fans trade symmetry for softer spacing.",
+      "directory": "rotors/rotor_fan_drift",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_open",
+      "family": "rotors",
+      "description": "A bright iris opens with a clean center lens.",
+      "directory": "rotors/rotor_iris_open",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_close",
+      "family": "rotors",
+      "description": "A closing iris keeps a narrow luminous seam.",
+      "directory": "rotors/rotor_iris_close",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_ring",
+      "family": "rotors",
+      "description": "Ring blades orbit a soft core without clutter.",
+      "directory": "rotors/rotor_iris_ring",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_split",
+      "family": "rotors",
+      "description": "Split iris leaves a clear central channel.",
+      "directory": "rotors/rotor_iris_split",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_column",
+      "family": "rotors",
+      "description": "A vertical iris column reads clearly in profile.",
+      "directory": "rotors/rotor_iris_column",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_helix",
+      "family": "rotors",
+      "description": "Helical blades turn gently around the center.",
+      "directory": "rotors/rotor_iris_helix",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_diagonal",
+      "family": "rotors",
+      "description": "Diagonal iris blades keep the motion legible.",
+      "directory": "rotors/rotor_iris_diagonal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_window",
+      "family": "rotors",
+      "description": "Windowed blades reveal a bright inner beam.",
+      "directory": "rotors/rotor_iris_window",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_nest",
+      "family": "rotors",
+      "description": "Nested iris rings stay bright and compact.",
+      "directory": "rotors/rotor_iris_nest",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_iris_twist",
+      "family": "rotors",
+      "description": "A twisted iris leans the sweep just enough.",
+      "directory": "rotors/rotor_iris_twist",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_compass",
+      "family": "rotors",
+      "description": "Axis blades form a clean four-way compass.",
+      "directory": "rotors/rotor_axis_compass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_quadrant",
+      "family": "rotors",
+      "description": "Quadrant blades open toward the corners.",
+      "directory": "rotors/rotor_axis_quadrant",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_needle",
+      "family": "rotors",
+      "description": "A needle rotor cuts through the beam with restraint.",
+      "directory": "rotors/rotor_axis_needle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_wheel",
+      "family": "rotors",
+      "description": "A wheel rotor keeps every spoke in view.",
+      "directory": "rotors/rotor_axis_wheel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_grid",
+      "family": "rotors",
+      "description": "Grid rotors stay square and readable.",
+      "directory": "rotors/rotor_axis_grid",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_latch",
+      "family": "rotors",
+      "description": "A latch of blades locks onto a bright center.",
+      "directory": "rotors/rotor_axis_latch",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_bow",
+      "family": "rotors",
+      "description": "Bow-shaped pivots give the fan a calmer read.",
+      "directory": "rotors/rotor_axis_bow",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_rim",
+      "family": "rotors",
+      "description": "A rim rotor keeps the center open.",
+      "directory": "rotors/rotor_axis_rim",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_clover",
+      "family": "rotors",
+      "description": "Clover-like blades turn in a balanced loop.",
+      "directory": "rotors/rotor_axis_clover",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_axis_cross",
+      "family": "rotors",
+      "description": "Crossed rotors hold a hard but legible symmetry.",
+      "directory": "rotors/rotor_axis_cross",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_exchange",
+      "family": "rotors",
+      "description": "Two rotors exchange the spotlight across the room.",
+      "directory": "rotors/rotor_exchange",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_aurora",
+      "family": "rotors",
+      "description": "A soft aurora of blades keeps warm and white beams separate.",
+      "directory": "rotors/rotor_aurora",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_lattice",
+      "family": "rotors",
+      "description": "A lattice of rotors stays bright through the gaps.",
+      "directory": "rotors/rotor_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_trellis",
+      "family": "rotors",
+      "description": "Trellis blades form a clean mirrored scaffold.",
+      "directory": "rotors/rotor_trellis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_crown",
+      "family": "rotors",
+      "description": "A rotor crown opens around a calm lens core.",
+      "directory": "rotors/rotor_crown",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_sentinel",
+      "family": "rotors",
+      "description": "Sentinel blades hold the frame without crowding it.",
+      "directory": "rotors/rotor_sentinel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_pylon",
+      "family": "rotors",
+      "description": "Pylons of blades catch a warm beam from one side.",
+      "directory": "rotors/rotor_pylon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_beacon",
+      "family": "rotors",
+      "description": "Beacon rotors keep the light centered and bright.",
+      "directory": "rotors/rotor_beacon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_clasp",
+      "family": "rotors",
+      "description": "A clasped fan opens just enough to show the beam.",
+      "directory": "rotors/rotor_clasp",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_quorum",
+      "family": "rotors",
+      "description": "A quorum of blades rotates in a balanced field.",
+      "directory": "rotors/rotor_quorum",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_hallway",
+      "family": "splitters",
+      "description": "A long corridor split by a centered warm-white beam.",
+      "directory": "splitters/splitter_hallway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_nave",
+      "family": "splitters",
+      "description": "Three splitter ribs frame a bright axial passage.",
+      "directory": "splitters/splitter_nave",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_crosswalk",
+      "family": "splitters",
+      "description": "A crossing web catches side light from both walls.",
+      "directory": "splitters/splitter_crosswalk",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_crownlight",
+      "family": "splitters",
+      "description": "A crown of splitters keeps a warm beam centered.",
+      "directory": "splitters/splitter_crownlight",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_braidline",
+      "family": "splitters",
+      "description": "Two beams braid through a narrow splitter lane.",
+      "directory": "splitters/splitter_braidline",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_lattice",
+      "family": "splitters",
+      "description": "A compact lattice sends light into a bright core.",
+      "directory": "splitters/splitter_lattice",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_gatehouse",
+      "family": "splitters",
+      "description": "A gate-like web opens under a white support beam.",
+      "directory": "splitters/splitter_gatehouse",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_river",
+      "family": "splitters",
+      "description": "A soft splitter river runs between warm side beams.",
+      "directory": "splitters/splitter_river",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_keel",
+      "family": "splitters",
+      "description": "A keel-shaped web keeps the center line luminous.",
+      "directory": "splitters/splitter_keel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_fern",
+      "family": "splitters",
+      "description": "Three splitters branch like a bright fern.",
+      "directory": "splitters/splitter_fern",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_pier",
+      "family": "splitters",
+      "description": "A small pier holds a centered beam against both walls.",
+      "directory": "splitters/splitter_pier",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_sash",
+      "family": "splitters",
+      "description": "A sash-like web crosses the room with a white echo.",
+      "directory": "splitters/splitter_sash",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_bastion",
+      "family": "splitters",
+      "description": "A heavy splitter bastion anchors a warm-white crossing.",
+      "directory": "splitters/splitter_bastion",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_chancel",
+      "family": "splitters",
+      "description": "A narrow chancel keeps the beam path clean and bright.",
+      "directory": "splitters/splitter_chancel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_causeway",
+      "family": "splitters",
+      "description": "A bright causeway runs through a centered splitter web.",
+      "directory": "splitters/splitter_causeway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_dock",
+      "family": "splitters",
+      "description": "A docked core lets a side beam skim the web.",
+      "directory": "splitters/splitter_dock",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_ledger",
+      "family": "splitters",
+      "description": "A ledger-like web keeps the lines measured and clear.",
+      "directory": "splitters/splitter_ledger",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_mill",
+      "family": "splitters",
+      "description": "A mill-wheel web turns under a warm and white pair.",
+      "directory": "splitters/splitter_mill",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_orchard",
+      "family": "splitters",
+      "description": "A branching orchard of splitters stays open at the center.",
+      "directory": "splitters/splitter_orchard",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_promenade",
+      "family": "splitters",
+      "description": "A promenade of two beams glides through a quiet web.",
+      "directory": "splitters/splitter_promenade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_quay",
+      "family": "splitters",
+      "description": "A quay-like corridor keeps both beams in view.",
+      "directory": "splitters/splitter_quay",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_rosette",
+      "family": "splitters",
+      "description": "A rosette of splitters opens around a bright core.",
+      "directory": "splitters/splitter_rosette",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_span",
+      "family": "splitters",
+      "description": "A spanning exchange keeps the room visually balanced.",
+      "directory": "splitters/splitter_span",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_trellis",
+      "family": "splitters",
+      "description": "A trellis web catches a warm beam and a white lift.",
+      "directory": "splitters/splitter_trellis",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_underpass",
+      "family": "splitters",
+      "description": "A low splitter underpass leaves a clean central lane.",
+      "directory": "splitters/splitter_underpass",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_valence",
+      "family": "splitters",
+      "description": "A valence-like trident keeps the center exposed.",
+      "directory": "splitters/splitter_valence",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_wicket",
+      "family": "splitters",
+      "description": "A wicket web frames a narrow beam exchange.",
+      "directory": "splitters/splitter_wicket",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_xbridge",
+      "family": "splitters",
+      "description": "An X bridge crosses the room with a bright core.",
+      "directory": "splitters/splitter_xbridge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_yard",
+      "family": "splitters",
+      "description": "A small yard of splitters leaves room for the beams.",
+      "directory": "splitters/splitter_yard",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_zigzag",
+      "family": "splitters",
+      "description": "A zigzag web turns a side beam into a bright trace.",
+      "directory": "splitters/splitter_zigzag",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_apron",
+      "family": "splitters",
+      "description": "An apron of splitters softens the crossing light.",
+      "directory": "splitters/splitter_apron",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_balcony",
+      "family": "splitters",
+      "description": "A balcony-like web hangs beneath a bright top beam.",
+      "directory": "splitters/splitter_balcony",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_canal",
+      "family": "splitters",
+      "description": "A canal of light stays clear between mirrored walls.",
+      "directory": "splitters/splitter_canal",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_daisy",
+      "family": "splitters",
+      "description": "A daisy ring of splitters holds a warm-white center.",
+      "directory": "splitters/splitter_daisy",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_easel",
+      "family": "splitters",
+      "description": "An easel web presents the core to a side beam.",
+      "directory": "splitters/splitter_easel",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_fjord",
+      "family": "splitters",
+      "description": "A fjord-like gap keeps the beam water bright.",
+      "directory": "splitters/splitter_fjord",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_gantry",
+      "family": "splitters",
+      "description": "A gantry of splitters frames a clean luminous passage.",
+      "directory": "splitters/splitter_gantry",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_hinge",
+      "family": "splitters",
+      "description": "A hinge-like web pivots around a small bright core.",
+      "directory": "splitters/splitter_hinge",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_ion",
+      "family": "splitters",
+      "description": "A compact ion-web keeps the beam footprint tight.",
+      "directory": "splitters/splitter_ion",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_junction",
+      "family": "splitters",
+      "description": "A junction web keeps all routes readable and bright.",
+      "directory": "splitters/splitter_junction",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_knuckle",
+      "family": "splitters",
+      "description": "A knuckled splitter chain catches a warm-white pair.",
+      "directory": "splitters/splitter_knuckle",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_lagoon",
+      "family": "splitters",
+      "description": "A lagoon of light opens in the middle of the web.",
+      "directory": "splitters/splitter_lagoon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_mast",
+      "family": "splitters",
+      "description": "A mast-like splitter stack keeps the scene vertical.",
+      "directory": "splitters/splitter_mast",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_niche",
+      "family": "splitters",
+      "description": "A niche web tucks the core between two bright beams.",
+      "directory": "splitters/splitter_niche",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_offset",
+      "family": "splitters",
+      "description": "An offset web keeps the crossing asymmetrical but clear.",
+      "directory": "splitters/splitter_offset",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_pylon",
+      "family": "splitters",
+      "description": "A pylon web holds the beam line with extra weight.",
+      "directory": "splitters/splitter_pylon",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_quarry",
+      "family": "splitters",
+      "description": "A quarry gap lets the white support beam shine through.",
+      "directory": "splitters/splitter_quarry",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_rampart",
+      "family": "splitters",
+      "description": "A rampart of splitters guards a luminous center.",
+      "directory": "splitters/splitter_rampart",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_scribe",
+      "family": "splitters",
+      "description": "A scribe-like web traces a narrow bright corridor.",
+      "directory": "splitters/splitter_scribe",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_tandem",
+      "family": "splitters",
+      "description": "Two beam families run tandem through a splitter web.",
+      "directory": "splitters/splitter_tandem",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_umbra",
+      "family": "splitters",
+      "description": "An umbra web keeps the center bright despite the shadows.",
+      "directory": "splitters/splitter_umbra",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_vault",
+      "family": "splitters",
+      "description": "A vault of splitters arches around a clean beam axis.",
+      "directory": "splitters/splitter_vault",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_waypost",
+      "family": "splitters",
+      "description": "A waypost web points two beams toward the core.",
+      "directory": "splitters/splitter_waypost",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_yoke",
+      "family": "splitters",
+      "description": "A yoke-like trident keeps the beam line centered.",
+      "directory": "splitters/splitter_yoke",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_zenith",
+      "family": "splitters",
+      "description": "A zenith web is lit by a top beam and a warm echo.",
+      "directory": "splitters/splitter_zenith",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_arcade",
+      "family": "splitters",
+      "description": "An arcade of splitter ribs carries a bright crossing.",
+      "directory": "splitters/splitter_arcade",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_blind",
+      "family": "splitters",
+      "description": "A blind window keeps the beam path crisp and narrow.",
+      "directory": "splitters/splitter_blind",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_chain",
+      "family": "splitters",
+      "description": "A chained web keeps warm and white beams braided.",
+      "directory": "splitters/splitter_chain",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_dome",
+      "family": "splitters",
+      "description": "A dome of splitters opens over a bright central lens.",
+      "directory": "splitters/splitter_dome",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_ember",
+      "family": "splitters",
+      "description": "A small ember core glows between a side beam pair.",
+      "directory": "splitters/splitter_ember",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_fairway",
+      "family": "splitters",
+      "description": "A fairway web keeps the beam travel straight and clear.",
+      "directory": "splitters/splitter_fairway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_grille",
+      "family": "splitters",
+      "description": "A grille web makes the crossing geometry easy to read.",
+      "directory": "splitters/splitter_grille",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_harbor",
+      "family": "splitters",
+      "description": "A harbor of splitters shelters a bright central beam.",
+      "directory": "splitters/splitter_harbor",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_inlet",
+      "family": "splitters",
+      "description": "An inlet web opens a clean channel for warm light.",
+      "directory": "splitters/splitter_inlet",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_javelin",
+      "family": "splitters",
+      "description": "A javelin-like trident sends the beam through a slit.",
+      "directory": "splitters/splitter_javelin",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_keystone",
+      "family": "splitters",
+      "description": "A keystone web stabilizes the bright center mass.",
+      "directory": "splitters/splitter_keystone",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_laneway",
+      "family": "splitters",
+      "description": "A laneway keeps both side beams visible and controlled.",
+      "directory": "splitters/splitter_laneway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_mosaic",
+      "family": "splitters",
+      "description": "A mosaic of splitters keeps the core crisp and luminous.",
+      "directory": "splitters/splitter_mosaic",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_narrowway",
+      "family": "splitters",
+      "description": "A narrow way stays bright even as the web turns.",
+      "directory": "splitters/splitter_narrowway",
+      "assets": [
+        "frame_000.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_overpass",
+      "family": "splitters",
+      "description": "An overpass web leaves a clean underbeam lane.",
+      "directory": "splitters/splitter_overpass",
+      "assets": [
+        "frame_000.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0

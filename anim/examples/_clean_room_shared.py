@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
@@ -93,6 +94,7 @@ class SceneSpec:
     build: Callable[[FrameContext], Frame]
     base_exposure: float
     description: str
+    family: str = ""
     ambient: float = 0.0
     white_point: float = 0.5
     hq_duration: float | None = None
@@ -148,7 +150,7 @@ SHEET_MODE = RenderMode(
 )
 PREVIEW_MODE = RenderMode(
     name="preview",
-    canvas=Canvas(480, 270),
+    canvas=Canvas(576, 324),
     trace=TraceDefaults(rays=260_000, batch=120_000, depth=12),
     fps=16,
 )
@@ -237,6 +239,10 @@ def blade(length: float, material) -> list[Segment]:
 
 def frame_for(groups: list[Group], camera: Camera2D | None = None) -> Frame:
     return Frame(scene=Scene(groups=groups), camera=camera or ROOM_CAMERA)
+
+
+def with_family(spec: SceneSpec, family: str) -> SceneSpec:
+    return replace(spec, family=family)
 
 
 def look_for(spec: SceneSpec, exposure: float) -> Look:
@@ -528,6 +534,8 @@ def audit_room_bounds(
 
 
 def scene_dir(root: Path, spec: SceneSpec) -> Path:
+    if spec.family:
+        return root / spec.family / spec.name
     return root / spec.name
 
 
@@ -621,21 +629,22 @@ def render_video(spec: SceneSpec, exposure: float, directory: Path, mode: Render
     return output
 
 
-def assemble_overview(specs: Iterable[SceneSpec], root: Path) -> Path:
+def _overview_tile(source: Path, label: str) -> Image.Image:
     font = ImageFont.load_default()
-    tiles: list[Image.Image] = []
     label_height = 18
+    tile = Image.open(source).convert("RGB")
+    framed = Image.new("RGB", (tile.width, tile.height + label_height), (8, 8, 8))
+    framed.paste(tile, (0, label_height))
+    draw = ImageDraw.Draw(framed)
+    draw.text((6, 3), label, fill=(235, 235, 235), font=font)
+    return framed
 
-    for spec in specs:
-        source = scene_dir(root, spec) / "sheet.png"
-        tile = Image.open(source).convert("RGB")
-        framed = Image.new("RGB", (tile.width, tile.height + label_height), (8, 8, 8))
-        framed.paste(tile, (0, label_height))
-        draw = ImageDraw.Draw(framed)
-        draw.text((6, 3), spec.name.replace("_", " "), fill=(235, 235, 235), font=font)
-        tiles.append(framed)
 
-    cols = 2
+def _overview_chunk(
+    tiles: list[Image.Image],
+    *,
+    cols: int,
+) -> Image.Image:
     rows = math.ceil(len(tiles) / cols)
     cell_w = max(tile.width for tile in tiles)
     cell_h = max(tile.height for tile in tiles)
@@ -645,9 +654,118 @@ def assemble_overview(specs: Iterable[SceneSpec], root: Path) -> Path:
         x = (index % cols) * cell_w
         y = (index // cols) * cell_h
         overview.paste(tile, (x, y))
+    return overview
 
-    target = root / "overview_sheet.png"
-    overview.save(target)
+
+def assemble_overview_pages(
+    specs: Iterable[SceneSpec],
+    root: Path,
+    *,
+    subdir: str = "overview_pages",
+    stem: str = "overview",
+    page_size: int = 32,
+    cols: int = 2,
+) -> list[Path]:
+    spec_list = list(specs)
+    if not spec_list:
+        return []
+
+    target_dir = root / subdir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    pages: list[Path] = []
+    for page_index in range(0, len(spec_list), page_size):
+        chunk = spec_list[page_index : page_index + page_size]
+        tiles = [
+            _overview_tile(scene_dir(root, spec) / "sheet.png", spec.name.replace("_", " "))
+            for spec in chunk
+        ]
+        overview = _overview_chunk(tiles, cols=cols)
+        target = target_dir / f"{stem}_{page_index // page_size + 1:02d}.png"
+        overview.save(target)
+        pages.append(target)
+
+    if pages and subdir == "overview_pages":
+        first_page = Image.open(pages[0]).convert("RGB")
+        first_page.save(root / "overview_sheet.png")
+    return pages
+
+
+def assemble_family_overviews(specs: Iterable[SceneSpec], root: Path) -> dict[str, list[Path]]:
+    grouped: dict[str, list[SceneSpec]] = defaultdict(list)
+    for spec in specs:
+        grouped[spec.family or "misc"].append(spec)
+
+    pages_by_family: dict[str, list[Path]] = {}
+    for family, family_specs in sorted(grouped.items()):
+        pages_by_family[family] = assemble_overview_pages(
+            family_specs,
+            root,
+            subdir=f"{family}/overview_pages",
+            stem=f"{family}_overview",
+            page_size=24,
+            cols=2,
+        )
+    return pages_by_family
+
+
+def _relative_to_root(root: Path, path: Path) -> str:
+    return str(path.relative_to(root))
+
+
+def write_manifest(
+    specs: Iterable[SceneSpec],
+    root: Path,
+    *,
+    overview_pages: Iterable[Path] = (),
+    family_overviews: dict[str, list[Path]] | None = None,
+) -> Path:
+    spec_list = list(specs)
+    grouped: dict[str, list[str]] = defaultdict(list)
+    scenes_payload: list[dict[str, object]] = []
+
+    for spec in spec_list:
+        directory = scene_dir(root, spec)
+        if not directory.exists():
+            assets: list[str] = []
+        else:
+            assets = sorted(path.name for path in directory.iterdir() if path.is_file())
+        audit = audit_room_bounds(spec, duration=spec.duration)
+        grouped[spec.family or "misc"].append(spec.name)
+        scenes_payload.append(
+            {
+                "name": spec.name,
+                "family": spec.family or "misc",
+                "description": spec.description,
+                "directory": _relative_to_root(root, directory),
+                "assets": assets,
+                "room_fit": audit.fits_room,
+                "max_overrun": audit.max_overrun,
+            }
+        )
+
+    payload = {
+        "canonical_root": _relative_to_root(REPO_ROOT, root),
+        "overview": "overview_sheet.png",
+        "overview_pages": sorted(_relative_to_root(root, path) for path in overview_pages),
+        "scene_count": len(spec_list),
+        "family_count": len(grouped),
+        "families": [
+            {
+                "name": family,
+                "scene_count": len(names),
+                "overview_pages": sorted(
+                    _relative_to_root(root, path)
+                    for path in (family_overviews or {}).get(family, [])
+                ),
+            }
+            for family, names in sorted(grouped.items())
+        ],
+        "scenes": scenes_payload,
+    }
+    target = root / "manifest.json"
+    with target.open("w") as handle:
+        json.dump(payload, handle, indent=2)
+        handle.write("\n")
     return target
 
 
@@ -680,6 +798,18 @@ def _build_gallery_parser(description: str) -> argparse.ArgumentParser:
         dest="names",
         help="render only the named scene (repeatable); defaults to all scenes",
     )
+    parser.add_argument(
+        "--family",
+        action="append",
+        dest="families",
+        help="render only the named family (repeatable)",
+    )
+    parser.add_argument(
+        "--match",
+        action="append",
+        dest="matches",
+        help="render only scenes whose name contains the substring",
+    )
     parser.add_argument("--video", action="store_true", help="render videos instead of sheets")
     parser.add_argument("--hq", action="store_true", help="use HQ video mode")
     parser.add_argument("--duration", type=float, help="override duration in seconds")
@@ -711,7 +841,15 @@ def resolve_mode(spec: SceneSpec, args: argparse.Namespace, *, gallery: bool = F
     if rays is None:
         rays = base.trace.rays
 
-    canvas = Canvas(args.width or base.canvas.width, args.height or base.canvas.height)
+    width = args.width or base.canvas.width
+    height = args.height or base.canvas.height
+    if base.name != "sheet":
+        if width % 2 != 0:
+            width += 1
+        if height % 2 != 0:
+            height += 1
+
+    canvas = Canvas(width, height)
     trace = TraceDefaults(
         rays=rays,
         batch=args.batch or base.trace.batch,
@@ -802,13 +940,31 @@ def run_gallery_cli(specs: list[SceneSpec], description: str) -> None:
     args = parser.parse_args()
     if args.list:
         for spec in specs:
-            print(f"{spec.name:24} {spec.description}")
+            family = spec.family or "misc"
+            print(f"{spec.name:24} {family:12} {spec.description}")
         return
 
-    selected = specs if not args.names else [spec for spec in specs if spec.name in set(args.names)]
+    selected = list(specs)
+    if args.names:
+        wanted_names = set(args.names)
+        selected = [spec for spec in selected if spec.name in wanted_names]
+    if args.families:
+        wanted_families = set(args.families)
+        selected = [spec for spec in selected if (spec.family or "misc") in wanted_families]
+    if args.matches:
+        lowered = [pattern.lower() for pattern in args.matches]
+        selected = [
+            spec for spec in selected if any(pattern in spec.name.lower() for pattern in lowered)
+        ]
+
     missing = sorted(set(args.names or []) - {spec.name for spec in specs})
     if missing:
         raise SystemExit(f"unknown scene(s): {', '.join(missing)}")
+    missing_families = sorted(set(args.families or []) - {(spec.family or "misc") for spec in specs})
+    if missing_families:
+        raise SystemExit(f"unknown family/families: {', '.join(missing_families)}")
+    if not selected:
+        raise SystemExit("no scenes matched the requested filters")
 
     rendered_for_overview: list[SceneSpec] = []
     for spec in selected:
@@ -817,5 +973,18 @@ def run_gallery_cli(specs: list[SceneSpec], description: str) -> None:
             rendered_for_overview.append(processed_spec)
 
     if rendered_for_overview and not args.no_overview:
-        overview = assemble_overview(rendered_for_overview, args.outdir)
-        print(f"overview {overview}")
+        overview_pages = assemble_overview_pages(rendered_for_overview, args.outdir)
+        family_overviews = assemble_family_overviews(rendered_for_overview, args.outdir)
+        for overview in overview_pages:
+            print(f"overview {overview}")
+        for family, pages in sorted(family_overviews.items()):
+            for page in pages:
+                print(f"family   {family:12} {page}")
+    else:
+        overview_pages = []
+        family_overviews = {}
+
+    full_selection = {spec.name for spec in selected} == {spec.name for spec in specs}
+    if full_selection:
+        manifest = write_manifest(specs, args.outdir, overview_pages=overview_pages, family_overviews=family_overviews)
+        print(f"manifest {manifest}")

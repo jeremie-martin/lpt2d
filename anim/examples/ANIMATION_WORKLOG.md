@@ -20,6 +20,12 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
   Shared example-only utilities: room/material constants, tuning, bounds audit, rendering/export helpers.
 - `_clean_room_registry.py`
   Batch registry for clean-room examples.
+- `clean_room_families/`
+  Large curated family modules used for high-scene-count expansion.
+- `clean_room_scene.py`
+  Named scene runner for the registry.
+- `clean_room_audit.py`
+  Bulk non-visual audit runner for bounds and base-exposure metrics.
 - `clean_room_*.py`
   One authored file per animation or preserved variant.
 - `clean_room_gallery.py`
@@ -91,6 +97,31 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
   `mirror_fan`, `bridge_ribbon`, and `prism_constellation`.
 - Scenes that are bright but clip more than ideal:
   `focus_columns`, `doublet_grid`, and `halo_lenses`.
+
+## Library Expansion Notes
+
+- The library now sits at `572` registry scenes across `10` families:
+  `arcs`, `crossfires`, `hybrids`, `lenses`, `mirrors`, `orbits`, `prisms`, `ribbons`, `rotors`, and `splitters`.
+- Preview defaults were raised slightly to `560x315` so promoted previews stay a bit cleaner without making the bulk pipeline too expensive.
+- The current canonical render tree is family-based under `renders/clean_room/<family>/<scene>/`.
+- Full-library baseline assets are now:
+  `frame_000.json`, `manifest.json`, and `library_audit*.json`.
+- Full-library media renders are now intentionally staged rather than required for every scene in a large wave.
+
+## Current Audit Findings
+
+- Bounds failures in `rotor_family` were fixed by tightening the `CROSS`/`QUAD` pivot spreads and a few overlong blade variants.
+- `lens_family` was the main clipping hotspot; layout-aware exposure trims brought it down materially, but it still runs hotter than the rest of the library.
+- A mild family-wide lift helped `splitter_family` and `prism_family` avoid the dimmest tails without causing a new clipping spike.
+- `ribbon_family` remains acceptable overall, but some `left` and `exchange` motifs still read moodier than the house preference.
+- For mirror-room work, clipping diagnostics are still harsher than the artistic target; the current numeric thresholds are useful for ranking outliers but not as absolute accept/reject gates.
+
+## Scaling Direction
+
+- For `5,000+` scenes, treat the work as a catalog problem rather than a flat authored-example problem.
+- Add families through curated recipe modules, not through one-off top-level files.
+- Keep non-visual audit first, metadata export second, and media render promotion third.
+- Reserve full preview/video renders for curated subsets, family samples, or on-demand promotion passes.
 
 ## Future `anim` Package Ideas
 
