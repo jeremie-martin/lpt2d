@@ -188,27 +188,35 @@ def test_intensity_scaling():
               f"expected {k:.1f}x, actual={results[k]/base:.3f}x")
 
 
-def test_uniform_backward_compat():
-    """N co-located lights at intensity=1 → W/N=1 → same max_hdr."""
-    print("\n=== Test 2: Uniform-intensity backward compatibility ===\n")
+def test_additive_lights():
+    """N co-located lights at intensity=1 → W=N → max_hdr scales linearly.
+
+    This is the correct IS estimator: adding a light ADDS energy.
+    Existing lights keep their brightness; total scene gets brighter.
+    """
+    print("\n=== Test 2: Additive lights (W = total intensity) ===\n")
 
     results = {}
     for n in [1, 2, 3, 5]:
         lights = [point_light(*LIGHT_POS, intensity=1.0) for _ in range(n)]
         r = render(json.dumps(make_scene(lights)), rays=RAYS, normalize="off")
         results[n] = r.max_hdr
-        print(f"  N={n}  max_hdr={r.max_hdr:>12.1f}")
+        print(f"  N={n}  max_hdr={r.max_hdr:>12.1f}  expected={n}x")
 
     base = results[1]
     print()
     for n in [2, 3, 5]:
-        check(f"N={n} vs N=1", ratio_ok(results[n], base, 1.0, tol=0.08),
-              f"ratio={results[n]/base:.3f}")
+        check(f"N={n} is {n}x", ratio_ok(results[n], base, float(n), tol=0.08),
+              f"expected {n:.0f}x, actual={results[n]/base:.3f}x")
 
 
-def test_multi_light_average():
-    """2 co-located lights: power_scale = avg(intensities)."""
-    print("\n=== Test 3: Multi-light average intensity ===\n")
+def test_multi_light_total_power():
+    """Co-located lights: max_hdr scales with W (total intensity).
+
+    With W model: 2 lights at (2,1) have W=3 vs 2 lights at (1,1) with W=2.
+    Ratio should be W_a / W_b = 3/2 = 1.5.
+    """
+    print("\n=== Test 3: Multi-light total power ===\n")
 
     base = render(json.dumps(make_scene([
         point_light(*LIGHT_POS, 1.0), point_light(*LIGHT_POS, 1.0),
@@ -220,13 +228,13 @@ def test_multi_light_average():
         point_light(*LIGHT_POS, 3.0), point_light(*LIGHT_POS, 1.0),
     ])), rays=RAYS, normalize="off")
 
-    print(f"  (1,1): max_hdr={base.max_hdr:>12.1f}  W/N=1.0")
-    print(f"  (2,1): max_hdr={r21.max_hdr:>12.1f}  W/N=1.5")
-    print(f"  (3,1): max_hdr={r31.max_hdr:>12.1f}  W/N=2.0")
+    print(f"  (1,1): max_hdr={base.max_hdr:>12.1f}  W=2")
+    print(f"  (2,1): max_hdr={r21.max_hdr:>12.1f}  W=3")
+    print(f"  (3,1): max_hdr={r31.max_hdr:>12.1f}  W=4")
     print()
-    check("(2,1)/(1,1)=1.5", ratio_ok(r21.max_hdr, base.max_hdr, 1.5),
+    check("(2,1)/(1,1)=3/2", ratio_ok(r21.max_hdr, base.max_hdr, 1.5),
           f"actual={r21.max_hdr/base.max_hdr:.3f}")
-    check("(3,1)/(1,1)=2.0", ratio_ok(r31.max_hdr, base.max_hdr, 2.0),
+    check("(3,1)/(1,1)=4/2", ratio_ok(r31.max_hdr, base.max_hdr, 2.0),
           f"actual={r31.max_hdr/base.max_hdr:.3f}")
 
 
@@ -326,9 +334,33 @@ def test_rays_mode_intensity_responsive():
           f"{results[4.0]:.2f} > {results[2.0]:.2f}")
 
 
+def test_adding_light_preserves_existing():
+    """Adding a second light must NOT dim the first one (Off mode, raw max_hdr).
+
+    This is the core user requirement. With the correct IS estimator (W),
+    each ray carries W * uIntensity energy. Adding a light increases W,
+    compensating for the ray split.
+    """
+    print("\n=== Test 8: Adding a light preserves existing brightness ===")
+    print("Theory: W model. Light A's max_hdr is unchanged when B is added.\n")
+
+    LIGHT_B = (0.0, -0.6)
+    r1 = render(json.dumps(make_scene([point_light(*LIGHT_POS)])),
+                rays=RAYS, normalize="off")
+    r2 = render(json.dumps(make_scene([point_light(*LIGHT_POS), point_light(*LIGHT_B)])),
+                rays=RAYS, normalize="off")
+
+    print(f"  1 light:   max_hdr={r1.max_hdr:>12.1f}")
+    print(f"  2 lights:  max_hdr={r2.max_hdr:>12.1f}")
+    ratio = r2.max_hdr / r1.max_hdr if r1.max_hdr > 0 else 0
+    print()
+    check("max_hdr preserved", abs(ratio - 1.0) < 0.10,
+          f"ratio={ratio:.3f} (expected ~1.0, adding B doesn't dim A)")
+
+
 def test_fixed_mode():
     """Fixed mode: normalize_ref captured from Max produces same output."""
-    print("\n=== Test 8: Fixed mode — calibrated reference ===\n")
+    print("\n=== Test 9: Fixed mode — calibrated reference ===\n")
 
     scene_json = json.dumps(make_scene([point_light(*LIGHT_POS)]))
 
@@ -395,7 +427,7 @@ def test_all_modes_produce_output():
 
 def test_existing_scene():
     """Diamond scene (non-uniform intensities) works correctly."""
-    print("\n=== Test 11: Existing scene — diamond ===\n")
+    print("\n=== Test 12: Existing scene — diamond ===\n")
 
     with open("scenes/diamond.json") as f:
         scene_json = json.dumps(json.loads(f.read()))
@@ -425,12 +457,13 @@ if __name__ == "__main__":
     print(f"Default rays: {RAYS:,}")
 
     test_intensity_scaling()
-    test_uniform_backward_compat()
-    test_multi_light_average()
+    test_additive_lights()
+    test_multi_light_total_power()
     test_ray_count_scaling()
     test_max_mode_ray_independent()
     test_rays_mode_ray_independent()
     test_rays_mode_intensity_responsive()
+    test_adding_light_preserves_existing()
     test_fixed_mode()
     test_percentile()
     test_all_modes_produce_output()

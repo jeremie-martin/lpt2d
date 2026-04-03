@@ -325,11 +325,11 @@ void main() {
     // Random wavelength → color (per-light spectral range)
     float wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
     vec3 rgb = wavelength_rgb(wavelength);
-    // Scale by mean intensity (W/N) — the IS-correct factor that makes per-light
-    // intensity control actual brightness while keeping the total energy budget
-    // fixed for a given number of lights.  Equals 1 when all intensities are 1.
-    float power_scale = total_w / float(uNumLights);
-    vec4 color = vec4(rgb * uIntensity * power_scale, uIntensity * power_scale);
+    // Importance sampling correction: each sample carries energy proportional to
+    // total_w (sum of all light intensities).  This is the standard unbiased IS
+    // estimator f(x)/p(x) where f = w_i * base and p = w_i / W, giving W * base.
+    // Adding a light source ADDS energy — existing lights keep their brightness.
+    vec4 color = vec4(rgb * uIntensity * total_w, uIntensity * total_w);
 
     // Trace
     float current_absorption = 0.0;
