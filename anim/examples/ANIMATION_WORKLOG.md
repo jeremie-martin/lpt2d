@@ -79,6 +79,19 @@ Scope: example-layer authoring only. No changes to `anim/` core modules, shaders
 - The good version is the new wall-safe center-gap version.
 - A useful next variant is a dual-beam composition with one warm beam and one white beam.
 
+## Second Wave Notes
+
+- Strong new additions:
+  `arc_bloom`, `resonator_weave`, `prism_bridge`, `prism_drum`, `iris_gate`, `splitter_compass`, and `splitter_crown`.
+- The warm-plus-white pairing worked especially well for:
+  `prism_drum`, `counter_rotor`, `louver_fan`, and `beam_exchange`.
+- A targeted brightness rescue pass materially improved:
+  `counter_rotor`, `iris_gate`, `louver_fan`, `prism_drum`, `silk_waveguide`, and `caustic_stair`.
+- Scenes that still read as moodier than the current house preference:
+  `mirror_fan`, `bridge_ribbon`, and `prism_constellation`.
+- Scenes that are bright but clip more than ideal:
+  `focus_columns`, `doublet_grid`, and `halo_lenses`.
+
 ## Future `anim` Package Ideas
 
 Not to implement now, but worth recording:

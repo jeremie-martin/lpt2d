@@ -1,6 +1,7 @@
 {
   "canonical_root": "renders/clean_room",
   "overview": "overview_sheet.png",
+  "scene_count": 42,
   "scenes": [
     {
       "name": "orbiting_triplet",
@@ -138,6 +139,366 @@
     {
       "name": "mirror_fan",
       "description": "A five-blade mirror fan catches a beam through a small prism.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_bloom",
+      "description": "Four mirrored crescents orbit around warm and white beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "crescent_duet",
+      "description": "Two large crescents trade the spotlight between a side beam and a top beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "resonator_weave",
+      "description": "Three offset resonator arcs weave under a warm-white triad of beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_lantern",
+      "description": "A lantern-like cage of crescents is lit from the side and from above.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "orbiting_crescents",
+      "description": "Five small crescents circulate around a bright dual-beam core.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_bridge",
+      "description": "A bridge of prisms floats between warm and white side beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_drum",
+      "description": "A ring of prisms turns like a drum under a warm lead beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_sweep",
+      "description": "A diagonal prism sweep catches light from both side walls.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_constellation",
+      "description": "A loose constellation of prisms sparkles under side and top beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_parade",
+      "description": "A straight parade of prisms glows between a warm beam and white support light.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "counter_rotor",
+      "description": "Two opposing rotor fans trade warm and white light across the room.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "iris_gate",
+      "description": "An iris of mirror blades opens and closes under a bright top beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "louver_fan",
+      "description": "A wide right-wall fan throws mirror slats across a warm side beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mirror_compass",
+      "description": "A four-point mirror compass catches light from both sides and above.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "rotor_cascade",
+      "description": "Three small rotors climb diagonally through a warm-white beam exchange.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "dual_ribbon",
+      "description": "Two wide ribbons exchange a warm beam and white support light.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "bridge_ribbon",
+      "description": "Three ribbons form a gentle bridge beneath a side beam and a top wash.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "ribbon_exchange",
+      "description": "A ribbon pair bends into an off-center beam exchange.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "silk_waveguide",
+      "description": "Four fine ribbons create a brighter silk-like waveguide sheet.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "tri_ribbon",
+      "description": "Three ribbon lanes braid through warm and white side beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "focus_columns",
+      "description": "Two bright columns of lenses are scanned by warm and white side beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "caustic_stair",
+      "description": "A stair of lenses climbs diagonally through a warm scan beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "lens_quartet",
+      "description": "A diamond quartet of lenses is lit by a side beam and a top wash.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "doublet_grid",
+      "description": "A small grid of mixed lenses glows between warm and white side beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "halo_lenses",
+      "description": "A ring of lenses forms a halo beneath a three-way beam setup.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_corridor",
+      "description": "A short corridor of splitters carries light from both side walls.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_compass",
+      "description": "A compass of splitters catches a warm-white trident of beams.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "trident_crossfire",
+      "description": "Three beams strike a staggered splitter trident through the room center.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "beam_exchange",
+      "description": "Two diagonal splitters stage a clean warm-white beam exchange.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_crown",
+      "description": "A crown of splitters sits under a side beam and a top wash.",
       "assets": [
         "frame_000.json",
         "preview.mp4",
