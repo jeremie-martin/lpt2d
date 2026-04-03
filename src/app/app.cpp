@@ -687,7 +687,7 @@ int App::run(const AppConfig& config) {
                 ImGui::InputText("##loadpath", load_path_buf, sizeof(load_path_buf));
                 if (ImGui::Button("OK") && load_path_buf[0]) {
                     Scene loaded = load_scene_json(load_path_buf);
-                    if (!loaded.shapes.empty() || !loaded.lights.empty()) {
+                    if (!loaded.shapes.empty() || !loaded.lights.empty() || !loaded.groups.empty()) {
                         ed.scene = loaded;
                         ed.save_path = load_path_buf;
                         current_scene = -1;

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from .stats import FrameStats, frame_stats
 from .types import Camera2D, Frame, FrameContext, RenderSettings, Scene, Timeline
 
 
@@ -370,6 +371,9 @@ def render_contact_sheet(
 ) -> None:
     """Render a grid of frames spread across the timeline. Saves as PPM.
 
+    Intended for human visual inspection during look development.
+    For automated/agent workflows, use frame_stats() instead.
+
     Args:
         animate: Callback receiving FrameContext, returning Scene or Frame.
         timeline: Timeline object, or duration in seconds.
@@ -430,3 +434,68 @@ def render_contact_sheet(
 
     _write_ppm(output, bytes(sheet), sheet_w, sheet_h)
     sys.stderr.write(f"wrote {output} ({sheet_w}x{sheet_h}, {count} frames, {cols}x{rows} grid)\n")
+
+
+def render_stats(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    *,
+    frames: list[int] | int | None = None,
+    count: int = 8,
+    settings: RenderSettings | str | None = None,
+    camera: Camera2D | None = None,
+) -> list[tuple[int, float, FrameStats]]:
+    """Render frames and return their statistics. No file output.
+
+    Returns a list of (frame_index, time, FrameStats) tuples.
+    Designed for automated workflows and agent-driven analysis.
+
+    Args:
+        animate: Callback receiving FrameContext, returning Scene or Frame.
+        timeline: Timeline object, or duration in seconds.
+        frames: Specific frame indices to render. An int renders that single frame.
+                None samples `count` frames evenly across the timeline.
+        count: Number of frames to sample when `frames` is None (default: 8).
+        settings: RenderSettings, preset name, or None for defaults.
+        camera: Session-level camera.
+    """
+    if isinstance(timeline, (int, float)):
+        timeline = Timeline(duration=float(timeline))
+    if settings is None:
+        settings = RenderSettings()
+    elif isinstance(settings, str):
+        settings = RenderSettings.preset(settings)
+
+    # Resolve frame indices
+    total = timeline.total_frames
+    if frames is None:
+        indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
+    elif isinstance(frames, int):
+        indices = [frames]
+    else:
+        indices = list(frames)
+
+    w, h = settings.width, settings.height
+    aspect = settings.aspect
+
+    renderer = Renderer(settings)
+    results: list[tuple[int, float, FrameStats]] = []
+    try:
+        for fi in indices:
+            ctx = FrameContext(
+                frame=fi,
+                time=timeline.time_at(fi),
+                progress=timeline.progress_at(fi),
+                fps=timeline.fps,
+                dt=timeline.dt,
+                total_frames=timeline.total_frames,
+                duration=timeline.duration,
+            )
+            result = animate(ctx)
+            f = result if isinstance(result, Frame) else Frame(scene=result)
+            wire = _build_wire_json(f, camera, aspect)
+            rgb = renderer.render_frame(wire)
+            results.append((fi, ctx.time, frame_stats(rgb, w, h)))
+    finally:
+        renderer.close()
+    return results
