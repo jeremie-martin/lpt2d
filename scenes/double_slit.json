@@ -1,6 +1,10 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "double_slit",
+  "camera": { "bounds": [-1.3, -0.9, 1.3, 0.9] },
+  "canvas": { "width": 1920, "height": 1080 },
+  "look": { "exposure": 2, "tonemap": "aces", "normalize": "rays" },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
   "shapes": [
     {
       "type": "segment",

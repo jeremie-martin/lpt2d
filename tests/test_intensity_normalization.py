@@ -34,7 +34,7 @@ CLI = "./build/lpt2d-cli"
 
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
-        "version": 3,
+        "version": 4,
         "name": name,
         "shapes": [
             {
@@ -81,10 +81,18 @@ def _render(
 ) -> FrameResult | tuple[FrameResult, bytes]:
     """Render one frame via --stream and return parsed metadata (+ optional pixels)."""
     cmd = [
-        CLI, "--stream",
-        "--width", str(width), "--height", str(height),
-        "--rays", str(rays), "--exposure", str(exposure),
-        "--normalize", normalize,
+        CLI,
+        "--stream",
+        "--width",
+        str(width),
+        "--height",
+        str(height),
+        "--rays",
+        str(rays),
+        "--exposure",
+        str(exposure),
+        "--normalize",
+        normalize,
     ]
     if normalize_ref > 0:
         cmd.extend(["--normalize-ref", str(normalize_ref)])
@@ -92,7 +100,10 @@ def _render(
         cmd.extend(["--normalize-pct", str(normalize_pct)])
 
     proc = subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     assert proc.stdin and proc.stdout and proc.stderr
     proc.stdin.write((scene_json + "\n").encode())
@@ -110,9 +121,10 @@ def _render(
         if "max_hdr" in line:
             idx = line.find(": {")
             if idx >= 0:
-                data = json.loads(line[idx + 2:])
+                data = json.loads(line[idx + 2 :])
                 fr = FrameResult(
-                    rays=data["rays"], time_ms=data["time_ms"],
+                    rays=data["rays"],
+                    time_ms=data["time_ms"],
                     max_hdr=data["max_hdr"],
                     total_rays=data.get("total_rays", data["rays"]),
                 )
@@ -185,8 +197,11 @@ def test_intensity_scaling():
     base = results[1.0]
     print()
     for k in [0.5, 2.0, 4.0]:
-        check(f"intensity={k}", ratio_ok(results[k], base, k),
-              f"expected {k:.1f}x, actual={results[k]/base:.3f}x")
+        check(
+            f"intensity={k}",
+            ratio_ok(results[k], base, k),
+            f"expected {k:.1f}x, actual={results[k] / base:.3f}x",
+        )
 
 
 def test_additive_lights():
@@ -208,8 +223,11 @@ def test_additive_lights():
     base = results[1]
     print()
     for n in [2, 3, 5]:
-        check(f"N={n} is {n}x", ratio_ok(results[n], base, float(n), tol=0.08),
-              f"expected {n:.0f}x, actual={results[n]/base:.3f}x")
+        check(
+            f"N={n} is {n}x",
+            ratio_ok(results[n], base, float(n), tol=0.08),
+            f"expected {n:.0f}x, actual={results[n] / base:.3f}x",
+        )
 
 
 def test_multi_light_total_power():
@@ -221,24 +239,57 @@ def test_multi_light_total_power():
     print("\n=== Test 3: Multi-light total power ===\n")
 
     # Use normalize="max" so compute_max_gpu runs and max_hdr is reported.
-    base = render(json.dumps(make_scene([
-        point_light(*LIGHT_POS, 1.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="max")
-    r21 = render(json.dumps(make_scene([
-        point_light(*LIGHT_POS, 2.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="max")
-    r31 = render(json.dumps(make_scene([
-        point_light(*LIGHT_POS, 3.0), point_light(*LIGHT_POS, 1.0),
-    ])), rays=RAYS, normalize="max")
+    base = render(
+        json.dumps(
+            make_scene(
+                [
+                    point_light(*LIGHT_POS, 1.0),
+                    point_light(*LIGHT_POS, 1.0),
+                ]
+            )
+        ),
+        rays=RAYS,
+        normalize="max",
+    )
+    r21 = render(
+        json.dumps(
+            make_scene(
+                [
+                    point_light(*LIGHT_POS, 2.0),
+                    point_light(*LIGHT_POS, 1.0),
+                ]
+            )
+        ),
+        rays=RAYS,
+        normalize="max",
+    )
+    r31 = render(
+        json.dumps(
+            make_scene(
+                [
+                    point_light(*LIGHT_POS, 3.0),
+                    point_light(*LIGHT_POS, 1.0),
+                ]
+            )
+        ),
+        rays=RAYS,
+        normalize="max",
+    )
 
     print(f"  (1,1): max_hdr={base.max_hdr:>12.1f}  W=2")
     print(f"  (2,1): max_hdr={r21.max_hdr:>12.1f}  W=3")
     print(f"  (3,1): max_hdr={r31.max_hdr:>12.1f}  W=4")
     print()
-    check("(2,1)/(1,1)=3/2", ratio_ok(r21.max_hdr, base.max_hdr, 1.5),
-          f"actual={r21.max_hdr/base.max_hdr:.3f}")
-    check("(3,1)/(1,1)=4/2", ratio_ok(r31.max_hdr, base.max_hdr, 2.0),
-          f"actual={r31.max_hdr/base.max_hdr:.3f}")
+    check(
+        "(2,1)/(1,1)=3/2",
+        ratio_ok(r21.max_hdr, base.max_hdr, 1.5),
+        f"actual={r21.max_hdr / base.max_hdr:.3f}",
+    )
+    check(
+        "(3,1)/(1,1)=4/2",
+        ratio_ok(r31.max_hdr, base.max_hdr, 2.0),
+        f"actual={r31.max_hdr / base.max_hdr:.3f}",
+    )
 
 
 def test_ray_count_scaling():
@@ -257,10 +308,16 @@ def test_ray_count_scaling():
 
     base = results[1_000_000]
     print()
-    check("2M/1M", ratio_ok(results[2_000_000], base, 2.0, tol=0.12),
-          f"actual={results[2_000_000]/base:.3f}")
-    check("5M/1M", ratio_ok(results[5_000_000], base, 5.0, tol=0.12),
-          f"actual={results[5_000_000]/base:.3f}")
+    check(
+        "2M/1M",
+        ratio_ok(results[2_000_000], base, 2.0, tol=0.12),
+        f"actual={results[2_000_000] / base:.3f}",
+    )
+    check(
+        "5M/1M",
+        ratio_ok(results[5_000_000], base, 5.0, tol=0.12),
+        f"actual={results[5_000_000] / base:.3f}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -284,8 +341,7 @@ def test_max_mode_ray_independent():
     print()
     for rays in [3_000_000, 5_000_000]:
         r = results[rays] / base if base > 0 else 0
-        check(f"{rays//1_000_000}M vs 1M", abs(r - 1.0) < 0.15,
-              f"ratio={r:.3f}")
+        check(f"{rays // 1_000_000}M vs 1M", abs(r - 1.0) < 0.15, f"ratio={r:.3f}")
 
 
 def test_rays_mode_ray_independent():
@@ -304,15 +360,18 @@ def test_rays_mode_ray_independent():
         fr, px = render_px(scene_json, rays=rays, normalize="rays")
         bright = mean_brightness(px)
         results[rays] = bright
-        print(f"  rays={rays:>10,}  max_hdr={fr.max_hdr:>12.1f}  "
-              f"total_rays={fr.total_rays:>10,}  brightness={bright:.2f}")
+        print(
+            f"  rays={rays:>10,}  max_hdr={fr.max_hdr:>12.1f}  "
+            f"total_rays={fr.total_rays:>10,}  brightness={bright:.2f}"
+        )
 
     base = results[500_000]
     print()
     for rays in [2_000_000, 5_000_000]:
         r = results[rays] / base if base > 0 else 0
-        check(f"{rays//1_000_000}M vs 500K", abs(r - 1.0) < 0.15,
-              f"ratio={r:.3f} (expected ~1.0)")
+        check(
+            f"{rays // 1_000_000}M vs 500K", abs(r - 1.0) < 0.15, f"ratio={r:.3f} (expected ~1.0)"
+        )
 
 
 def test_rays_mode_intensity_responsive():
@@ -334,10 +393,16 @@ def test_rays_mode_intensity_responsive():
 
     print()
     # Brightness should increase with intensity (not necessarily linearly due to tonemap)
-    check("intensity=2 > intensity=1", results[2.0] > results[1.0],
-          f"{results[2.0]:.2f} > {results[1.0]:.2f}")
-    check("intensity=4 > intensity=2", results[4.0] > results[2.0],
-          f"{results[4.0]:.2f} > {results[2.0]:.2f}")
+    check(
+        "intensity=2 > intensity=1",
+        results[2.0] > results[1.0],
+        f"{results[2.0]:.2f} > {results[1.0]:.2f}",
+    )
+    check(
+        "intensity=4 > intensity=2",
+        results[4.0] > results[2.0],
+        f"{results[4.0]:.2f} > {results[2.0]:.2f}",
+    )
 
 
 def test_adding_light_preserves_existing():
@@ -351,17 +416,22 @@ def test_adding_light_preserves_existing():
     print("Theory: W model. Light A's max_hdr is unchanged when B is added.\n")
 
     LIGHT_B = (0.0, -0.6)
-    r1 = render(json.dumps(make_scene([point_light(*LIGHT_POS)])),
-                rays=RAYS, normalize="off")
-    r2 = render(json.dumps(make_scene([point_light(*LIGHT_POS), point_light(*LIGHT_B)])),
-                rays=RAYS, normalize="off")
+    r1 = render(json.dumps(make_scene([point_light(*LIGHT_POS)])), rays=RAYS, normalize="off")
+    r2 = render(
+        json.dumps(make_scene([point_light(*LIGHT_POS), point_light(*LIGHT_B)])),
+        rays=RAYS,
+        normalize="off",
+    )
 
     print(f"  1 light:   max_hdr={r1.max_hdr:>12.1f}")
     print(f"  2 lights:  max_hdr={r2.max_hdr:>12.1f}")
     ratio = r2.max_hdr / r1.max_hdr if r1.max_hdr > 0 else 0
     print()
-    check("max_hdr preserved", abs(ratio - 1.0) < 0.10,
-          f"ratio={ratio:.3f} (expected ~1.0, adding B doesn't dim A)")
+    check(
+        "max_hdr preserved",
+        abs(ratio - 1.0) < 0.10,
+        f"ratio={ratio:.3f} (expected ~1.0, adding B doesn't dim A)",
+    )
 
 
 def test_fixed_mode():
@@ -376,15 +446,13 @@ def test_fixed_mode():
     print(f"  Max mode:    max_hdr={fr_max.max_hdr:>12.1f}  brightness={bright_max:.2f}")
 
     # Use captured max as fixed ref
-    _, px_fixed = render_px(scene_json, rays=RAYS, normalize="fixed",
-                            normalize_ref=fr_max.max_hdr)
+    _, px_fixed = render_px(scene_json, rays=RAYS, normalize="fixed", normalize_ref=fr_max.max_hdr)
     bright_fixed = mean_brightness(px_fixed)
     print(f"  Fixed mode:  ref={fr_max.max_hdr:>12.1f}  brightness={bright_fixed:.2f}")
 
     print()
     ratio = bright_fixed / bright_max if bright_max > 0 else 0
-    check("Max ≈ Fixed(captured)", abs(ratio - 1.0) < 0.10,
-          f"ratio={ratio:.3f}")
+    check("Max ≈ Fixed(captured)", abs(ratio - 1.0) < 0.10, f"ratio={ratio:.3f}")
 
 
 def test_percentile():
@@ -405,8 +473,11 @@ def test_percentile():
     print()
     # max_hdr always reports the true max (both should be ~equal).
     # The P99 divisor is smaller → image is brighter.
-    check("P99 brightness > Max brightness", bright_p99 > bright_max,
-          f"P99={bright_p99:.2f} > Max={bright_max:.2f}")
+    check(
+        "P99 brightness > Max brightness",
+        bright_p99 > bright_max,
+        f"P99={bright_p99:.2f} > Max={bright_max:.2f}",
+    )
 
 
 def test_all_modes_produce_output():
@@ -419,16 +490,14 @@ def test_all_modes_produce_output():
         _, px = render_px(scene_json, rays=RAYS, normalize=mode)
         bright = mean_brightness(px)
         print(f"  mode={mode:<6}  brightness={bright:.2f}")
-        check(f"{mode} produces visible output", 1.0 < bright < 250.0,
-              f"brightness={bright:.2f}")
+        check(f"{mode} produces visible output", 1.0 < bright < 250.0, f"brightness={bright:.2f}")
 
     # Fixed mode needs a ref
     fr = render(scene_json, rays=RAYS, normalize="max")
     _, px = render_px(scene_json, rays=RAYS, normalize="fixed", normalize_ref=fr.max_hdr)
     bright = mean_brightness(px)
     print(f"  mode=fixed  brightness={bright:.2f}")
-    check("fixed produces visible output", 1.0 < bright < 250.0,
-          f"brightness={bright:.2f}")
+    check("fixed produces visible output", 1.0 < bright < 250.0, f"brightness={bright:.2f}")
 
 
 def test_existing_scene():

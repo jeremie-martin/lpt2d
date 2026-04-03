@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <span>
@@ -201,7 +202,6 @@ struct Scene {
     std::vector<Light> lights;   // ungrouped lights (world coords)
     std::vector<Group> groups;
     std::map<std::string, Material> materials; // named material library
-    std::string name;
 };
 
 // Intersection testing
@@ -269,6 +269,12 @@ inline std::optional<NormalizeMode> parse_normalize_mode(const std::string& s) {
     return std::nullopt;
 }
 
+struct TraceConfig {
+    int batch_size = 200000;
+    int max_depth = 12;
+    float intensity = 1.0f;
+};
+
 struct PostProcess {
     float exposure = 2.0f;
     float contrast = 1.0f;
@@ -281,6 +287,45 @@ struct PostProcess {
     float ambient = 0.0f;       // constant fill light (added after exposure, before tonemap)
     float background[3] = {0, 0, 0}; // background color (linear RGB, applied to unlit pixels)
     float opacity = 1.0f;       // global opacity (applied after tonemap, for fade-to-black)
+};
+
+// --- Shot: the authored document ---
+
+struct Camera2D {
+    std::optional<Bounds> bounds;   // explicit [xmin, ymin, xmax, ymax]
+    std::optional<Vec2> center;     // center point (requires width)
+    std::optional<float> width;     // world width (height derived from aspect)
+
+    // Resolve to concrete bounds. Uses fallback (e.g. scene bounds) if unset.
+    Bounds resolve(float aspect, const Bounds& fallback) const;
+    bool empty() const { return !bounds && !center && !width; }
+};
+
+struct Canvas {
+    int width = 1920;
+    int height = 1080;
+    float aspect() const { return (float)width / height; }
+};
+
+// Look is the authored name for post-process settings. Same type — no conversion needed.
+using Look = PostProcess;
+
+struct TraceDefaults {
+    int64_t rays = 10'000'000;
+    int batch = 200'000;
+    int depth = 12;
+    float intensity = 1.0f;
+
+    TraceConfig to_trace_config() const;
+};
+
+struct Shot {
+    Scene scene;
+    Camera2D camera;
+    Canvas canvas;
+    Look look;
+    TraceDefaults trace;
+    std::string name;
 };
 
 // --- Utilities ---

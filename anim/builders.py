@@ -115,7 +115,13 @@ def _convex_face(
         top = [center_x + radius * math.cos(angle_start + sweep), center_y + semi_aperture]
 
     return (
-        Arc(center=[center_x, center_y], radius=radius, angle_start=angle_start, sweep=sweep, material=material),
+        Arc(
+            center=[center_x, center_y],
+            radius=radius,
+            angle_start=angle_start,
+            sweep=sweep,
+            material=material,
+        ),
         top,
         bottom,
     )
@@ -153,12 +159,27 @@ def _build_lens(
     left_vertex_x = cx - half_thickness
     right_vertex_x = cx + half_thickness
 
-    def make_face(face: tuple[str, float | None], side: Literal["left", "right"]) -> tuple[Shape, list[float], list[float]]:
+    def make_face(
+        face: tuple[str, float | None], side: Literal["left", "right"]
+    ) -> tuple[Shape, list[float], list[float]]:
         kind, radius = face
         if kind == "plane":
-            return _plane_face(cy, left_vertex_x if side == "left" else right_vertex_x, semi_aperture, side, material)
+            return _plane_face(
+                cy,
+                left_vertex_x if side == "left" else right_vertex_x,
+                semi_aperture,
+                side,
+                material,
+            )
         if kind == "convex" and radius is not None:
-            return _convex_face(cy, left_vertex_x if side == "left" else right_vertex_x, semi_aperture, radius, side, material)
+            return _convex_face(
+                cy,
+                left_vertex_x if side == "left" else right_vertex_x,
+                semi_aperture,
+                radius,
+                side,
+                material,
+            )
         raise ValueError(f"unsupported lens face: {face!r}")
 
     left_shape, left_top, left_bottom = make_face(left_face, "left")

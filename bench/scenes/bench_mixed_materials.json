@@ -1,6 +1,9 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "bench_mixed_materials",
+  "camera": { "bounds": [-1.0, -0.6, 1.0, 0.6] },
+  "canvas": { "width": 1920, "height": 1080 },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
   "shapes": [
     {
       "type": "circle",

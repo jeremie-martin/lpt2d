@@ -132,11 +132,11 @@ enum class EditTool { Select, Circle, Segment, Arc, Bezier, PointLight, SegmentL
 // ─── Editor state ──────────────────────────────────────────────────────
 
 struct EditorState {
-    // Scene
-    Scene scene;
-    Bounds scene_bounds{{-1, -1}, {1, 1}};
+    // Authored document
+    Shot shot;
+    Bounds scene_bounds{{-1, -1}, {1, 1}}; // cached, updated on reload
 
-    // Camera
+    // Camera (editor viewport, not authored camera)
     Camera camera;
 
     // Selection
@@ -201,11 +201,11 @@ struct EditorState {
 
     void select_all() {
         selection.clear();
-        for (int i = 0; i < (int)scene.shapes.size(); ++i)
+        for (int i = 0; i < (int)shot.scene.shapes.size(); ++i)
             selection.push_back({ObjectId::Shape, i});
-        for (int i = 0; i < (int)scene.lights.size(); ++i)
+        for (int i = 0; i < (int)shot.scene.lights.size(); ++i)
             selection.push_back({ObjectId::Light, i});
-        for (int i = 0; i < (int)scene.groups.size(); ++i)
+        for (int i = 0; i < (int)shot.scene.groups.size(); ++i)
             selection.push_back({ObjectId::Group, i});
     }
 
@@ -217,24 +217,25 @@ struct EditorState {
 
     // Validate selection indices after scene changes
     void validate_selection() {
+        const auto& sc = shot.scene;
         selection.erase(
             std::remove_if(selection.begin(), selection.end(), [&](const ObjectId& id) {
                 if (id.group >= 0) {
                     // Group member: validate group exists and member index is in range
-                    if (id.group >= (int)scene.groups.size()) return true;
-                    const auto& g = scene.groups[id.group];
+                    if (id.group >= (int)sc.groups.size()) return true;
+                    const auto& g = sc.groups[id.group];
                     if (id.type == ObjectId::Shape) return id.index >= (int)g.shapes.size();
                     if (id.type == ObjectId::Light) return id.index >= (int)g.lights.size();
                     return true;
                 }
-                if (id.type == ObjectId::Shape) return id.index >= (int)scene.shapes.size();
-                if (id.type == ObjectId::Light) return id.index >= (int)scene.lights.size();
-                if (id.type == ObjectId::Group) return id.index >= (int)scene.groups.size();
+                if (id.type == ObjectId::Shape) return id.index >= (int)sc.shapes.size();
+                if (id.type == ObjectId::Light) return id.index >= (int)sc.lights.size();
+                if (id.type == ObjectId::Group) return id.index >= (int)sc.groups.size();
                 return true;
             }),
             selection.end());
         // Validate editing_group
-        if (editing_group >= (int)scene.groups.size()) {
+        if (editing_group >= (int)sc.groups.size()) {
             editing_group = -1;
         }
     }

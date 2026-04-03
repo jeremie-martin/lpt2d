@@ -61,7 +61,7 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
 Vec2 EditorState::selection_centroid() const {
     if (selection.empty()) return {0, 0};
     Vec2 sum{0, 0};
-    for (auto& id : selection) sum = sum + object_centroid(scene, id);
+    for (auto& id : selection) sum = sum + object_centroid(shot.scene, id);
     return sum * (1.0f / selection.size());
 }
 
@@ -73,18 +73,18 @@ Bounds EditorState::selection_bounds() const {
         hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y);
     };
     for (auto& id : selection) {
-        if (const Shape* shape = resolve_shape(scene, id)) {
+        if (const Shape* shape = resolve_shape(shot.scene, id)) {
             Bounds b = shape_bounds(*shape);
             expand(b.min);
             expand(b.max);
         }
-        if (const Light* light = resolve_light(scene, id)) {
+        if (const Light* light = resolve_light(shot.scene, id)) {
             Bounds b = light_bounds(*light);
             expand(b.min);
             expand(b.max);
         }
-        if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
-            const auto& group = scene.groups[id.index];
+        if (id.type == ObjectId::Group && id.index < (int)shot.scene.groups.size()) {
+            const auto& group = shot.scene.groups[id.index];
             for (const auto& shape : group.shapes) {
                 Shape ws = transform_shape(shape, group.transform);
                 Bounds b = shape_bounds(ws);

@@ -441,3 +441,19 @@ std::optional<Light> emission_light(const Shape& s) {
         },
     }, s);
 }
+
+// --- Shot types ---
+
+Bounds Camera2D::resolve(float aspect, const Bounds& fallback) const {
+    if (bounds) return *bounds;
+    if (center && width) {
+        float hw = *width / 2.0f;
+        float hh = hw / aspect;
+        return {{center->x - hw, center->y - hh}, {center->x + hw, center->y + hh}};
+    }
+    return fallback;
+}
+
+TraceConfig TraceDefaults::to_trace_config() const {
+    return {.batch_size = batch, .max_depth = depth, .intensity = intensity};
+}

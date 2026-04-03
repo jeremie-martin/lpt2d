@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from .stats import FrameStats, frame_stats
-from .types import Camera2D, Frame, FrameContext, FrameReport, RenderSettings, Scene, Timeline
+from .types import Camera2D, Frame, FrameContext, FrameReport, Quality, Scene, Shot, Timeline
 
 DEFAULT_BINARY = "./build/lpt2d-cli"
 
@@ -27,50 +27,53 @@ class Renderer:
 
     last_report: FrameReport | None = None
 
-    def __init__(self, settings: RenderSettings | None = None, binary: str = DEFAULT_BINARY):
-        if settings is None:
-            settings = RenderSettings()
-        self.width = settings.width
-        self.height = settings.height
-        self.frame_bytes = settings.width * settings.height * 3
+    def __init__(self, shot: Shot | None = None, binary: str = DEFAULT_BINARY):
+        if shot is None:
+            shot = Shot()
+        canvas = shot.canvas
+        look = shot.look
+        trace = shot.trace
+        self.width = canvas.width
+        self.height = canvas.height
+        self.frame_bytes = canvas.width * canvas.height * 3
         cmd = [
             binary,
             "--stream",
             "--width",
-            str(settings.width),
+            str(canvas.width),
             "--height",
-            str(settings.height),
+            str(canvas.height),
             "--rays",
-            str(settings.rays),
+            str(trace.rays),
             "--batch",
-            str(settings.batch),
+            str(trace.batch),
             "--depth",
-            str(settings.depth),
+            str(trace.depth),
             "--exposure",
-            str(settings.exposure),
+            str(look.exposure),
             "--contrast",
-            str(settings.contrast),
+            str(look.contrast),
             "--gamma",
-            str(settings.gamma),
+            str(look.gamma),
             "--tonemap",
-            settings.tonemap,
+            look.tonemap,
             "--white-point",
-            str(settings.white_point),
+            str(look.white_point),
         ]
-        cmd.extend(["--normalize", settings.normalize])
-        if settings.normalize_ref > 0:
-            cmd.extend(["--normalize-ref", str(settings.normalize_ref)])
-        if settings.normalize_pct < 1.0:
-            cmd.extend(["--normalize-pct", str(settings.normalize_pct)])
-        if settings.ambient != 0:
-            cmd.extend(["--ambient", str(settings.ambient)])
-        bg = settings.background
+        cmd.extend(["--normalize", look.normalize])
+        if look.normalize_ref > 0:
+            cmd.extend(["--normalize-ref", str(look.normalize_ref)])
+        if look.normalize_pct < 1.0:
+            cmd.extend(["--normalize-pct", str(look.normalize_pct)])
+        if look.ambient != 0:
+            cmd.extend(["--ambient", str(look.ambient)])
+        bg = look.background
         if any(v != 0 for v in bg):
             cmd.extend(["--background", f"{bg[0]},{bg[1]},{bg[2]}"])
-        if settings.opacity < 1.0:
-            cmd.extend(["--opacity", str(settings.opacity)])
-        if settings.intensity != 1.0:
-            cmd.extend(["--intensity", str(settings.intensity)])
+        if look.opacity < 1.0:
+            cmd.extend(["--opacity", str(look.opacity)])
+        if trace.intensity != 1.0:
+            cmd.extend(["--intensity", str(trace.intensity)])
         self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -244,8 +247,9 @@ class PpmOutput:
 
 
 def _build_wire_json(frame: Frame, session_camera: Camera2D | None, aspect: float) -> str:
-    """Serialize a Frame into the wire-format JSON that C++ expects."""
+    """Serialize a Frame into the v4 wire-format JSON that C++ expects."""
     d = frame.scene.to_dict()
+    d["version"] = 4
 
     render_block: dict = {}
 
@@ -256,9 +260,13 @@ def _build_wire_json(frame: Frame, session_camera: Camera2D | None, aspect: floa
         if bounds is not None:
             render_block["bounds"] = bounds
 
-    # Per-frame render overrides
-    if frame.render is not None:
-        render_block.update(frame.render.to_dict())
+    # Per-frame look overrides
+    if frame.look is not None:
+        render_block.update(frame.look.to_dict())
+
+    # Per-frame trace overrides
+    if frame.trace is not None:
+        render_block.update(frame.trace.to_dict())
 
     if render_block:
         d["render"] = render_block
@@ -272,14 +280,16 @@ AnimateFn = Callable[[FrameContext], Scene | Frame]
 
 
 def _resolve_args(
-    timeline: Timeline | float, settings: RenderSettings | str | None
-) -> tuple[Timeline, RenderSettings]:
+    timeline: Timeline | float, settings: Shot | Quality | str | None
+) -> tuple[Timeline, Shot]:
     if isinstance(timeline, (int, float)):
         timeline = Timeline(duration=float(timeline))
     if settings is None:
-        settings = RenderSettings()
+        settings = Shot()
     elif isinstance(settings, str):
-        settings = RenderSettings.preset(settings)
+        settings = Shot.preset(settings)
+    elif isinstance(settings, Quality):
+        settings = Shot.preset(settings)
     return timeline, settings
 
 
@@ -288,7 +298,7 @@ def render(
     timeline: Timeline | float,
     output: str,
     *,
-    settings: RenderSettings | str | None = None,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
     codec: str = "libx264",
@@ -305,7 +315,7 @@ def render(
         timeline: Timeline object, or duration in seconds (uses fps=30).
         output: Output path. .mp4/.webm/.mkv -> video via ffmpeg.
                 Trailing / or directory -> PPM sequence.
-        settings: RenderSettings, Quality preset name (str), or None for defaults.
+        settings: Shot, Quality preset, preset name (str), or None for defaults.
         camera: Session-level camera. Per-frame Frame.camera overrides this.
         binary: Path to lpt2d-cli executable.
         codec: Video codec (default: libx264).
@@ -315,8 +325,8 @@ def render(
         stride: Render every Nth frame (default: 1 = all frames).
         frame: Render a single frame by index. Overrides start/end/stride.
     """
-    timeline, settings = _resolve_args(timeline, settings)
-    width, height, aspect = settings.width, settings.height, settings.aspect
+    timeline, shot = _resolve_args(timeline, settings)
+    width, height, aspect = shot.canvas.width, shot.canvas.height, shot.canvas.aspect
 
     # Choose output backend
     if output.endswith("/") or (Path(output).exists() and Path(output).is_dir()):
@@ -324,7 +334,7 @@ def render(
     else:
         out = FFmpegOutput(output, width, height, timeline.fps, codec, crf)
 
-    renderer = Renderer(settings, binary=binary)
+    renderer = Renderer(shot, binary=binary)
 
     def _render_frame(i: int) -> bytes:
         ctx = timeline.context_at(i)
@@ -370,32 +380,24 @@ def render_still(
     output: str,
     *,
     frame: int = 0,
-    settings: RenderSettings | str | None = None,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
 ) -> None:
-    """Render a single frame to an image file.
+    """Render a single frame to an image file."""
+    timeline, shot = _resolve_args(timeline, settings)
 
-    Args:
-        animate: Callback receiving FrameContext, returning Scene or Frame.
-        timeline: Timeline object, or duration in seconds.
-        output: Output image path (.png, .ppm, .jpg, ...).
-        frame: Frame index to render (default: 0).
-        settings: RenderSettings, preset name, or None for defaults.
-        camera: Session-level camera.
-        binary: Path to lpt2d-cli executable.
-    """
-    timeline, settings = _resolve_args(timeline, settings)
-
-    renderer = Renderer(settings, binary=binary)
+    renderer = Renderer(shot, binary=binary)
     try:
         ctx = timeline.context_at(frame)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, settings.aspect)
+        wire = _build_wire_json(f, camera, shot.canvas.aspect)
         rgb = renderer.render_frame(wire)
-        _save_image(output, rgb, settings.width, settings.height)
-        sys.stderr.write(f"wrote {output} ({settings.width}x{settings.height}, frame {frame})\n")
+        _save_image(output, rgb, shot.canvas.width, shot.canvas.height)
+        sys.stderr.write(
+            f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n"
+        )
     finally:
         renderer.close()
 
@@ -407,28 +409,14 @@ def render_contact_sheet(
     *,
     cols: int = 4,
     count: int = 16,
-    settings: RenderSettings | str | None = None,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
 ) -> None:
-    """Render a grid of frames spread across the timeline.
+    """Render a grid of frames spread across the timeline."""
+    timeline, shot = _resolve_args(timeline, settings)
 
-    Intended for human visual inspection during look development.
-    For automated/agent workflows, use frame_stats() instead.
-
-    Args:
-        animate: Callback receiving FrameContext, returning Scene or Frame.
-        timeline: Timeline object, or duration in seconds.
-        output: Output image path (.png, .ppm, .jpg, ...).
-        cols: Number of columns in the grid (default: 4).
-        count: Total number of frames to sample (default: 16).
-        settings: RenderSettings, preset name, or None for defaults.
-        camera: Session-level camera.
-        binary: Path to lpt2d-cli executable.
-    """
-    timeline, settings = _resolve_args(timeline, settings)
-
-    w, h = settings.width, settings.height
+    w, h = shot.canvas.width, shot.canvas.height
     rows = math.ceil(count / cols)
     sheet_w = w * cols
     sheet_h = h * rows
@@ -437,14 +425,14 @@ def render_contact_sheet(
     total = timeline.total_frames
     indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
 
-    renderer = Renderer(settings, binary=binary)
+    renderer = Renderer(shot, binary=binary)
     try:
         frames_rgb: list[bytes] = []
         for idx, fi in enumerate(indices):
             ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, settings.aspect)
+            wire = _build_wire_json(f, camera, shot.canvas.aspect)
             frames_rgb.append(renderer.render_frame(wire))
             sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
             sys.stderr.flush()
@@ -472,26 +460,12 @@ def render_stats(
     *,
     frames: list[int] | int | None = None,
     count: int = 8,
-    settings: RenderSettings | str | None = None,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
 ) -> list[tuple[int, float, FrameStats]]:
-    """Render frames and return their statistics. No file output.
-
-    Returns a list of (frame_index, time, FrameStats) tuples.
-    Designed for automated workflows and agent-driven analysis.
-
-    Args:
-        animate: Callback receiving FrameContext, returning Scene or Frame.
-        timeline: Timeline object, or duration in seconds.
-        frames: Specific frame indices to render. An int renders that single frame.
-                None samples `count` frames evenly across the timeline.
-        count: Number of frames to sample when `frames` is None (default: 8).
-        settings: RenderSettings, preset name, or None for defaults.
-        camera: Session-level camera.
-        binary: Path to lpt2d-cli executable.
-    """
-    timeline, settings = _resolve_args(timeline, settings)
+    """Render frames and return their statistics. No file output."""
+    timeline, shot = _resolve_args(timeline, settings)
 
     # Resolve frame indices
     total = timeline.total_frames
@@ -502,10 +476,10 @@ def render_stats(
     else:
         indices = list(frames)
 
-    w, h = settings.width, settings.height
-    aspect = settings.aspect
+    w, h = shot.canvas.width, shot.canvas.height
+    aspect = shot.canvas.aspect
 
-    renderer = Renderer(settings, binary=binary)
+    renderer = Renderer(shot, binary=binary)
     results: list[tuple[int, float, FrameStats]] = []
     try:
         for fi in indices:
@@ -524,40 +498,27 @@ def calibrate_normalize_ref(
     animate: AnimateFn,
     timeline: Timeline | float,
     *,
-    settings: RenderSettings | str | None = None,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
     frame: int = 0,
 ) -> float:
     """Render one frame with max-normalize to determine a good normalize_ref.
 
-    Uses the standard :class:`Renderer` with ``normalize="max"`` to capture
-    the HDR peak from the :class:`FrameReport` metadata.
-    The returned value can be used as ``RenderSettings(normalize="fixed",
-    normalize_ref=...)`` for temporally stable animation renders.
-
-    Args:
-        animate: Callback receiving FrameContext, returning Scene or Frame.
-        timeline: Timeline object, or duration in seconds.
-        settings: RenderSettings, preset name, or None for defaults.
-        camera: Session-level camera.
-        binary: Path to lpt2d-cli executable.
-        frame: Frame index to calibrate on (default: 0).
-
-    Returns:
-        The HDR max value suitable for use as ``normalize_ref``.
+    Returns the HDR max value suitable for use as ``Look(normalize="fixed",
+    normalize_ref=...)``.
     """
-    timeline, settings = _resolve_args(timeline, settings)
+    timeline, shot = _resolve_args(timeline, settings)
 
     # Force max mode so the C++ renderer computes and reports true HDR peak.
-    cal_settings = replace(settings, normalize="max", normalize_pct=1.0)
+    cal_shot = replace(shot, look=replace(shot.look, normalize="max", normalize_pct=1.0))
 
-    renderer = Renderer(cal_settings, binary=binary)
+    renderer = Renderer(cal_shot, binary=binary)
     try:
         ctx = timeline.context_at(frame)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, cal_settings.aspect)
+        wire = _build_wire_json(f, camera, cal_shot.canvas.aspect)
         renderer.render_frame(wire)  # discard pixels, we want the report
 
         rpt = renderer.last_report

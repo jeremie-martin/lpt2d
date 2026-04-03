@@ -7,7 +7,7 @@
 #include <iostream>
 #include <string>
 
-static constexpr int SCENE_JSON_VERSION = 3;
+static constexpr int SHOT_JSON_VERSION = 4;
 
 // ─── Minimal JSON writer ────────────────────────────────────────────────
 
@@ -57,13 +57,102 @@ static void write_json_string(std::ostream& os, const std::string& s) {
     os << '"';
 }
 
-bool save_scene_json(const Scene& scene, const std::string& path) {
+// ─── Tonemap/normalize to string ────────────────────────────────────────
+
+static const char* tonemap_to_string(ToneMap tm) {
+    switch (tm) {
+        case ToneMap::None: return "none";
+        case ToneMap::Reinhard: return "reinhard";
+        case ToneMap::ReinhardExtended: return "reinhardx";
+        case ToneMap::ACES: return "aces";
+        case ToneMap::Logarithmic: return "log";
+    }
+    return "aces";
+}
+
+static const char* normalize_to_string(NormalizeMode nm) {
+    switch (nm) {
+        case NormalizeMode::Max: return "max";
+        case NormalizeMode::Rays: return "rays";
+        case NormalizeMode::Fixed: return "fixed";
+        case NormalizeMode::Off: return "off";
+    }
+    return "rays";
+}
+
+// ─── Shot writer (v4) ───────────────────────────────────────────────────
+
+static void write_camera(std::ostream& f, const Camera2D& cam) {
+    if (cam.empty()) return;
+    f << "  \"camera\": {\n";
+    if (cam.bounds) {
+        f << "    \"bounds\": [" << fmt(cam.bounds->min.x) << ", " << fmt(cam.bounds->min.y)
+          << ", " << fmt(cam.bounds->max.x) << ", " << fmt(cam.bounds->max.y) << "]\n";
+    } else if (cam.center && cam.width) {
+        f << "    "; write_vec2(f, "center", *cam.center); f << ",\n";
+        f << "    \"width\": " << fmt(*cam.width) << "\n";
+    }
+    f << "  },\n";
+}
+
+static void write_canvas(std::ostream& f, const Canvas& canvas) {
+    f << "  \"canvas\": {\"width\": " << canvas.width << ", \"height\": " << canvas.height << "},\n";
+}
+
+static void write_look(std::ostream& f, const Look& look) {
+    Look def; // defaults for comparison
+    // Collect non-default fields
+    std::vector<std::pair<std::string, std::string>> entries;
+    if (look.exposure != def.exposure) entries.push_back({"\"exposure\"", fmt(look.exposure)});
+    if (look.contrast != def.contrast) entries.push_back({"\"contrast\"", fmt(look.contrast)});
+    if (look.gamma != def.gamma) entries.push_back({"\"gamma\"", fmt(look.gamma)});
+    if (look.tone_map != def.tone_map) entries.push_back({"\"tonemap\"", std::string("\"") + tonemap_to_string(look.tone_map) + "\""});
+    if (look.white_point != def.white_point) entries.push_back({"\"white_point\"", fmt(look.white_point)});
+    if (look.normalize != def.normalize) entries.push_back({"\"normalize\"", std::string("\"") + normalize_to_string(look.normalize) + "\""});
+    if (look.normalize_ref != def.normalize_ref) entries.push_back({"\"normalize_ref\"", fmt(look.normalize_ref)});
+    if (look.normalize_pct != def.normalize_pct) entries.push_back({"\"normalize_pct\"", fmt(look.normalize_pct)});
+    if (look.ambient != def.ambient) entries.push_back({"\"ambient\"", fmt(look.ambient)});
+    if (look.background[0] != 0.0f || look.background[1] != 0.0f || look.background[2] != 0.0f) {
+        entries.push_back({"\"background\"", "[" + fmt(look.background[0]) + ", " + fmt(look.background[1]) + ", " + fmt(look.background[2]) + "]"});
+    }
+    if (look.opacity != def.opacity) entries.push_back({"\"opacity\"", fmt(look.opacity)});
+
+    if (entries.empty()) return; // all defaults, skip block
+
+    f << "  \"look\": {";
+    for (int i = 0; i < (int)entries.size(); ++i) {
+        if (i > 0) f << ",";
+        f << "\n    " << entries[i].first << ": " << entries[i].second;
+    }
+    f << "\n  },\n";
+}
+
+static void write_trace(std::ostream& f, const TraceDefaults& trace) {
+    f << "  \"trace\": {\n";
+    f << "    \"rays\": " << trace.rays << ",\n";
+    f << "    \"batch\": " << trace.batch << ",\n";
+    f << "    \"depth\": " << trace.depth;
+    if (trace.intensity != 1.0f) {
+        f << ",\n    \"intensity\": " << fmt(trace.intensity);
+    }
+    f << "\n  },\n";
+}
+
+bool save_shot_json(const Shot& shot, const std::string& path) {
     std::ofstream f(path);
     if (!f) { std::cerr << "Failed to open " << path << " for writing\n"; return false; }
 
+    const auto& scene = shot.scene;
+
     f << "{\n";
-    f << "  \"version\": " << SCENE_JSON_VERSION << ",\n";
-    f << "  \"name\": "; write_json_string(f, scene.name); f << ",\n";
+    f << "  \"version\": " << SHOT_JSON_VERSION << ",\n";
+    f << "  \"name\": "; write_json_string(f, shot.name); f << ",\n";
+
+    // Shot-level blocks
+    write_camera(f, shot.camera);
+    write_canvas(f, shot.canvas);
+    write_look(f, shot.look);
+    write_trace(f, shot.trace);
 
     // Materials library
     if (!scene.materials.empty()) {
@@ -470,21 +559,90 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
     }
 }
 
+// ─── Shot-level block readers ───────────────────────────────────────────
+
+static Camera2D read_camera(const JsonValue* v) {
+    Camera2D cam;
+    if (!v || v->type != JsonValue::Object) return cam;
+    if (auto* b = v->get("bounds")) {
+        if (b->type == JsonValue::Array && b->arr.size() >= 4) {
+            cam.bounds = Bounds{
+                {b->arr[0].as_float(), b->arr[1].as_float()},
+                {b->arr[2].as_float(), b->arr[3].as_float()}};
+        }
+    }
+    if (auto* c = v->get("center")) cam.center = read_vec2(c);
+    if (auto* w = v->get("width")) cam.width = w->as_float();
+    return cam;
+}
+
+static Canvas read_canvas(const JsonValue* v) {
+    Canvas canvas;
+    if (!v || v->type != JsonValue::Object) return canvas;
+    if (auto* w = v->get("width")) canvas.width = (int)w->number;
+    if (auto* h = v->get("height")) canvas.height = (int)h->number;
+    return canvas;
+}
+
+static Look read_look(const JsonValue* v) {
+    Look look;
+    if (!v || v->type != JsonValue::Object) return look;
+    if (auto* f = v->get("exposure")) look.exposure = f->as_float(2.0f);
+    if (auto* f = v->get("contrast")) look.contrast = f->as_float(1.0f);
+    if (auto* f = v->get("gamma")) look.gamma = f->as_float(2.2f);
+    if (auto* f = v->get("white_point")) look.white_point = f->as_float(1.0f);
+    if (auto* f = v->get("tonemap"))
+        if (auto tm = parse_tonemap(f->as_string())) look.tone_map = *tm;
+    if (auto* f = v->get("normalize"))
+        if (auto nm = parse_normalize_mode(f->as_string())) look.normalize = *nm;
+    if (auto* f = v->get("normalize_ref")) look.normalize_ref = f->as_float();
+    if (auto* f = v->get("normalize_pct")) look.normalize_pct = f->as_float(1.0f);
+    if (auto* f = v->get("ambient")) look.ambient = f->as_float();
+    if (auto* f = v->get("background")) {
+        if (f->type == JsonValue::Array && f->arr.size() >= 3) {
+            look.background[0] = f->arr[0].as_float();
+            look.background[1] = f->arr[1].as_float();
+            look.background[2] = f->arr[2].as_float();
+        }
+    }
+    if (auto* f = v->get("opacity")) look.opacity = f->as_float(1.0f);
+    return look;
+}
+
+static TraceDefaults read_trace(const JsonValue* v) {
+    TraceDefaults trace;
+    if (!v || v->type != JsonValue::Object) return trace;
+    if (auto* f = v->get("rays")) trace.rays = (int64_t)f->number;
+    if (auto* f = v->get("batch")) trace.batch = (int)f->number;
+    if (auto* f = v->get("depth")) trace.depth = (int)f->number;
+    if (auto* f = v->get("intensity")) trace.intensity = f->as_float(1.0f);
+    return trace;
+}
+
 } // anonymous namespace
 
-Scene load_scene_json_string(std::string_view json_content) {
+Shot load_shot_json_string(std::string_view json_content) {
     Parser parser{json_content.data(), json_content.data() + json_content.size()};
     JsonValue root = parser.parse_value();
 
     if (root.type != JsonValue::Object) { std::cerr << "Invalid JSON\n"; return {}; }
     auto* version = root.get("version");
-    if (!version || version->type != JsonValue::Number || (int)version->number != SCENE_JSON_VERSION) {
-        std::cerr << "Unsupported scene version\n";
+    if (!version || version->type != JsonValue::Number || (int)version->number != SHOT_JSON_VERSION) {
+        std::cerr << "Unsupported shot version (expected " << SHOT_JSON_VERSION << ")\n";
         return {};
     }
 
-    Scene scene;
-    if (auto* n = root.get("name")) scene.name = n->as_string();
+    Shot shot;
+    if (auto* n = root.get("name")) shot.name = n->as_string();
+
+    // Shot-level blocks
+    shot.camera = read_camera(root.get("camera"));
+    shot.canvas = read_canvas(root.get("canvas"));
+    shot.look = read_look(root.get("look"));
+    shot.trace = read_trace(root.get("trace"));
+
+    // Scene content
+    auto& scene = shot.scene;
 
     // Parse named materials library (must come before shapes to resolve references)
     if (auto* mats = root.get("materials")) {
@@ -517,15 +675,15 @@ Scene load_scene_json_string(std::string_view json_content) {
         }
     }
 
-    return scene;
+    return shot;
 }
 
-Scene load_scene_json(const std::string& path) {
+Shot load_shot_json(const std::string& path) {
     std::ifstream f(path);
     if (!f) { std::cerr << "Failed to open " << path << "\n"; return {}; }
 
     std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    return load_scene_json_string(content);
+    return load_shot_json_string(content);
 }
 
 FrameOverrides parse_frame_overrides(std::string_view json) {

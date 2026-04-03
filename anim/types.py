@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from pathlib import Path
 
-SCENE_JSON_VERSION = 3
+SHOT_JSON_VERSION = 4
 
 # --- Materials ---
 
@@ -92,6 +92,8 @@ def emissive(emission: float, base: Material | None = None) -> Material:
     (e.g., ``emissive(2.0, glass(1.5))`` for a glowing glass surface).
     """
     if base is not None:
+        from dataclasses import replace
+
         return replace(base, emission=emission)
     return Material(emission=emission)
 
@@ -292,7 +294,7 @@ class Group:
         }
 
 
-# --- Scene (pure scene data — no render/camera config) ---
+# --- Scene (content-only: shapes, lights, groups, materials) ---
 
 _SHAPE_PARSERS = {
     "circle": lambda d: Circle(
@@ -369,15 +371,16 @@ def _parse_lights(arr: list[dict]) -> list[Light]:
 
 @dataclass
 class Scene:
+    """Content-only scene data: shapes, lights, groups, materials."""
+
     shapes: list[Shape] = field(default_factory=list)
     lights: list[Light] = field(default_factory=list)
     groups: list[Group] = field(default_factory=list)
     materials: dict[str, Material] = field(default_factory=dict)
-    name: str = ""
 
     def to_dict(self) -> dict:
-        """Scene as a dict (version 3 wire format)."""
-        d: dict = {"version": SCENE_JSON_VERSION, "name": self.name}
+        """Scene content as a dict (no version — used inside Shot)."""
+        d: dict = {}
         if self.materials:
             d["materials"] = {name: mat.to_dict() for name, mat in self.materials.items()}
         d["shapes"] = [s.to_dict() for s in self.shapes]
@@ -386,24 +389,10 @@ class Scene:
             d["groups"] = [g.to_dict() for g in self.groups]
         return d
 
-    def to_json(self) -> str:
-        """Compact single-line JSON for streaming."""
-        return json.dumps(self.to_dict(), separators=(",", ":"))
-
     @staticmethod
-    def load(path: str | Path) -> Scene:
-        """Load scene from a JSON file."""
-        with open(path) as f:
-            return Scene.from_json(f.read())
-
-    @staticmethod
-    def from_json(s: str) -> Scene:
-        """Parse scene from a JSON string."""
-        d = json.loads(s)
-        if d.get("version") != SCENE_JSON_VERSION:
-            raise ValueError(f"unsupported scene version: {d.get('version')}")
-        scene = Scene(name=d.get("name", ""))
-        # Parse materials library first (needed for resolving string references)
+    def _from_dict(d: dict) -> Scene:
+        """Parse scene content from a dict (materials/shapes/lights/groups)."""
+        scene = Scene()
         for name, mat_d in d.get("materials", {}).items():
             scene.materials[name] = Material.from_dict(mat_d)
         scene.shapes = _parse_shapes(d.get("shapes", []), scene.materials)
@@ -446,8 +435,120 @@ class Camera2D:
             raise ValueError("Camera2D requires both center and width, or bounds, or neither")
         return None
 
+    def to_dict(self) -> dict | None:
+        """Serialize camera. Returns None if empty (auto-fit)."""
+        if self.bounds is not None:
+            return {"bounds": self.bounds}
+        if self.center is not None and self.width is not None:
+            return {"center": self.center, "width": self.width}
+        return None
 
-# --- Render settings & overrides ---
+    @staticmethod
+    def from_dict(d: dict) -> Camera2D:
+        return Camera2D(
+            bounds=d.get("bounds"),
+            center=d.get("center"),
+            width=d.get("width"),
+        )
+
+
+# --- Canvas, Look, TraceDefaults ---
+
+
+@dataclass
+class Canvas:
+    """Output resolution."""
+
+    width: int = 1920
+    height: int = 1080
+
+    @property
+    def aspect(self) -> float:
+        return self.width / self.height
+
+    def to_dict(self) -> dict:
+        return {"width": self.width, "height": self.height}
+
+    @staticmethod
+    def from_dict(d: dict) -> Canvas:
+        return Canvas(width=d.get("width", 1920), height=d.get("height", 1080))
+
+
+@dataclass
+class Look:
+    """Post-processing / display settings."""
+
+    exposure: float = 2.0
+    contrast: float = 1.0
+    gamma: float = 2.2
+    tonemap: str = "aces"
+    white_point: float = 1.0
+    normalize: str = "rays"  # "max" | "rays" | "fixed" | "off"
+    normalize_ref: float = 0.0
+    normalize_pct: float = 1.0
+    ambient: float = 0.0
+    background: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    opacity: float = 1.0
+
+    def to_dict(self) -> dict:
+        """Only emit non-default values."""
+        _defaults = Look()
+        d: dict = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            default_val = getattr(_defaults, f.name)
+            if val != default_val:
+                d[f.name] = val
+        return d
+
+    @staticmethod
+    def from_dict(d: dict) -> Look:
+        return Look(
+            exposure=d.get("exposure", 2.0),
+            contrast=d.get("contrast", 1.0),
+            gamma=d.get("gamma", 2.2),
+            tonemap=d.get("tonemap", "aces"),
+            white_point=d.get("white_point", 1.0),
+            normalize=d.get("normalize", "rays"),
+            normalize_ref=d.get("normalize_ref", 0.0),
+            normalize_pct=d.get("normalize_pct", 1.0),
+            ambient=d.get("ambient", 0.0),
+            background=d.get("background", [0.0, 0.0, 0.0]),
+            opacity=d.get("opacity", 1.0),
+        )
+
+
+@dataclass
+class TraceDefaults:
+    """Ray tracing quality defaults."""
+
+    rays: int = 10_000_000
+    batch: int = 200_000
+    depth: int = 12
+    intensity: float = 1.0
+
+    def to_dict(self) -> dict:
+        """Only emit non-default values."""
+        _defaults = TraceDefaults()
+        d: dict = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            default_val = getattr(_defaults, f.name)
+            if val != default_val:
+                d[f.name] = val
+        return d
+
+    @staticmethod
+    def from_dict(d: dict) -> TraceDefaults:
+        return TraceDefaults(
+            rays=d.get("rays", 10_000_000),
+            batch=d.get("batch", 200_000),
+            depth=d.get("depth", 12),
+            intensity=d.get("intensity", 1.0),
+        )
+
+
+# --- Quality presets ---
 
 
 class Quality(Enum):
@@ -458,82 +559,109 @@ class Quality(Enum):
 
 
 _QUALITY_PRESETS: dict[Quality, dict] = {
-    Quality.DRAFT: dict(width=480, height=480, rays=200_000, batch=100_000, depth=6),
-    Quality.PREVIEW: dict(width=720, height=720, rays=1_000_000, batch=200_000, depth=10),
-    Quality.PRODUCTION: dict(width=1080, height=1080, rays=5_000_000, batch=200_000, depth=12),
-    Quality.FINAL: dict(width=1920, height=1080, rays=50_000_000, batch=500_000, depth=16),
+    Quality.DRAFT: dict(
+        canvas=Canvas(480, 480), trace=TraceDefaults(rays=200_000, batch=100_000, depth=6)
+    ),
+    Quality.PREVIEW: dict(
+        canvas=Canvas(720, 720), trace=TraceDefaults(rays=1_000_000, batch=200_000, depth=10)
+    ),
+    Quality.PRODUCTION: dict(
+        canvas=Canvas(1080, 1080), trace=TraceDefaults(rays=5_000_000, batch=200_000, depth=12)
+    ),
+    Quality.FINAL: dict(
+        canvas=Canvas(1920, 1080), trace=TraceDefaults(rays=50_000_000, batch=500_000, depth=16)
+    ),
 }
 
 
+# --- Shot: the authored document ---
+
+
 @dataclass
-class RenderSettings:
-    """Rendering quality and tone mapping parameters.
+class Shot:
+    """The authored document — what the user saves and expects to reopen unchanged.
 
-    Construct from a preset, then override individual fields::
-
-        settings = RenderSettings.preset(Quality.PREVIEW, width=1080)
-
-    Or build from scratch::
-
-        settings = RenderSettings(width=1920, height=1080, rays=10_000_000)
+    Contains scene content, camera framing, output canvas, display look,
+    and trace quality defaults.
     """
 
-    width: int = 1920
-    height: int = 1080
-    rays: int = 10_000_000
-    batch: int = 200_000
-    depth: int = 12
-    exposure: float = 2.0
-    contrast: float = 1.0
-    gamma: float = 2.2
-    tonemap: str = "aces"
-    white_point: float = 1.0
-    normalize: str = "rays"  # "max" | "rays" | "fixed" | "off"
-    normalize_ref: float = 0.0  # divisor for "fixed" mode
-    normalize_pct: float = 1.0  # percentile for "max" mode (1.0=max, 0.99=P99)
-    ambient: float = 0.0  # constant fill light (added after exposure, before tonemap)
-    background: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # linear RGB
-    opacity: float = 1.0  # global opacity (0=black, 1=full)
-    intensity: float = 1.0  # trace intensity multiplier
+    name: str = ""
+    scene: Scene = field(default_factory=Scene)
+    camera: Camera2D | None = None
+    canvas: Canvas = field(default_factory=Canvas)
+    look: Look = field(default_factory=Look)
+    trace: TraceDefaults = field(default_factory=TraceDefaults)
+
+    def to_dict(self) -> dict:
+        """Full v4 format dict."""
+        d: dict = {"version": SHOT_JSON_VERSION, "name": self.name}
+        if self.camera is not None:
+            cam_d = self.camera.to_dict()
+            if cam_d:
+                d["camera"] = cam_d
+        d["canvas"] = self.canvas.to_dict()
+        look_d = self.look.to_dict()
+        if look_d:
+            d["look"] = look_d
+        trace_d = self.trace.to_dict()
+        if trace_d:
+            d["trace"] = trace_d
+        # Inline scene content at root level
+        d.update(self.scene.to_dict())
+        return d
+
+    def to_json(self) -> str:
+        """Compact single-line JSON for streaming."""
+        return json.dumps(self.to_dict(), separators=(",", ":"))
 
     @staticmethod
-    def preset(quality: Quality | str, **overrides) -> RenderSettings:
-        """Create settings from a named quality preset with optional overrides."""
+    def load(path: str | Path) -> Shot:
+        """Load shot from a JSON file."""
+        with open(path) as f:
+            return Shot.from_json(f.read())
+
+    @staticmethod
+    def from_json(s: str) -> Shot:
+        """Parse shot from a JSON string (v4 format)."""
+        d = json.loads(s)
+        if d.get("version") != SHOT_JSON_VERSION:
+            raise ValueError(
+                f"unsupported shot version: {d.get('version')} (expected {SHOT_JSON_VERSION})"
+            )
+        shot = Shot(name=d.get("name", ""))
+        # Shot-level blocks
+        if "camera" in d:
+            shot.camera = Camera2D.from_dict(d["camera"])
+        shot.canvas = Canvas.from_dict(d.get("canvas", {}))
+        shot.look = Look.from_dict(d.get("look", {}))
+        shot.trace = TraceDefaults.from_dict(d.get("trace", {}))
+        # Scene content
+        shot.scene = Scene._from_dict(d)
+        return shot
+
+    def save(self, path: str | Path) -> None:
+        """Save shot to a JSON file."""
+        with open(path, "w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+            f.write("\n")
+
+    @staticmethod
+    def preset(quality: Quality | str, **overrides) -> Shot:
+        """Create a shot from a named quality preset with optional overrides."""
         if isinstance(quality, str):
             quality = Quality(quality)
         values = dict(_QUALITY_PRESETS[quality])
-        values.update(overrides)
-        return RenderSettings(**values)
-
-    @property
-    def aspect(self) -> float:
-        return self.width / self.height
-
-
-@dataclass
-class RenderOverrides:
-    """Sparse per-frame render overrides. Only non-None fields are sent to C++."""
-
-    rays: int | None = None
-    batch: int | None = None
-    depth: int | None = None
-    exposure: float | None = None
-    contrast: float | None = None
-    gamma: float | None = None
-    tonemap: str | None = None
-    white_point: float | None = None
-    normalize: str | None = None  # "max" | "rays" | "fixed" | "off"
-    normalize_ref: float | None = None
-    normalize_pct: float | None = None
-    ambient: float | None = None
-    background: list[float] | None = None  # [r, g, b] linear RGB
-    opacity: float | None = None
-    intensity: float | None = None
-
-    def to_dict(self) -> dict:
-        return {
-            f.name: getattr(self, f.name) for f in fields(self) if getattr(self, f.name) is not None
-        }
+        shot = Shot(canvas=values["canvas"], trace=values["trace"])
+        for key, val in overrides.items():
+            if hasattr(shot.canvas, key):
+                setattr(shot.canvas, key, val)
+            elif hasattr(shot.trace, key):
+                setattr(shot.trace, key, val)
+            elif hasattr(shot.look, key):
+                setattr(shot.look, key, val)
+            else:
+                raise TypeError(f"Shot.preset() got unexpected keyword argument '{key}'")
+        return shot
 
 
 # --- Timeline ---
@@ -613,7 +741,8 @@ class Frame:
 
     scene: Scene
     camera: Camera2D | None = None
-    render: RenderOverrides | None = None
+    look: Look | None = None  # per-frame look overrides
+    trace: TraceDefaults | None = None  # per-frame trace overrides
 
 
 @dataclass(frozen=True)

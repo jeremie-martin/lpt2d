@@ -1,6 +1,9 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "bench_prism_beam",
+  "camera": { "bounds": [-1.3, -0.9, 1.3, 0.9] },
+  "canvas": { "width": 1920, "height": 1080 },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
   "shapes": [
     {
       "type": "segment",

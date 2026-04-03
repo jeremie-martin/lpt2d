@@ -1,6 +1,10 @@
 {
-  "version": 3,
+  "version": 4,
   "name": "diamond",
+  "camera": { "bounds": [-1.1, -0.8, 1.1, 0.8] },
+  "canvas": { "width": 1920, "height": 1080 },
+  "look": { "exposure": 2, "tonemap": "aces", "normalize": "rays" },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
   "materials": {
     "diamond": {
       "ior": 2.42,

@@ -6,12 +6,6 @@
 #include <cstdint>
 #include <vector>
 
-struct TraceConfig {
-    int batch_size = 200000;
-    int max_depth = 12;
-    float intensity = 1.0f;
-};
-
 class Renderer {
 public:
     ~Renderer();

@@ -22,132 +22,84 @@ from .stats import frame_stats as frame_stats
 from .track import Key as Key
 from .track import Track as Track
 from .track import Wrap as Wrap
-from .types import (
-    Arc as Arc,
-)
-from .types import (
-    BeamLight as BeamLight,
-)
-from .types import (
-    Bezier as Bezier,
-)
-from .types import (
-    Camera2D as Camera2D,
-)
-from .types import (
-    Circle as Circle,
-)
-from .types import (
-    Frame as Frame,
-)
-from .types import (
-    FrameContext as FrameContext,
-)
-from .types import (
-    FrameReport as FrameReport,
-)
-from .types import (
-    Group as Group,
-)
-from .types import (
-    Material as Material,
-)
-from .types import (
-    PointLight as PointLight,
-)
-from .types import (
-    Quality as Quality,
-)
-from .types import (
-    RenderOverrides as RenderOverrides,
-)
-from .types import (
-    RenderSettings as RenderSettings,
-)
-from .types import (
-    Scene as Scene,
-)
-from .types import (
-    Segment as Segment,
-)
-from .types import (
-    SegmentLight as SegmentLight,
-)
-from .types import (
-    Timeline as Timeline,
-)
-from .types import (
-    Transform2D as Transform2D,
-)
-from .types import (
-    absorber as absorber,
-)
-from .types import (
-    beam_splitter as beam_splitter,
-)
-from .types import (
-    diffuse as diffuse,
-)
-from .types import (
-    emissive as emissive,
-)
-from .types import (
-    glass as glass,
-)
-from .types import (
-    mirror as mirror,
-)
-from .types import (
-    opaque_mirror as opaque_mirror,
-)
+from .types import Arc as Arc
+from .types import BeamLight as BeamLight
+from .types import Bezier as Bezier
+from .types import Camera2D as Camera2D
+from .types import Canvas as Canvas
+from .types import Circle as Circle
+from .types import Frame as Frame
+from .types import FrameContext as FrameContext
+from .types import FrameReport as FrameReport
+from .types import Group as Group
+from .types import Look as Look
+from .types import Material as Material
+from .types import PointLight as PointLight
+from .types import Quality as Quality
+from .types import Scene as Scene
+from .types import Segment as Segment
+from .types import SegmentLight as SegmentLight
+from .types import Shot as Shot
+from .types import Timeline as Timeline
+from .types import TraceDefaults as TraceDefaults
+from .types import Transform2D as Transform2D
+from .types import absorber as absorber
+from .types import beam_splitter as beam_splitter
+from .types import diffuse as diffuse
+from .types import emissive as emissive
+from .types import glass as glass
+from .types import mirror as mirror
+from .types import opaque_mirror as opaque_mirror
 
 __all__ = [
     "Arc",
     "BeamLight",
     "Bezier",
     "Camera2D",
+    "Canvas",
     "Circle",
     "EASINGS",
     "FFmpegOutput",
     "Frame",
     "FrameContext",
     "FrameReport",
+    "FrameStats",
     "Group",
+    "Key",
+    "Look",
     "Material",
     "PointLight",
     "Quality",
-    "RenderOverrides",
-    "RenderSettings",
     "Renderer",
     "Scene",
     "Segment",
     "SegmentLight",
+    "Shot",
     "Timeline",
-    "Transform2D",
-    "Key",
     "Track",
+    "TraceDefaults",
+    "Transform2D",
     "Wrap",
     "absorber",
-    "beam_splitter",
     "ball_lens",
+    "beam_splitter",
     "biconvex_lens",
+    "calibrate_normalize_ref",
     "diffuse",
     "emissive",
+    "frame_stats",
     "glass",
     "hemispherical_lens",
-    "mirror_box",
-    "FrameStats",
-    "frame_stats",
     "mirror",
+    "mirror_box",
     "opaque_mirror",
     "plano_convex_lens",
     "polygon",
     "regular_polygon",
-    "thick_arc",
-    "calibrate_normalize_ref",
     "render",
     "render_contact_sheet",
     "render_stats",
     "render_still",
     "smoothstep",
+    "thick_arc",
 ]

@@ -17,14 +17,17 @@ Produces three targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (head
 # Interactive (GLFW window + ImGui controls)
 ./build/lpt2d --scene diamond
 
-# Headless (EGL, no display needed)
-./build/lpt2d-cli --scene prism --width 1920 --height 1080 --rays 100000000 --output render.png
+# Headless (EGL, no display needed) — honors shot camera/look/trace from file
+./build/lpt2d-cli --scene scenes/prism.json --output render.png
+
+# CLI flags override shot defaults
+./build/lpt2d-cli --scene scenes/prism.json --exposure 3 --rays 50000000
 
 # Python animation
 python anim/examples/orbiting_beam.py
 ```
 
-Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--ambient`, `--background`, `--opacity`, `--intensity`.
+Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--ambient`, `--background`, `--opacity`, `--intensity`. All flags override the shot file's saved values.
 
 ## Benchmarking
 
@@ -37,17 +40,29 @@ bash benchmark-compare.sh benchmarks/dir_a benchmarks/dir_b  # HTML side-by-side
 
 2D spectral light path tracer. GPU compute shader traces rays, emits line segments to an SSBO, then instanced draw rasterizes them as anti-aliased quads with additive blending to a float32 FBO.
 
+### Shot: the authored document
+
+The central concept is the **Shot** — the complete authored document that preserves what the user sees. A Shot contains:
+
+- **Scene** (content): shapes, lights, groups, materials
+- **Camera2D**: authored viewport framing (bounds or center+width)
+- **Canvas**: output resolution (width x height)
+- **Look**: post-processing settings (exposure, tonemap, gamma, normalize, etc.)
+- **TraceDefaults**: ray tracing quality (rays, batch, depth, intensity)
+
+The GUI save/load, CLI, and Python API all operate on Shots. "Save" preserves the full visual result.
+
 ### Layer model
 
-The same scene data flows through five layers. **All layers must stay consistent.**
+The same data flows through five layers. **All layers must stay consistent.**
 
-| Layer | Material fields | Render params | Materials dict |
-|-------|----------------|---------------|----------------|
-| **C++ scene.h** | 8 fields on `Material` struct | `PostProcess` (11) + `TraceConfig` (3) | `Scene::materials` (map) |
-| **GPU structs** (renderer.cpp) | Same 8 fields in std430 layout | Uniforms | Flattened at upload |
+| Layer | Material fields | Shot fields | Materials dict |
+|-------|----------------|-------------|----------------|
+| **C++ scene.h** | 8 fields on `Material` struct | `Shot` (Scene + Camera2D + Canvas + Look + TraceDefaults) | `Scene::materials` (map) |
+| **GPU structs** (renderer.cpp) | Same 8 fields in std430 layout | `PostProcess` + `TraceConfig` (runtime) | Flattened at upload |
 | **GLSL shader** (trace.comp) | Same 8 fields in `Hit` struct | Uniforms | N/A |
-| **JSON** (serialize.cpp) | All 8 read/written | Per-frame overrides in `render` block | `"materials"` dict |
-| **Python** (anim/types.py) | Same 8 fields on `Material` dataclass | `RenderSettings` (unified) | `Scene.materials` dict |
+| **JSON** (serialize.cpp) | All 8 read/written | v4 format: camera/canvas/look/trace blocks | `"materials"` dict |
+| **Python** (anim/types.py) | Same 8 fields on `Material` dataclass | `Shot` (Scene + Camera2D + Canvas + Look + TraceDefaults) | `Scene.materials` dict |
 
 ### Material system
 
@@ -80,22 +95,22 @@ Applied per-pixel in `postprocess.frag`:
 ```
 CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lpt2d-cli (headless)
 anim/                       — Python animation library (pip install -e .)
-  types.py                  — Scene model mirroring C++ (Material, Shape, Light, Group, Scene)
+  types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
   renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet
   builders.py               — Shape composition: polygon, regular_polygon, mirror_box, thick_arc, biconvex_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
   stats.py                  — Frame statistics (luminance, clipping, percentiles)
   examples/                 — Working animation examples
-scenes/                     — JSON scene files (the single source of truth for all scenes)
+scenes/                     — JSON shot files (v4 format, the single source of truth)
 src/
   core/                     — lpt2d-core static library (no GUI/windowing deps)
-    scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, intersection, bounds
-    scenes.h/cpp            — runtime scene discovery from scenes/ directory
+    scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, Shot, Camera2D, Canvas, Look, TraceDefaults, intersection, bounds
+    scenes.h/cpp            — runtime scene discovery from scenes/ directory (returns Shot)
     renderer.h/cpp          — GPU pipeline: framebuffers, compute dispatch, instanced draw, post-processing
     spectrum.h/cpp          — CIE 1931 wavelength→RGB (Gaussian fit), uploaded as 1D texture LUT
     export.h/cpp            — PNG export via stb_image_write
-    serialize.h/cpp         — JSON scene save/load (file and string APIs)
+    serialize.h/cpp         — JSON shot save/load (v4 format, file and string APIs)
   shaders/                  — standalone GLSL files (embedded at build time → build/generated/shaders.h)
     trace.comp              — main ray tracing compute kernel
     line.vert/frag          — instanced anti-aliased line rasterization
@@ -124,7 +139,8 @@ src/
 - **Transforms**: G=grab, R=rotate, S=scale. Axis lock with X/Y. Numeric input. Shift=snap.
 - **Enter-group editing**: Double-click a group member to enter the group. Properties panel shows individual member materials. Escape exits.
 - **Material Library**: Named materials with create/edit/delete/apply-to-selection. Preset buttons for common materials.
-- **Undo/Redo**: Ctrl+Z/Ctrl+Shift+Z, 200-level history.
+- **Undo/Redo**: Ctrl+Z/Ctrl+Shift+Z, 200-level history (tracks Scene only, not Look/TraceDefaults).
+- **Save/Load**: Ctrl+S/Ctrl+O saves/loads the full Shot (scene content + camera + look + trace + canvas).
 
 ### Important constraints
 
@@ -134,12 +150,16 @@ src/
 - **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed.
 - **String-to-enum parsing**: Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` — do not duplicate the string-matching logic.
 
-### JSON scene format (version 3)
+### JSON shot format (version 4)
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "name": "scene_name",
+  "camera": { "bounds": [-1.3, -0.9, 1.3, 0.9] },
+  "canvas": { "width": 1920, "height": 1080 },
+  "look": { "exposure": 2, "tonemap": "aces", "normalize": "rays" },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
   "materials": {
     "glass": {"ior": 1.5, "transmission": 1, "cauchy_b": 20000},
     "mirror": {"metallic": 1, "albedo": 0.95, "transmission": 1}
@@ -162,4 +182,34 @@ src/
 }
 ```
 
-Shapes can reference materials by name (string) or inline (object). Named references are resolved from the `materials` dict at load time.
+Camera, canvas, look, and trace blocks are at the root level alongside scene content. Shapes can reference materials by name (string) or inline (object). Named references are resolved from the `materials` dict at load time.
+
+**Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
+
+**Look** only needs to include non-default values. Defaults: exposure=2, contrast=1, gamma=2.2, tonemap=aces, white_point=1, normalize=rays, ambient=0, background=[0,0,0], opacity=1.
+
+**Trace** only needs to include non-default values. Defaults: rays=10M, batch=200K, depth=12, intensity=1.
+
+### Python animation API
+
+```python
+from anim import Shot, Scene, Frame, Look, Camera2D, Timeline, render
+
+# Load a shot file
+shot = Shot.load("scenes/three_spheres.json")
+
+# Create from preset
+shot = Shot.preset("production", rays=20_000_000)
+
+# Animation callback returns Scene or Frame
+def animate(ctx):
+    return Frame(
+        scene=Scene(shapes=[...], lights=[...]),
+        camera=Camera2D(bounds=[-1, -1, 1, 1]),
+        look=Look(exposure=3.0, tonemap="reinhardx"),
+    )
+
+render(animate, Timeline(10.0), "output.mp4", settings="preview")
+```
+
+Key types: `Shot` (authored document), `Scene` (content only), `Canvas`, `Look`, `TraceDefaults`, `Camera2D`, `Frame` (per-frame return from animate callback), `Quality` presets (draft/preview/production/final).

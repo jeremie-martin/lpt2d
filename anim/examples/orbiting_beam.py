@@ -4,7 +4,7 @@ Canonical example demonstrating the animation API:
 - Group-based composition (actors: box, spheres, fill light, beam)
 - Track for declarative motion and exposure control
 - Camera2D for stable framing
-- Frame for per-frame render overrides
+- Frame for per-frame look overrides
 - Quality presets for draft/final workflow
 """
 
@@ -19,7 +19,7 @@ from anim import (
     FrameContext,
     Group,
     Key,
-    RenderOverrides,
+    Look,
     Scene,
     Segment,
     SegmentLight,
@@ -132,12 +132,9 @@ def make_beam(t: float) -> Group:
 def animate(ctx: FrameContext) -> Frame:
     return Frame(
         scene=Scene(
-            name=NAME,
             groups=[make_box(), make_spheres(), make_fill_light(), make_beam(ctx.time)],
         ),
-        render=RenderOverrides(
-            exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.5
-        ),
+        look=Look(exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.5),
     )
 
 

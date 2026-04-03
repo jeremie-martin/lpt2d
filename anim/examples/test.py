@@ -24,11 +24,11 @@ from anim import (
     FrameContext,
     Group,
     Key,
-    RenderOverrides,
-    RenderSettings,
+    Look,
     Scene,
     Segment,
     SegmentLight,
+    Shot,
     Timeline,
     Track,
     Transform2D,
@@ -214,7 +214,6 @@ def animate(ctx: FrameContext) -> Frame:
 
     return Frame(
         scene=Scene(
-            name=NAME,
             groups=[
                 FRAME_GROUP,
                 FIELD_GROUP,
@@ -223,7 +222,7 @@ def animate(ctx: FrameContext) -> Frame:
             ],
         ),
         camera=camera,
-        render=RenderOverrides(
+        look=Look(
             exposure=float(EXPOSURE(ctx.time)),
             contrast=1.0,
             tonemap="reinhardx",
@@ -234,7 +233,7 @@ def animate(ctx: FrameContext) -> Frame:
 
 if __name__ == "__main__":
     hq = "--hq" in sys.argv
-    settings = RenderSettings.preset(
+    shot = Shot.preset(
         "production" if hq else "draft",
         width=1920 if hq else 720,
         height=1080 if hq else 404,
@@ -246,5 +245,5 @@ if __name__ == "__main__":
         animate,
         Timeline(DURATION, fps=60 if hq else 30),
         f"{NAME}_{'hq' if hq else 'preview'}.mp4",
-        settings=settings,
+        settings=shot,
     )

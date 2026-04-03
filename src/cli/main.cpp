@@ -16,36 +16,36 @@ static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
-              << "  --width <int>            Width (default: 1920)\n"
-              << "  --height <int>           Height (default: 1080)\n"
-              << "  --rays <int>             Total rays (default: 10000000)\n"
-              << "  --batch <int>            Rays per batch (default: 200000)\n"
-              << "  --depth <int>            Max ray depth (default: 12)\n"
-              << "  --exposure <float>       Exposure in stops (default: 2)\n"
-              << "  --contrast <float>       Contrast (default: 1)\n"
-              << "  --gamma <float>          Gamma (default: 2.2)\n"
-              << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (default: aces)\n"
-              << "  --white-point <float>    White point for reinhardx/log (default: 1)\n"
-              << "  --normalize <mode>       max|rays|fixed|off (default: rays)\n"
+              << "  --width <int>            Width (overrides shot canvas)\n"
+              << "  --height <int>           Height (overrides shot canvas)\n"
+              << "  --rays <int>             Total rays (overrides shot trace)\n"
+              << "  --batch <int>            Rays per batch (overrides shot trace)\n"
+              << "  --depth <int>            Max ray depth (overrides shot trace)\n"
+              << "  --exposure <float>       Exposure in stops (overrides shot look)\n"
+              << "  --contrast <float>       Contrast (overrides shot look)\n"
+              << "  --gamma <float>          Gamma (overrides shot look)\n"
+              << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (overrides shot look)\n"
+              << "  --white-point <float>    White point for reinhardx/log (overrides shot look)\n"
+              << "  --normalize <mode>       max|rays|fixed|off (overrides shot look)\n"
               << "  --normalize-ref <float>  Fixed divisor (for --normalize fixed)\n"
               << "  --normalize-pct <float>  Percentile for max mode (default: 1.0, use 0.99 for P99)\n"
-              << "  --ambient <float>        Constant fill light (default: 0)\n"
-              << "  --background <r,g,b>     Background color, linear RGB 0-1 (default: 0,0,0)\n"
-              << "  --opacity <float>        Global opacity 0-1 (default: 1)\n"
-              << "  --intensity <float>      Trace intensity multiplier (default: 1)\n"
-              << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
+              << "  --ambient <float>        Constant fill light (overrides shot look)\n"
+              << "  --background <r,g,b>     Background color, linear RGB 0-1 (overrides shot look)\n"
+              << "  --opacity <float>        Global opacity 0-1 (overrides shot look)\n"
+              << "  --intensity <float>      Trace intensity multiplier (overrides shot trace)\n"
+              << "  --stream                 Streaming mode: read JSON shots from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
         std::cerr << entry.name << " ";
     std::cerr << "\n";
 }
 
-static Scene resolve_scene(const std::string& arg) {
+static Shot resolve_shot(const std::string& arg) {
     // Try built-in name first
     if (auto s = find_builtin_scene(arg)) return *s;
     // Then try as a file path
-    Scene s = load_scene_json(arg);
-    if (!s.shapes.empty() || !s.lights.empty() || !s.groups.empty()) return s;
+    Shot s = load_shot_json(arg);
+    if (!s.scene.shapes.empty() || !s.scene.lights.empty() || !s.scene.groups.empty()) return s;
     std::cerr << "Unknown scene: " << arg << "\n";
     std::cerr << "Available: ";
     for (auto& entry : get_builtin_scenes())
@@ -54,10 +54,51 @@ static Scene resolve_scene(const std::string& arg) {
     std::exit(1);
 }
 
-static int run_stream(int width, int height, int64_t default_rays,
-                      TraceConfig default_tcfg, PostProcess default_pp) {
+// CLI overrides — all optional, applied on top of shot defaults
+struct CLIOverrides {
+    std::optional<int> width, height;
+    std::optional<int64_t> rays;
+    std::optional<int> batch, depth;
+    std::optional<float> exposure, contrast, gamma, white_point;
+    std::optional<ToneMap> tonemap;
+    std::optional<NormalizeMode> normalize;
+    std::optional<float> normalize_ref, normalize_pct;
+    std::optional<float> ambient, opacity, intensity;
+    std::optional<std::array<float, 3>> background;
+};
+
+static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
+    if (ov.width) shot.canvas.width = *ov.width;
+    if (ov.height) shot.canvas.height = *ov.height;
+    if (ov.rays) shot.trace.rays = *ov.rays;
+    if (ov.batch) shot.trace.batch = *ov.batch;
+    if (ov.depth) shot.trace.depth = *ov.depth;
+    if (ov.intensity) shot.trace.intensity = *ov.intensity;
+    if (ov.exposure) shot.look.exposure = *ov.exposure;
+    if (ov.contrast) shot.look.contrast = *ov.contrast;
+    if (ov.gamma) shot.look.gamma = *ov.gamma;
+    if (ov.white_point) shot.look.white_point = *ov.white_point;
+    if (ov.tonemap) shot.look.tone_map = *ov.tonemap;
+    if (ov.normalize) shot.look.normalize = *ov.normalize;
+    if (ov.normalize_ref) shot.look.normalize_ref = *ov.normalize_ref;
+    if (ov.normalize_pct) shot.look.normalize_pct = *ov.normalize_pct;
+    if (ov.ambient) shot.look.ambient = *ov.ambient;
+    if (ov.opacity) shot.look.opacity = *ov.opacity;
+    if (ov.background) {
+        shot.look.background[0] = (*ov.background)[0];
+        shot.look.background[1] = (*ov.background)[1];
+        shot.look.background[2] = (*ov.background)[2];
+    }
+}
+
+static int run_stream(const Shot& session, int64_t default_rays) {
     HeadlessGL gl;
     if (!gl.init()) return 1;
+
+    int width = session.canvas.width;
+    int height = session.canvas.height;
+    TraceConfig default_tcfg = session.trace.to_trace_config();
+    PostProcess default_pp = session.look;
 
     Renderer renderer;
     if (!renderer.init(width, height)) return 1;
@@ -82,7 +123,7 @@ static int run_stream(int width, int height, int64_t default_rays,
             continue;
         }
 
-        Scene scene = load_scene_json_string(line);
+        Shot frame_shot = load_shot_json_string(line);
 
         // Parse per-frame render overrides
         FrameOverrides fo = parse_frame_overrides(line);
@@ -113,12 +154,12 @@ static int run_stream(int width, int height, int64_t default_rays,
         Bounds bounds;
         if (fo.bounds) {
             bounds = *fo.bounds;
-        } else if (scene.shapes.empty() && scene.lights.empty() && scene.groups.empty()) {
+        } else if (frame_shot.scene.shapes.empty() && frame_shot.scene.lights.empty() && frame_shot.scene.groups.empty()) {
             bounds = {{-1, -1}, {1, 1}};
         } else {
-            bounds = compute_bounds(scene);
+            bounds = compute_bounds(frame_shot.scene);
         }
-        renderer.upload_scene(scene, bounds);
+        renderer.upload_scene(frame_shot.scene, bounds);
         renderer.clear();
 
         // Trace rays in batched dispatches (skip if no lights)
@@ -154,11 +195,8 @@ static int run_stream(int width, int height, int64_t default_rays,
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
-    int width = 1920, height = 1080;
-    int64_t total_rays = 10'000'000;
-    TraceConfig tcfg;
-    PostProcess pp;
     bool stream_mode = false;
+    CLIOverrides overrides;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
@@ -166,45 +204,44 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc)
             output = argv[++i];
         else if (std::strcmp(argv[i], "--width") == 0 && i + 1 < argc)
-            width = std::atoi(argv[++i]);
+            overrides.width = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
-            height = std::atoi(argv[++i]);
+            overrides.height = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--rays") == 0 && i + 1 < argc)
-            total_rays = std::strtoll(argv[++i], nullptr, 10);
+            overrides.rays = std::strtoll(argv[++i], nullptr, 10);
         else if (std::strcmp(argv[i], "--batch") == 0 && i + 1 < argc)
-            tcfg.batch_size = std::atoi(argv[++i]);
+            overrides.batch = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
-            tcfg.max_depth = std::atoi(argv[++i]);
+            overrides.depth = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--exposure") == 0 && i + 1 < argc)
-            pp.exposure = std::atof(argv[++i]);
+            overrides.exposure = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--gamma") == 0 && i + 1 < argc)
-            pp.gamma = std::atof(argv[++i]);
+            overrides.gamma = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--contrast") == 0 && i + 1 < argc)
-            pp.contrast = std::atof(argv[++i]);
+            overrides.contrast = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--white-point") == 0 && i + 1 < argc)
-            pp.white_point = std::atof(argv[++i]);
+            overrides.white_point = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--tonemap") == 0 && i + 1 < argc) {
-            if (auto tm = parse_tonemap(argv[++i])) pp.tone_map = *tm;
+            if (auto tm = parse_tonemap(argv[++i])) overrides.tonemap = *tm;
         } else if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
-            if (auto nm = parse_normalize_mode(argv[++i])) pp.normalize = *nm;
+            if (auto nm = parse_normalize_mode(argv[++i])) overrides.normalize = *nm;
         } else if (std::strcmp(argv[i], "--normalize-ref") == 0 && i + 1 < argc) {
-            pp.normalize_ref = std::atof(argv[++i]);
+            overrides.normalize_ref = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--normalize-pct") == 0 && i + 1 < argc) {
-            pp.normalize_pct = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+            overrides.normalize_pct = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--ambient") == 0 && i + 1 < argc) {
-            pp.ambient = std::atof(argv[++i]);
+            overrides.ambient = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--background") == 0 && i + 1 < argc) {
-            // Parse "r,g,b" or a single gray value
             char* end = nullptr;
             float r = std::strtof(argv[++i], &end);
             float g = r, b = r;
             if (end && *end == ',') { g = std::strtof(end + 1, &end); }
             if (end && *end == ',') { b = std::strtof(end + 1, &end); }
-            pp.background[0] = r; pp.background[1] = g; pp.background[2] = b;
+            overrides.background = {r, g, b};
         } else if (std::strcmp(argv[i], "--opacity") == 0 && i + 1 < argc) {
-            pp.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+            overrides.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--intensity") == 0 && i + 1 < argc) {
-            tcfg.intensity = std::atof(argv[++i]);
+            overrides.intensity = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
@@ -217,21 +254,37 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (stream_mode)
-        return run_stream(width, height, total_rays, tcfg, pp);
+    if (stream_mode) {
+        // Stream mode: use default shot (no scene file needed), apply CLI overrides
+        Shot session;
+        apply_overrides(session, overrides);
+        return run_stream(session, session.trace.rays);
+    }
+
+    // Load shot (scene file provides defaults for everything)
+    Shot shot = resolve_shot(scene_name);
+    apply_overrides(shot, overrides);
 
     HeadlessGL gl;
     if (!gl.init())
         return 1;
 
+    int width = shot.canvas.width;
+    int height = shot.canvas.height;
+
     Renderer renderer;
     if (!renderer.init(width, height))
         return 1;
 
-    Scene scene = resolve_scene(scene_name);
-    Bounds bounds = compute_bounds(scene);
-    renderer.upload_scene(scene, bounds);
+    // Resolve camera bounds
+    Bounds scene_bounds = compute_bounds(shot.scene);
+    Bounds bounds = shot.camera.resolve(shot.canvas.aspect(), scene_bounds);
+    renderer.upload_scene(shot.scene, bounds);
     renderer.clear();
+
+    TraceConfig tcfg = shot.trace.to_trace_config();
+    PostProcess pp = shot.look;
+    int64_t total_rays = shot.trace.rays;
 
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
 
