@@ -80,6 +80,33 @@ inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0
     return {.ior = ior, .transmission = 1.0f, .absorption = absorption, .cauchy_b = cauchy_b};
 }
 
+// --- Transform ---
+
+struct Transform2D {
+    Vec2 translate{0, 0};
+    float rotate = 0;      // radians
+    Vec2 scale{1, 1};
+
+    // Apply transform to a point: scale → rotate → translate
+    Vec2 apply(Vec2 p) const {
+        p = {p.x * scale.x, p.y * scale.y};
+        float c = std::cos(rotate), s = std::sin(rotate);
+        p = {p.x * c - p.y * s, p.x * s + p.y * c};
+        return p + translate;
+    }
+
+    // Apply to a direction vector (no translate)
+    Vec2 apply_direction(Vec2 d) const {
+        d = {d.x * scale.x, d.y * scale.y};
+        float c = std::cos(rotate), s = std::sin(rotate);
+        return {d.x * c - d.y * s, d.x * s + d.y * c};
+    }
+
+    bool is_identity() const {
+        return translate.x == 0 && translate.y == 0 && rotate == 0 && scale.x == 1 && scale.y == 1;
+    }
+};
+
 // --- Geometry ---
 
 struct Circle {
@@ -135,6 +162,15 @@ struct BeamLight {
 
 using Light = std::variant<PointLight, SegmentLight, BeamLight>;
 
+// --- Groups ---
+
+struct Group {
+    std::string name;
+    Transform2D transform;
+    std::vector<Shape> shapes;  // in local coordinates
+    std::vector<Light> lights;  // in local coordinates
+};
+
 // --- Ray tracing ---
 
 struct Ray {
@@ -151,8 +187,9 @@ struct Hit {
 // --- Scene ---
 
 struct Scene {
-    std::vector<Shape> shapes;
-    std::vector<Light> lights;
+    std::vector<Shape> shapes;   // ungrouped shapes (world coords)
+    std::vector<Light> lights;   // ungrouped lights (world coords)
+    std::vector<Group> groups;
     std::string name;
 };
 
@@ -200,3 +237,7 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
 
 // Add four axis-aligned walls forming a box
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);
+
+// Transform a shape/light from local to world coordinates using a Transform2D
+Shape transform_shape(const Shape& s, const Transform2D& t);
+Light transform_light(const Light& l, const Transform2D& t);

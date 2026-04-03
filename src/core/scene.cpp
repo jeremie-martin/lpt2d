@@ -217,6 +217,40 @@ Bounds compute_bounds(const Scene& scene, float padding) {
                    light);
     }
 
+    // Groups: expand with world-space transformed shapes/lights
+    for (const auto& group : scene.groups) {
+        for (const auto& shape : group.shapes) {
+            Shape ws = transform_shape(shape, group.transform);
+            std::visit(overloaded{
+                [&](const Circle& c) {
+                    expand(c.center - Vec2{c.radius, c.radius});
+                    expand(c.center + Vec2{c.radius, c.radius});
+                },
+                [&](const Segment& s) { expand(s.a); expand(s.b); },
+                [&](const Arc& a) {
+                    expand(a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)});
+                    expand(a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)});
+                    constexpr float cardinals[] = {0.0f, 1.5707963f, 3.1415927f, 4.7123890f};
+                    constexpr float dx[] = {1.0f, 0.0f, -1.0f, 0.0f};
+                    constexpr float dy[] = {0.0f, 1.0f, 0.0f, -1.0f};
+                    for (int i = 0; i < 4; ++i) {
+                        if (angle_in_arc(cardinals[i], a.angle_start, a.angle_end))
+                            expand(a.center + Vec2{a.radius * dx[i], a.radius * dy[i]});
+                    }
+                },
+                [&](const Bezier& b) { expand(b.p0); expand(b.p1); expand(b.p2); },
+            }, ws);
+        }
+        for (const auto& light : group.lights) {
+            Light wl = transform_light(light, group.transform);
+            std::visit(overloaded{
+                [&](const PointLight& l) { expand(l.pos); },
+                [&](const SegmentLight& l) { expand(l.a); expand(l.b); },
+                [&](const BeamLight& l) { expand(l.origin); },
+            }, wl);
+        }
+    }
+
     Vec2 size = hi - lo;
     float pad = std::max(size.x, size.y) * padding;
     return {lo - Vec2{pad, pad}, hi + Vec2{pad, pad}};
@@ -233,6 +267,67 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
         s.p0 = (s.p0 - bounds.min) * scale + offset;
         s.p1 = (s.p1 - bounds.min) * scale + offset;
     }
+}
+
+// ─── Transform helpers ─────────────────────────────────────────────
+
+Shape transform_shape(const Shape& s, const Transform2D& t) {
+    if (t.is_identity()) return s;
+    float uniform_scale = std::sqrt(std::abs(t.scale.x * t.scale.y));
+    return std::visit(overloaded{
+        [&](const Circle& c) -> Shape {
+            Circle r = c;
+            r.center = t.apply(c.center);
+            r.radius = std::max(c.radius * uniform_scale, 0.01f);
+            return r;
+        },
+        [&](const Segment& seg) -> Shape {
+            Segment r = seg;
+            r.a = t.apply(seg.a);
+            r.b = t.apply(seg.b);
+            return r;
+        },
+        [&](const Arc& a) -> Shape {
+            Arc r = a;
+            r.center = t.apply(a.center);
+            r.radius = std::max(a.radius * uniform_scale, 0.01f);
+            r.angle_start = std::fmod(std::fmod(a.angle_start + t.rotate, TWO_PI) + TWO_PI, TWO_PI);
+            r.angle_end = std::fmod(std::fmod(a.angle_end + t.rotate, TWO_PI) + TWO_PI, TWO_PI);
+            return r;
+        },
+        [&](const Bezier& b) -> Shape {
+            Bezier r = b;
+            r.p0 = t.apply(b.p0);
+            r.p1 = t.apply(b.p1);
+            r.p2 = t.apply(b.p2);
+            return r;
+        },
+    }, s);
+}
+
+Light transform_light(const Light& l, const Transform2D& t) {
+    if (t.is_identity()) return l;
+    return std::visit(overloaded{
+        [&](const PointLight& pl) -> Light {
+            PointLight r = pl;
+            r.pos = t.apply(pl.pos);
+            return r;
+        },
+        [&](const SegmentLight& sl) -> Light {
+            SegmentLight r = sl;
+            r.a = t.apply(sl.a);
+            r.b = t.apply(sl.b);
+            return r;
+        },
+        [&](const BeamLight& bl) -> Light {
+            BeamLight r = bl;
+            r.origin = t.apply(bl.origin);
+            Vec2 d = t.apply_direction(bl.direction);
+            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
+            r.angular_width = std::clamp(bl.angular_width * std::sqrt(std::abs(t.scale.x * t.scale.y)), 0.01f, PI);
+            return r;
+        },
+    }, l);
 }
 
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat) {

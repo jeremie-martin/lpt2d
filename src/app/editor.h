@@ -12,7 +12,7 @@
 // ─── Object identification ─────────────────────────────────────────────
 
 struct ObjectId {
-    enum Type { Shape, Light } type;
+    enum Type { Shape, Light, Group } type;
     int index;
     bool operator==(const ObjectId&) const = default;
 };
@@ -119,8 +119,9 @@ struct Handle {
 struct Clipboard {
     std::vector<Shape> shapes;
     std::vector<Light> lights;
+    std::vector<Group> groups;
     Vec2 centroid{};
-    bool empty() const { return shapes.empty() && lights.empty(); }
+    bool empty() const { return shapes.empty() && lights.empty() && groups.empty(); }
 };
 
 // ─── Editor tools ──────────────────────────────────────────────────────
@@ -202,6 +203,8 @@ struct EditorState {
             selection.push_back({ObjectId::Shape, i});
         for (int i = 0; i < (int)scene.lights.size(); ++i)
             selection.push_back({ObjectId::Light, i});
+        for (int i = 0; i < (int)scene.groups.size(); ++i)
+            selection.push_back({ObjectId::Group, i});
     }
 
     // Centroid of selected objects (for transform pivot)
@@ -215,7 +218,9 @@ struct EditorState {
         selection.erase(
             std::remove_if(selection.begin(), selection.end(), [&](const ObjectId& id) {
                 if (id.type == ObjectId::Shape) return id.index >= (int)scene.shapes.size();
-                return id.index >= (int)scene.lights.size();
+                if (id.type == ObjectId::Light) return id.index >= (int)scene.lights.size();
+                if (id.type == ObjectId::Group) return id.index >= (int)scene.groups.size();
+                return true;
             }),
             selection.end());
     }
@@ -249,3 +254,13 @@ int handle_hit_test(const std::vector<Handle>& handles, Vec2 wp, float threshold
 
 // Apply a handle drag — modifies the specific object parameter
 void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 new_world_pos);
+
+// Apply grab/rotate/scale to a group's transform (from snapshot → live scene)
+void apply_transform_group(Group& dst, const Group& src, const TransformMode& tm, Vec2 mouse_world, bool shift_held = false);
+
+// Translate a group by a delta (modifies transform.translate)
+void translate_group(Group& g, Vec2 delta);
+
+// Find which group (if any) contains the given world-space point
+// Returns group index or -1
+int hit_test_groups(Vec2 wp, const Scene& scene, float threshold);

@@ -20,6 +20,9 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
             [](const BeamLight& l) -> Vec2 { return l.origin; },
         }, scene.lights[id.index]);
     }
+    if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+        return scene.groups[id.index].transform.translate;
+    }
     return {0, 0};
 }
 
@@ -53,6 +56,26 @@ Bounds EditorState::selection_bounds() const {
                 [&](const BeamLight& l) { expand(l.origin); },
             }, scene.lights[id.index]);
         }
+        if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+            const auto& group = scene.groups[id.index];
+            for (const auto& shape : group.shapes) {
+                Shape ws = transform_shape(shape, group.transform);
+                std::visit(overloaded{
+                    [&](const Circle& c) { expand(c.center - Vec2{c.radius, c.radius}); expand(c.center + Vec2{c.radius, c.radius}); },
+                    [&](const Segment& s) { expand(s.a); expand(s.b); },
+                    [&](const Arc& a) { expand(a.center - Vec2{a.radius, a.radius}); expand(a.center + Vec2{a.radius, a.radius}); },
+                    [&](const Bezier& b) { expand(b.p0); expand(b.p1); expand(b.p2); },
+                }, ws);
+            }
+            for (const auto& light : group.lights) {
+                Light wl = transform_light(light, group.transform);
+                std::visit(overloaded{
+                    [&](const PointLight& l) { expand(l.pos); },
+                    [&](const SegmentLight& l) { expand(l.a); expand(l.b); },
+                    [&](const BeamLight& l) { expand(l.origin); },
+                }, wl);
+            }
+        }
     }
     return {lo, hi};
 }
@@ -67,54 +90,93 @@ static float point_seg_dist(Vec2 p, Vec2 a, Vec2 b) {
     return (p - (a + ab * t)).length();
 }
 
+static float shape_distance(Vec2 wp, const Shape& shape) {
+    return std::visit(overloaded{
+        [&](const Circle& c) -> float {
+            float dc = (wp - c.center).length();
+            return dc < c.radius ? 0.0f : dc - c.radius;
+        },
+        [&](const Segment& s) -> float { return point_seg_dist(wp, s.a, s.b); },
+        [&](const Arc& a) -> float {
+            Vec2 d = wp - a.center;
+            float dc = d.length();
+            float angle = std::atan2(d.y, d.x);
+            if (angle < 0) angle += TWO_PI;
+            float span = a.angle_end - a.angle_start;
+            if (span < 0) span += TWO_PI;
+            float rel = angle - a.angle_start;
+            if (rel < 0) rel += TWO_PI;
+            if (rel <= span) {
+                return std::abs(dc - a.radius);
+            }
+            Vec2 p0 = a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)};
+            Vec2 p1 = a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)};
+            return std::min((wp - p0).length(), (wp - p1).length());
+        },
+        [&](const Bezier& b) -> float {
+            float best = 1e30f;
+            for (int j = 0; j <= 20; ++j) {
+                float t = j / 20.0f;
+                float u = 1.0f - t;
+                Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
+                best = std::min(best, (wp - p).length());
+            }
+            return best;
+        },
+    }, shape);
+}
+
+static float light_distance(Vec2 wp, const Light& light) {
+    return std::visit(overloaded{
+        [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
+        [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
+        [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
+    }, light);
+}
+
 ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold) {
     ObjectId result{ObjectId::Shape, -1};
     float best = threshold;
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
-        float d = std::visit(overloaded{
-            [&](const Circle& c) -> float {
-                float dc = (wp - c.center).length();
-                return dc < c.radius ? 0.0f : dc - c.radius;
-            },
-            [&](const Segment& s) -> float { return point_seg_dist(wp, s.a, s.b); },
-            [&](const Arc& a) -> float {
-                Vec2 d = wp - a.center;
-                float dc = d.length();
-                // Check if point's angle falls within arc span
-                float angle = std::atan2(d.y, d.x);
-                if (angle < 0) angle += TWO_PI;
-                float span = a.angle_end - a.angle_start;
-                if (span < 0) span += TWO_PI;
-                float rel = angle - a.angle_start;
-                if (rel < 0) rel += TWO_PI;
-                if (rel <= span) {
-                    return std::abs(dc - a.radius); // distance to arc curve
-                }
-                // Outside angular span: distance to nearest endpoint
-                Vec2 p0 = a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)};
-                Vec2 p1 = a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)};
-                return std::min((wp - p0).length(), (wp - p1).length());
-            },
-            [&](const Bezier& b) -> float {
-                float best = 1e30f;
-                for (int j = 0; j <= 20; ++j) {
-                    float t = j / 20.0f;
-                    float u = 1.0f - t;
-                    Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
-                    best = std::min(best, (wp - p).length());
-                }
-                return best;
-            },
-        }, scene.shapes[i]);
+        float d = shape_distance(wp, scene.shapes[i]);
         if (d < best) { best = d; result = {ObjectId::Shape, i}; }
     }
     for (int i = 0; i < (int)scene.lights.size(); ++i) {
-        float d = std::visit(overloaded{
-            [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
-            [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
-            [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
-        }, scene.lights[i]);
+        float d = light_distance(wp, scene.lights[i]);
         if (d < best) { best = d; result = {ObjectId::Light, i}; }
+    }
+    // Test group members (in world space)
+    for (int g = 0; g < (int)scene.groups.size(); ++g) {
+        const auto& group = scene.groups[g];
+        for (const auto& shape : group.shapes) {
+            Shape ws = transform_shape(shape, group.transform);
+            float d = shape_distance(wp, ws);
+            if (d < best) { best = d; result = {ObjectId::Group, g}; }
+        }
+        for (const auto& light : group.lights) {
+            Light wl = transform_light(light, group.transform);
+            float d = light_distance(wp, wl);
+            if (d < best) { best = d; result = {ObjectId::Group, g}; }
+        }
+    }
+    return result;
+}
+
+int hit_test_groups(Vec2 wp, const Scene& scene, float threshold) {
+    float best = threshold;
+    int result = -1;
+    for (int g = 0; g < (int)scene.groups.size(); ++g) {
+        const auto& group = scene.groups[g];
+        for (const auto& shape : group.shapes) {
+            Shape ws = transform_shape(shape, group.transform);
+            float d = shape_distance(wp, ws);
+            if (d < best) { best = d; result = g; }
+        }
+        for (const auto& light : group.lights) {
+            Light wl = transform_light(light, group.transform);
+            float d = light_distance(wp, wl);
+            if (d < best) { best = d; result = g; }
+        }
     }
     return result;
 }
@@ -137,6 +199,28 @@ bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_ma
             [&](const SegmentLight& l) -> bool { return in_rect(l.a) || in_rect(l.b); },
             [&](const BeamLight& l) -> bool { return in_rect(l.origin); },
         }, scene.lights[id.index]);
+    }
+    if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+        const auto& group = scene.groups[id.index];
+        for (const auto& shape : group.shapes) {
+            Shape ws = transform_shape(shape, group.transform);
+            bool hit = std::visit(overloaded{
+                [&](const Circle& c) -> bool { return in_rect(c.center); },
+                [&](const Segment& s) -> bool { return in_rect(s.a) || in_rect(s.b); },
+                [&](const Arc& a) -> bool { return in_rect(a.center); },
+                [&](const Bezier& b) -> bool { return in_rect(b.p0) || in_rect(b.p1) || in_rect(b.p2); },
+            }, ws);
+            if (hit) return true;
+        }
+        for (const auto& light : group.lights) {
+            Light wl = transform_light(light, group.transform);
+            bool hit = std::visit(overloaded{
+                [&](const PointLight& l) -> bool { return in_rect(l.pos); },
+                [&](const SegmentLight& l) -> bool { return in_rect(l.a) || in_rect(l.b); },
+                [&](const BeamLight& l) -> bool { return in_rect(l.origin); },
+            }, wl);
+            if (hit) return true;
+        }
     }
     return false;
 }
@@ -277,6 +361,34 @@ static void scale_light(Light& l, Vec2 pivot, float fx, float fy) {
     }, l);
 }
 
+void translate_group(Group& g, Vec2 delta) {
+    g.transform.translate = g.transform.translate + delta;
+}
+
+void apply_transform_group(Group& dst, const Group& src, const TransformMode& tm, Vec2 mouse_world, bool shift_held) {
+    dst = src;
+    switch (tm.type) {
+    case TransformMode::Grab:
+        dst.transform.translate = src.transform.translate + compute_grab_delta(tm, mouse_world);
+        break;
+    case TransformMode::Rotate: {
+        float angle = compute_rotate_angle(tm, mouse_world, shift_held);
+        dst.transform.rotate = src.transform.rotate + angle;
+        dst.transform.translate = rotate_around(src.transform.translate, tm.pivot, angle);
+        break;
+    }
+    case TransformMode::Scale: {
+        float f = compute_scale_factor(tm, mouse_world, shift_held);
+        float fx = tm.lock_x ? f : (tm.lock_y ? 1.0f : f);
+        float fy = tm.lock_y ? f : (tm.lock_x ? 1.0f : f);
+        dst.transform.scale = {src.transform.scale.x * fx, src.transform.scale.y * fy};
+        dst.transform.translate = scale_around(src.transform.translate, tm.pivot, fx, fy);
+        break;
+    }
+    default: break;
+    }
+}
+
 void apply_transform_shape(Shape& dst, const Shape& src, const TransformMode& tm, Vec2 mouse_world, bool shift_held) {
     dst = src;
     switch (tm.type) {
@@ -363,6 +475,10 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                 },
             }, scene.lights[id.index]);
         }
+        if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+            const auto& group = scene.groups[id.index];
+            handles.push_back({Handle::Position, id, 0, group.transform.translate});
+        }
     }
     return handles;
 }
@@ -435,5 +551,12 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                 }
             },
         }, light);
+    }
+
+    if (obj.type == ObjectId::Group && obj.index < (int)scene.groups.size()) {
+        auto& group = scene.groups[obj.index];
+        if (handle.kind == Handle::Position) {
+            group.transform.translate = wp;
+        }
     }
 }

@@ -54,7 +54,7 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
     if (!f) { std::cerr << "Failed to open " << path << " for writing\n"; return false; }
 
     f << "{\n";
-    f << "  \"version\": 1,\n";
+    f << "  \"version\": 2,\n";
     f << "  \"name\": "; write_json_string(f, scene.name); f << ",\n";
 
     // Shapes
@@ -126,7 +126,96 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
         }, scene.lights[i]);
         f << "    }" << (i + 1 < (int)scene.lights.size() ? "," : "") << "\n";
     }
-    f << "  ]\n";
+    f << "  ]" << (scene.groups.empty() ? "\n" : ",\n");
+
+    // Groups
+    if (!scene.groups.empty()) {
+        f << "  \"groups\": [\n";
+        for (int g = 0; g < (int)scene.groups.size(); ++g) {
+            const auto& group = scene.groups[g];
+            f << "    {\n";
+            f << "      \"name\": "; write_json_string(f, group.name); f << ",\n";
+            f << "      \"transform\": {\n";
+            f << "        "; write_vec2(f, "translate", group.transform.translate); f << ",\n";
+            f << "        \"rotate\": " << fmt(group.transform.rotate) << ",\n";
+            f << "        "; write_vec2(f, "scale", group.transform.scale); f << "\n";
+            f << "      },\n";
+
+            // Group shapes
+            f << "      \"shapes\": [\n";
+            for (int i = 0; i < (int)group.shapes.size(); ++i) {
+                f << "        {\n";
+                std::visit(overloaded{
+                    [&](const Circle& c) {
+                        f << "          \"type\": \"circle\",\n";
+                        f << "          "; write_vec2(f, "center", c.center); f << ",\n";
+                        f << "          \"radius\": " << fmt(c.radius) << ",\n";
+                        write_material(f, c.material, 5); f << "\n";
+                    },
+                    [&](const Segment& s) {
+                        f << "          \"type\": \"segment\",\n";
+                        f << "          "; write_vec2(f, "a", s.a); f << ",\n";
+                        f << "          "; write_vec2(f, "b", s.b); f << ",\n";
+                        write_material(f, s.material, 5); f << "\n";
+                    },
+                    [&](const Arc& a) {
+                        f << "          \"type\": \"arc\",\n";
+                        f << "          "; write_vec2(f, "center", a.center); f << ",\n";
+                        f << "          \"radius\": " << fmt(a.radius) << ",\n";
+                        f << "          \"angle_start\": " << fmt(a.angle_start) << ",\n";
+                        f << "          \"angle_end\": " << fmt(a.angle_end) << ",\n";
+                        write_material(f, a.material, 5); f << "\n";
+                    },
+                    [&](const Bezier& b) {
+                        f << "          \"type\": \"bezier\",\n";
+                        f << "          "; write_vec2(f, "p0", b.p0); f << ",\n";
+                        f << "          "; write_vec2(f, "p1", b.p1); f << ",\n";
+                        f << "          "; write_vec2(f, "p2", b.p2); f << ",\n";
+                        write_material(f, b.material, 5); f << "\n";
+                    },
+                }, group.shapes[i]);
+                f << "        }" << (i + 1 < (int)group.shapes.size() ? "," : "") << "\n";
+            }
+            f << "      ],\n";
+
+            // Group lights
+            f << "      \"lights\": [\n";
+            for (int i = 0; i < (int)group.lights.size(); ++i) {
+                f << "        {\n";
+                std::visit(overloaded{
+                    [&](const PointLight& l) {
+                        f << "          \"type\": \"point\",\n";
+                        f << "          "; write_vec2(f, "pos", l.pos); f << ",\n";
+                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
+                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+                    },
+                    [&](const SegmentLight& l) {
+                        f << "          \"type\": \"segment\",\n";
+                        f << "          "; write_vec2(f, "a", l.a); f << ",\n";
+                        f << "          "; write_vec2(f, "b", l.b); f << ",\n";
+                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
+                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+                    },
+                    [&](const BeamLight& l) {
+                        f << "          \"type\": \"beam\",\n";
+                        f << "          "; write_vec2(f, "origin", l.origin); f << ",\n";
+                        f << "          "; write_vec2(f, "direction", l.direction); f << ",\n";
+                        f << "          \"angular_width\": " << fmt(l.angular_width) << ",\n";
+                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
+                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+                    },
+                }, group.lights[i]);
+                f << "        }" << (i + 1 < (int)group.lights.size() ? "," : "") << "\n";
+            }
+            f << "      ]\n";
+
+            f << "    }" << (g + 1 < (int)scene.groups.size() ? "," : "") << "\n";
+        }
+        f << "  ]\n";
+    }
     f << "}\n";
 
     return true;
@@ -258,6 +347,83 @@ static Material read_material(const JsonValue* v) {
     return m;
 }
 
+static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out) {
+    if (!shapes_arr) return;
+    for (auto& sv : shapes_arr->arr) {
+        if (sv.type != JsonValue::Object) continue;
+        auto* type = sv.get("type");
+        if (!type) continue;
+        const auto& t = type->as_string();
+
+        if (t == "circle") {
+            Circle c;
+            c.center = read_vec2(sv.get("center"));
+            if (auto* r = sv.get("radius")) c.radius = r->as_float(0.1f);
+            c.material = read_material(sv.get("material"));
+            out.push_back(c);
+        } else if (t == "segment") {
+            Segment s;
+            s.a = read_vec2(sv.get("a"));
+            s.b = read_vec2(sv.get("b"));
+            s.material = read_material(sv.get("material"));
+            out.push_back(s);
+        } else if (t == "arc") {
+            Arc a;
+            a.center = read_vec2(sv.get("center"));
+            if (auto* r = sv.get("radius")) a.radius = r->as_float(0.1f);
+            if (auto* v = sv.get("angle_start")) a.angle_start = v->as_float();
+            if (auto* v = sv.get("angle_end")) a.angle_end = v->as_float(TWO_PI);
+            a.material = read_material(sv.get("material"));
+            out.push_back(a);
+        } else if (t == "bezier") {
+            Bezier b;
+            b.p0 = read_vec2(sv.get("p0"));
+            b.p1 = read_vec2(sv.get("p1"));
+            b.p2 = read_vec2(sv.get("p2"));
+            b.material = read_material(sv.get("material"));
+            out.push_back(b);
+        }
+    }
+}
+
+static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
+    if (!lights_arr) return;
+    for (auto& lv : lights_arr->arr) {
+        if (lv.type != JsonValue::Object) continue;
+        auto* type = lv.get("type");
+        if (!type) continue;
+        const auto& t = type->as_string();
+
+        if (t == "point") {
+            PointLight l;
+            l.pos = read_vec2(lv.get("pos"));
+            if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
+            if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
+            if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
+            out.push_back(l);
+        } else if (t == "segment") {
+            SegmentLight l;
+            l.a = read_vec2(lv.get("a"));
+            l.b = read_vec2(lv.get("b"));
+            if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
+            if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
+            if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
+            out.push_back(l);
+        } else if (t == "beam") {
+            BeamLight l;
+            l.origin = read_vec2(lv.get("origin"));
+            l.direction = read_vec2(lv.get("direction"));
+            if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+            else l.direction = {1, 0};
+            if (auto* v = lv.get("angular_width")) l.angular_width = v->as_float(0.1f);
+            if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
+            if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
+            if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
+            out.push_back(l);
+        }
+    }
+}
+
 } // anonymous namespace
 
 Scene load_scene_json_string(std::string_view json_content) {
@@ -269,80 +435,26 @@ Scene load_scene_json_string(std::string_view json_content) {
     Scene scene;
     if (auto* n = root.get("name")) scene.name = n->as_string();
 
-    // Shapes
-    if (auto* shapes = root.get("shapes")) {
-        for (auto& sv : shapes->arr) {
-            if (sv.type != JsonValue::Object) continue;
-            auto* type = sv.get("type");
-            if (!type) continue;
-            const auto& t = type->as_string();
+    read_shapes(root.get("shapes"), scene.shapes);
+    read_lights(root.get("lights"), scene.lights);
 
-            if (t == "circle") {
-                Circle c;
-                c.center = read_vec2(sv.get("center"));
-                if (auto* r = sv.get("radius")) c.radius = r->as_float(0.1f);
-                c.material = read_material(sv.get("material"));
-                scene.shapes.push_back(c);
-            } else if (t == "segment") {
-                Segment s;
-                s.a = read_vec2(sv.get("a"));
-                s.b = read_vec2(sv.get("b"));
-                s.material = read_material(sv.get("material"));
-                scene.shapes.push_back(s);
-            } else if (t == "arc") {
-                Arc a;
-                a.center = read_vec2(sv.get("center"));
-                if (auto* r = sv.get("radius")) a.radius = r->as_float(0.1f);
-                if (auto* v = sv.get("angle_start")) a.angle_start = v->as_float();
-                if (auto* v = sv.get("angle_end")) a.angle_end = v->as_float(TWO_PI);
-                a.material = read_material(sv.get("material"));
-                scene.shapes.push_back(a);
-            } else if (t == "bezier") {
-                Bezier b;
-                b.p0 = read_vec2(sv.get("p0"));
-                b.p1 = read_vec2(sv.get("p1"));
-                b.p2 = read_vec2(sv.get("p2"));
-                b.material = read_material(sv.get("material"));
-                scene.shapes.push_back(b);
+    // Groups (version 2+)
+    if (auto* groups = root.get("groups")) {
+        for (auto& gv : groups->arr) {
+            if (gv.type != JsonValue::Object) continue;
+            Group group;
+            if (auto* n = gv.get("name")) group.name = n->as_string();
+            if (auto* tf = gv.get("transform")) {
+                group.transform.translate = read_vec2(tf->get("translate"));
+                if (auto* r = tf->get("rotate")) group.transform.rotate = r->as_float();
+                group.transform.scale = read_vec2(tf->get("scale"));
+                if (group.transform.scale.x == 0) group.transform.scale.x = 1;
+                if (group.transform.scale.y == 0) group.transform.scale.y = 1;
             }
-        }
-    }
-
-    // Lights
-    if (auto* lights = root.get("lights")) {
-        for (auto& lv : lights->arr) {
-            if (lv.type != JsonValue::Object) continue;
-            auto* type = lv.get("type");
-            if (!type) continue;
-            const auto& t = type->as_string();
-
-            if (t == "point") {
-                PointLight l;
-                l.pos = read_vec2(lv.get("pos"));
-                if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
-                if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
-                if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
-                scene.lights.push_back(l);
-            } else if (t == "segment") {
-                SegmentLight l;
-                l.a = read_vec2(lv.get("a"));
-                l.b = read_vec2(lv.get("b"));
-                if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
-                if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
-                if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
-                scene.lights.push_back(l);
-            } else if (t == "beam") {
-                BeamLight l;
-                l.origin = read_vec2(lv.get("origin"));
-                l.direction = read_vec2(lv.get("direction"));
-                if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
-                else l.direction = {1, 0};
-                if (auto* v = lv.get("angular_width")) l.angular_width = v->as_float(0.1f);
-                if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
-                if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
-                if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
-                scene.lights.push_back(l);
-            }
+            read_shapes(gv.get("shapes"), group.shapes);
+            read_lights(gv.get("lights"), group.lights);
+            if (!group.shapes.empty() || !group.lights.empty())
+                scene.groups.push_back(std::move(group));
         }
     }
 
@@ -355,4 +467,37 @@ Scene load_scene_json(const std::string& path) {
 
     std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     return load_scene_json_string(content);
+}
+
+FrameOverrides parse_frame_overrides(std::string_view json) {
+    FrameOverrides fo;
+    Parser parser{json.data(), json.data() + json.size()};
+    JsonValue root = parser.parse_value();
+    if (root.type != JsonValue::Object) return fo;
+
+    auto* render = root.get("render");
+    if (!render || render->type != JsonValue::Object) return fo;
+
+    if (auto* v = render->get("rays")) fo.rays = (int64_t)v->number;
+    if (auto* v = render->get("batch")) fo.batch = (int)v->number;
+    if (auto* v = render->get("depth")) fo.depth = (int)v->number;
+    if (auto* v = render->get("exposure")) fo.exposure = v->as_float();
+    if (auto* v = render->get("contrast")) fo.contrast = v->as_float();
+    if (auto* v = render->get("gamma")) fo.gamma = v->as_float();
+    if (auto* v = render->get("tonemap")) {
+        const auto& tm = v->as_string();
+        if (tm == "none") fo.tonemap = ToneMap::None;
+        else if (tm == "reinhard") fo.tonemap = ToneMap::Reinhard;
+        else if (tm == "aces") fo.tonemap = ToneMap::ACES;
+        else if (tm == "log") fo.tonemap = ToneMap::Logarithmic;
+    }
+    if (auto* v = render->get("bounds")) {
+        if (v->type == JsonValue::Array && v->arr.size() >= 4) {
+            fo.bounds = Bounds{
+                {v->arr[0].as_float(), v->arr[1].as_float()},
+                {v->arr[2].as_float(), v->arr[3].as_float()}};
+        }
+    }
+
+    return fo;
 }
