@@ -76,7 +76,7 @@ private:
     // Output segment SSBO + draw indirect buffer
     GLuint output_ssbo_ = 0;
     GLuint draw_cmd_buffer_ = 0;
-    int max_output_segments_ = 0;
+    size_t max_output_segments_ = 0;
 
     // Trace shader uniform locations
     GLint trace_loc_num_circles_ = -1;

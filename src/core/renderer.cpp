@@ -369,7 +369,7 @@ float Renderer::compute_max_gpu() {
     GLuint groups_x = (width_ + 15) / 16;
     GLuint groups_y = (height_ + 15) / 16;
     glDispatchCompute(groups_x, groups_y, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 
     // Read back single uint32 (4 bytes instead of full framebuffer)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, max_ssbo_);
@@ -541,14 +541,16 @@ void Renderer::trace_and_draw(const TraceConfig& cfg) {
 }
 
 void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) {
-    size_t max_segs = (size_t)cfg.batch_size * cfg.max_depth * num_dispatches;
+    size_t max_segs = (size_t)cfg.batch_size * (size_t)cfg.max_depth * (size_t)num_dispatches;
 
     // Reallocate output SSBO if needed (sized for all dispatches)
-    if (max_segs > (size_t)max_output_segments_) {
-        max_output_segments_ = (int)max_segs;
+    if (max_segs > max_output_segments_) {
+        max_output_segments_ = max_segs;
         if (!output_ssbo_) glGenBuffers(1, &output_ssbo_);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, output_ssbo_);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, (size_t)max_segs * 32, nullptr, GL_DYNAMIC_COPY);
+        // LineSeg = vec2 p0 + vec2 p1 + vec4 color = 32 bytes (must match GLSL std430)
+        static constexpr size_t kLineSegBytes = 32;
+        glBufferData(GL_SHADER_STORAGE_BUFFER, max_segs * kLineSegBytes, nullptr, GL_DYNAMIC_COPY);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 
