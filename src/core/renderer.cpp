@@ -347,38 +347,21 @@ void Renderer::create_wavelength_lut() {
 }
 
 float Renderer::compute_max_gpu() {
-    // GPU parallel max reduction via compute shader
-    // Reset max SSBO to 0
-    uint32_t zero = 0;
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, max_ssbo_);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &zero);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    // CPU readback via glReadPixels — the only reliable path on NVIDIA EGL.
+    // texelFetch and glGetTexImage return stale/zero data after many
+    // additive-blend draw operations (documented NVIDIA driver quirk).
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    std::vector<float> buf(width_ * height_ * 4);
+    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_FLOAT, buf.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    glUseProgram(max_compute_);
-
-    // Bind float texture as sampler
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, float_texture_);
-    glUniform1i(max_loc_input_texture_, 0);
-    glUniform2i(max_loc_tex_size_, width_, height_);
-
-    // Bind output SSBO
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, max_ssbo_);
-
-    // Dispatch: 16x16 workgroups covering the texture
-    GLuint groups_x = (width_ + 15) / 16;
-    GLuint groups_y = (height_ + 15) / 16;
-    glDispatchCompute(groups_x, groups_y, 1);
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
-
-    // Read back single uint32 (4 bytes instead of full framebuffer)
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, max_ssbo_);
-    uint32_t max_bits = 0;
-    glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uint32_t), &max_bits);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-
-    float max_val;
-    std::memcpy(&max_val, &max_bits, sizeof(float));
+    float max_val = 0.0f;
+    for (size_t i = 0; i < buf.size(); i += 4) {
+        max_val = std::max(max_val, buf[i]);
+        max_val = std::max(max_val, buf[i + 1]);
+        max_val = std::max(max_val, buf[i + 2]);
+    }
     return max_val;
 }
 
