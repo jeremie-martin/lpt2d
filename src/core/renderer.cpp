@@ -103,7 +103,7 @@ struct GPUArc {
     float center[2];
     float radius;
     float angle_start;
-    float angle_end;
+    float sweep;
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
@@ -447,7 +447,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.center[0] = a.center.x; ga.center[1] = a.center.y;
                 ga.radius = a.radius;
                 ga.angle_start = a.angle_start;
-                ga.angle_end = a.angle_end;
+                ga.sweep = a.sweep;
                 fill_material(ga, a.material);
                 gpu_arcs.push_back(ga);
             },

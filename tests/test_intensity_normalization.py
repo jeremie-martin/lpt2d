@@ -34,7 +34,7 @@ CLI = "./build/lpt2d-cli"
 
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
-        "version": 2,
+        "version": 3,
         "name": name,
         "shapes": [
             {

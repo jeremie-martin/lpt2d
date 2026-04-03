@@ -92,6 +92,19 @@ int App::run(const AppConfig& config) {
     float frame_ms = 16.0f;
     bool show_wireframe = true;
     bool open_load_popup = false;
+    auto make_default_arc = [](Vec2 center, Vec2 target) {
+        Vec2 delta = target - center;
+        float angle = delta.length_sq() > 1e-10f
+            ? normalize_angle(std::atan2(delta.y, delta.x))
+            : 0.0f;
+        return Arc{
+            center,
+            std::max(delta.length(), 0.02f),
+            normalize_angle(angle - 0.5f * PI),
+            PI,
+            mat_glass(1.5f, 20000.0f, 0.3f),
+        };
+    };
 
     // Reload: re-upload scene to GPU, clear accumulation
     // Renderer viewport always tracks the camera's visible bounds.
@@ -120,8 +133,8 @@ int App::run(const AppConfig& config) {
         ed.clipboard.lights.clear();
         ed.clipboard.groups.clear();
         for (auto& sid : ed.selection) {
-            if (sid.type == ObjectId::Shape) ed.clipboard.shapes.push_back(ed.scene.shapes[sid.index]);
-            else if (sid.type == ObjectId::Light) ed.clipboard.lights.push_back(ed.scene.lights[sid.index]);
+            if (const Shape* shape = resolve_shape(ed.scene, sid)) ed.clipboard.shapes.push_back(*shape);
+            else if (const Light* light = resolve_light(ed.scene, sid)) ed.clipboard.lights.push_back(*light);
             else if (sid.type == ObjectId::Group) ed.clipboard.groups.push_back(ed.scene.groups[sid.index]);
         }
         ed.clipboard.centroid = ed.selection_centroid();
@@ -329,9 +342,15 @@ int App::run(const AppConfig& config) {
             // Creation preview
             if (ed.creating) {
                 Vec2 mw = cv.to_world(io.MousePos);
-                if (ed.tool == EditTool::Circle || ed.tool == EditTool::Arc) {
+                if (ed.tool == EditTool::Circle) {
                     float r = (mw - ed.create_start).length() * cv.cam.zoom;
                     dl->AddCircle(cv.to_screen(ed.create_start), r, COL_PREVIEW, 64, 1.5f * dpi_scale);
+                } else if (ed.tool == EditTool::Arc) {
+                    Vec2 delta = mw - ed.create_start;
+                    if (delta.length_sq() > 1e-10f) {
+                        Arc preview = make_default_arc(ed.create_start, mw);
+                        draw_shape_overlay(dl, cv, preview, COL_PREVIEW, 1.5f * dpi_scale);
+                    }
                 } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier) {
                     dl->AddLine(cv.to_screen(ed.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
@@ -488,19 +507,19 @@ int App::run(const AppConfig& config) {
                             ed.dragging = true;
                             ed.drag_offsets.clear();
                             for (auto& sid : ed.selection) {
-                                if (sid.type == ObjectId::Shape) {
+                                if (const Shape* shape = resolve_shape(ed.scene, sid)) {
                                     std::visit(overloaded{
                                         [&](const Circle& ci) { ed.drag_offsets.push_back({ci.center - mw, {}}); },
                                         [&](const Segment& s) { ed.drag_offsets.push_back({s.a - mw, s.b - mw}); },
                                         [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw, {}}); },
                                         [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw, b.p2 - mw}); },
-                                    }, ed.scene.shapes[sid.index]);
-                                } else if (sid.type == ObjectId::Light) {
+                                    }, *shape);
+                                } else if (const Light* light = resolve_light(ed.scene, sid)) {
                                     std::visit(overloaded{
                                         [&](const PointLight& l) { ed.drag_offsets.push_back({l.pos - mw, {}}); },
                                         [&](const SegmentLight& l) { ed.drag_offsets.push_back({l.a - mw, l.b - mw}); },
                                         [&](const BeamLight& l) { ed.drag_offsets.push_back({l.origin - mw, {}}); },
-                                    }, ed.scene.lights[sid.index]);
+                                    }, *light);
                                 } else if (sid.type == ObjectId::Group) {
                                     auto& g = ed.scene.groups[sid.index];
                                     ed.drag_offsets.push_back({g.transform.translate - mw, {}});
@@ -551,7 +570,7 @@ int App::run(const AppConfig& config) {
             for (int i = 0; i < (int)ed.selection.size(); ++i) {
                 auto& sid = ed.selection[i];
                 auto& off = ed.drag_offsets[i];
-                if (sid.type == ObjectId::Shape && sid.index < (int)ed.scene.shapes.size()) {
+                if (Shape* shape = resolve_shape(ed.scene, sid)) {
                     std::visit(overloaded{
                         [&](Circle& c) { c.center = mw + off.a; },
                         [&](Segment& s) { s.a = mw + off.a; s.b = mw + off.b; },
@@ -560,13 +579,13 @@ int App::run(const AppConfig& config) {
                             Vec2 delta = (mw + off.a) - b.p0;
                             b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta;
                         },
-                    }, ed.scene.shapes[sid.index]);
-                } else if (sid.type == ObjectId::Light && sid.index < (int)ed.scene.lights.size()) {
+                    }, *shape);
+                } else if (Light* light = resolve_light(ed.scene, sid)) {
                     std::visit(overloaded{
                         [&](PointLight& l) { l.pos = mw + off.a; },
                         [&](SegmentLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
                         [&](BeamLight& l) { l.origin = mw + off.a; },
-                    }, ed.scene.lights[sid.index]);
+                    }, *light);
                 } else if (sid.type == ObjectId::Group && sid.index < (int)ed.scene.groups.size()) {
                     ed.scene.groups[sid.index].transform.translate = mw + off.a;
                 }
@@ -595,8 +614,7 @@ int App::run(const AppConfig& config) {
                     ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Arc) {
-                    float r = std::max(dist, 0.02f);
-                    ed.scene.shapes.push_back(Arc{ed.create_start, r, 0.0f, TWO_PI, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    ed.scene.shapes.push_back(make_default_arc(ed.create_start, end));
                     ed.clear_selection();
                     ed.select({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
                     created = true;
@@ -857,35 +875,13 @@ int App::run(const AppConfig& config) {
             bool changed = false;
             auto& sid = ed.selection[0];
 
-            // Resolve the shape: top-level or group member
-            auto resolve_shape = [&]() -> Shape* {
-                if (sid.type != ObjectId::Shape) return nullptr;
-                if (sid.group >= 0 && sid.group < (int)ed.scene.groups.size()) {
-                    auto& g = ed.scene.groups[sid.group];
-                    if (sid.index < (int)g.shapes.size()) return &g.shapes[sid.index];
-                    return nullptr;
-                }
-                if (sid.index < (int)ed.scene.shapes.size()) return &ed.scene.shapes[sid.index];
-                return nullptr;
-            };
-            auto resolve_light = [&]() -> Light* {
-                if (sid.type != ObjectId::Light) return nullptr;
-                if (sid.group >= 0 && sid.group < (int)ed.scene.groups.size()) {
-                    auto& g = ed.scene.groups[sid.group];
-                    if (sid.index < (int)g.lights.size()) return &g.lights[sid.index];
-                    return nullptr;
-                }
-                if (sid.index < (int)ed.scene.lights.size()) return &ed.scene.lights[sid.index];
-                return nullptr;
-            };
-
             if (sid.group >= 0) {
                 ImGui::TextDisabled("Editing group: %s",
                     ed.scene.groups[sid.group].name.empty() ? "(unnamed)" : ed.scene.groups[sid.group].name.c_str());
                 ImGui::Separator();
             }
 
-            if (Shape* sp = resolve_shape()) {
+            if (Shape* sp = resolve_shape(ed.scene, sid)) {
                 auto& shape = *sp;
                 std::visit(overloaded{
                     [&](Circle& c) {
@@ -901,8 +897,10 @@ int App::run(const AppConfig& config) {
                     [&](Arc& a) {
                         changed |= ImGui::DragFloat2("Center", &a.center.x, 0.01f);
                         changed |= ImGui::DragFloat("Radius", &a.radius, 0.005f, 0.01f, 5.0f);
-                        changed |= ImGui::SliderFloat("Start angle", &a.angle_start, 0.0f, TWO_PI);
-                        changed |= ImGui::SliderFloat("End angle", &a.angle_end, 0.0f, TWO_PI);
+                        changed |= ImGui::SliderAngle("Start angle", &a.angle_start, 0.0f, 360.0f);
+                        changed |= ImGui::SliderAngle("Sweep", &a.sweep, 0.0f, 360.0f);
+                        a.angle_start = normalize_angle(a.angle_start);
+                        a.sweep = clamp_arc_sweep(a.sweep);
                         changed |= edit_material(a.material);
                     },
                     [&](Bezier& b) {
@@ -914,7 +912,7 @@ int App::run(const AppConfig& config) {
                 }, shape);
             }
 
-            if (Light* lp = resolve_light()) {
+            if (Light* lp = resolve_light(ed.scene, sid)) {
                 auto& light = *lp;
                 auto edit_wavelength = [&](float& wl_min, float& wl_max) {
                     changed |= ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
@@ -1176,12 +1174,14 @@ int App::run(const AppConfig& config) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsMouseClicked(0)) {
                     // Apply transform to scene
                     for (auto& sid : ed.selection) {
-                        if (sid.type == ObjectId::Shape && sid.index < (int)ed.transform.snapshot.shapes.size()) {
-                            apply_transform_shape(ed.scene.shapes[sid.index],
-                                ed.transform.snapshot.shapes[sid.index], ed.transform, mw, io.KeyShift);
-                        } else if (sid.type == ObjectId::Light && sid.index < (int)ed.transform.snapshot.lights.size()) {
-                            apply_transform_light(ed.scene.lights[sid.index],
-                                ed.transform.snapshot.lights[sid.index], ed.transform, mw, io.KeyShift);
+                        if (Shape* live_shape = resolve_shape(ed.scene, sid)) {
+                            if (const Shape* snap_shape = resolve_shape(ed.transform.snapshot, sid)) {
+                                apply_transform_shape(*live_shape, *snap_shape, ed.transform, mw, io.KeyShift);
+                            }
+                        } else if (Light* live_light = resolve_light(ed.scene, sid)) {
+                            if (const Light* snap_light = resolve_light(ed.transform.snapshot, sid)) {
+                                apply_transform_light(*live_light, *snap_light, ed.transform, mw, io.KeyShift);
+                            }
                         } else if (sid.type == ObjectId::Group && sid.index < (int)ed.transform.snapshot.groups.size()) {
                             apply_transform_group(ed.scene.groups[sid.index],
                                 ed.transform.snapshot.groups[sid.index], ed.transform, mw, io.KeyShift);
@@ -1266,7 +1266,7 @@ int App::run(const AppConfig& config) {
                     int n_ungrouped = 0;
                     bool has_groups = false;
                     for (auto& sid : ed.selection) {
-                        if (sid.type == ObjectId::Group) has_groups = true;
+                        if (sid.type == ObjectId::Group || sid.group >= 0) has_groups = true;
                         else n_ungrouped++;
                     }
                     if (n_ungrouped >= 2 && !has_groups) {
@@ -1347,13 +1347,13 @@ int App::run(const AppConfig& config) {
                     std::vector<ObjectId> new_sel;
                     Vec2 offset{0.05f, 0.05f};
                     for (auto& sid : ed.selection) {
-                        if (sid.type == ObjectId::Shape) {
-                            Shape s = ed.scene.shapes[sid.index];
+                        if (const Shape* shape = resolve_shape(ed.scene, sid)) {
+                            Shape s = *shape;
                             translate_shape(s, offset);
                             ed.scene.shapes.push_back(s);
                             new_sel.push_back({ObjectId::Shape, (int)ed.scene.shapes.size() - 1});
-                        } else if (sid.type == ObjectId::Light) {
-                            Light l = ed.scene.lights[sid.index];
+                        } else if (const Light* light = resolve_light(ed.scene, sid)) {
+                            Light l = *light;
                             translate_light(l, offset);
                             ed.scene.lights.push_back(l);
                             new_sel.push_back({ObjectId::Light, (int)ed.scene.lights.size() - 1});

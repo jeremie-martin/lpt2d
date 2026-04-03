@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 
+static constexpr int SCENE_JSON_VERSION = 3;
+
 // ─── Minimal JSON writer ────────────────────────────────────────────────
 
 // Shortest round-tripping float representation (cleans up 0.34999999 → 0.35)
@@ -60,7 +62,7 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
     if (!f) { std::cerr << "Failed to open " << path << " for writing\n"; return false; }
 
     f << "{\n";
-    f << "  \"version\": 2,\n";
+    f << "  \"version\": " << SCENE_JSON_VERSION << ",\n";
     f << "  \"name\": "; write_json_string(f, scene.name); f << ",\n";
 
     // Materials library
@@ -109,7 +111,7 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
                 f << "      "; write_vec2(f, "center", a.center); f << ",\n";
                 f << "      \"radius\": " << fmt(a.radius) << ",\n";
                 f << "      \"angle_start\": " << fmt(a.angle_start) << ",\n";
-                f << "      \"angle_end\": " << fmt(a.angle_end) << ",\n";
+                f << "      \"sweep\": " << fmt(a.sweep) << ",\n";
                 write_material(f, a.material, 3); f << "\n";
             },
             [&](const Bezier& b) {
@@ -193,7 +195,7 @@ bool save_scene_json(const Scene& scene, const std::string& path) {
                         f << "          "; write_vec2(f, "center", a.center); f << ",\n";
                         f << "          \"radius\": " << fmt(a.radius) << ",\n";
                         f << "          \"angle_start\": " << fmt(a.angle_start) << ",\n";
-                        f << "          \"angle_end\": " << fmt(a.angle_end) << ",\n";
+                        f << "          \"sweep\": " << fmt(a.sweep) << ",\n";
                         write_material(f, a.material, 5); f << "\n";
                     },
                     [&](const Bezier& b) {
@@ -415,8 +417,8 @@ static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out,
             Arc a;
             a.center = read_vec2(sv.get("center"));
             if (auto* r = sv.get("radius")) a.radius = r->as_float(0.1f);
-            if (auto* v = sv.get("angle_start")) a.angle_start = v->as_float();
-            if (auto* v = sv.get("angle_end")) a.angle_end = v->as_float(TWO_PI);
+            if (auto* v = sv.get("angle_start")) a.angle_start = normalize_angle(v->as_float());
+            if (auto* v = sv.get("sweep")) a.sweep = clamp_arc_sweep(v->as_float(TWO_PI));
             a.material = read_material(sv.get("material"), materials);
             out.push_back(a);
         } else if (t == "bezier") {
@@ -475,6 +477,11 @@ Scene load_scene_json_string(std::string_view json_content) {
     JsonValue root = parser.parse_value();
 
     if (root.type != JsonValue::Object) { std::cerr << "Invalid JSON\n"; return {}; }
+    auto* version = root.get("version");
+    if (!version || version->type != JsonValue::Number || (int)version->number != SCENE_JSON_VERSION) {
+        std::cerr << "Unsupported scene version\n";
+        return {};
+    }
 
     Scene scene;
     if (auto* n = root.get("name")) scene.name = n->as_string();
@@ -490,7 +497,7 @@ Scene load_scene_json_string(std::string_view json_content) {
     read_shapes(root.get("shapes"), scene.shapes, scene.materials);
     read_lights(root.get("lights"), scene.lights);
 
-    // Groups (version 2+)
+    // Groups
     if (auto* groups = root.get("groups")) {
         for (auto& gv : groups->arr) {
             if (gv.type != JsonValue::Object) continue;

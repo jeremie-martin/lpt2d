@@ -134,11 +134,11 @@ src/
 - **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed.
 - **String-to-enum parsing**: Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` — do not duplicate the string-matching logic.
 
-### JSON scene format (version 2)
+### JSON scene format (version 3)
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "name": "scene_name",
   "materials": {
     "glass": {"ior": 1.5, "transmission": 1, "cauchy_b": 20000},

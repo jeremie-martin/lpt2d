@@ -51,7 +51,7 @@ struct GPUArc {
     vec2 center;
     float radius;
     float angle_start;
-    float angle_end;
+    float sweep;
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
@@ -177,11 +177,13 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
     return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission);
 }
 
-bool in_arc(float angle, float start, float end) {
-    if (start <= end)
-        return angle >= start && angle <= end;
-    else
-        return angle >= start || angle <= end;
+bool in_arc(float angle, float start, float sweep) {
+    float arc_sweep = clamp(sweep, 0.0, 2.0 * PI);
+    if (arc_sweep >= 2.0 * PI - INTERSECT_EPS)
+        return true;
+    float delta = mod(angle - start, 2.0 * PI);
+    if (delta < 0.0) delta += 2.0 * PI;
+    return delta <= arc_sweep + INTERSECT_EPS;
 }
 
 Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
@@ -203,7 +205,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         float angle = atan(p.y - a.center.y, p.x - a.center.x);
         if (angle < 0.0) angle += 2.0 * PI;
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
-        if (in_arc(angle, a.angle_start, a.angle_end)) {
+        if (in_arc(angle, a.angle_start, a.sweep)) {
             return Hit(t, p, normalize(p - a.center),
                        a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission);
         }

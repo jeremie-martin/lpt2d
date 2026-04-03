@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "name": "bench_arc_focus",
   "shapes": [
     {
@@ -7,7 +7,7 @@
       "center": [0.9, 0],
       "radius": 0.7,
       "angle_start": 2.4,
-      "angle_end": 3.88,
+      "sweep": 1.48,
       "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
     },
     {
@@ -15,7 +15,7 @@
       "center": [-0.9, 0],
       "radius": 0.7,
       "angle_start": 5.54,
-      "angle_end": 0.74,
+      "sweep": 1.4831853,
       "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
     },
     {

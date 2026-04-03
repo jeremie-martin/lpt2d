@@ -8,6 +8,8 @@ from dataclasses import dataclass, field, fields, replace
 from enum import Enum
 from pathlib import Path
 
+SCENE_JSON_VERSION = 3
+
 # --- Materials ---
 
 
@@ -94,6 +96,17 @@ def emissive(emission: float, base: Material | None = None) -> Material:
     return Material(emission=emission)
 
 
+def normalize_angle(angle: float) -> float:
+    angle = math.fmod(angle, math.tau)
+    if angle < 0.0:
+        angle += math.tau
+    return angle
+
+
+def clamp_arc_sweep(sweep: float) -> float:
+    return min(max(sweep, 0.0), math.tau)
+
+
 # --- Shapes ---
 
 
@@ -127,16 +140,20 @@ class Arc:
     center: list[float] = field(default_factory=lambda: [0.0, 0.0])
     radius: float = 0.1
     angle_start: float = 0.0
-    angle_end: float = 6.283185307
+    sweep: float = math.tau
     material: Material = field(default_factory=Material)
+
+    def __post_init__(self) -> None:
+        self.angle_start = normalize_angle(self.angle_start)
+        self.sweep = clamp_arc_sweep(self.sweep)
 
     def to_dict(self) -> dict:
         return {
             "type": "arc",
             "center": self.center,
             "radius": self.radius,
-            "angle_start": self.angle_start,
-            "angle_end": self.angle_end,
+            "angle_start": normalize_angle(self.angle_start),
+            "sweep": clamp_arc_sweep(self.sweep),
             "material": self.material.to_dict(),
         }
 
@@ -288,7 +305,7 @@ _SHAPE_PARSERS = {
         center=d["center"],
         radius=d["radius"],
         angle_start=d.get("angle_start", 0.0),
-        angle_end=d.get("angle_end", 6.283185307),
+        sweep=d.get("sweep", math.tau),
         material=Material.from_dict(d.get("material", {})),
     ),
     "bezier": lambda d: Bezier(
@@ -359,8 +376,8 @@ class Scene:
     name: str = ""
 
     def to_dict(self) -> dict:
-        """Scene as a dict (version 2 wire format)."""
-        d: dict = {"version": 2, "name": self.name}
+        """Scene as a dict (version 3 wire format)."""
+        d: dict = {"version": SCENE_JSON_VERSION, "name": self.name}
         if self.materials:
             d["materials"] = {name: mat.to_dict() for name, mat in self.materials.items()}
         d["shapes"] = [s.to_dict() for s in self.shapes]
@@ -383,6 +400,8 @@ class Scene:
     def from_json(s: str) -> Scene:
         """Parse scene from a JSON string."""
         d = json.loads(s)
+        if d.get("version") != SCENE_JSON_VERSION:
+            raise ValueError(f"unsupported scene version: {d.get('version')}")
         scene = Scene(name=d.get("name", ""))
         # Parse materials library first (needed for resolving string references)
         for name, mat_d in d.get("materials", {}).items():

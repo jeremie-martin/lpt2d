@@ -249,6 +249,12 @@ ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_grou
 // Test if an object's geometry intersects a world-space rectangle
 bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max);
 
+// Resolve top-level or group-member objects from an ObjectId.
+Shape* resolve_shape(Scene& scene, ObjectId id);
+const Shape* resolve_shape(const Scene& scene, ObjectId id);
+Light* resolve_light(Scene& scene, ObjectId id);
+const Light* resolve_light(const Scene& scene, ObjectId id);
+
 // ─── Transform application ─────────────────────────────────────────────
 
 // Apply grab/rotate/scale to a shape (from snapshot → live scene)

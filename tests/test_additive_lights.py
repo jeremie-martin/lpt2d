@@ -25,7 +25,7 @@ RAYS = 5_000_000
 
 def make_scene(lights, name="test"):
     return {
-        "version": 2,
+        "version": 3,
         "name": name,
         "shapes": [
             {

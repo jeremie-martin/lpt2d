@@ -1,7 +1,10 @@
 """lpt2d animation library — f(ctx) -> Scene -> video."""
 
+from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
+from .builders import hemispherical_lens as hemispherical_lens
 from .builders import mirror_box as mirror_box
+from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
 from .builders import regular_polygon as regular_polygon
 from .builders import thick_arc as thick_arc
@@ -126,15 +129,18 @@ __all__ = [
     "Wrap",
     "absorber",
     "beam_splitter",
+    "ball_lens",
     "biconvex_lens",
     "diffuse",
     "emissive",
     "glass",
+    "hemispherical_lens",
     "mirror_box",
     "FrameStats",
     "frame_stats",
     "mirror",
     "opaque_mirror",
+    "plano_convex_lens",
     "polygon",
     "regular_polygon",
     "thick_arc",

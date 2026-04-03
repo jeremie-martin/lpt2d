@@ -2,23 +2,55 @@
 
 #include <cmath>
 
+Shape* resolve_shape(Scene& scene, ObjectId id) {
+    if (id.type != ObjectId::Shape) return nullptr;
+    if (id.group >= 0) {
+        if (id.group >= (int)scene.groups.size()) return nullptr;
+        auto& group = scene.groups[id.group];
+        if (id.index >= (int)group.shapes.size()) return nullptr;
+        return &group.shapes[id.index];
+    }
+    if (id.index >= (int)scene.shapes.size()) return nullptr;
+    return &scene.shapes[id.index];
+}
+
+const Shape* resolve_shape(const Scene& scene, ObjectId id) {
+    return resolve_shape(const_cast<Scene&>(scene), id);
+}
+
+Light* resolve_light(Scene& scene, ObjectId id) {
+    if (id.type != ObjectId::Light) return nullptr;
+    if (id.group >= 0) {
+        if (id.group >= (int)scene.groups.size()) return nullptr;
+        auto& group = scene.groups[id.group];
+        if (id.index >= (int)group.lights.size()) return nullptr;
+        return &group.lights[id.index];
+    }
+    if (id.index >= (int)scene.lights.size()) return nullptr;
+    return &scene.lights[id.index];
+}
+
+const Light* resolve_light(const Scene& scene, ObjectId id) {
+    return resolve_light(const_cast<Scene&>(scene), id);
+}
+
 // ─── Object centroid ───────────────────────────────────────────────────
 
 Vec2 object_centroid(const Scene& scene, ObjectId id) {
-    if (id.type == ObjectId::Shape && id.index < (int)scene.shapes.size()) {
+    if (const Shape* shape = resolve_shape(scene, id)) {
         return std::visit(overloaded{
             [](const Circle& c) -> Vec2 { return c.center; },
             [](const Segment& s) -> Vec2 { return (s.a + s.b) * 0.5f; },
             [](const Arc& a) -> Vec2 { return a.center; },
             [](const Bezier& b) -> Vec2 { return (b.p0 + b.p1 + b.p2) * (1.0f / 3.0f); },
-        }, scene.shapes[id.index]);
+        }, *shape);
     }
-    if (id.type == ObjectId::Light && id.index < (int)scene.lights.size()) {
+    if (const Light* light = resolve_light(scene, id)) {
         return std::visit(overloaded{
             [](const PointLight& l) -> Vec2 { return l.pos; },
             [](const SegmentLight& l) -> Vec2 { return (l.a + l.b) * 0.5f; },
             [](const BeamLight& l) -> Vec2 { return l.origin; },
-        }, scene.lights[id.index]);
+        }, *light);
     }
     if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
         return scene.groups[id.index].transform.translate;
@@ -41,39 +73,29 @@ Bounds EditorState::selection_bounds() const {
         hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y);
     };
     for (auto& id : selection) {
-        if (id.type == ObjectId::Shape && id.index < (int)scene.shapes.size()) {
-            std::visit(overloaded{
-                [&](const Circle& c) { expand(c.center - Vec2{c.radius, c.radius}); expand(c.center + Vec2{c.radius, c.radius}); },
-                [&](const Segment& s) { expand(s.a); expand(s.b); },
-                [&](const Arc& a) { expand(a.center - Vec2{a.radius, a.radius}); expand(a.center + Vec2{a.radius, a.radius}); },
-                [&](const Bezier& b) { expand(b.p0); expand(b.p1); expand(b.p2); },
-            }, scene.shapes[id.index]);
+        if (const Shape* shape = resolve_shape(scene, id)) {
+            Bounds b = shape_bounds(*shape);
+            expand(b.min);
+            expand(b.max);
         }
-        if (id.type == ObjectId::Light && id.index < (int)scene.lights.size()) {
-            std::visit(overloaded{
-                [&](const PointLight& l) { expand(l.pos); },
-                [&](const SegmentLight& l) { expand(l.a); expand(l.b); },
-                [&](const BeamLight& l) { expand(l.origin); },
-            }, scene.lights[id.index]);
+        if (const Light* light = resolve_light(scene, id)) {
+            Bounds b = light_bounds(*light);
+            expand(b.min);
+            expand(b.max);
         }
         if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
             const auto& group = scene.groups[id.index];
             for (const auto& shape : group.shapes) {
                 Shape ws = transform_shape(shape, group.transform);
-                std::visit(overloaded{
-                    [&](const Circle& c) { expand(c.center - Vec2{c.radius, c.radius}); expand(c.center + Vec2{c.radius, c.radius}); },
-                    [&](const Segment& s) { expand(s.a); expand(s.b); },
-                    [&](const Arc& a) { expand(a.center - Vec2{a.radius, a.radius}); expand(a.center + Vec2{a.radius, a.radius}); },
-                    [&](const Bezier& b) { expand(b.p0); expand(b.p1); expand(b.p2); },
-                }, ws);
+                Bounds b = shape_bounds(ws);
+                expand(b.min);
+                expand(b.max);
             }
             for (const auto& light : group.lights) {
                 Light wl = transform_light(light, group.transform);
-                std::visit(overloaded{
-                    [&](const PointLight& l) { expand(l.pos); },
-                    [&](const SegmentLight& l) { expand(l.a); expand(l.b); },
-                    [&](const BeamLight& l) { expand(l.origin); },
-                }, wl);
+                Bounds b = light_bounds(wl);
+                expand(b.min);
+                expand(b.max);
             }
         }
     }
@@ -97,22 +119,7 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
             return dc < c.radius ? 0.0f : dc - c.radius;
         },
         [&](const Segment& s) -> float { return point_seg_dist(wp, s.a, s.b); },
-        [&](const Arc& a) -> float {
-            Vec2 d = wp - a.center;
-            float dc = d.length();
-            float angle = std::atan2(d.y, d.x);
-            if (angle < 0) angle += TWO_PI;
-            float span = a.angle_end - a.angle_start;
-            if (span < 0) span += TWO_PI;
-            float rel = angle - a.angle_start;
-            if (rel < 0) rel += TWO_PI;
-            if (rel <= span) {
-                return std::abs(dc - a.radius);
-            }
-            Vec2 p0 = a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)};
-            Vec2 p1 = a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)};
-            return std::min((wp - p0).length(), (wp - p1).length());
-        },
+        [&](const Arc& a) -> float { return point_arc_distance(wp, a); },
         [&](const Bezier& b) -> float {
             float best = 1e30f;
             for (int j = 0; j <= 20; ++j) {
@@ -200,44 +207,25 @@ int hit_test_groups(Vec2 wp, const Scene& scene, float threshold) {
 }
 
 bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max) {
-    auto in_rect = [&](Vec2 p) {
-        return p.x >= rect_min.x && p.x <= rect_max.x && p.y >= rect_min.y && p.y <= rect_max.y;
+    auto overlaps = [&](const Bounds& b) {
+        return b.max.x >= rect_min.x && b.min.x <= rect_max.x &&
+               b.max.y >= rect_min.y && b.min.y <= rect_max.y;
     };
     if (id.type == ObjectId::Shape && id.index < (int)scene.shapes.size()) {
-        return std::visit(overloaded{
-            [&](const Circle& c) -> bool { return in_rect(c.center); },
-            [&](const Segment& s) -> bool { return in_rect(s.a) || in_rect(s.b); },
-            [&](const Arc& a) -> bool { return in_rect(a.center); },
-            [&](const Bezier& b) -> bool { return in_rect(b.p0) || in_rect(b.p1) || in_rect(b.p2); },
-        }, scene.shapes[id.index]);
+        return overlaps(shape_bounds(scene.shapes[id.index]));
     }
     if (id.type == ObjectId::Light && id.index < (int)scene.lights.size()) {
-        return std::visit(overloaded{
-            [&](const PointLight& l) -> bool { return in_rect(l.pos); },
-            [&](const SegmentLight& l) -> bool { return in_rect(l.a) || in_rect(l.b); },
-            [&](const BeamLight& l) -> bool { return in_rect(l.origin); },
-        }, scene.lights[id.index]);
+        return overlaps(light_bounds(scene.lights[id.index]));
     }
     if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
         const auto& group = scene.groups[id.index];
         for (const auto& shape : group.shapes) {
             Shape ws = transform_shape(shape, group.transform);
-            bool hit = std::visit(overloaded{
-                [&](const Circle& c) -> bool { return in_rect(c.center); },
-                [&](const Segment& s) -> bool { return in_rect(s.a) || in_rect(s.b); },
-                [&](const Arc& a) -> bool { return in_rect(a.center); },
-                [&](const Bezier& b) -> bool { return in_rect(b.p0) || in_rect(b.p1) || in_rect(b.p2); },
-            }, ws);
-            if (hit) return true;
+            if (overlaps(shape_bounds(ws))) return true;
         }
         for (const auto& light : group.lights) {
             Light wl = transform_light(light, group.transform);
-            bool hit = std::visit(overloaded{
-                [&](const PointLight& l) -> bool { return in_rect(l.pos); },
-                [&](const SegmentLight& l) -> bool { return in_rect(l.a) || in_rect(l.b); },
-                [&](const BeamLight& l) -> bool { return in_rect(l.origin); },
-            }, wl);
-            if (hit) return true;
+            if (overlaps(light_bounds(wl))) return true;
         }
     }
     return false;
@@ -321,8 +309,8 @@ static void rotate_shape(Shape& s, Vec2 pivot, float angle) {
         [&](Segment& seg) { seg.a = rotate_around(seg.a, pivot, angle); seg.b = rotate_around(seg.b, pivot, angle); },
         [&](Arc& a) {
             a.center = rotate_around(a.center, pivot, angle);
-            a.angle_start = std::fmod(std::fmod(a.angle_start + angle, TWO_PI) + TWO_PI, TWO_PI);
-            a.angle_end = std::fmod(std::fmod(a.angle_end + angle, TWO_PI) + TWO_PI, TWO_PI);
+            a.angle_start = normalize_angle(a.angle_start + angle);
+            a.sweep = clamp_arc_sweep(a.sweep);
         },
         [&](Bezier& b) {
             b.p0 = rotate_around(b.p0, pivot, angle);
@@ -453,7 +441,7 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
     std::vector<Handle> handles;
 
     for (auto& id : selection) {
-        if (id.type == ObjectId::Shape && id.index < (int)scene.shapes.size()) {
+        if (const Shape* shape = resolve_shape(scene, id)) {
             std::visit(overloaded{
                 [&](const Circle& c) {
                     handles.push_back({Handle::Position, id, 0, c.center});
@@ -465,20 +453,18 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                 },
                 [&](const Arc& a) {
                     handles.push_back({Handle::Position, id, 0, a.center});
-                    float mid_angle = a.angle_start + (a.angle_end - a.angle_start) * 0.5f;
-                    if (a.angle_end < a.angle_start) mid_angle += PI;
-                    handles.push_back({Handle::Radius, id, 0, a.center + Vec2{a.radius * std::cos(mid_angle), a.radius * std::sin(mid_angle)}});
-                    handles.push_back({Handle::Angle, id, 0, a.center + Vec2{a.radius * std::cos(a.angle_start), a.radius * std::sin(a.angle_start)}});
-                    handles.push_back({Handle::Angle, id, 1, a.center + Vec2{a.radius * std::cos(a.angle_end), a.radius * std::sin(a.angle_end)}});
+                    handles.push_back({Handle::Radius, id, 0, arc_mid_point(a)});
+                    handles.push_back({Handle::Angle, id, 0, arc_start_point(a)});
+                    handles.push_back({Handle::Angle, id, 1, arc_end_point(a)});
                 },
                 [&](const Bezier& b) {
                     handles.push_back({Handle::Position, id, 0, b.p0});
                     handles.push_back({Handle::Position, id, 1, b.p1}); // control point
                     handles.push_back({Handle::Position, id, 2, b.p2});
                 },
-            }, scene.shapes[id.index]);
+            }, *shape);
         }
-        if (id.type == ObjectId::Light && id.index < (int)scene.lights.size()) {
+        if (const Light* light = resolve_light(scene, id)) {
             std::visit(overloaded{
                 [&](const PointLight& l) {
                     handles.push_back({Handle::Position, id, 0, l.pos});
@@ -491,7 +477,7 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                     handles.push_back({Handle::Position, id, 0, l.origin});
                     handles.push_back({Handle::Direction, id, 0, l.origin + l.direction.normalized() * 0.3f});
                 },
-            }, scene.lights[id.index]);
+            }, *light);
         }
         if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
             const auto& group = scene.groups[id.index];
@@ -516,8 +502,7 @@ int handle_hit_test(const std::vector<Handle>& handles, Vec2 wp, float threshold
 void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
     auto& obj = handle.obj;
 
-    if (obj.type == ObjectId::Shape && obj.index < (int)scene.shapes.size()) {
-        auto& shape = scene.shapes[obj.index];
+    if (Shape* shape = resolve_shape(scene, obj)) {
         std::visit(overloaded{
             [&](Circle& c) {
                 if (handle.kind == Handle::Position) {
@@ -536,10 +521,18 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                 } else if (handle.kind == Handle::Radius) {
                     a.radius = std::max((wp - a.center).length(), 0.01f);
                 } else if (handle.kind == Handle::Angle) {
-                    float angle = std::atan2(wp.y - a.center.y, wp.x - a.center.x);
-                    if (angle < 0) angle += TWO_PI;
-                    if (handle.param_index == 0) a.angle_start = angle;
-                    else a.angle_end = angle;
+                    float old_sweep = clamp_arc_sweep(a.sweep);
+                    float angle = normalize_angle(std::atan2(wp.y - a.center.y, wp.x - a.center.x));
+                    if (old_sweep >= TWO_PI - INTERSECT_EPS) {
+                        a.angle_start = angle;
+                        a.sweep = TWO_PI;
+                    } else if (handle.param_index == 0) {
+                        float raw_end_angle = a.angle_start + old_sweep;
+                        a.angle_start = angle;
+                        a.sweep = clamp_arc_sweep(normalize_angle(raw_end_angle - a.angle_start));
+                    } else {
+                        a.sweep = clamp_arc_sweep(normalize_angle(angle - a.angle_start));
+                    }
                 }
             },
             [&](Bezier& b) {
@@ -547,11 +540,10 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                 else if (handle.param_index == 1) b.p1 = wp;
                 else b.p2 = wp;
             },
-        }, shape);
+        }, *shape);
     }
 
-    if (obj.type == ObjectId::Light && obj.index < (int)scene.lights.size()) {
-        auto& light = scene.lights[obj.index];
+    if (Light* light = resolve_light(scene, obj)) {
         std::visit(overloaded{
             [&](PointLight& l) {
                 l.pos = wp;
@@ -568,7 +560,7 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                     if (d.length_sq() > 1e-6f) l.direction = d.normalized();
                 }
             },
-        }, light);
+        }, *light);
     }
 
     if (obj.type == ObjectId::Group && obj.index < (int)scene.groups.size()) {

@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 3,
   "name": "bench_all_shapes",
   "shapes": [
     {
@@ -37,7 +37,7 @@
       "center": [0.8, 0.3],
       "radius": 0.4,
       "angle_start": 2.0,
-      "angle_end": 4.3,
+      "sweep": 2.3,
       "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.9}
     },
     {
@@ -45,7 +45,7 @@
       "center": [-0.1, -0.3],
       "radius": 0.3,
       "angle_start": 4.5,
-      "angle_end": 6.0,
+      "sweep": 1.5,
       "material": {"ior": 1.4, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.2, "cauchy_b": 15000, "albedo": 1}
     },
     {

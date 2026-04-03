@@ -14,7 +14,7 @@ A light source defined by position + direction + angular width. The "laser point
 Every light currently emits the full 380–780nm spectrum uniformly. Adding `wavelength_min` and `wavelength_max` per light (or center + bandwidth for Gaussian emission) enables: monochromatic beams that don't disperse, narrow-band sources for interference, warm/cool toned lamps. Minimal shader change, massive artistic control.
 
 ### Arc primitive
-Circular arc defined by center, radius, angle_start, angle_end. Trivially extends existing circle intersection (clamp the hit angle). Enables: curved mirrors, parabolic reflectors, lenses with controlled aperture, crescents, half-pipes.
+Circular arc defined by center, radius, angle_start, sweep. Trivially extends existing circle intersection (clamp the hit angle). Enables: curved mirrors, parabolic reflectors, lenses with controlled aperture, crescents, half-pipes.
 
 ### Glossy reflection (roughness)
 A roughness parameter on specular materials — perturb the reflection direction by a random angle scaled by roughness. Bridges the gap between perfect mirror and Lambertian diffuse. One float, a few shader lines. Enables: brushed metal, frosted glass, soft reflections.

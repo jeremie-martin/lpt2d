@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "name": "three_spheres",
   "materials": {
     "glass": {

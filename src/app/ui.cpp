@@ -100,14 +100,18 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
             dl->AddLine(cv.to_screen(s.a), cv.to_screen(s.b), col, th);
         },
         [&](const Arc& a) {
-            constexpr int N = 64;
-            float span = a.angle_end - a.angle_start;
-            if (span < 0) span += TWO_PI;
-            for (int j = 0; j < N; ++j) {
-                float t0 = a.angle_start + span * j / N;
-                float t1 = a.angle_start + span * (j + 1) / N;
-                Vec2 p0 = a.center + Vec2{a.radius * std::cos(t0), a.radius * std::sin(t0)};
-                Vec2 p1 = a.center + Vec2{a.radius * std::cos(t1), a.radius * std::sin(t1)};
+            float sweep = clamp_arc_sweep(a.sweep);
+            if (sweep >= TWO_PI - INTERSECT_EPS) {
+                dl->AddCircle(cv.to_screen(a.center), a.radius * cv.cam.zoom, col, 64, th);
+                return;
+            }
+
+            int segments = std::max(1, (int)std::ceil(64.0f * sweep / TWO_PI));
+            for (int j = 0; j < segments; ++j) {
+                float t0 = a.angle_start + sweep * j / segments;
+                float t1 = a.angle_start + sweep * (j + 1) / segments;
+                Vec2 p0 = arc_point(a, t0);
+                Vec2 p1 = arc_point(a, t1);
                 dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
             }
         },
