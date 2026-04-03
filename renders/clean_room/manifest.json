@@ -1,0 +1,151 @@
+{
+  "canonical_root": "renders/clean_room",
+  "overview": "overview_sheet.png",
+  "scenes": [
+    {
+      "name": "orbiting_triplet",
+      "description": "Three-lens cluster with a wall-safe orbiting beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "splitter_braid",
+      "description": "Two beams braid through a reflective beam-splitter cross.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "breathing_lenses",
+      "description": "A simplified two-lens scan with restrained breathing motion.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mirror_shutters",
+      "description": "Opposed mirror shutters open and close around a downward beam.",
+      "assets": [
+        "frame_000.json",
+        "hq.mp4",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "prism_crown",
+      "description": "A slow prism crown with a lead beam and a softer trailing echo.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "waveguide_ribbon",
+      "description": "A clean bezier ribbon waveguide fed by a narrow beam.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "corner_crossfire",
+      "description": "Cool and warm corner beams cross through a simple glass doublet.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "caustic_ladder",
+      "description": "A scanning beam walks across a vertical ladder of lenses.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "aperture_waltz",
+      "description": "Mirror slats open and close into a rhythmic gated field.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_resonator",
+      "description": "A curved resonator cavity with a wall-safe warm beam through the center gap.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "arc_resonator_dual_beam",
+      "description": "Warm and white beams crossing a resonator gap with independently animated arcs.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    },
+    {
+      "name": "mirror_fan",
+      "description": "A five-blade mirror fan catches a beam through a small prism.",
+      "assets": [
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
+      ],
+      "room_fit": true,
+      "max_overrun": 0.0
+    }
+  ]
+}

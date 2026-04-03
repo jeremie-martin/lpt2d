@@ -19,6 +19,11 @@ __pycache__/
 *.mp4
 *.mkv
 *.webm
+/middle_frame.json
+/twin_prisms.json
+/renders/archive/
+/renders/clean_room/*/frame_*.json
+/renders/clean_room/*/tuning.json
 
 # Local benchmark outputs
 /bench/baseline/
