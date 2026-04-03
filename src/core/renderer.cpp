@@ -723,9 +723,16 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp)
     glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
 
     out_rgb.resize(width_ * height_ * 3);
-    for (int i = 0; i < width_ * height_; ++i) {
-        out_rgb[i * 3 + 0] = rgba_buffer_[i * 4 + 0];
-        out_rgb[i * 3 + 1] = rgba_buffer_[i * 4 + 1];
-        out_rgb[i * 3 + 2] = rgba_buffer_[i * 4 + 2];
+    // OpenGL returns texture rows bottom-up; flip here so saved PNG/video rows
+    // match the world-space orientation seen in the interactive viewport.
+    for (int y = 0; y < height_; ++y) {
+        int src_y = height_ - 1 - y;
+        const uint8_t* src = rgba_buffer_.data() + (size_t)src_y * width_ * 4;
+        uint8_t* dst = out_rgb.data() + (size_t)y * width_ * 3;
+        for (int x = 0; x < width_; ++x) {
+            dst[x * 3 + 0] = src[x * 4 + 0];
+            dst[x * 3 + 1] = src[x * 4 + 1];
+            dst[x * 3 + 2] = src[x * 4 + 2];
+        }
     }
 }

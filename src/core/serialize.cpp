@@ -484,10 +484,13 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
     if (auto* v = render->get("exposure")) fo.exposure = v->as_float();
     if (auto* v = render->get("contrast")) fo.contrast = v->as_float();
     if (auto* v = render->get("gamma")) fo.gamma = v->as_float();
+    if (auto* v = render->get("white_point")) fo.white_point = v->as_float();
     if (auto* v = render->get("tonemap")) {
         const auto& tm = v->as_string();
         if (tm == "none") fo.tonemap = ToneMap::None;
         else if (tm == "reinhard") fo.tonemap = ToneMap::Reinhard;
+        else if (tm == "reinhardx" || tm == "reinhard_ext" || tm == "reinhard_extended")
+            fo.tonemap = ToneMap::ReinhardExtended;
         else if (tm == "aces") fo.tonemap = ToneMap::ACES;
         else if (tm == "log") fo.tonemap = ToneMap::Logarithmic;
     }

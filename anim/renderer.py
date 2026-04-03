@@ -24,6 +24,7 @@ class Renderer:
         contrast: float = 1.0,
         gamma: float = 2.2,
         tonemap: str = "aces",
+        white_point: float = 1.0,
         binary: str = "./build/lpt2d-cli",
     ):
         self.width = width
@@ -36,7 +37,7 @@ class Renderer:
                 "--rays", str(rays), "--batch", str(batch),
                 "--depth", str(depth), "--exposure", str(exposure),
                 "--contrast", str(contrast), "--gamma", str(gamma),
-                "--tonemap", tonemap,
+                "--tonemap", tonemap, "--white-point", str(white_point),
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,

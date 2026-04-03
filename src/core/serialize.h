@@ -20,7 +20,7 @@ Scene load_scene_json_string(std::string_view json_content);
 struct FrameOverrides {
     std::optional<int64_t> rays;
     std::optional<int> batch, depth;
-    std::optional<float> exposure, contrast, gamma;
+    std::optional<float> exposure, contrast, gamma, white_point;
     std::optional<ToneMap> tonemap;
     std::optional<Bounds> bounds; // fixed camera
 };

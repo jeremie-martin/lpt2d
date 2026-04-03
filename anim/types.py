@@ -187,11 +187,12 @@ class RenderConfig:
     contrast: float | None = None
     gamma: float | None = None
     tonemap: str | None = None
+    white_point: float | None = None
     bounds: list[float] | None = None  # [xmin, ymin, xmax, ymax]
 
     def to_dict(self) -> dict:
         d: dict = {}
-        for k in ("rays", "batch", "depth", "exposure", "contrast", "gamma", "tonemap", "bounds"):
+        for k in ("rays", "batch", "depth", "exposure", "contrast", "gamma", "tonemap", "white_point", "bounds"):
             v = getattr(self, k)
             if v is not None:
                 d[k] = v

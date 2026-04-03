@@ -23,7 +23,8 @@ static void print_usage() {
               << "  --exposure <float>       Exposure in stops (default: 2)\n"
               << "  --contrast <float>       Contrast (default: 1)\n"
               << "  --gamma <float>          Gamma (default: 2.2)\n"
-              << "  --tonemap <name>         none|reinhard|aces|log (default: aces)\n"
+              << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (default: aces)\n"
+              << "  --white-point <float>    White point for reinhardx/log (default: 1)\n"
               << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -87,6 +88,7 @@ static int run_stream(int width, int height, int64_t default_rays,
         if (fo.exposure) pp.exposure = *fo.exposure;
         if (fo.contrast) pp.contrast = *fo.contrast;
         if (fo.gamma) pp.gamma = *fo.gamma;
+        if (fo.white_point) pp.white_point = *fo.white_point;
         if (fo.tonemap) pp.tone_map = *fo.tonemap;
 
         Bounds bounds = fo.bounds ? *fo.bounds : compute_bounds(scene);
@@ -148,10 +150,14 @@ int main(int argc, char** argv) {
             pp.gamma = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--contrast") == 0 && i + 1 < argc)
             pp.contrast = std::atof(argv[++i]);
+        else if (std::strcmp(argv[i], "--white-point") == 0 && i + 1 < argc)
+            pp.white_point = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--tonemap") == 0 && i + 1 < argc) {
             std::string tm = argv[++i];
             if (tm == "none") pp.tone_map = ToneMap::None;
             else if (tm == "reinhard") pp.tone_map = ToneMap::Reinhard;
+            else if (tm == "reinhardx" || tm == "reinhard_ext" || tm == "reinhard_extended")
+                pp.tone_map = ToneMap::ReinhardExtended;
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
         } else if (std::strcmp(argv[i], "--stream") == 0) {
