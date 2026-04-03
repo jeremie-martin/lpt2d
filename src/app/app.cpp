@@ -948,6 +948,11 @@ int App::run(const AppConfig& config) {
                     pp.normalize_ref = renderer.compute_current_max();
                 }
             }
+            ImGui::Separator();
+            ImGui::SliderFloat("Ambient", &pp.ambient, 0.0f, 0.5f, "%.3f");
+            ImGui::ColorEdit3("Background", pp.background,
+                              ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            ImGui::SliderFloat("Opacity", &pp.opacity, 0.0f, 1.0f);
             ImGui::PopID();
         }
 

@@ -35,6 +35,8 @@ bool edit_material(Material& mat) {
     changed |= ImGui::SliderFloat("Absorption", &mat.absorption, 0.0f, 2.0f);
     changed |= ImGui::SliderFloat("Dispersion", &mat.cauchy_b, 0.0f, 50000.0f, "%.0f");
     changed |= ImGui::SliderFloat("Albedo", &mat.albedo, 0.0f, 1.0f);
+    changed |= ImGui::SliderFloat("Emission", &mat.emission, 0.0f, 10.0f, "%.2f",
+                                   ImGuiSliderFlags_Logarithmic);
     return changed;
 }
 

@@ -30,7 +30,13 @@ static void write_material(std::ostream& os, const Material& m, int depth) {
     write_indent(os, depth + 1); os << "\"transmission\": " << fmt(m.transmission) << ",\n";
     write_indent(os, depth + 1); os << "\"absorption\": " << fmt(m.absorption) << ",\n";
     write_indent(os, depth + 1); os << "\"cauchy_b\": " << fmt(m.cauchy_b) << ",\n";
-    write_indent(os, depth + 1); os << "\"albedo\": " << fmt(m.albedo) << "\n";
+    write_indent(os, depth + 1); os << "\"albedo\": " << fmt(m.albedo);
+    if (m.emission > 0.0f) {
+        os << ",\n";
+        write_indent(os, depth + 1); os << "\"emission\": " << fmt(m.emission) << "\n";
+    } else {
+        os << "\n";
+    }
     write_indent(os, depth); os << "}";
 }
 
@@ -344,6 +350,7 @@ static Material read_material(const JsonValue* v) {
     if (auto* f = v->get("absorption")) m.absorption = f->as_float();
     if (auto* f = v->get("cauchy_b")) m.cauchy_b = f->as_float();
     if (auto* f = v->get("albedo")) m.albedo = f->as_float(1.0f);
+    if (auto* f = v->get("emission")) m.emission = f->as_float();
     return m;
 }
 
@@ -485,15 +492,8 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
     if (auto* v = render->get("contrast")) fo.contrast = v->as_float();
     if (auto* v = render->get("gamma")) fo.gamma = v->as_float();
     if (auto* v = render->get("white_point")) fo.white_point = v->as_float();
-    if (auto* v = render->get("tonemap")) {
-        const auto& tm = v->as_string();
-        if (tm == "none") fo.tonemap = ToneMap::None;
-        else if (tm == "reinhard") fo.tonemap = ToneMap::Reinhard;
-        else if (tm == "reinhardx" || tm == "reinhard_ext" || tm == "reinhard_extended")
-            fo.tonemap = ToneMap::ReinhardExtended;
-        else if (tm == "aces") fo.tonemap = ToneMap::ACES;
-        else if (tm == "log") fo.tonemap = ToneMap::Logarithmic;
-    }
+    if (auto* v = render->get("tonemap"))
+        fo.tonemap = parse_tonemap(v->as_string());
     if (auto* v = render->get("bounds")) {
         if (v->type == JsonValue::Array && v->arr.size() >= 4) {
             fo.bounds = Bounds{
@@ -501,15 +501,18 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
                 {v->arr[2].as_float(), v->arr[3].as_float()}};
         }
     }
-    if (auto* v = render->get("normalize")) {
-        const auto& s = v->as_string();
-        if (s == "max") fo.normalize = NormalizeMode::Max;
-        else if (s == "rays") fo.normalize = NormalizeMode::Rays;
-        else if (s == "fixed") fo.normalize = NormalizeMode::Fixed;
-        else if (s == "off") fo.normalize = NormalizeMode::Off;
-    }
+    if (auto* v = render->get("normalize"))
+        fo.normalize = parse_normalize_mode(v->as_string());
     if (auto* v = render->get("normalize_ref")) fo.normalize_ref = v->as_float();
     if (auto* v = render->get("normalize_pct")) fo.normalize_pct = v->as_float();
+    if (auto* v = render->get("ambient")) fo.ambient = v->as_float();
+    if (auto* v = render->get("background")) {
+        if (v->type == JsonValue::Array && v->arr.size() >= 3) {
+            fo.background = {v->arr[0].as_float(), v->arr[1].as_float(), v->arr[2].as_float()};
+        }
+    }
+    if (auto* v = render->get("opacity")) fo.opacity = v->as_float();
+    if (auto* v = render->get("intensity")) fo.intensity = v->as_float();
 
     return fo;
 }

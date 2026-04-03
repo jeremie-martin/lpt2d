@@ -6,7 +6,8 @@ struct GPUCircle {
     float radius;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad0, _pad1; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
+    float emission;
+    float _pad; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
 };
 
 struct GPUSeg {
@@ -14,7 +15,7 @@ struct GPUSeg {
     vec2 b;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 
 struct GPULight {
@@ -54,7 +55,7 @@ struct GPUArc {
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad1;
+    float emission;
 };
 
 struct GPUBezier {
@@ -63,7 +64,7 @@ struct GPUBezier {
     vec2 p2;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 
 layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
@@ -138,9 +139,10 @@ struct Hit {
     float absorption;
     float cauchy_b;
     float albedo;
+    float emission;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -157,7 +159,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo);
+    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -172,7 +174,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission);
 }
 
 bool in_arc(float angle, float start, float end) {
@@ -203,7 +205,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.angle_end)) {
             return Hit(t, p, normalize(p - a.center),
-                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo);
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission);
         }
     }
     return NO_HIT;
@@ -248,7 +250,7 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission);
     }
     return best;
 }
@@ -345,6 +347,12 @@ void main() {
         color *= exp(-current_absorption * h.t);
 
         emit(ro, h.point, color);
+
+        // Emissive surface: adds energy at the current wavelength
+        if (h.emission > 0.0) {
+            color += vec4(rgb * h.emission * uIntensity * total_w,
+                          h.emission * uIntensity * total_w);
+        }
 
         // ── Unified Principled BSDF ──
         {

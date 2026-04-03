@@ -73,7 +73,8 @@ struct GPUCircle {
     float radius;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad[2]; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+    float emission;
+    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
 };
 static_assert(sizeof(GPUCircle) == 48);
 
@@ -82,7 +83,7 @@ struct GPUSegment {
     float b[2];
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 static_assert(sizeof(GPUSegment) == 48);
 
@@ -106,7 +107,7 @@ struct GPUArc {
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad1;
+    float emission;
 };
 static_assert(sizeof(GPUArc) == 56);
 
@@ -116,7 +117,7 @@ struct GPUBezier {
     float p2[2];
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 static_assert(sizeof(GPUBezier) == 56);
 
@@ -308,6 +309,9 @@ bool Renderer::create_pp_shader() {
     loc_tone_map_ = glGetUniformLocation(pp_program_, "uToneMapOp");
     loc_white_point_ = glGetUniformLocation(pp_program_, "uWhitePoint");
     loc_float_tex_ = glGetUniformLocation(pp_program_, "uFloatTexture");
+    loc_ambient_ = glGetUniformLocation(pp_program_, "uAmbient");
+    loc_background_ = glGetUniformLocation(pp_program_, "uBackground");
+    loc_opacity_ = glGetUniformLocation(pp_program_, "uOpacity");
     return true;
 }
 
@@ -412,9 +416,16 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         gpu.absorption = mat.absorption;
         gpu.cauchy_b = mat.cauchy_b;
         gpu.albedo = mat.albedo;
+        gpu.emission = mat.emission;
     };
 
-    for (const auto& shape : scene.shapes) {
+    // Collect all world-space shapes (ungrouped + transformed group shapes)
+    std::vector<Shape> all_shapes(scene.shapes.begin(), scene.shapes.end());
+    for (const auto& group : scene.groups)
+        for (const auto& shape : group.shapes)
+            all_shapes.push_back(transform_shape(shape, group.transform));
+
+    for (const auto& shape : all_shapes) {
         std::visit(overloaded{
             [&](const Circle& c) {
                 GPUCircle gc{};
@@ -451,53 +462,17 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         }, shape);
     }
 
-    // Flatten group shapes (apply group transform to get world-space geometry)
-    for (const auto& group : scene.groups) {
-        for (const auto& shape : group.shapes) {
-            Shape ws = transform_shape(shape, group.transform);
-            std::visit(overloaded{
-                [&](const Circle& c) {
-                    GPUCircle gc{};
-                    gc.center[0] = c.center.x;
-                    gc.center[1] = c.center.y;
-                    gc.radius = c.radius;
-                    fill_material(gc, c.material);
-                    circles.push_back(gc);
-                },
-                [&](const Segment& s) {
-                    GPUSegment gs{};
-                    gs.a[0] = s.a.x; gs.a[1] = s.a.y;
-                    gs.b[0] = s.b.x; gs.b[1] = s.b.y;
-                    fill_material(gs, s.material);
-                    segs.push_back(gs);
-                },
-                [&](const Arc& a) {
-                    GPUArc ga{};
-                    ga.center[0] = a.center.x; ga.center[1] = a.center.y;
-                    ga.radius = a.radius;
-                    ga.angle_start = a.angle_start;
-                    ga.angle_end = a.angle_end;
-                    fill_material(ga, a.material);
-                    gpu_arcs.push_back(ga);
-                },
-                [&](const Bezier& b) {
-                    GPUBezier gb{};
-                    gb.p0[0] = b.p0.x; gb.p0[1] = b.p0.y;
-                    gb.p1[0] = b.p1.x; gb.p1[1] = b.p1.y;
-                    gb.p2[0] = b.p2.x; gb.p2[1] = b.p2.y;
-                    fill_material(gb, b.material);
-                    gpu_beziers.push_back(gb);
-                },
-            }, ws);
-        }
-    }
+    // Collect all world-space lights (ungrouped + transformed group lights)
+    std::vector<Light> all_lights(scene.lights.begin(), scene.lights.end());
+    for (const auto& group : scene.groups)
+        for (const auto& light : group.lights)
+            all_lights.push_back(transform_light(light, group.transform));
 
-    // Flatten lights
     std::vector<GPULight> gpu_lights;
     std::vector<float> cum_weights;
     float total = 0.0f;
 
-    for (const auto& light : scene.lights) {
+    for (const auto& light : all_lights) {
         GPULight gl{};
         std::visit(overloaded{
             [&](const PointLight& l) {
@@ -529,44 +504,6 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         total += gl.intensity;
         cum_weights.push_back(total);
         gpu_lights.push_back(gl);
-    }
-
-    // Flatten group lights (apply group transform to get world-space)
-    for (const auto& group : scene.groups) {
-        for (const auto& light : group.lights) {
-            Light wl = transform_light(light, group.transform);
-            GPULight gl{};
-            std::visit(overloaded{
-                [&](const PointLight& l) {
-                    gl.type = 0;
-                    gl.intensity = l.intensity;
-                    gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
-                    gl.wavelength_min = l.wavelength_min;
-                    gl.wavelength_max = l.wavelength_max;
-                },
-                [&](const SegmentLight& l) {
-                    gl.type = 1;
-                    gl.intensity = l.intensity;
-                    gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
-                    gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
-                    gl.wavelength_min = l.wavelength_min;
-                    gl.wavelength_max = l.wavelength_max;
-                },
-                [&](const BeamLight& l) {
-                    gl.type = 2;
-                    gl.intensity = l.intensity;
-                    gl.pos_a[0] = l.origin.x; gl.pos_a[1] = l.origin.y;
-                    Vec2 d = l.direction.normalized();
-                    gl.pos_b[0] = d.x; gl.pos_b[1] = d.y;
-                    gl.angular_width = l.angular_width * 0.5f;
-                    gl.wavelength_min = l.wavelength_min;
-                    gl.wavelength_max = l.wavelength_max;
-                },
-            }, wl);
-            total += gl.intensity;
-            cum_weights.push_back(total);
-            gpu_lights.push_back(gl);
-        }
     }
 
     num_circles_ = (int)circles.size();
@@ -744,6 +681,9 @@ void Renderer::update_display(const PostProcess& pp) {
     glUniform1f(loc_inv_gamma_, inv_gamma);
     glUniform1i(loc_tone_map_, (int)pp.tone_map);
     glUniform1f(loc_white_point_, pp.white_point);
+    glUniform1f(loc_ambient_, pp.ambient);
+    glUniform3f(loc_background_, pp.background[0], pp.background[1], pp.background[2]);
+    glUniform1f(loc_opacity_, pp.opacity);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
@@ -759,11 +699,15 @@ void Renderer::update_display(const PostProcess& pp) {
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp) {
     update_display(pp);
 
-    glBindTexture(GL_TEXTURE_2D, display_texture_);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
+    // Use glReadPixels via the display FBO — glGetTexImage returns stale data
+    // on NVIDIA EGL after many additive-blend draw operations.
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
+    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     out_rgb.resize(width_ * height_ * 3);
-    // OpenGL returns texture rows bottom-up; flip here so saved PNG/video rows
+    // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
     // match the world-space orientation seen in the interactive viewport.
     for (int y = 0; y < height_; ++y) {
         int src_y = height_ - 1 - y;

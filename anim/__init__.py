@@ -1,5 +1,10 @@
 """lpt2d animation library — f(ctx) -> Scene -> video."""
 
+from .builders import biconvex_lens as biconvex_lens
+from .builders import mirror_box as mirror_box
+from .builders import polygon as polygon
+from .builders import regular_polygon as regular_polygon
+from .builders import thick_arc as thick_arc
 from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
@@ -81,6 +86,9 @@ from .types import (
     diffuse as diffuse,
 )
 from .types import (
+    emissive as emissive,
+)
+from .types import (
     glass as glass,
 )
 from .types import (
@@ -118,12 +126,18 @@ __all__ = [
     "Wrap",
     "absorber",
     "beam_splitter",
+    "biconvex_lens",
     "diffuse",
+    "emissive",
     "glass",
+    "mirror_box",
     "FrameStats",
     "frame_stats",
     "mirror",
     "opaque_mirror",
+    "polygon",
+    "regular_polygon",
+    "thick_arc",
     "calibrate_normalize_ref",
     "render",
     "render_contact_sheet",

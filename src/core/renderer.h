@@ -129,6 +129,9 @@ private:
     GLint loc_tone_map_ = -1;
     GLint loc_white_point_ = -1;
     GLint loc_float_tex_ = -1;
+    GLint loc_ambient_ = -1;
+    GLint loc_background_ = -1;
+    GLint loc_opacity_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();

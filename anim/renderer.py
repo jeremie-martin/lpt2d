@@ -62,6 +62,15 @@ class Renderer:
             cmd.extend(["--normalize-ref", str(settings.normalize_ref)])
         if settings.normalize_pct < 1.0:
             cmd.extend(["--normalize-pct", str(settings.normalize_pct)])
+        if settings.ambient != 0:
+            cmd.extend(["--ambient", str(settings.ambient)])
+        bg = settings.background
+        if any(v != 0 for v in bg):
+            cmd.extend(["--background", f"{bg[0]},{bg[1]},{bg[2]}"])
+        if settings.opacity < 1.0:
+            cmd.extend(["--opacity", str(settings.opacity)])
+        if settings.intensity != 1.0:
+            cmd.extend(["--intensity", str(settings.intensity)])
         self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,

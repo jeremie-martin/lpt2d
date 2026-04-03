@@ -66,6 +66,7 @@ struct Material {
     float absorption = 0.0f;   // Beer-Lambert coefficient inside medium (per unit distance)
     float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
     float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
+    float emission = 0.0f;     // Emissive intensity (adds energy at hit wavelength)
 };
 
 // Convenience constructors
@@ -220,12 +221,30 @@ struct LineSegment {
 
 enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 
+inline std::optional<ToneMap> parse_tonemap(const std::string& s) {
+    if (s == "none") return ToneMap::None;
+    if (s == "reinhard") return ToneMap::Reinhard;
+    if (s == "reinhardx" || s == "reinhard_ext" || s == "reinhard_extended")
+        return ToneMap::ReinhardExtended;
+    if (s == "aces") return ToneMap::ACES;
+    if (s == "log") return ToneMap::Logarithmic;
+    return std::nullopt;
+}
+
 enum class NormalizeMode : int {
     Max = 0,   // per-frame max pixel (or percentile)
     Rays = 1,  // total accumulated rays — stable across ray counts (default)
     Fixed = 2, // user-specified divisor (normalize_ref)
     Off = 3,   // no normalization (divisor = 1.0)
 };
+
+inline std::optional<NormalizeMode> parse_normalize_mode(const std::string& s) {
+    if (s == "max") return NormalizeMode::Max;
+    if (s == "rays") return NormalizeMode::Rays;
+    if (s == "fixed") return NormalizeMode::Fixed;
+    if (s == "off") return NormalizeMode::Off;
+    return std::nullopt;
+}
 
 struct PostProcess {
     float exposure = 2.0f;
@@ -236,6 +255,9 @@ struct PostProcess {
     NormalizeMode normalize = NormalizeMode::Rays;
     float normalize_ref = 0.0f; // divisor for Fixed mode
     float normalize_pct = 1.0f; // percentile for Max mode (1.0=max, 0.99=P99)
+    float ambient = 0.0f;       // constant fill light (added after exposure, before tonemap)
+    float background[3] = {0, 0, 0}; // background color (linear RGB, applied to unlit pixels)
+    float opacity = 1.0f;       // global opacity (applied after tonemap, for fade-to-black)
 };
 
 // --- Utilities ---

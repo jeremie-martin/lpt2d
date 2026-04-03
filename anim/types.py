@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from enum import Enum
 from pathlib import Path
 
@@ -20,9 +20,10 @@ class Material:
     absorption: float = 0.0
     cauchy_b: float = 0.0
     albedo: float = 1.0
+    emission: float = 0.0
 
     def to_dict(self) -> dict:
-        return {
+        d = {
             "ior": self.ior,
             "roughness": self.roughness,
             "metallic": self.metallic,
@@ -31,6 +32,9 @@ class Material:
             "cauchy_b": self.cauchy_b,
             "albedo": self.albedo,
         }
+        if self.emission > 0:
+            d["emission"] = self.emission
+        return d
 
     @staticmethod
     def from_dict(d: dict) -> Material:
@@ -42,6 +46,7 @@ class Material:
             absorption=d.get("absorption", 0.0),
             cauchy_b=d.get("cauchy_b", 0.0),
             albedo=d.get("albedo", 1.0),
+            emission=d.get("emission", 0.0),
         )
 
 
@@ -76,6 +81,17 @@ def diffuse(reflectance: float) -> Material:
 
 def absorber() -> Material:
     return Material(albedo=0.0)
+
+
+def emissive(emission: float, base: Material | None = None) -> Material:
+    """Emissive surface: adds energy at hit wavelength.
+
+    Pass an optional *base* material to combine emission with other properties
+    (e.g., ``emissive(2.0, glass(1.5))`` for a glowing glass surface).
+    """
+    if base is not None:
+        return replace(base, emission=emission)
+    return Material(emission=emission)
 
 
 # --- Shapes ---
@@ -439,6 +455,10 @@ class RenderSettings:
     normalize: str = "rays"  # "max" | "rays" | "fixed" | "off"
     normalize_ref: float = 0.0  # divisor for "fixed" mode
     normalize_pct: float = 1.0  # percentile for "max" mode (1.0=max, 0.99=P99)
+    ambient: float = 0.0  # constant fill light (added after exposure, before tonemap)
+    background: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])  # linear RGB
+    opacity: float = 1.0  # global opacity (0=black, 1=full)
+    intensity: float = 1.0  # trace intensity multiplier
 
     @staticmethod
     def preset(quality: Quality | str, **overrides) -> RenderSettings:
@@ -469,6 +489,10 @@ class RenderOverrides:
     normalize: str | None = None  # "max" | "rays" | "fixed" | "off"
     normalize_ref: float | None = None
     normalize_pct: float | None = None
+    ambient: float | None = None
+    background: list[float] | None = None  # [r, g, b] linear RGB
+    opacity: float | None = None
+    intensity: float | None = None
 
     def to_dict(self) -> dict:
         return {

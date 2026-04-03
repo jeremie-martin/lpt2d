@@ -2,6 +2,7 @@
 
 #include "scene.h"
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -26,6 +27,10 @@ struct FrameOverrides {
     std::optional<NormalizeMode> normalize;
     std::optional<float> normalize_ref;
     std::optional<float> normalize_pct;
+    std::optional<float> ambient;
+    std::optional<std::array<float, 3>> background;
+    std::optional<float> opacity;
+    std::optional<float> intensity;
 };
 
 // Extract optional "render" overrides from a scene JSON string.

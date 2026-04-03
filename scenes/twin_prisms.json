@@ -1,0 +1,101 @@
+{
+  "version": 2,
+  "name": "twin_prisms",
+  "shapes": [
+    {
+      "type": "segment",
+      "a": [-1.2, -0.8],
+      "b": [1.2, -0.8],
+      "material": { "metallic": 1, "transmission": 1, "albedo": 0.95 }
+    },
+    {
+      "type": "segment",
+      "a": [1.2, 0.8],
+      "b": [-1.2, 0.8],
+      "material": { "metallic": 1, "transmission": 1, "albedo": 0.95 }
+    },
+    {
+      "type": "segment",
+      "a": [-1.2, 0.8],
+      "b": [-1.2, -0.8],
+      "material": { "metallic": 1, "transmission": 1, "albedo": 0.95 }
+    },
+    {
+      "type": "segment",
+      "a": [1.2, -0.8],
+      "b": [1.2, 0.8],
+      "material": { "metallic": 1, "transmission": 1, "albedo": 0.95 }
+    }
+  ],
+  "lights": [
+    {
+      "type": "beam",
+      "origin": [-1.0, 0.0],
+      "direction": [1, 0],
+      "angular_width": 0.02,
+      "intensity": 1,
+      "wavelength_min": 380,
+      "wavelength_max": 780
+    }
+  ],
+  "groups": [
+    {
+      "name": "prism_left",
+      "transform": {
+        "translate": [-0.3, 0.0],
+        "rotate": 0,
+        "scale": [1, 1]
+      },
+      "shapes": [
+        {
+          "type": "segment",
+          "a": [0.0, -0.2],
+          "b": [-0.2, 0.15],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        },
+        {
+          "type": "segment",
+          "a": [-0.2, 0.15],
+          "b": [0.2, 0.15],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        },
+        {
+          "type": "segment",
+          "a": [0.2, 0.15],
+          "b": [0.0, -0.2],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        }
+      ],
+      "lights": []
+    },
+    {
+      "name": "prism_right",
+      "transform": {
+        "translate": [0.5, -0.2],
+        "rotate": 3.14159,
+        "scale": [0.8, 0.8]
+      },
+      "shapes": [
+        {
+          "type": "segment",
+          "a": [0.0, -0.2],
+          "b": [-0.2, 0.15],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        },
+        {
+          "type": "segment",
+          "a": [-0.2, 0.15],
+          "b": [0.2, 0.15],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        },
+        {
+          "type": "segment",
+          "a": [0.2, 0.15],
+          "b": [0.0, -0.2],
+          "material": { "ior": 1.5, "transmission": 1, "absorption": 0.3, "cauchy_b": 30000 }
+        }
+      ],
+      "lights": []
+    }
+  ]
+}

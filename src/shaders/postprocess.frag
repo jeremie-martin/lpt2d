@@ -9,6 +9,9 @@ uniform float uContrast;
 uniform float uInvGamma;
 uniform int uToneMapOp;
 uniform float uWhitePoint;
+uniform float uAmbient;
+uniform vec3 uBackground;
+uniform float uOpacity;
 
 float toneMapReinhard(float v) { return v / (1.0 + v); }
 
@@ -43,6 +46,10 @@ void main() {
         float v = hdr[c];
         v = v / uMaxVal;
         v = v * uExposureMult;
+        // Background replaces pixels with negligible light; threshold is in
+        // post-exposure space so it works consistently across normalization modes.
+        if (v < 1e-6) v = uBackground[c];
+        else v = v + uAmbient;
         v = toneMap(v, uToneMapOp, uWhitePoint);
         v = (v - 0.5) * uContrast + 0.5;
         v = clamp(v, 0.0, 1.0);
@@ -50,5 +57,6 @@ void main() {
         color[c] = v;
     }
 
+    color *= uOpacity;
     FragColor = vec4(color, 1.0);
 }

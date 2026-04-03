@@ -29,6 +29,10 @@ static void print_usage() {
               << "  --normalize <mode>       max|rays|fixed|off (default: rays)\n"
               << "  --normalize-ref <float>  Fixed divisor (for --normalize fixed)\n"
               << "  --normalize-pct <float>  Percentile for max mode (default: 1.0, use 0.99 for P99)\n"
+              << "  --ambient <float>        Constant fill light (default: 0)\n"
+              << "  --background <r,g,b>     Background color, linear RGB 0-1 (default: 0,0,0)\n"
+              << "  --opacity <float>        Global opacity 0-1 (default: 1)\n"
+              << "  --intensity <float>      Trace intensity multiplier (default: 1)\n"
               << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -87,6 +91,7 @@ static int run_stream(int width, int height, int64_t default_rays,
         TraceConfig tcfg = default_tcfg;
         if (fo.batch) tcfg.batch_size = *fo.batch;
         if (fo.depth) tcfg.max_depth = *fo.depth;
+        if (fo.intensity) tcfg.intensity = *fo.intensity;
 
         PostProcess pp = default_pp;
         if (fo.exposure) pp.exposure = *fo.exposure;
@@ -94,9 +99,16 @@ static int run_stream(int width, int height, int64_t default_rays,
         if (fo.gamma) pp.gamma = *fo.gamma;
         if (fo.white_point) pp.white_point = *fo.white_point;
         if (fo.tonemap) pp.tone_map = *fo.tonemap;
-        if (fo.normalize.has_value()) pp.normalize = *fo.normalize;
-        if (fo.normalize_ref.has_value()) pp.normalize_ref = *fo.normalize_ref;
-        if (fo.normalize_pct.has_value()) pp.normalize_pct = *fo.normalize_pct;
+        if (fo.normalize) pp.normalize = *fo.normalize;
+        if (fo.normalize_ref) pp.normalize_ref = *fo.normalize_ref;
+        if (fo.normalize_pct) pp.normalize_pct = *fo.normalize_pct;
+        if (fo.ambient) pp.ambient = *fo.ambient;
+        if (fo.background) {
+            pp.background[0] = (*fo.background)[0];
+            pp.background[1] = (*fo.background)[1];
+            pp.background[2] = (*fo.background)[2];
+        }
+        if (fo.opacity) pp.opacity = *fo.opacity;
 
         Bounds bounds;
         if (fo.bounds) {
@@ -172,23 +184,27 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--white-point") == 0 && i + 1 < argc)
             pp.white_point = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--tonemap") == 0 && i + 1 < argc) {
-            std::string tm = argv[++i];
-            if (tm == "none") pp.tone_map = ToneMap::None;
-            else if (tm == "reinhard") pp.tone_map = ToneMap::Reinhard;
-            else if (tm == "reinhardx" || tm == "reinhard_ext" || tm == "reinhard_extended")
-                pp.tone_map = ToneMap::ReinhardExtended;
-            else if (tm == "aces") pp.tone_map = ToneMap::ACES;
-            else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
+            if (auto tm = parse_tonemap(argv[++i])) pp.tone_map = *tm;
         } else if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
-            std::string m = argv[++i];
-            if (m == "max") pp.normalize = NormalizeMode::Max;
-            else if (m == "rays") pp.normalize = NormalizeMode::Rays;
-            else if (m == "fixed") pp.normalize = NormalizeMode::Fixed;
-            else if (m == "off") pp.normalize = NormalizeMode::Off;
+            if (auto nm = parse_normalize_mode(argv[++i])) pp.normalize = *nm;
         } else if (std::strcmp(argv[i], "--normalize-ref") == 0 && i + 1 < argc) {
             pp.normalize_ref = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--normalize-pct") == 0 && i + 1 < argc) {
             pp.normalize_pct = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+        } else if (std::strcmp(argv[i], "--ambient") == 0 && i + 1 < argc) {
+            pp.ambient = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--background") == 0 && i + 1 < argc) {
+            // Parse "r,g,b" or a single gray value
+            char* end = nullptr;
+            float r = std::strtof(argv[++i], &end);
+            float g = r, b = r;
+            if (end && *end == ',') { g = std::strtof(end + 1, &end); }
+            if (end && *end == ',') { b = std::strtof(end + 1, &end); }
+            pp.background[0] = r; pp.background[1] = g; pp.background[2] = b;
+        } else if (std::strcmp(argv[i], "--opacity") == 0 && i + 1 < argc) {
+            pp.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+        } else if (std::strcmp(argv[i], "--intensity") == 0 && i + 1 < argc) {
+            tcfg.intensity = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
