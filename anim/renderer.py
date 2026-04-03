@@ -38,12 +38,28 @@ class Renderer:
         self.frame_bytes = width * height * 3
         self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             [
-                binary, "--stream",
-                "--width", str(width), "--height", str(height),
-                "--rays", str(rays), "--batch", str(batch),
-                "--depth", str(depth), "--exposure", str(exposure),
-                "--contrast", str(contrast), "--gamma", str(gamma),
-                "--tonemap", tonemap, "--white-point", str(white_point),
+                binary,
+                "--stream",
+                "--width",
+                str(width),
+                "--height",
+                str(height),
+                "--rays",
+                str(rays),
+                "--batch",
+                str(batch),
+                "--depth",
+                str(depth),
+                "--exposure",
+                str(exposure),
+                "--contrast",
+                str(contrast),
+                "--gamma",
+                str(gamma),
+                "--tonemap",
+                tonemap,
+                "--white-point",
+                str(white_point),
             ],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -62,9 +78,7 @@ class Renderer:
 
         data = stdout.read(self.frame_bytes)
         if len(data) != self.frame_bytes:
-            raise RuntimeError(
-                f"Renderer died after {len(data)}/{self.frame_bytes} bytes"
-            )
+            raise RuntimeError(f"Renderer died after {len(data)}/{self.frame_bytes} bytes")
         return data
 
     def close(self):
@@ -94,11 +108,24 @@ class FFmpegOutput:
     ):
         self._proc = subprocess.Popen(
             [
-                "ffmpeg", "-y",
-                "-f", "rawvideo", "-pix_fmt", "rgb24",
-                "-s", f"{width}x{height}", "-r", str(fps),
-                "-i", "pipe:0",
-                "-c:v", codec, "-crf", str(crf), "-pix_fmt", "yuv420p",
+                "ffmpeg",
+                "-y",
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
+                "-s",
+                f"{width}x{height}",
+                "-r",
+                str(fps),
+                "-i",
+                "pipe:0",
+                "-c:v",
+                codec,
+                "-crf",
+                str(crf),
+                "-pix_fmt",
+                "yuv420p",
                 path,
             ],
             stdin=subprocess.PIPE,

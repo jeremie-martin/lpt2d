@@ -1,14 +1,22 @@
 """Beam light orbiting three glass spheres."""
 
 import math
+
 from anim import (
-    Scene, Circle, Segment, BeamLight, SegmentLight, RenderConfig,
-    glass, mirror, render,
+    BeamLight,
+    Circle,
+    RenderConfig,
+    Scene,
+    Segment,
+    SegmentLight,
+    glass,
+    mirror,
+    render,
 )
 
-ORBIT_DURATION = 10.0
+ORBIT_DURATION = 12.0
 ORBIT_RADIUS = 1.0
-RAMP_DURATION = 1.25
+RAMP_DURATION = 2.0
 START_ANGLE = math.pi
 FULL_TURN = 2.0 * math.pi
 BOX_HALF_EXTENT = 1.2
@@ -66,7 +74,13 @@ def animate(t):
 
     # Three glass spheres (same as three_spheres scene)
     for x in (-0.5, 0.0, 0.5):
-        scene.shapes.append(Circle(center=[x, 0], radius=0.2, material=glass(1.5, cauchy_b=20000, absorption=0.5)))
+        scene.shapes.append(
+            Circle(
+                center=[x, 0],
+                radius=0.2,
+                material=glass(1.5, cauchy_b=20000, absorption=0.5),
+            )
+        )
 
     # Mirror box walls
     wall = mirror(0.95)
@@ -80,11 +94,13 @@ def animate(t):
     segment_y = vertical_position(BOX_BOUNDS, SEGMENT_LIGHT_VERTICAL_PROGRESS)
 
     # Left-to-right winding keeps the segment normal pointing upward.
-    scene.lights.append(SegmentLight(
-        a=[-segment_half_width, segment_y],
-        b=[segment_half_width, segment_y],
-        intensity=SEGMENT_LIGHT_INTENSITY,
-    ))
+    scene.lights.append(
+        SegmentLight(
+            a=[-segment_half_width, segment_y],
+            b=[segment_half_width, segment_y],
+            intensity=SEGMENT_LIGHT_INTENSITY,
+        )
+    )
 
     # Beam orbiting on a circle, always aimed at center
     angle = START_ANGLE + FULL_TURN * orbit_progress(t)
@@ -98,16 +114,21 @@ def animate(t):
     dx /= length
     dy /= length
 
-    scene.lights.append(BeamLight(
-        origin=[ox, oy], direction=[dx, dy],
-        angular_width=0.08, intensity=1.5,
-    ))
+    scene.lights.append(
+        BeamLight(
+            origin=[ox, oy],
+            direction=[dx, dy],
+            angular_width=0.08,
+            intensity=0.8,
+        )
+    )
 
     # Fix camera so it doesn't jump around
     scene.render = RenderConfig(
+        exposure=2.2,
         bounds=VIEW_BOUNDS,
         tonemap="reinhardx",
-        white_point=0.5,
+        white_point=0.4,
     )
 
     return scene
@@ -118,8 +139,24 @@ if __name__ == "__main__":
 
     # Quick preview: low res, few rays
     if "--hq" in sys.argv:
-        render(animate, duration=ORBIT_DURATION, output="orbiting_beam_hq.mp4", fps=60,
-               width=1920, height=1920, rays=10_000_000, binary="./build/lpt2d-cli")
+        render(
+            animate,
+            duration=ORBIT_DURATION,
+            output="orbiting_beam_hq.mp4",
+            fps=60,
+            width=1080,
+            height=1080,
+            rays=5_000_000,
+            binary="./build/lpt2d-cli",
+        )
     else:
-        render(animate, duration=ORBIT_DURATION, output="orbiting_beam.mp4", fps=30,
-               width=640, height=640, rays=100_000, binary="./build/lpt2d-cli")
+        render(
+            animate,
+            duration=ORBIT_DURATION,
+            output="orbiting_beam.mp4",
+            fps=1,
+            width=1080,
+            height=1080,
+            rays=1_000_000,
+            binary="./build/lpt2d-cli",
+        )

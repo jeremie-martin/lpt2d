@@ -8,6 +8,7 @@ from pathlib import Path
 
 # --- Materials ---
 
+
 @dataclass
 class Material:
     ior: float = 1.0
@@ -20,17 +21,24 @@ class Material:
 
     def to_dict(self) -> dict:
         return {
-            "ior": self.ior, "roughness": self.roughness, "metallic": self.metallic,
-            "transmission": self.transmission, "absorption": self.absorption,
-            "cauchy_b": self.cauchy_b, "albedo": self.albedo,
+            "ior": self.ior,
+            "roughness": self.roughness,
+            "metallic": self.metallic,
+            "transmission": self.transmission,
+            "absorption": self.absorption,
+            "cauchy_b": self.cauchy_b,
+            "albedo": self.albedo,
         }
 
     @staticmethod
     def from_dict(d: dict) -> Material:
         return Material(
-            ior=d.get("ior", 1.0), roughness=d.get("roughness", 0.0),
-            metallic=d.get("metallic", 0.0), transmission=d.get("transmission", 0.0),
-            absorption=d.get("absorption", 0.0), cauchy_b=d.get("cauchy_b", 0.0),
+            ior=d.get("ior", 1.0),
+            roughness=d.get("roughness", 0.0),
+            metallic=d.get("metallic", 0.0),
+            transmission=d.get("transmission", 0.0),
+            absorption=d.get("absorption", 0.0),
+            cauchy_b=d.get("cauchy_b", 0.0),
             albedo=d.get("albedo", 1.0),
         )
 
@@ -38,17 +46,21 @@ class Material:
 def glass(ior: float, cauchy_b: float = 0.0, absorption: float = 0.0) -> Material:
     return Material(ior=ior, transmission=1.0, absorption=absorption, cauchy_b=cauchy_b)
 
+
 def mirror(reflectance: float, roughness: float = 0.0) -> Material:
     return Material(roughness=roughness, metallic=1.0, transmission=1.0, albedo=reflectance)
 
+
 def diffuse(reflectance: float) -> Material:
     return Material(albedo=reflectance)
+
 
 def absorber() -> Material:
     return Material(albedo=0.0)
 
 
 # --- Shapes ---
+
 
 @dataclass
 class Circle:
@@ -57,8 +69,13 @@ class Circle:
     material: Material = field(default_factory=Material)
 
     def to_dict(self) -> dict:
-        return {"type": "circle", "center": self.center, "radius": self.radius,
-                "material": self.material.to_dict()}
+        return {
+            "type": "circle",
+            "center": self.center,
+            "radius": self.radius,
+            "material": self.material.to_dict(),
+        }
+
 
 @dataclass
 class Segment:
@@ -67,8 +84,8 @@ class Segment:
     material: Material = field(default_factory=Material)
 
     def to_dict(self) -> dict:
-        return {"type": "segment", "a": self.a, "b": self.b,
-                "material": self.material.to_dict()}
+        return {"type": "segment", "a": self.a, "b": self.b, "material": self.material.to_dict()}
+
 
 @dataclass
 class Arc:
@@ -79,9 +96,15 @@ class Arc:
     material: Material = field(default_factory=Material)
 
     def to_dict(self) -> dict:
-        return {"type": "arc", "center": self.center, "radius": self.radius,
-                "angle_start": self.angle_start, "angle_end": self.angle_end,
-                "material": self.material.to_dict()}
+        return {
+            "type": "arc",
+            "center": self.center,
+            "radius": self.radius,
+            "angle_start": self.angle_start,
+            "angle_end": self.angle_end,
+            "material": self.material.to_dict(),
+        }
+
 
 @dataclass
 class Bezier:
@@ -91,14 +114,20 @@ class Bezier:
     material: Material = field(default_factory=Material)
 
     def to_dict(self) -> dict:
-        return {"type": "bezier", "p0": self.p0, "p1": self.p1, "p2": self.p2,
-                "material": self.material.to_dict()}
+        return {
+            "type": "bezier",
+            "p0": self.p0,
+            "p1": self.p1,
+            "p2": self.p2,
+            "material": self.material.to_dict(),
+        }
 
 
 Shape = Circle | Segment | Arc | Bezier
 
 
 # --- Lights ---
+
 
 @dataclass
 class PointLight:
@@ -108,8 +137,14 @@ class PointLight:
     wavelength_max: float = 780.0
 
     def to_dict(self) -> dict:
-        return {"type": "point", "pos": self.pos, "intensity": self.intensity,
-                "wavelength_min": self.wavelength_min, "wavelength_max": self.wavelength_max}
+        return {
+            "type": "point",
+            "pos": self.pos,
+            "intensity": self.intensity,
+            "wavelength_min": self.wavelength_min,
+            "wavelength_max": self.wavelength_max,
+        }
+
 
 @dataclass
 class SegmentLight:
@@ -120,8 +155,15 @@ class SegmentLight:
     wavelength_max: float = 780.0
 
     def to_dict(self) -> dict:
-        return {"type": "segment", "a": self.a, "b": self.b, "intensity": self.intensity,
-                "wavelength_min": self.wavelength_min, "wavelength_max": self.wavelength_max}
+        return {
+            "type": "segment",
+            "a": self.a,
+            "b": self.b,
+            "intensity": self.intensity,
+            "wavelength_min": self.wavelength_min,
+            "wavelength_max": self.wavelength_max,
+        }
+
 
 @dataclass
 class BeamLight:
@@ -133,15 +175,22 @@ class BeamLight:
     wavelength_max: float = 780.0
 
     def to_dict(self) -> dict:
-        return {"type": "beam", "origin": self.origin, "direction": self.direction,
-                "angular_width": self.angular_width, "intensity": self.intensity,
-                "wavelength_min": self.wavelength_min, "wavelength_max": self.wavelength_max}
+        return {
+            "type": "beam",
+            "origin": self.origin,
+            "direction": self.direction,
+            "angular_width": self.angular_width,
+            "intensity": self.intensity,
+            "wavelength_min": self.wavelength_min,
+            "wavelength_max": self.wavelength_max,
+        }
 
 
 Light = PointLight | SegmentLight | BeamLight
 
 
 # --- Groups ---
+
 
 @dataclass
 class Transform2D:
@@ -160,6 +209,7 @@ class Transform2D:
             scale=d.get("scale", [1.0, 1.0]),
         )
 
+
 @dataclass
 class Group:
     name: str = ""
@@ -169,13 +219,15 @@ class Group:
 
     def to_dict(self) -> dict:
         return {
-            "name": self.name, "transform": self.transform.to_dict(),
+            "name": self.name,
+            "transform": self.transform.to_dict(),
             "shapes": [s.to_dict() for s in self.shapes],
             "lights": [light.to_dict() for light in self.lights],
         }
 
 
 # --- Per-frame render overrides ---
+
 
 @dataclass
 class RenderConfig:
@@ -191,7 +243,17 @@ class RenderConfig:
 
     def to_dict(self) -> dict:
         d: dict = {}
-        for k in ("rays", "batch", "depth", "exposure", "contrast", "gamma", "tonemap", "white_point", "bounds"):
+        for k in (
+            "rays",
+            "batch",
+            "depth",
+            "exposure",
+            "contrast",
+            "gamma",
+            "tonemap",
+            "white_point",
+            "bounds",
+        ):
             v = getattr(self, k)
             if v is not None:
                 d[k] = v
@@ -201,22 +263,46 @@ class RenderConfig:
 # --- Scene ---
 
 _SHAPE_PARSERS = {
-    "circle": lambda d: Circle(center=d["center"], radius=d["radius"], material=Material.from_dict(d.get("material", {}))),
-    "segment": lambda d: Segment(a=d["a"], b=d["b"], material=Material.from_dict(d.get("material", {}))),
-    "arc": lambda d: Arc(center=d["center"], radius=d["radius"],
-                         angle_start=d.get("angle_start", 0.0), angle_end=d.get("angle_end", 6.283185307),
-                         material=Material.from_dict(d.get("material", {}))),
-    "bezier": lambda d: Bezier(p0=d["p0"], p1=d["p1"], p2=d["p2"], material=Material.from_dict(d.get("material", {}))),
+    "circle": lambda d: Circle(
+        center=d["center"], radius=d["radius"], material=Material.from_dict(d.get("material", {}))
+    ),
+    "segment": lambda d: Segment(
+        a=d["a"], b=d["b"], material=Material.from_dict(d.get("material", {}))
+    ),
+    "arc": lambda d: Arc(
+        center=d["center"],
+        radius=d["radius"],
+        angle_start=d.get("angle_start", 0.0),
+        angle_end=d.get("angle_end", 6.283185307),
+        material=Material.from_dict(d.get("material", {})),
+    ),
+    "bezier": lambda d: Bezier(
+        p0=d["p0"], p1=d["p1"], p2=d["p2"], material=Material.from_dict(d.get("material", {}))
+    ),
 }
 
 _LIGHT_PARSERS = {
-    "point": lambda d: PointLight(pos=d["pos"], intensity=d.get("intensity", 1.0),
-                                  wavelength_min=d.get("wavelength_min", 380.0), wavelength_max=d.get("wavelength_max", 780.0)),
-    "segment": lambda d: SegmentLight(a=d["a"], b=d["b"], intensity=d.get("intensity", 1.0),
-                                      wavelength_min=d.get("wavelength_min", 380.0), wavelength_max=d.get("wavelength_max", 780.0)),
-    "beam": lambda d: BeamLight(origin=d["origin"], direction=d["direction"],
-                                angular_width=d.get("angular_width", 0.1), intensity=d.get("intensity", 1.0),
-                                wavelength_min=d.get("wavelength_min", 380.0), wavelength_max=d.get("wavelength_max", 780.0)),
+    "point": lambda d: PointLight(
+        pos=d["pos"],
+        intensity=d.get("intensity", 1.0),
+        wavelength_min=d.get("wavelength_min", 380.0),
+        wavelength_max=d.get("wavelength_max", 780.0),
+    ),
+    "segment": lambda d: SegmentLight(
+        a=d["a"],
+        b=d["b"],
+        intensity=d.get("intensity", 1.0),
+        wavelength_min=d.get("wavelength_min", 380.0),
+        wavelength_max=d.get("wavelength_max", 780.0),
+    ),
+    "beam": lambda d: BeamLight(
+        origin=d["origin"],
+        direction=d["direction"],
+        angular_width=d.get("angular_width", 0.1),
+        intensity=d.get("intensity", 1.0),
+        wavelength_min=d.get("wavelength_min", 380.0),
+        wavelength_max=d.get("wavelength_max", 780.0),
+    ),
 }
 
 
