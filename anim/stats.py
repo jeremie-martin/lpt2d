@@ -8,17 +8,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
+_LUM_WEIGHTS = np.array([218, 732, 74], dtype=np.uint32)
+
 
 @dataclass(frozen=True)
 class FrameStats:
-    """Numeric summary of a rendered frame's pixel values (0-255 scale)."""
+    """Numeric summary of a rendered frame (0-255 scale).
+
+    All metrics except pct_clipped use BT.709 luminance.
+    pct_clipped uses raw RGB channels (any channel == 255).
+    """
 
     mean: float  # mean luminance
-    max: int  # brightest pixel channel value
-    min: int  # darkest pixel channel value
+    max: int  # brightest pixel luminance
+    min: int  # darkest pixel luminance
     std: float  # standard deviation of luminance
     pct_black: float  # fraction of pixels with luminance < 1
-    pct_clipped: float  # fraction of pixels with any channel == 255
+    pct_clipped: float  # fraction of pixels with any RGB channel == 255
     p05: float  # 5th percentile luminance
     p50: float  # median luminance
     p95: float  # 95th percentile luminance
@@ -54,76 +62,56 @@ def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
         FrameStats with luminance and exposure metrics.
     """
     n_pixels = width * height
+    if n_pixels == 0:
+        raise ValueError("Cannot compute stats for a 0-pixel frame")
     if len(rgb) != n_pixels * 3:
         raise ValueError(f"Expected {n_pixels * 3} bytes, got {len(rgb)}")
 
-    # Compute luminance for each pixel: 0.2126*R + 0.7152*G + 0.0722*B
-    # Use integer math for speed (coefficients scaled by 1024)
-    lum_r, lum_g, lum_b = 218, 732, 74  # ~0.2126, ~0.7152, ~0.0722 scaled by 1024
+    arr = np.frombuffer(rgb, dtype=np.uint8).reshape(n_pixels, 3)
 
-    luminances = bytearray(n_pixels)
-    max_val = 0
-    min_val = 255
-    lum_sum = 0
-    lum_sq_sum = 0
-    black_count = 0
-    clipped_count = 0
+    # BT.709 luminance via matrix multiply (uint32 intermediate, >>10)
+    lum = (arr.astype(np.uint32) @ _LUM_WEIGHTS >> 10).astype(np.uint8)
 
-    for i in range(n_pixels):
-        off = i * 3
-        r, g, b = rgb[off], rgb[off + 1], rgb[off + 2]
-        lum = (r * lum_r + g * lum_g + b * lum_b) >> 10
-        if lum > 255:
-            lum = 255
-        luminances[i] = lum
-        lum_sum += lum
-        lum_sq_sum += lum * lum
-        if lum > max_val:
-            max_val = lum
-        if lum < min_val:
-            min_val = lum
-        if lum < 1:
-            black_count += 1
-        if r == 255 or g == 255 or b == 255:
-            clipped_count += 1
+    # Histogram-based stats (256 bins, exact for uint8)
+    hist = np.bincount(lum, minlength=256)
+    bins = np.arange(256, dtype=np.float64)
+    total = float(n_pixels)
 
-    # Also track raw channel max/min
-    raw_max = 0
-    raw_min = 255
-    for byte in rgb:
-        if byte > raw_max:
-            raw_max = byte
-        if byte < raw_min:
-            raw_min = byte
-
-    mean = lum_sum / n_pixels
-    variance = lum_sq_sum / n_pixels - mean * mean
+    mean = float(np.dot(hist, bins) / total)
+    variance = float(np.dot(hist, bins * bins) / total) - mean * mean
     std = variance**0.5 if variance > 0 else 0.0
 
-    # Percentiles via histogram (256 bins, exact for 8-bit)
-    histogram = [0] * 256
-    for lum in luminances:
-        histogram[lum] += 1
+    nonzero = np.nonzero(hist)[0]
+    lum_min = int(nonzero[0])
+    lum_max = int(nonzero[-1])
 
-    def percentile(p: float) -> float:
-        target = p * n_pixels
-        cumulative = 0
-        for val, count in enumerate(histogram):
-            cumulative += count
-            if cumulative >= target:
-                return float(val)
-        return 255.0
+    pct_black = float(hist[0] / total)
+    pct_clipped = float(
+        np.count_nonzero((arr[:, 0] == 255) | (arr[:, 1] == 255) | (arr[:, 2] == 255)) / total
+    )
+
+    # Percentiles from cumulative histogram
+    cdf = np.cumsum(hist)
+
+    def _percentile(p: float) -> float:
+        target = p * total
+        idx = np.searchsorted(cdf, target)
+        return float(min(idx, 255))
+
+    p05 = _percentile(0.05)
+    p50 = _percentile(0.50)
+    p95 = _percentile(0.95)
 
     return FrameStats(
         mean=mean,
-        max=raw_max,
-        min=raw_min,
+        max=lum_max,
+        min=lum_min,
         std=std,
-        pct_black=black_count / n_pixels,
-        pct_clipped=clipped_count / n_pixels,
-        p05=percentile(0.05),
-        p50=percentile(0.50),
-        p95=percentile(0.95),
+        pct_black=pct_black,
+        pct_clipped=pct_clipped,
+        p05=p05,
+        p50=p50,
+        p95=p95,
         width=width,
         height=height,
     )
