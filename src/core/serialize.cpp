@@ -502,8 +502,14 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
         }
     }
     if (auto* v = render->get("normalize")) {
-        fo.normalize = v->number != 0;
+        const auto& s = v->as_string();
+        if (s == "max") fo.normalize = NormalizeMode::Max;
+        else if (s == "rays") fo.normalize = NormalizeMode::Rays;
+        else if (s == "fixed") fo.normalize = NormalizeMode::Fixed;
+        else if (s == "off") fo.normalize = NormalizeMode::Off;
     }
+    if (auto* v = render->get("normalize_ref")) fo.normalize_ref = v->as_float();
+    if (auto* v = render->get("normalize_pct")) fo.normalize_pct = v->as_float();
 
     return fo;
 }

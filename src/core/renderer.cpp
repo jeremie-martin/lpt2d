@@ -346,7 +346,7 @@ void Renderer::create_wavelength_lut() {
     glBindTexture(GL_TEXTURE_1D, 0);
 }
 
-float Renderer::compute_max_gpu() {
+float Renderer::compute_max_gpu(float percentile) {
     // CPU readback via glReadPixels — the only reliable path on NVIDIA EGL.
     // texelFetch and glGetTexImage return stale/zero data after many
     // additive-blend draw operations (documented NVIDIA driver quirk).
@@ -356,13 +356,34 @@ float Renderer::compute_max_gpu() {
     glReadPixels(0, 0, width_, height_, GL_RGBA, GL_FLOAT, buf.data());
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    // Always compute the true max (for last_max_ / metadata).
     float max_val = 0.0f;
     for (size_t i = 0; i < buf.size(); i += 4) {
         max_val = std::max(max_val, buf[i]);
         max_val = std::max(max_val, buf[i + 1]);
         max_val = std::max(max_val, buf[i + 2]);
     }
-    return max_val;
+    last_max_ = max_val;
+
+    if (percentile >= 1.0f)
+        return max_val;
+
+    // Percentile path: collect per-pixel RGB max (non-zero only),
+    // use nth_element (O(n) average).
+    std::vector<float> lum;
+    lum.reserve(width_ * height_);
+    for (size_t i = 0; i < buf.size(); i += 4) {
+        float v = std::max({buf[i], buf[i + 1], buf[i + 2]});
+        if (v > 0.0f) lum.push_back(v);
+    }
+    if (lum.empty()) return 0.0f;
+    size_t idx = std::min((size_t)(percentile * (double)(lum.size() - 1)), lum.size() - 1);
+    std::nth_element(lum.begin(), lum.begin() + (ptrdiff_t)idx, lum.end());
+    return lum[idx];
+}
+
+float Renderer::compute_current_max() {
+    return compute_max_gpu(1.0f);
 }
 
 void Renderer::clear() {
@@ -371,6 +392,7 @@ void Renderer::clear() {
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     batch_counter_ = 0;
+    total_rays_ = 0;
 }
 
 // ─── Scene upload ────────────────────────────────────────────────────
@@ -659,6 +681,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         batch_counter_++;
     }
+    total_rays_ += (int64_t)cfg.batch_size * num_dispatches;
 
     // Final barrier before draw (need command barrier for indirect draw)
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
@@ -685,15 +708,26 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
 void Renderer::update_display(const PostProcess& pp) {
+    // compute_max_gpu sets last_max_ to the true max (always), and returns
+    // the percentile-based value (which equals max when normalize_pct >= 1.0).
+    float pct_val = compute_max_gpu(pp.normalize_pct);
+
     float divisor;
-    if (pp.normalize) {
-        divisor = compute_max_gpu();
-        if (divisor < 1e-6f)
-            divisor = 1.0f;
-    } else {
+    switch (pp.normalize) {
+    case NormalizeMode::Max:
+        divisor = (pct_val < 1e-6f) ? 1.0f : pct_val;
+        break;
+    case NormalizeMode::Rays:
+        divisor = (total_rays_ > 0) ? (float)total_rays_ : 1.0f;
+        break;
+    case NormalizeMode::Fixed:
+        divisor = (pp.normalize_ref > 0.0f) ? pp.normalize_ref : 1.0f;
+        break;
+    case NormalizeMode::Off:
+    default:
         divisor = 1.0f;
+        break;
     }
-    last_max_ = divisor;
 
     float exposure_mult = std::pow(2.0f, pp.exposure);
     float inv_gamma = 1.0f / pp.gamma;

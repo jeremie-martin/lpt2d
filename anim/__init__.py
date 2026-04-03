@@ -4,6 +4,7 @@ from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
+from .renderer import calibrate_normalize_ref as calibrate_normalize_ref
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
@@ -111,6 +112,7 @@ __all__ = [
     "FrameStats",
     "frame_stats",
     "mirror",
+    "calibrate_normalize_ref",
     "render",
     "render_contact_sheet",
     "render_stats",

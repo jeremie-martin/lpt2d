@@ -4,6 +4,7 @@
 #include "scenes.h"
 #include "serialize.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -25,7 +26,9 @@ static void print_usage() {
               << "  --gamma <float>          Gamma (default: 2.2)\n"
               << "  --tonemap <name>         none|reinhard|reinhardx|aces|log (default: aces)\n"
               << "  --white-point <float>    White point for reinhardx/log (default: 1)\n"
-              << "  --no-normalize           Disable per-frame auto-normalization (fixed exposure for animation)\n"
+              << "  --normalize <mode>       max|rays|fixed|off (default: max)\n"
+              << "  --normalize-ref <float>  Fixed divisor (for --normalize fixed)\n"
+              << "  --normalize-pct <float>  Percentile for max mode (default: 1.0, use 0.99 for P99)\n"
               << "  --stream                 Streaming mode: read JSON scenes from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -92,6 +95,8 @@ static int run_stream(int width, int height, int64_t default_rays,
         if (fo.white_point) pp.white_point = *fo.white_point;
         if (fo.tonemap) pp.tone_map = *fo.tonemap;
         if (fo.normalize.has_value()) pp.normalize = *fo.normalize;
+        if (fo.normalize_ref.has_value()) pp.normalize_ref = *fo.normalize_ref;
+        if (fo.normalize_pct.has_value()) pp.normalize_pct = *fo.normalize_pct;
 
         Bounds bounds;
         if (fo.bounds) {
@@ -123,7 +128,10 @@ static int run_stream(int width, int height, int64_t default_rays,
 
         auto t1 = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        std::cerr << "frame " << frame << ": " << rays << " rays, " << ms << "ms\n";
+        std::cerr << "frame " << frame << ": {\"rays\": " << rays
+                  << ", \"time_ms\": " << ms
+                  << ", \"max_hdr\": " << renderer.last_max()
+                  << ", \"total_rays\": " << renderer.total_rays() << "}\n";
         ++frame;
     }
 
@@ -171,8 +179,16 @@ int main(int argc, char** argv) {
                 pp.tone_map = ToneMap::ReinhardExtended;
             else if (tm == "aces") pp.tone_map = ToneMap::ACES;
             else if (tm == "log") pp.tone_map = ToneMap::Logarithmic;
-        } else if (std::strcmp(argv[i], "--no-normalize") == 0) {
-            pp.normalize = false;
+        } else if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
+            std::string m = argv[++i];
+            if (m == "max") pp.normalize = NormalizeMode::Max;
+            else if (m == "rays") pp.normalize = NormalizeMode::Rays;
+            else if (m == "fixed") pp.normalize = NormalizeMode::Fixed;
+            else if (m == "off") pp.normalize = NormalizeMode::Off;
+        } else if (std::strcmp(argv[i], "--normalize-ref") == 0 && i + 1 < argc) {
+            pp.normalize_ref = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--normalize-pct") == 0 && i + 1 < argc) {
+            pp.normalize_pct = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {

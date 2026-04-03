@@ -318,7 +318,7 @@ def animate(ctx: FrameContext) -> Frame:
         render=RenderOverrides(
             exposure=exposure,
             contrast=1.0,
-            normalize=True,
+            normalize="max",
             tonemap="reinhardx",
             white_point=float(WHITE_POINT(ctx.time)),
         ),

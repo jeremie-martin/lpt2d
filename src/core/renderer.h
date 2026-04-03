@@ -43,6 +43,10 @@ public:
     int width() const { return width_; }
     int height() const { return height_; }
     int num_lights() const { return num_lights_; }
+    int64_t total_rays() const { return total_rays_; }
+
+    // Compute current max luminance from the float accumulation buffer (CPU readback).
+    float compute_current_max();
 
 private:
     int width_ = 0, height_ = 0;
@@ -95,6 +99,7 @@ private:
     GLint trace_loc_wavelength_lut_ = -1;
 
     uint32_t batch_counter_ = 0;
+    int64_t total_rays_ = 0;
 
     // --- Instanced line drawing ---
     GLuint line_program_ = 0;
@@ -132,5 +137,5 @@ private:
     bool create_pp_shader();
     bool create_compute_shader();
     void create_wavelength_lut();
-    float compute_max_gpu();
+    float compute_max_gpu(float percentile = 1.0f);
 };

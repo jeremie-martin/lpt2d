@@ -135,7 +135,7 @@ def animate(ctx: FrameContext) -> Frame:
             groups=[make_box(), make_spheres(), make_fill_light(), make_beam(ctx.time)],
         ),
         render=RenderOverrides(
-            exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.4
+            exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.4, normalize="max"
         ),
     )
 

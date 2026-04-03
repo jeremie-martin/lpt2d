@@ -87,7 +87,7 @@ int App::run(const AppConfig& config) {
     TraceConfig tcfg;
     tcfg.batch_size = 50000;
     PostProcess pp;
-    int64_t total_rays = 0;
+    // total rays tracked by renderer.total_rays()
     bool paused = false;
     float frame_ms = 16.0f;
     bool show_wireframe = true;
@@ -103,7 +103,6 @@ int App::run(const AppConfig& config) {
         Bounds view = ed.camera.visible_bounds((float)win_w, (float)win_h);
         renderer.upload_scene(ed.scene, view);
         renderer.clear();
-        total_rays = 0;
         ed.dirty = true;
     };
 
@@ -200,7 +199,6 @@ int App::run(const AppConfig& config) {
         if (!paused && has_lights) {
             renderer.trace_and_draw(tcfg);
             glFinish();
-            total_rays += tcfg.batch_size;
         }
         renderer.update_display(pp);
 
@@ -427,7 +425,6 @@ int App::run(const AppConfig& config) {
                 ed.camera.center.y += delta.y / ed.camera.zoom;
                 renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                 renderer.clear();
-                total_rays = 0;
             }
 
             // Zoom: scroll wheel (cursor-centered)
@@ -443,7 +440,6 @@ int App::run(const AppConfig& config) {
                 cv = CameraView{ed.camera, (float)win_w, (float)win_h};
                 renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                 renderer.clear();
-                total_rays = 0;
             }
         }
 
@@ -938,6 +934,20 @@ int App::run(const AppConfig& config) {
             int tm = (int)pp.tone_map;
             if (ImGui::Combo("Tone map", &tm, tone_names, 5))
                 pp.tone_map = (ToneMap)tm;
+            const char* norm_names[] = {"Auto (Max)", "Ray Count", "Fixed Ref", "Off"};
+            int nm = (int)pp.normalize;
+            if (ImGui::Combo("Normalize", &nm, norm_names, 4))
+                pp.normalize = (NormalizeMode)nm;
+            if (pp.normalize == NormalizeMode::Max) {
+                ImGui::SliderFloat("Percentile", &pp.normalize_pct, 0.9f, 1.0f, "%.3f");
+            }
+            if (pp.normalize == NormalizeMode::Fixed) {
+                ImGui::SliderFloat("Ref value", &pp.normalize_ref, 1.0f, 1000000.0f,
+                                   "%.0f", ImGuiSliderFlags_Logarithmic);
+                if (ImGui::Button("Capture Ref")) {
+                    pp.normalize_ref = renderer.compute_current_max();
+                }
+            }
             ImGui::PopID();
         }
 
@@ -945,12 +955,13 @@ int App::run(const AppConfig& config) {
         if (ImGui::CollapsingHeader("Output", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Output");
             char ray_str[32];
-            if (total_rays >= 1'000'000)
-                std::snprintf(ray_str, sizeof(ray_str), "%.1fM", total_rays / 1e6);
-            else if (total_rays >= 1'000)
-                std::snprintf(ray_str, sizeof(ray_str), "%.1fK", total_rays / 1e3);
+            int64_t tr = renderer.total_rays();
+            if (tr >= 1'000'000)
+                std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
+            else if (tr >= 1'000)
+                std::snprintf(ray_str, sizeof(ray_str), "%.1fK", tr / 1e3);
             else
-                std::snprintf(ray_str, sizeof(ray_str), "%lld", (long long)total_rays);
+                std::snprintf(ray_str, sizeof(ray_str), "%lld", (long long)tr);
             ImGui::Text("Rays: %s", ray_str);
             ImGui::Text("Max HDR: %.2f", renderer.last_max());
             ImGui::Text("%.1f FPS (%.1f ms)", 1000.0f / frame_ms, frame_ms);
@@ -958,7 +969,6 @@ int App::run(const AppConfig& config) {
 
             if (ImGui::Button("Clear")) {
                 renderer.clear();
-                total_rays = 0;
             }
             ImGui::SameLine();
             if (ImGui::Button("Export PNG")) {
@@ -1252,13 +1262,11 @@ int App::run(const AppConfig& config) {
                     }
                     renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                     renderer.clear();
-                    total_rays = 0;
                 }
                 if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
                     renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                     renderer.clear();
-                    total_rays = 0;
                 }
 
                 // Space: pause

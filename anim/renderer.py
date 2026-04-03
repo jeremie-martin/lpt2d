@@ -52,8 +52,11 @@ class Renderer:
             "--white-point",
             str(settings.white_point),
         ]
-        if not settings.normalize:
-            cmd.append("--no-normalize")
+        cmd.extend(["--normalize", settings.normalize])
+        if settings.normalize_ref > 0:
+            cmd.extend(["--normalize-ref", str(settings.normalize_ref)])
+        if settings.normalize_pct < 1.0:
+            cmd.extend(["--normalize-pct", str(settings.normalize_pct)])
         self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -499,3 +502,94 @@ def render_stats(
     finally:
         renderer.close()
     return results
+
+
+def calibrate_normalize_ref(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    *,
+    settings: RenderSettings | str | None = None,
+    camera: Camera2D | None = None,
+    frame: int = 0,
+) -> float:
+    """Render one frame with auto-normalize to determine a good normalize_ref.
+
+    Spawns a separate CLI process with ``normalize=true``, renders the specified
+    frame, and parses the ``max_hdr`` value from the enriched stderr metadata.
+    The returned value can be used as ``RenderSettings.normalize_ref`` for
+    temporally stable animation renders.
+
+    Args:
+        animate: Callback receiving FrameContext, returning Scene or Frame.
+        timeline: Timeline object, or duration in seconds.
+        settings: RenderSettings, preset name, or None for defaults.
+        camera: Session-level camera.
+        frame: Frame index to calibrate on (default: 0).
+
+    Returns:
+        The HDR max value suitable for use as ``normalize_ref``.
+    """
+    if isinstance(timeline, (int, float)):
+        timeline = Timeline(duration=float(timeline))
+    if settings is None:
+        settings = RenderSettings()
+    elif isinstance(settings, str):
+        settings = RenderSettings.preset(settings)
+
+    # Build a calibration subprocess with normalize=true
+    cmd = [
+        settings.binary,
+        "--stream",
+        "--width", str(settings.width),
+        "--height", str(settings.height),
+        "--rays", str(settings.rays),
+        "--batch", str(settings.batch),
+        "--depth", str(settings.depth),
+        "--exposure", str(settings.exposure),
+        "--contrast", str(settings.contrast),
+        "--gamma", str(settings.gamma),
+        "--tonemap", settings.tonemap,
+        "--white-point", str(settings.white_point),
+        "--normalize", "max",  # force max mode so max_hdr is the real peak
+        "--normalize-pct", "1.0",  # ensure we get true max, not percentile
+    ]
+
+    ctx = FrameContext(
+        frame=frame,
+        time=timeline.time_at(frame),
+        progress=timeline.progress_at(frame),
+        fps=timeline.fps,
+        dt=timeline.dt,
+        total_frames=timeline.total_frames,
+        duration=timeline.duration,
+    )
+    result = animate(ctx)
+    f = result if isinstance(result, Frame) else Frame(scene=result)
+    wire = _build_wire_json(f, camera, settings.aspect)
+
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    stdin = _require_pipe(proc.stdin, "stdin")
+    stdout = _require_pipe(proc.stdout, "stdout")
+    stderr = _require_pipe(proc.stderr, "stderr")
+
+    stdin.write((wire + "\n").encode())
+    stdin.close()
+
+    # Read and discard the pixel data
+    frame_bytes = settings.width * settings.height * 3
+    stdout.read(frame_bytes)
+
+    stderr_text = stderr.read().decode()
+    proc.wait()
+
+    # Parse max_hdr from enriched stderr: "frame 0: {"rays": ..., "max_hdr": 1234.5}"
+    for line in stderr_text.splitlines():
+        if "max_hdr" in line:
+            colon_pos = line.find(": {")
+            if colon_pos >= 0:
+                data = json.loads(line[colon_pos + 2:])
+                return float(data["max_hdr"])
+
+    raise RuntimeError(f"Could not parse max_hdr from calibration output: {stderr_text!r}")

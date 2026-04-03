@@ -325,7 +325,11 @@ void main() {
     // Random wavelength → color (per-light spectral range)
     float wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
     vec3 rgb = wavelength_rgb(wavelength);
-    vec4 color = vec4(rgb * uIntensity, uIntensity);
+    // Scale by mean intensity (W/N) — the IS-correct factor that makes per-light
+    // intensity control actual brightness while keeping the total energy budget
+    // fixed for a given number of lights.  Equals 1 when all intensities are 1.
+    float power_scale = total_w / float(uNumLights);
+    vec4 color = vec4(rgb * uIntensity * power_scale, uIntensity * power_scale);
 
     // Trace
     float current_absorption = 0.0;

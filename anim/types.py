@@ -405,7 +405,9 @@ class RenderSettings:
     gamma: float = 2.2
     tonemap: str = "aces"
     white_point: float = 1.0
-    normalize: bool = False  # False = fixed exposure (animation default)
+    normalize: str = "rays"       # "max" | "rays" | "fixed" | "off"
+    normalize_ref: float = 0.0    # divisor for "fixed" mode
+    normalize_pct: float = 1.0    # percentile for "max" mode (1.0=max, 0.99=P99)
     binary: str = "./build/lpt2d-cli"
 
     @staticmethod
@@ -434,7 +436,9 @@ class RenderOverrides:
     gamma: float | None = None
     tonemap: str | None = None
     white_point: float | None = None
-    normalize: bool | None = None
+    normalize: str | None = None      # "max" | "rays" | "fixed" | "off"
+    normalize_ref: float | None = None
+    normalize_pct: float | None = None
 
     def to_dict(self) -> dict:
         return {

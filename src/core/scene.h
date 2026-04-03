@@ -216,13 +216,22 @@ struct LineSegment {
 
 enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 
+enum class NormalizeMode : int {
+    Max = 0,   // per-frame max pixel (or percentile) — interactive default
+    Rays = 1,  // total accumulated rays — stable across ray counts
+    Fixed = 2, // user-specified divisor (normalize_ref)
+    Off = 3,   // no normalization (divisor = 1.0)
+};
+
 struct PostProcess {
-    float exposure = 2.0f;   // stops (brighter default)
-    float contrast = 1.0f;   // centered at 0.5
-    float gamma = 2.2f;      // sRGB
+    float exposure = 2.0f;
+    float contrast = 1.0f;
+    float gamma = 2.2f;
     ToneMap tone_map = ToneMap::ACES;
     float white_point = 1.0f;
-    bool normalize = true;   // auto-normalize by max luminance (disable for animation)
+    NormalizeMode normalize = NormalizeMode::Max;
+    float normalize_ref = 0.0f; // divisor for Fixed mode
+    float normalize_pct = 1.0f; // percentile for Max mode (1.0=max, 0.99=P99)
 };
 
 // --- Utilities ---
