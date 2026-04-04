@@ -6,12 +6,23 @@ import json
 import math
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
-from .stats import FrameStats, frame_stats
-from .types import Camera2D, Canvas, Frame, FrameContext, FrameReport, Look, Quality, Scene, Shot, Timeline, TraceDefaults
+from .stats import FrameStats, QualityGate, check_quality, frame_stats
+from .types import (
+    Camera2D,
+    Canvas,
+    Frame,
+    FrameContext,
+    FrameReport,
+    Look,
+    Quality,
+    Scene,
+    Shot,
+    Timeline,
+    TraceDefaults,
+)
 
 DEFAULT_BINARY = "./build/lpt2d-cli"
 
@@ -120,6 +131,11 @@ class Renderer:
                         time_ms=meta.get("time_ms", 0),
                         max_hdr=meta.get("max_hdr", 0.0),
                         total_rays=meta.get("total_rays", 0),
+                        mean=meta.get("mean"),
+                        pct_black=meta.get("pct_black"),
+                        pct_clipped=meta.get("pct_clipped"),
+                        p50=meta.get("p50"),
+                        p95=meta.get("p95"),
                     )
                 except (json.JSONDecodeError, ValueError):
                     pass
@@ -310,6 +326,7 @@ def render(
     end: float | None = None,
     stride: int = 1,
     frame: int | None = None,
+    gate: QualityGate | None = None,
 ) -> None:
     """Render an animation to video or image sequence.
 
@@ -327,6 +344,7 @@ def render(
         end: End time in seconds (default: full duration).
         stride: Render every Nth frame (default: 1 = all frames).
         frame: Render a single frame by index. Overrides start/end/stride.
+        gate: Optional quality gate — prints warnings when thresholds are exceeded.
     """
     timeline, shot = _resolve_args(timeline, settings)
     width, height, aspect = shot.canvas.width, shot.canvas.height, shot.canvas.aspect
@@ -338,6 +356,7 @@ def render(
         out = FFmpegOutput(output, width, height, timeline.fps, codec, crf)
 
     renderer = Renderer(shot, binary=binary, fast=fast)
+    gate_warnings: list[str] = []
 
     def _render_frame(i: int) -> bytes:
         ctx = timeline.context_at(i)
@@ -346,10 +365,23 @@ def render(
         wire = _build_wire_json(f, camera, aspect)
         return renderer.render_frame(wire)
 
+    def _check_gate(frame_idx: int) -> None:
+        if gate is None:
+            return
+        rpt = renderer.last_report
+        if rpt is None:
+            return
+        warns = check_quality(rpt, gate)
+        for w in warns:
+            msg = f"frame {frame_idx}: WARN: {w}"
+            gate_warnings.append(msg)
+            sys.stderr.write(f"\n  {msg}")
+
     try:
         if frame is not None:
             # Single-frame mode
             out.write_frame(_render_frame(frame))
+            _check_gate(frame)
             rpt = renderer.last_report
             ms = f", {rpt.time_ms}ms" if rpt else ""
             sys.stderr.write(f"frame {frame} ({timeline.time_at(frame):.2f}s{ms})\n")
@@ -364,11 +396,15 @@ def render(
 
             for idx, i in enumerate(frames):
                 out.write_frame(_render_frame(i))
+                _check_gate(i)
                 rpt = renderer.last_report
                 ms = f" {rpt.time_ms}ms" if rpt else ""
                 sys.stderr.write(f"\rframe {idx + 1}/{total} ({timeline.time_at(i):.2f}s{ms})")
                 sys.stderr.flush()
             sys.stderr.write("\n")
+
+        if gate_warnings:
+            sys.stderr.write(f"Quality gate: {len(gate_warnings)} warning(s)\n")
     finally:
         out.close()
         renderer.close()
@@ -540,7 +576,13 @@ def auto_look(
     )
 
     stats_results = render_stats(
-        animate, timeline, frames=frame, settings=draft_shot, camera=camera, binary=binary, fast=True,
+        animate,
+        timeline,
+        frames=frame,
+        settings=draft_shot,
+        camera=camera,
+        binary=binary,
+        fast=True,
     )
     if not stats_results:
         return Look(tonemap=tonemap, normalize=normalize)
@@ -565,7 +607,9 @@ def auto_look(
 
     # For fixed normalization, calibrate the reference value
     if normalize == "fixed":
-        ref = calibrate_normalize_ref(animate, timeline, settings=draft_shot, camera=camera, binary=binary, frame=frame)
+        ref = calibrate_normalize_ref(
+            animate, timeline, settings=draft_shot, camera=camera, binary=binary, frame=frame
+        )
         result.normalize_ref = ref
 
     return result
@@ -589,7 +633,7 @@ def calibrate_normalize_ref(
     timeline, shot = _resolve_args(timeline, settings)
 
     # Force max mode so the C++ renderer computes and reports true HDR peak.
-    cal_shot = replace(shot, look=replace(shot.look, normalize="max", normalize_pct=1.0))
+    cal_shot = shot.with_look(normalize="max", normalize_pct=1.0)
 
     renderer = Renderer(cal_shot, binary=binary, fast=fast)
     try:

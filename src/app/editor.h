@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -127,7 +128,7 @@ struct Clipboard {
 
 // ─── Editor tools ──────────────────────────────────────────────────────
 
-enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, PointLight, SegmentLight, BeamLight, Erase };
+enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight, Erase, Measure };
 
 // Camera handle identifiers for interactive frame editing
 enum class CameraHandle : int {
@@ -190,6 +191,40 @@ struct EditorState {
     bool dirty = false;
     std::string save_path;
 
+    // Visibility (editor-only, not serialized, not undo-tracked)
+    std::set<int> hidden_shapes;
+    std::set<int> hidden_lights;
+    std::set<int> hidden_groups;
+    int solo_light = -1; // -1 = off, >= 0 = only this light rendered
+
+    // Grid
+    bool show_grid = false;
+    bool snap_to_grid = false;
+
+    // Measurement tool
+    bool measure_active = false;
+    Vec2 measure_start{};
+
+    // ── Visibility helpers ─────────────────────────────────────────
+
+    bool is_shape_visible(int i) const { return hidden_shapes.find(i) == hidden_shapes.end(); }
+    bool is_light_visible(int i) const { return hidden_lights.find(i) == hidden_lights.end(); }
+    bool is_group_visible(int i) const { return hidden_groups.find(i) == hidden_groups.end(); }
+
+    void toggle_shape_visibility(int i) {
+        if (hidden_shapes.count(i)) hidden_shapes.erase(i); else hidden_shapes.insert(i);
+    }
+    void toggle_light_visibility(int i) {
+        if (hidden_lights.count(i)) hidden_lights.erase(i); else hidden_lights.insert(i);
+    }
+    void toggle_group_visibility(int i) {
+        if (hidden_groups.count(i)) hidden_groups.erase(i); else hidden_groups.insert(i);
+    }
+    void show_all() {
+        hidden_shapes.clear(); hidden_lights.clear(); hidden_groups.clear();
+        solo_light = -1;
+    }
+
     // ── Selection helpers ───────────────────────────────────────────
 
     bool is_selected(ObjectId id) const {
@@ -250,6 +285,11 @@ struct EditorState {
         if (editing_group >= (int)sc.groups.size()) {
             editing_group = -1;
         }
+        // Prune stale visibility indices
+        std::erase_if(hidden_shapes, [&](int i) { return i >= (int)sc.shapes.size(); });
+        std::erase_if(hidden_lights, [&](int i) { return i >= (int)sc.lights.size(); });
+        std::erase_if(hidden_groups, [&](int i) { return i >= (int)sc.groups.size(); });
+        if (solo_light >= (int)sc.lights.size()) solo_light = -1;
     }
 };
 

@@ -103,15 +103,45 @@ int App::run(const AppConfig& config) {
         };
     };
 
+    // Build a filtered scene applying editor visibility/solo state.
+    auto build_render_scene = [&]() -> Scene {
+        Scene filtered;
+        filtered.materials = ed.shot.scene.materials;
+        for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i)
+            if (ed.is_shape_visible(i))
+                filtered.shapes.push_back(ed.shot.scene.shapes[i]);
+        if (ed.solo_light >= 0) {
+            if (ed.solo_light < (int)ed.shot.scene.lights.size())
+                filtered.lights.push_back(ed.shot.scene.lights[ed.solo_light]);
+        } else {
+            for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i)
+                if (ed.is_light_visible(i))
+                    filtered.lights.push_back(ed.shot.scene.lights[i]);
+        }
+        for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
+            if (!ed.is_group_visible(i)) continue;
+            if (ed.solo_light >= 0) {
+                // Solo mode: copy group shapes but strip lights (solo only applies to top-level lights)
+                Group g = ed.shot.scene.groups[i];
+                g.lights.clear();
+                filtered.groups.push_back(std::move(g));
+            } else {
+                filtered.groups.push_back(ed.shot.scene.groups[i]);
+            }
+        }
+        return filtered;
+    };
+
     // Reload: re-upload scene to GPU, clear accumulation
     // Renderer viewport always tracks the camera's visible bounds.
+    // Bounds computed from FULL scene (hiding objects doesn't shift viewport).
     auto reload = [&]() {
         if (ed.shot.scene.shapes.empty() && ed.shot.scene.lights.empty() && ed.shot.scene.groups.empty())
             ed.scene_bounds = {{-1, -1}, {1, 1}};
         else
             ed.scene_bounds = compute_bounds(ed.shot.scene);
         Bounds view = ed.camera.visible_bounds((float)win_w, (float)win_h);
-        renderer.upload_scene(ed.shot.scene, view);
+        renderer.upload_scene(build_render_scene(), view);
         renderer.clear();
         ed.dirty = true;
     };
@@ -172,6 +202,11 @@ int App::run(const AppConfig& config) {
                 ed.shot.scene.groups.erase(ed.shot.scene.groups.begin() + id.index);
         }
         ed.clear_selection();
+        // Clear visibility state (indices shifted after deletion)
+        ed.hidden_shapes.clear();
+        ed.hidden_lights.clear();
+        ed.hidden_groups.clear();
+        if (ed.solo_light >= (int)ed.shot.scene.lights.size()) ed.solo_light = -1;
         reload();
         return true;
     };
@@ -236,6 +271,14 @@ int App::run(const AppConfig& config) {
 
         bool vp_hovered = ImGui::IsWindowHovered();
 
+        // ── Grid overlay ───────────────────────────────────────────────
+        float grid_spacing = 0;
+        if (ed.show_grid) {
+            ImDrawList* gdl = ImGui::GetWindowDrawList();
+            grid_spacing = adaptive_grid_spacing(cv.cam.zoom);
+            draw_grid(gdl, cv, grid_spacing);
+        }
+
         // ── Wireframe overlay ───────────────────────────────────────────
 
         if (show_wireframe) {
@@ -245,15 +288,17 @@ int App::run(const AppConfig& config) {
                 ObjectId id{ObjectId::Shape, i};
                 bool is_sel = ed.is_selected(id);
                 bool is_hov = (ed.hovered == id);
-                ImU32 col = is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE);
-                float th = (is_sel ? 2.5f : 1.5f) * dpi_scale;
+                bool hidden = !ed.is_shape_visible(i);
+                ImU32 col = hidden ? IM_COL32(100, 100, 110, 30)
+                                   : (is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE));
+                float th = hidden ? 1.0f * dpi_scale : (is_sel ? 2.5f : 1.5f) * dpi_scale;
 
                 if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.shapes.size()) {
-                    // Ghost at original position (dim)
                     draw_shape_overlay(dl, cv, ed.transform.snapshot.shapes[i], COL_GHOST_SHAPE, 1.0f * dpi_scale);
-                    // Live scene already has the transformed position
                     draw_shape_overlay(dl, cv, ed.shot.scene.shapes[i], COL_SHAPE_SEL, 2.5f * dpi_scale);
                 } else {
+                    if (is_sel && !hidden && !ed.transform.active())
+                        draw_shape_overlay(dl, cv, ed.shot.scene.shapes[i], COL_SHAPE_SEL_GLOW, 6.0f * dpi_scale);
                     draw_shape_overlay(dl, cv, ed.shot.scene.shapes[i], col, th);
                 }
             }
@@ -262,13 +307,13 @@ int App::run(const AppConfig& config) {
                 ObjectId id{ObjectId::Light, i};
                 bool is_sel = ed.is_selected(id);
                 bool is_hov = (ed.hovered == id);
-                ImU32 col = is_sel ? COL_LIGHT_SEL : (is_hov ? COL_LIGHT_HOV : COL_LIGHT);
-                float th = (is_sel ? 3.0f : 2.0f) * dpi_scale;
+                bool hidden = !ed.is_light_visible(i);
+                ImU32 col = hidden ? IM_COL32(200, 180, 40, 30)
+                                   : (is_sel ? COL_LIGHT_SEL : (is_hov ? COL_LIGHT_HOV : COL_LIGHT));
+                float th = hidden ? 1.0f * dpi_scale : (is_sel ? 3.0f : 2.0f) * dpi_scale;
 
                 if (ed.transform.active() && is_sel && i < (int)ed.transform.snapshot.lights.size()) {
-                    // Ghost at original position (dim)
                     draw_light_overlay(dl, cv, ed.transform.snapshot.lights[i], COL_GHOST_LIGHT, 1.0f * dpi_scale, dpi_scale);
-                    // Live scene already has the transformed position
                     draw_light_overlay(dl, cv, ed.shot.scene.lights[i], COL_LIGHT_SEL, 3.0f * dpi_scale, dpi_scale);
                 } else {
                     draw_light_overlay(dl, cv, ed.shot.scene.lights[i], col, th, dpi_scale);
@@ -280,6 +325,7 @@ int App::run(const AppConfig& config) {
                 ObjectId gid{ObjectId::Group, g};
                 bool is_sel = ed.is_selected(gid);
                 bool is_hov = (ed.hovered == gid);
+                bool hidden = !ed.is_group_visible(g);
 
                 const auto& group = ed.shot.scene.groups[g];
 
@@ -296,10 +342,12 @@ int App::run(const AppConfig& config) {
                     }
                 }
 
-                ImU32 shape_col = is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE);
-                ImU32 light_col = is_sel ? COL_LIGHT_SEL : (is_hov ? COL_LIGHT_HOV : COL_LIGHT);
-                float s_th = (is_sel ? 2.5f : 1.5f) * dpi_scale;
-                float l_th = (is_sel ? 3.0f : 2.0f) * dpi_scale;
+                ImU32 shape_col = hidden ? IM_COL32(100, 100, 110, 30)
+                                        : (is_sel ? COL_SHAPE_SEL : (is_hov ? COL_SHAPE_HOV : COL_SHAPE));
+                ImU32 light_col = hidden ? IM_COL32(200, 180, 40, 30)
+                                        : (is_sel ? COL_LIGHT_SEL : (is_hov ? COL_LIGHT_HOV : COL_LIGHT));
+                float s_th = hidden ? 1.0f * dpi_scale : (is_sel ? 2.5f : 1.5f) * dpi_scale;
+                float l_th = hidden ? 1.0f * dpi_scale : (is_sel ? 3.0f : 2.0f) * dpi_scale;
 
                 for (const auto& s : group.shapes) {
                     Shape ws = transform_shape(s, group.transform);
@@ -346,7 +394,7 @@ int App::run(const AppConfig& config) {
                     ImVec2 b = io.MousePos;
                     dl->AddRect(ImVec2(std::min(a.x,b.x), std::min(a.y,b.y)),
                                 ImVec2(std::max(a.x,b.x), std::max(a.y,b.y)), COL_PREVIEW, 0.0f, 0, 1.5f * dpi_scale);
-                } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier) {
+                } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier || ed.tool == EditTool::ParallelBeamLight) {
                     dl->AddLine(cv.to_screen(ed.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
             }
@@ -406,6 +454,28 @@ int App::run(const AppConfig& config) {
             }
         }
 
+        // ── Measurement overlay ──────────────────────────────────────────
+        if (ed.tool == EditTool::Measure && ed.measure_active) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImU32 meas_col = IM_COL32(0, 255, 180, 200);
+            Vec2 mend = cv.to_world(io.MousePos);
+            if (ed.snap_to_grid && ed.show_grid && grid_spacing > 0)
+                mend = snap_to_grid_pos(mend, grid_spacing);
+            ImVec2 s0 = cv.to_screen(ed.measure_start);
+            ImVec2 s1 = cv.to_screen(mend);
+            dl->AddLine(s0, s1, meas_col, 1.5f * dpi_scale);
+            dl->AddCircleFilled(s0, 3.0f * dpi_scale, meas_col);
+            dl->AddCircleFilled(s1, 3.0f * dpi_scale, meas_col);
+            Vec2 delta = mend - ed.measure_start;
+            float dist = delta.length();
+            float angle_deg = std::atan2(delta.y, delta.x) * 180.0f / PI;
+            char mtext[128];
+            std::snprintf(mtext, sizeof(mtext), "d=%.4f  a=%.1f deg  dx=%.4f  dy=%.4f",
+                          dist, angle_deg, delta.x, delta.y);
+            ImVec2 mid = {(s0.x + s1.x) * 0.5f, std::min(s0.y, s1.y) - 20.0f * dpi_scale};
+            dl->AddText(mid, meas_col, mtext);
+        }
+
         // ── Camera frame overlay ───────────────────────────────────────
         // Resolve camera bounds once per frame for both drawing and interaction
         struct CamHandlePt { CameraHandle id; Vec2 pos; };
@@ -458,7 +528,9 @@ int App::run(const AppConfig& config) {
 
         // ── Mouse interaction ───────────────────────────────────────────
 
-        Vec2 mw = cv.to_world(io.MousePos);
+        Vec2 mw_raw = cv.to_world(io.MousePos);
+        bool snapping = ed.snap_to_grid && ed.show_grid && grid_spacing > 0;
+        Vec2 mw = snapping ? snap_to_grid_pos(mw_raw, grid_spacing) : mw_raw;
         float hit_thresh = 8.0f / cv.cam.zoom;
 
         // Camera handle interaction (hover + start drag)
@@ -520,7 +592,7 @@ int App::run(const AppConfig& config) {
         // Hover detection (Select tool only, skip during camera drag)
         if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()
             && ed.cam_handle_dragging == CameraHandle::None) {
-            ObjectId hit = hit_test(mw, ed.shot.scene, hit_thresh, ed.editing_group);
+            ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
             ed.hovered = hit;
         } else if (!vp_hovered) {
             ed.hovered = {ObjectId::Shape, -1};
@@ -568,12 +640,12 @@ int App::run(const AppConfig& config) {
             if (ImGui::IsMouseDoubleClicked(0) && ed.tool == EditTool::Select) {
                 if (ed.editing_group < 0) {
                     // Not inside a group — double-click on group member enters it
-                    ObjectId hit = hit_test(mw, ed.shot.scene, hit_thresh, -1);
+                    ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, -1);
                     if (hit.type == ObjectId::Group && hit.index >= 0) {
                         ed.editing_group = hit.index;
                         ed.clear_selection();
                         // Select the specific member that was clicked
-                        ObjectId member = hit_test(mw, ed.shot.scene, hit_thresh, ed.editing_group);
+                        ObjectId member = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
                         if (member.index >= 0) ed.select(member);
                         reload();
                     }
@@ -584,7 +656,7 @@ int App::run(const AppConfig& config) {
                 if (ed.tool == EditTool::Select) {
                     // Check handle hit first
                     auto handles = get_handles(ed.shot.scene, ed.selection);
-                    int h_idx = handle_hit_test(handles, mw, hit_thresh);
+                    int h_idx = handle_hit_test(handles, mw_raw, hit_thresh);
 
                     if (h_idx >= 0) {
                         // Start handle drag
@@ -593,7 +665,7 @@ int App::run(const AppConfig& config) {
                         ed.active_handle = handles[h_idx];
                     } else {
                         // Hit test objects
-                        ObjectId hit = hit_test(mw, ed.shot.scene, hit_thresh, ed.editing_group);
+                        ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
 
                         if (hit.index >= 0) {
                             if (io.KeyShift) {
@@ -609,21 +681,23 @@ int App::run(const AppConfig& config) {
                             for (auto& sid : ed.selection) {
                                 if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) {
                                     std::visit(overloaded{
-                                        [&](const Circle& ci) { ed.drag_offsets.push_back({ci.center - mw, {}}); },
-                                        [&](const Segment& s) { ed.drag_offsets.push_back({s.a - mw, s.b - mw}); },
-                                        [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw, {}}); },
-                                        [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw, b.p2 - mw}); },
-                                        [&](const Polygon& p) { ed.drag_offsets.push_back({p.centroid() - mw, {}}); },
+                                        [&](const Circle& ci) { ed.drag_offsets.push_back({ci.center - mw_raw, {}}); },
+                                        [&](const Segment& s) { ed.drag_offsets.push_back({s.a - mw_raw, s.b - mw_raw}); },
+                                        [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw_raw, {}}); },
+                                        [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw_raw, b.p2 - mw_raw}); },
+                                        [&](const Polygon& p) { ed.drag_offsets.push_back({p.centroid() - mw_raw, {}}); },
                                     }, *shape);
                                 } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                                     std::visit(overloaded{
-                                        [&](const PointLight& l) { ed.drag_offsets.push_back({l.pos - mw, {}}); },
-                                        [&](const SegmentLight& l) { ed.drag_offsets.push_back({l.a - mw, l.b - mw}); },
-                                        [&](const BeamLight& l) { ed.drag_offsets.push_back({l.origin - mw, {}}); },
+                                        [&](const PointLight& l) { ed.drag_offsets.push_back({l.pos - mw_raw, {}}); },
+                                        [&](const SegmentLight& l) { ed.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
+                                        [&](const BeamLight& l) { ed.drag_offsets.push_back({l.origin - mw_raw, {}}); },
+                                        [&](const ParallelBeamLight& l) { ed.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
+                                        [&](const SpotLight& l) { ed.drag_offsets.push_back({l.pos - mw_raw, {}}); },
                                     }, *light);
                                 } else if (sid.type == ObjectId::Group) {
                                     auto& g = ed.shot.scene.groups[sid.index];
-                                    ed.drag_offsets.push_back({g.transform.translate - mw, {}});
+                                    ed.drag_offsets.push_back({g.transform.translate - mw_raw, {}});
                                 }
                             }
                         } else {
@@ -634,7 +708,7 @@ int App::run(const AppConfig& config) {
                         }
                     }
                 } else if (ed.tool == EditTool::Erase) {
-                    ObjectId hit = hit_test(mw, ed.shot.scene, hit_thresh, ed.editing_group);
+                    ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
                     if (hit.index >= 0) {
                         ed.clear_selection();
                         ed.select(hit);
@@ -652,6 +726,19 @@ int App::run(const AppConfig& config) {
                     ed.clear_selection();
                     ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
                     reload();
+                } else if (ed.tool == EditTool::SpotLight) {
+                    ed.undo.push(ed.shot.scene);
+                    ed.shot.scene.lights.push_back(SpotLight{mw, {1.0f, 0.0f}, 0.5f, 2.0f, 1.0f});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    reload();
+                } else if (ed.tool == EditTool::Measure) {
+                    if (!ed.measure_active) {
+                        ed.measure_start = mw;
+                        ed.measure_active = true;
+                    } else {
+                        ed.measure_active = false;
+                    }
                 } else {
                     ed.creating = true;
                     ed.create_start = mw;
@@ -691,6 +778,8 @@ int App::run(const AppConfig& config) {
                         [&](PointLight& l) { l.pos = mw + off.a; },
                         [&](SegmentLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
                         [&](BeamLight& l) { l.origin = mw + off.a; },
+                        [&](ParallelBeamLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
+                        [&](SpotLight& l) { l.pos = mw + off.a; },
                     }, *light);
                 } else if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()) {
                     ed.shot.scene.groups[sid.index].transform.translate = mw + off.a;
@@ -741,6 +830,13 @@ int App::run(const AppConfig& config) {
                     created = true;
                 } else if (ed.tool == EditTool::SegmentLight && dist > 0.01f) {
                     ed.shot.scene.lights.push_back(SegmentLight{ed.create_start, end, 1.0f});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::ParallelBeamLight && dist > 0.01f) {
+                    Vec2 seg_dir = end - ed.create_start;
+                    Vec2 perp = Vec2{-seg_dir.y, seg_dir.x}.normalized();
+                    ed.shot.scene.lights.push_back(ParallelBeamLight{ed.create_start, end, perp, 0.0f, 1.0f});
                     ed.clear_selection();
                     ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
                     created = true;
@@ -867,8 +963,16 @@ int App::run(const AppConfig& config) {
             tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
             tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
             tbtn("Beam", EditTool::BeamLight);
+            tbtn("Par.Beam", EditTool::ParallelBeamLight); ImGui::SameLine();
+            tbtn("Spot", EditTool::SpotLight); ImGui::SameLine();
+            tbtn("Measure", EditTool::Measure);
 
             ImGui::Checkbox("Wireframe overlay", &show_wireframe);
+            ImGui::Checkbox("Grid", &ed.show_grid);
+            if (ed.show_grid) {
+                ImGui::SameLine();
+                ImGui::Checkbox("Snap", &ed.snap_to_grid);
+            }
             ImGui::PopID();
         }
 
@@ -927,6 +1031,11 @@ int App::run(const AppConfig& config) {
         // -- Objects --
         if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Objects");
+            if (ImGui::SmallButton("Show All")) { ed.show_all(); reload(); }
+            if (ed.solo_light >= 0) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: Light %d", ed.solo_light);
+            }
             int n_items = (int)(ed.shot.scene.shapes.size() + ed.shot.scene.lights.size() + ed.shot.scene.groups.size());
             float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
                                  40.0f, 200.0f * dpi_scale);
@@ -953,6 +1062,14 @@ int App::run(const AppConfig& config) {
                         std::snprintf(lbl, sizeof(lbl), "Polygon %d [%dv] (%s)", i, (int)p.vertices.size(), material_name(p.material));
                     },
                 }, ed.shot.scene.shapes[i]);
+                // Visibility toggle
+                ImGui::PushID(i + 10000);
+                bool svis = ed.is_shape_visible(i);
+                if (ImGui::SmallButton(svis ? "o" : "-")) {
+                    ed.toggle_shape_visibility(i); reload();
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
                 // Material color swatch
                 ImVec4 mc = std::visit([](const auto& s) { return material_color(s.material); }, ed.shot.scene.shapes[i]);
                 ImGui::PushID(i);
@@ -979,7 +1096,29 @@ int App::run(const AppConfig& config) {
                     [&](const BeamLight& l) {
                         std::snprintf(lbl, sizeof(lbl), "Beam Light %d (I=%.1f)", i, l.intensity);
                     },
+                    [&](const ParallelBeamLight& l) {
+                        std::snprintf(lbl, sizeof(lbl), "Par. Beam %d (I=%.1f)", i, l.intensity);
+                    },
+                    [&](const SpotLight& l) {
+                        std::snprintf(lbl, sizeof(lbl), "Spot Light %d (I=%.1f)", i, l.intensity);
+                    },
                 }, ed.shot.scene.lights[i]);
+                // Visibility toggle
+                ImGui::PushID(i + 20000);
+                bool lvis = ed.is_light_visible(i);
+                if (ImGui::SmallButton(lvis ? "o" : "-")) {
+                    ed.toggle_light_visibility(i); reload();
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
+                // Solo toggle
+                ImGui::PushID(i + 30000);
+                bool is_solo = (ed.solo_light == i);
+                if (ImGui::SmallButton(is_solo ? "S" : "s")) {
+                    ed.solo_light = is_solo ? -1 : i; reload();
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
                 if (ImGui::Selectable(lbl, is_sel)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
@@ -997,6 +1136,14 @@ int App::run(const AppConfig& config) {
                     std::snprintf(lbl, sizeof(lbl), "%sGroup %d (%d items)", is_editing ? "> " : "", i, n_members);
                 else
                     std::snprintf(lbl, sizeof(lbl), "%s%s (%d items)", is_editing ? "> " : "", group.name.c_str(), n_members);
+                // Visibility toggle
+                ImGui::PushID(i + 40000);
+                bool gvis = ed.is_group_visible(i);
+                if (ImGui::SmallButton(gvis ? "o" : "-")) {
+                    ed.toggle_group_visibility(i); reload();
+                }
+                ImGui::PopID();
+                ImGui::SameLine();
                 if (ImGui::Selectable(lbl, is_sel || is_editing)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
@@ -1152,6 +1299,26 @@ int App::run(const AppConfig& config) {
                         if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
                         else l.direction = {1.0f, 0.0f};
                         changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.01f, PI);
+                        changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
+                        edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    },
+                    [&](ParallelBeamLight& l) {
+                        changed |= ImGui::DragFloat2("Point A", &l.a.x, 0.01f);
+                        changed |= ImGui::DragFloat2("Point B", &l.b.x, 0.01f);
+                        changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
+                        if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+                        else l.direction = {1.0f, 0.0f};
+                        changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.0f, PI);
+                        changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
+                        edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    },
+                    [&](SpotLight& l) {
+                        changed |= ImGui::DragFloat2("Position", &l.pos.x, 0.01f);
+                        changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
+                        if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+                        else l.direction = {1.0f, 0.0f};
+                        changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.01f, PI);
+                        changed |= ImGui::SliderFloat("Falloff", &l.falloff, 0.0f, 20.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
                         changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
                         edit_wavelength(l.wavelength_min, l.wavelength_max);
                     },
@@ -1327,6 +1494,33 @@ int App::run(const AppConfig& config) {
         // -- Display --
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Display");
+
+            // Look presets
+            static const struct { const char* name; float exp; float contrast; float gamma;
+                                  ToneMap tm; float wp; NormalizeMode norm; float ambient; } look_presets[] = {
+                {"Default",       2.0f, 1.0f, 2.2f, ToneMap::ACES,             1.0f, NormalizeMode::Rays, 0.0f},
+                {"Bright",        4.0f, 1.1f, 2.2f, ToneMap::ACES,             1.5f, NormalizeMode::Rays, 0.0f},
+                {"Dark/Moody",    1.0f, 1.3f, 2.4f, ToneMap::ACES,             0.8f, NormalizeMode::Rays, 0.0f},
+                {"Linear",        0.0f, 1.0f, 1.0f, ToneMap::None,             1.0f, NormalizeMode::Max,  0.0f},
+                {"High Contrast", 3.0f, 1.5f, 2.2f, ToneMap::ReinhardExtended, 2.0f, NormalizeMode::Rays, 0.0f},
+                {"Soft",          2.5f, 0.8f, 2.0f, ToneMap::Reinhard,         1.0f, NormalizeMode::Rays, 0.02f},
+            };
+            if (ImGui::BeginCombo("Preset", "(select)")) {
+                for (auto& p : look_presets) {
+                    if (ImGui::Selectable(p.name)) {
+                        ed.shot.look.exposure = p.exp;
+                        ed.shot.look.contrast = p.contrast;
+                        ed.shot.look.gamma = p.gamma;
+                        ed.shot.look.tone_map = p.tm;
+                        ed.shot.look.white_point = p.wp;
+                        ed.shot.look.normalize = p.norm;
+                        ed.shot.look.ambient = p.ambient;
+                        // Preserve scene-specific: normalize_ref, normalize_pct, background, opacity
+                    }
+                }
+                ImGui::EndCombo();
+            }
+
             ImGui::SliderFloat("Exposure", &ed.shot.look.exposure, -15.0f, 15.0f);
             ImGui::SliderFloat("Contrast", &ed.shot.look.contrast, 0.1f, 3.0f);
             ImGui::SliderFloat("Gamma", &ed.shot.look.gamma, 0.5f, 4.0f);
@@ -1644,15 +1838,34 @@ int App::run(const AppConfig& config) {
 
                 // Tool switching
                 if (!io.KeyCtrl && !io.KeyAlt) {
-                    if (ImGui::IsKeyPressed(ImGuiKey_Q)) ed.tool = EditTool::Select;
-                    if (ImGui::IsKeyPressed(ImGuiKey_C)) ed.tool = EditTool::Circle;
-                    if (ImGui::IsKeyPressed(ImGuiKey_L)) ed.tool = EditTool::Segment;
-                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) ed.tool = EditTool::Arc;
-                    if (ImGui::IsKeyPressed(ImGuiKey_B)) ed.tool = EditTool::Bezier;
-                    if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.transform.active()) ed.tool = EditTool::Erase;
-                    if (ImGui::IsKeyPressed(ImGuiKey_P)) ed.tool = EditTool::PointLight;
-                    if (ImGui::IsKeyPressed(ImGuiKey_T)) ed.tool = EditTool::SegmentLight;
-                    if (ImGui::IsKeyPressed(ImGuiKey_W)) ed.tool = EditTool::BeamLight;
+                    auto switch_tool = [&](EditTool t) {
+                        if (ed.tool == EditTool::Measure) ed.measure_active = false;
+                        ed.tool = t;
+                    };
+                    if (ImGui::IsKeyPressed(ImGuiKey_Q)) switch_tool(EditTool::Select);
+                    if (ImGui::IsKeyPressed(ImGuiKey_C)) switch_tool(EditTool::Circle);
+                    if (ImGui::IsKeyPressed(ImGuiKey_L)) switch_tool(EditTool::Segment);
+                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) switch_tool(EditTool::Arc);
+                    if (ImGui::IsKeyPressed(ImGuiKey_B)) switch_tool(EditTool::Bezier);
+                    if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.transform.active()) switch_tool(EditTool::Erase);
+                    if (ImGui::IsKeyPressed(ImGuiKey_P)) switch_tool(EditTool::PointLight);
+                    if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);
+                    if (ImGui::IsKeyPressed(ImGuiKey_W)) switch_tool(EditTool::BeamLight);
+                    if (ImGui::IsKeyPressed(ImGuiKey_M)) switch_tool(EditTool::Measure);
+                }
+
+                // Visibility: H = toggle selected, Alt+H = show all
+                if (ImGui::IsKeyPressed(ImGuiKey_H)) {
+                    if (io.KeyAlt) {
+                        ed.show_all();
+                    } else {
+                        for (auto& sid : ed.selection) {
+                            if (sid.type == ObjectId::Shape) ed.toggle_shape_visibility(sid.index);
+                            else if (sid.type == ObjectId::Light) ed.toggle_light_visibility(sid.index);
+                            else if (sid.type == ObjectId::Group) ed.toggle_group_visibility(sid.index);
+                        }
+                    }
+                    reload();
                 }
 
                 // Fit to view
@@ -1683,7 +1896,9 @@ int App::run(const AppConfig& config) {
 
                 // Escape cascade
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                    if (ed.creating) {
+                    if (ed.tool == EditTool::Measure && ed.measure_active) {
+                        ed.measure_active = false;
+                    } else if (ed.creating) {
                         ed.creating = false;
                     } else if (ed.editing_group >= 0) {
                         ed.editing_group = -1;

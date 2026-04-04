@@ -88,16 +88,17 @@ struct GPUSegment {
 static_assert(sizeof(GPUSegment) == 48);
 
 struct GPULight {
-    uint32_t type; // 0=point, 1=segment, 2=beam
+    uint32_t type; // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
     float intensity;
     float pos_a[2];
     float pos_b[2];
-    float angular_width;  // beam only (half-angle radians), 0 for others
+    float dir[2];         // direction for parallel_beam (3) and spot (4)
+    float angular_width;  // half-angle radians (converted at upload), 0 for point/segment
+    float falloff;        // spot cosine-power exponent, 0 for non-spot types
     float wavelength_min; // nm, default 380
     float wavelength_max; // nm, default 780
-    float _pad;
 };
-static_assert(sizeof(GPULight) == 40);
+static_assert(sizeof(GPULight) == 48);
 
 struct GPUArc {
     float center[2];
@@ -518,6 +519,28 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
             },
+            [&](const ParallelBeamLight& l) {
+                gl.type = 3;
+                gl.intensity = l.intensity;
+                gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
+                gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
+                Vec2 d = l.direction.normalized();
+                gl.dir[0] = d.x; gl.dir[1] = d.y;
+                gl.angular_width = l.angular_width * 0.5f; // store half-angle
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
+            },
+            [&](const SpotLight& l) {
+                gl.type = 4;
+                gl.intensity = l.intensity;
+                gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
+                Vec2 d = l.direction.normalized();
+                gl.dir[0] = d.x; gl.dir[1] = d.y;
+                gl.angular_width = l.angular_width * 0.5f; // store half-angle
+                gl.falloff = l.falloff;
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
+            },
         }, light);
         total += gl.intensity;
         cum_weights.push_back(total);
@@ -749,4 +772,51 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp)
             dst[x * 3 + 2] = src[x * 4 + 2];
         }
     }
+}
+
+FrameMetrics Renderer::compute_frame_metrics() const {
+    // Single pass over rgba_buffer_ (already populated by read_pixels).
+    // BT.709 luminance weights matching Python frame_stats(): 218/732/74 >> 10
+    const size_t n_pixels = (size_t)width_ * height_;
+    if (n_pixels == 0) return {0, 1, 0, 0, 0};
+
+    int histogram[256] = {};
+    size_t clipped = 0;
+
+    for (size_t i = 0; i < n_pixels; ++i) {
+        size_t off = i * 4; // RGBA8
+        uint8_t r = rgba_buffer_[off];
+        uint8_t g = rgba_buffer_[off + 1];
+        uint8_t b = rgba_buffer_[off + 2];
+
+        uint32_t lum = (218u * r + 732u * g + 74u * b) >> 10;
+        if (lum > 255) lum = 255;
+        histogram[lum]++;
+
+        if (r == 255 || g == 255 || b == 255) ++clipped;
+    }
+
+    // Mean luminance
+    double sum = 0;
+    for (int i = 0; i < 256; ++i) sum += (double)i * histogram[i];
+    float mean = (float)(sum / n_pixels);
+
+    // pct_black: fraction with luminance < 1 (i.e., bin 0)
+    float pct_black = (float)histogram[0] / n_pixels;
+
+    // pct_clipped: any channel == 255
+    float pct_clip = (float)clipped / n_pixels;
+
+    // Percentiles from cumulative histogram (single pass for both p50 and p95)
+    size_t target_50 = (size_t)(0.5f * n_pixels);
+    size_t target_95 = (size_t)(0.95f * n_pixels);
+    float p50 = 255.0f, p95 = 255.0f;
+    size_t cumul = 0;
+    for (int i = 0; i < 256; ++i) {
+        cumul += histogram[i];
+        if (p50 == 255.0f && cumul >= target_50) p50 = (float)i;
+        if (cumul >= target_95) { p95 = (float)i; break; }
+    }
+
+    return {mean, pct_black, pct_clip, p50, p95};
 }

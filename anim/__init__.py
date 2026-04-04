@@ -20,6 +20,11 @@ from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
 from .stats import FrameStats as FrameStats
+from .stats import QualityGate as QualityGate
+from .stats import StatsDiff as StatsDiff
+from .stats import check_quality as check_quality
+from .stats import compare_stats as compare_stats
+from .stats import compare_summary as compare_summary
 from .stats import frame_stats as frame_stats
 from .track import Key as Key
 from .track import Track as Track
@@ -36,6 +41,7 @@ from .types import FrameReport as FrameReport
 from .types import Group as Group
 from .types import Look as Look
 from .types import Material as Material
+from .types import ParallelBeamLight as ParallelBeamLight
 from .types import PointLight as PointLight
 from .types import Polygon as Polygon
 from .types import Quality as Quality
@@ -43,6 +49,7 @@ from .types import Scene as Scene
 from .types import Segment as Segment
 from .types import SegmentLight as SegmentLight
 from .types import Shot as Shot
+from .types import SpotLight as SpotLight
 from .types import Timeline as Timeline
 from .types import TraceDefaults as TraceDefaults
 from .types import Transform2D as Transform2D
@@ -57,6 +64,8 @@ from .types import opaque_mirror as opaque_mirror
 __all__ = [
     "Arc",
     "BeamLight",
+    "ParallelBeamLight",
+    "SpotLight",
     "Bezier",
     "Camera2D",
     "Canvas",
@@ -84,6 +93,8 @@ __all__ = [
     "TraceDefaults",
     "Transform2D",
     "Wrap",
+    "QualityGate",
+    "StatsDiff",
     "auto_look",
     "absorber",
     "ball_lens",
@@ -92,6 +103,9 @@ __all__ = [
     "calibrate_normalize_ref",
     "diffuse",
     "emissive",
+    "check_quality",
+    "compare_stats",
+    "compare_summary",
     "frame_stats",
     "glass",
     "hemispherical_lens",

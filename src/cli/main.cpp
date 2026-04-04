@@ -180,12 +180,18 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast) {
         std::fwrite(pixels.data(), 1, frame_bytes, stdout);
         std::fflush(stdout);
 
+        auto metrics = renderer.compute_frame_metrics();
         auto t1 = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+        char mbuf[256];
+        std::snprintf(mbuf, sizeof(mbuf),
+            ", \"mean\": %.1f, \"pct_black\": %.4f, \"pct_clipped\": %.4f, \"p50\": %.0f, \"p95\": %.0f",
+            metrics.mean_lum, metrics.pct_black, metrics.pct_clipped, metrics.p50, metrics.p95);
         std::cerr << "frame " << frame << ": {\"rays\": " << rays
                   << ", \"time_ms\": " << ms
                   << ", \"max_hdr\": " << renderer.last_max()
-                  << ", \"total_rays\": " << renderer.total_rays() << "}\n";
+                  << ", \"total_rays\": " << renderer.total_rays()
+                  << mbuf << "}\n";
         ++frame;
     }
 

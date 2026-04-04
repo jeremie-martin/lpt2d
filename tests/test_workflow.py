@@ -1,0 +1,73 @@
+"""Unit tests for the 3.2 workflow helpers: Scene/Group/Shot/Look mutation methods."""
+
+from __future__ import annotations
+
+from anim.types import (
+    Circle,
+    Group,
+    Look,
+    Material,
+    Scene,
+    Shot,
+    TraceDefaults,
+)
+
+
+def test_scene_find_group():
+    g1 = Group(name="prism")
+    g2 = Group(name="mirror")
+    scene = Scene(groups=[g1, g2])
+    assert scene.find_group("prism") is g1
+    assert scene.find_group("mirror") is g2
+    assert scene.find_group("nonexistent") is None
+
+
+def test_scene_find_group_empty():
+    scene = Scene()
+    assert scene.find_group("anything") is None
+
+
+def test_scene_clone():
+    mat = Material(ior=1.5)
+    scene = Scene(shapes=[Circle(center=[0, 0], radius=1.0, material=mat)])
+    cloned = scene.clone()
+    assert cloned.shapes[0].center == [0, 0]
+    # Mutating the clone should not affect the original
+    cloned.shapes[0].center = [1, 1]
+    assert scene.shapes[0].center == [0, 0]
+
+
+def test_group_clone():
+    g = Group(name="test", shapes=[Circle(center=[0, 0], radius=0.5, material=Material())])
+    cloned = g.clone()
+    cloned.shapes[0].center = [2, 2]
+    assert g.shapes[0].center == [0, 0]
+
+
+def test_shot_with_look():
+    shot = Shot(look=Look(exposure=2.0, tonemap="aces"))
+    new_shot = shot.with_look(exposure=5.0, tonemap="reinhard")
+    # Original unchanged
+    assert shot.look.exposure == 2.0
+    assert shot.look.tonemap == "aces"
+    # New shot has overrides
+    assert new_shot.look.exposure == 5.0
+    assert new_shot.look.tonemap == "reinhard"
+    # Other fields preserved
+    assert new_shot.look.gamma == 2.2
+
+
+def test_shot_with_trace():
+    shot = Shot(trace=TraceDefaults(rays=10_000_000))
+    new_shot = shot.with_trace(rays=50_000_000, depth=16)
+    assert shot.trace.rays == 10_000_000
+    assert new_shot.trace.rays == 50_000_000
+    assert new_shot.trace.depth == 16
+
+
+def test_look_with_overrides():
+    look = Look(exposure=2.0, gamma=2.2)
+    new_look = look.with_overrides(exposure=4.0)
+    assert look.exposure == 2.0
+    assert new_look.exposure == 4.0
+    assert new_look.gamma == 2.2

@@ -7,8 +7,12 @@ image file I/O or visual inspection.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .types import FrameReport
 
 _LUM_WEIGHTS = np.array([218, 732, 74], dtype=np.uint32)
 
@@ -115,3 +119,113 @@ def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
         width=width,
         height=height,
     )
+
+
+# --- Quality gates ---
+
+
+@dataclass
+class QualityGate:
+    """Threshold configuration for automated quality checks.
+
+    ``min_mean`` uses 0-1 scale (mapped from the 0-255 mean luminance).
+    ``max_pct_clipped`` and ``max_pct_black`` are already fractions (0-1).
+    """
+
+    max_pct_clipped: float = 0.05  # warn if clipping > 5%
+    min_mean: float = 0.3  # warn if mean brightness < 0.3
+    max_pct_black: float = 0.8  # warn if > 80% black pixels
+
+
+def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
+    """Check live metrics from a FrameReport against quality thresholds.
+
+    Returns a list of warning strings (empty means all checks passed).
+    Gracefully returns empty if live metrics are not available.
+    """
+    warnings: list[str] = []
+    if report.mean is None:
+        return warnings
+    if report.pct_clipped is not None and report.pct_clipped > gate.max_pct_clipped:
+        warnings.append(f"clipping {report.pct_clipped:.1%} > {gate.max_pct_clipped:.1%}")
+    if report.mean / 255.0 < gate.min_mean:
+        warnings.append(f"mean brightness {report.mean / 255.0:.2f} < {gate.min_mean}")
+    if report.pct_black is not None and report.pct_black > gate.max_pct_black:
+        warnings.append(f"black pixels {report.pct_black:.1%} > {gate.max_pct_black:.1%}")
+    return warnings
+
+
+# --- A/B comparison ---
+
+
+@dataclass(frozen=True)
+class StatsDiff:
+    """Per-field difference between two FrameStats (b - a)."""
+
+    mean: float
+    pct_black: float
+    pct_clipped: float
+    p50: float
+    p95: float
+
+    def summary(self) -> str:
+        """One-line summary with signed deltas."""
+
+        def _fmt(name: str, val: float) -> str:
+            return f"{name}={val:+.2f}"
+
+        return " ".join(
+            [
+                _fmt("mean", self.mean),
+                _fmt("black", self.pct_black),
+                _fmt("clip", self.pct_clipped),
+                _fmt("p50", self.p50),
+                _fmt("p95", self.p95),
+            ]
+        )
+
+
+def compare_stats(
+    a: list[tuple[int, float, FrameStats]],
+    b: list[tuple[int, float, FrameStats]],
+) -> list[tuple[int, float, StatsDiff]]:
+    """Compare two render_stats() results frame-by-frame.
+
+    Both lists must have the same length and frame indices.
+    Returns per-frame StatsDiff (b - a).
+    """
+    if len(a) != len(b):
+        raise ValueError(f"Mismatched frame counts: {len(a)} vs {len(b)}")
+    diffs: list[tuple[int, float, StatsDiff]] = []
+    for (fi_a, t_a, sa), (fi_b, _, sb) in zip(a, b, strict=True):
+        if fi_a != fi_b:
+            raise ValueError(f"Frame index mismatch: {fi_a} vs {fi_b}")
+        diffs.append(
+            (
+                fi_a,
+                t_a,
+                StatsDiff(
+                    mean=sb.mean - sa.mean,
+                    pct_black=sb.pct_black - sa.pct_black,
+                    pct_clipped=sb.pct_clipped - sa.pct_clipped,
+                    p50=sb.p50 - sa.p50,
+                    p95=sb.p95 - sa.p95,
+                ),
+            )
+        )
+    return diffs
+
+
+def compare_summary(diffs: list[tuple[int, float, StatsDiff]]) -> str:
+    """Multi-line summary of an A/B stats comparison."""
+    if not diffs:
+        return "(no frames to compare)"
+    lines = [f"A/B comparison ({len(diffs)} frames):"]
+    for fi, t, d in diffs:
+        lines.append(f"  frame {fi} ({t:.2f}s): {d.summary()}")
+    # Aggregate
+    n = len(diffs)
+    avg_mean = sum(d.mean for _, _, d in diffs) / n
+    avg_clip = sum(d.pct_clipped for _, _, d in diffs) / n
+    lines.append(f"  average: mean={avg_mean:+.2f} clip={avg_clip:+.4f}")
+    return "\n".join(lines)

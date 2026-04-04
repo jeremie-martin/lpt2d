@@ -167,6 +167,35 @@ void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light
             dl->AddLine(o, cv.to_screen(l.origin + w1 * 0.2f), col, th * 0.5f);
             dl->AddLine(o, cv.to_screen(l.origin + w2 * 0.2f), col, th * 0.5f);
         },
+        [&](const ParallelBeamLight& l) {
+            ImVec2 sa = cv.to_screen(l.a), sb = cv.to_screen(l.b);
+            dl->AddLine(sa, sb, col, th);
+            dl->AddCircleFilled(sa, 3.0f * dpi, col);
+            dl->AddCircleFilled(sb, 3.0f * dpi, col);
+            Vec2 mid = (l.a + l.b) * 0.5f;
+            Vec2 d = l.direction.normalized();
+            ImVec2 tip = cv.to_screen(mid + d * 0.3f);
+            dl->AddLine(cv.to_screen(mid), tip, col, th);
+            float half_w = l.angular_width * 0.5f;
+            float base_a = std::atan2(d.y, d.x);
+            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
+            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
+            dl->AddLine(cv.to_screen(mid), cv.to_screen(mid + w1 * 0.2f), col, th * 0.5f);
+            dl->AddLine(cv.to_screen(mid), cv.to_screen(mid + w2 * 0.2f), col, th * 0.5f);
+        },
+        [&](const SpotLight& l) {
+            ImVec2 o = cv.to_screen(l.pos);
+            dl->AddCircleFilled(o, 4.0f * dpi, col);
+            Vec2 d = l.direction.normalized();
+            ImVec2 tip = cv.to_screen(l.pos + d * 0.3f);
+            dl->AddLine(o, tip, col, th);
+            float half_w = l.angular_width * 0.5f;
+            float base_a = std::atan2(d.y, d.x);
+            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
+            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
+            dl->AddLine(o, cv.to_screen(l.pos + w1 * 0.2f), col, th * 0.5f);
+            dl->AddLine(o, cv.to_screen(l.pos + w2 * 0.2f), col, th * 0.5f);
+        },
     }, light);
 }
 
@@ -239,4 +268,47 @@ void compute_display_uvs(const Camera& cam, const Bounds& scene_bounds,
 
     uv0 = ImVec2(u_left, v_top);
     uv1 = ImVec2(u_right, v_bottom);
+}
+
+// ─── Grid ──────────────────────────────────────────────────────────────
+
+float adaptive_grid_spacing(float pixels_per_unit) {
+    // Target: grid lines ~80px apart on screen
+    float world_per_80px = 80.0f / pixels_per_unit;
+    float log10_val = std::log10(world_per_80px);
+    float base = std::pow(10.0f, std::floor(log10_val));
+    float frac = world_per_80px / base;
+    if (frac < 1.5f) return base;
+    if (frac < 3.5f) return base * 2.0f;
+    if (frac < 7.5f) return base * 5.0f;
+    return base * 10.0f;
+}
+
+Vec2 snap_to_grid_pos(Vec2 pos, float spacing) {
+    return {std::round(pos.x / spacing) * spacing,
+            std::round(pos.y / spacing) * spacing};
+}
+
+void draw_grid(ImDrawList* dl, const CameraView& cv, float spacing) {
+    ImU32 col_minor = IM_COL32(255, 255, 255, 15);
+    ImU32 col_major = IM_COL32(255, 255, 255, 35);
+    ImU32 col_axis  = IM_COL32(255, 255, 255, 60);
+
+    Bounds vis = cv.cam.visible_bounds(cv.w, cv.h);
+
+    int ix_start = (int)std::floor(vis.min.x / spacing);
+    int ix_end   = (int)std::ceil(vis.max.x / spacing);
+    int iy_start = (int)std::floor(vis.min.y / spacing);
+    int iy_end   = (int)std::ceil(vis.max.y / spacing);
+
+    for (int ix = ix_start; ix <= ix_end; ++ix) {
+        float x = ix * spacing;
+        ImU32 col = (ix == 0) ? col_axis : (ix % 5 == 0) ? col_major : col_minor;
+        dl->AddLine(cv.to_screen({x, vis.max.y}), cv.to_screen({x, vis.min.y}), col, 1.0f);
+    }
+    for (int iy = iy_start; iy <= iy_end; ++iy) {
+        float y = iy * spacing;
+        ImU32 col = (iy == 0) ? col_axis : (iy % 5 == 0) ? col_major : col_minor;
+        dl->AddLine(cv.to_screen({vis.min.x, y}), cv.to_screen({vis.max.x, y}), col, 1.0f);
+    }
 }

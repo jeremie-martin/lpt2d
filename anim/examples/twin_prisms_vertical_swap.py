@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -150,7 +149,7 @@ def infer_layout(scene: Scene, aspect: float) -> Layout:
 
 def make_animate(layout: Layout):
     def animate(ctx: FrameContext) -> Frame:
-        scene = copy.deepcopy(BASE_SHOT.scene)
+        scene = BASE_SHOT.scene.clone()
         p = ease_in_out_sine(ctx.progress)
         left_x = lerp(layout.start_left[0], layout.end_left[0], p)
         left_y = lerp(layout.start_left[1], layout.end_left[1], p)

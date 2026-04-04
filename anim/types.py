@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from enum import Enum
 from pathlib import Path
 
@@ -92,8 +92,6 @@ def emissive(emission: float, base: Material | None = None) -> Material:
     (e.g., ``emissive(2.0, glass(1.5))`` for a glowing glass surface).
     """
     if base is not None:
-        from dataclasses import replace
-
         return replace(base, emission=emission)
     return Material(emission=emission)
 
@@ -253,7 +251,53 @@ class BeamLight:
         }
 
 
-Light = PointLight | SegmentLight | BeamLight
+@dataclass
+class ParallelBeamLight:
+    a: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    b: list[float] = field(default_factory=lambda: [0.0, 0.5])
+    direction: list[float] = field(default_factory=lambda: [1.0, 0.0])
+    angular_width: float = 0.0
+    intensity: float = 1.0
+    wavelength_min: float = 380.0
+    wavelength_max: float = 780.0
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "parallel_beam",
+            "a": self.a,
+            "b": self.b,
+            "direction": self.direction,
+            "angular_width": self.angular_width,
+            "intensity": self.intensity,
+            "wavelength_min": self.wavelength_min,
+            "wavelength_max": self.wavelength_max,
+        }
+
+
+@dataclass
+class SpotLight:
+    pos: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    direction: list[float] = field(default_factory=lambda: [1.0, 0.0])
+    angular_width: float = 0.5
+    falloff: float = 2.0
+    intensity: float = 1.0
+    wavelength_min: float = 380.0
+    wavelength_max: float = 780.0
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "spot",
+            "pos": self.pos,
+            "direction": self.direction,
+            "angular_width": self.angular_width,
+            "falloff": self.falloff,
+            "intensity": self.intensity,
+            "wavelength_min": self.wavelength_min,
+            "wavelength_max": self.wavelength_max,
+        }
+
+
+Light = PointLight | SegmentLight | BeamLight | ParallelBeamLight | SpotLight
 
 
 # --- Groups ---
@@ -306,6 +350,12 @@ class Group:
             "lights": [light.to_dict() for light in self.lights],
         }
 
+    def clone(self) -> Group:
+        """Deep copy of the group."""
+        import copy
+
+        return copy.deepcopy(self)
+
 
 # --- Scene (content-only: shapes, lights, groups, materials) ---
 
@@ -349,6 +399,24 @@ _LIGHT_PARSERS = {
         origin=d["origin"],
         direction=d["direction"],
         angular_width=d.get("angular_width", 0.1),
+        intensity=d.get("intensity", 1.0),
+        wavelength_min=d.get("wavelength_min", 380.0),
+        wavelength_max=d.get("wavelength_max", 780.0),
+    ),
+    "parallel_beam": lambda d: ParallelBeamLight(
+        a=d.get("a", [0.0, 0.0]),
+        b=d.get("b", [0.0, 0.5]),
+        direction=d.get("direction", [1.0, 0.0]),
+        angular_width=d.get("angular_width", 0.0),
+        intensity=d.get("intensity", 1.0),
+        wavelength_min=d.get("wavelength_min", 380.0),
+        wavelength_max=d.get("wavelength_max", 780.0),
+    ),
+    "spot": lambda d: SpotLight(
+        pos=d.get("pos", [0.0, 0.0]),
+        direction=d.get("direction", [1.0, 0.0]),
+        angular_width=d.get("angular_width", 0.5),
+        falloff=d.get("falloff", 2.0),
         intensity=d.get("intensity", 1.0),
         wavelength_min=d.get("wavelength_min", 380.0),
         wavelength_max=d.get("wavelength_max", 780.0),
@@ -421,6 +489,19 @@ class Scene:
             group.lights = _parse_lights(gd.get("lights", []))
             scene.groups.append(group)
         return scene
+
+    def find_group(self, name: str) -> Group | None:
+        """Find a group by name, or None if not found."""
+        for g in self.groups:
+            if g.name == name:
+                return g
+        return None
+
+    def clone(self) -> Scene:
+        """Deep copy of the scene. Safe to mutate without affecting the original."""
+        import copy
+
+        return copy.deepcopy(self)
 
 
 # --- Camera ---
@@ -516,6 +597,10 @@ class Look:
             if val != default_val:
                 d[f.name] = val
         return d
+
+    def with_overrides(self, **overrides) -> Look:
+        """Return a new Look with specified fields overridden."""
+        return replace(self, **overrides)
 
     @staticmethod
     def from_dict(d: dict) -> Look:
@@ -679,6 +764,20 @@ class Shot:
                 raise TypeError(f"Shot.preset() got unexpected keyword argument '{key}'")
         return shot
 
+    def with_look(self, **overrides) -> Shot:
+        """Return a new Shot with Look fields overridden.
+
+        Example: ``shot.with_look(exposure=3, tonemap="reinhardx")``
+        """
+        return replace(self, look=self.look.with_overrides(**overrides))
+
+    def with_trace(self, **overrides) -> Shot:
+        """Return a new Shot with TraceDefaults fields overridden.
+
+        Example: ``shot.with_trace(rays=50_000_000)``
+        """
+        return replace(self, trace=replace(self.trace, **overrides))
+
 
 # --- Timeline ---
 
@@ -770,3 +869,9 @@ class FrameReport:
     time_ms: int
     max_hdr: float
     total_rays: int
+    # Live metrics from C++ stats pipeline (None if unavailable / old binary)
+    mean: float | None = None
+    pct_black: float | None = None
+    pct_clipped: float | None = None
+    p50: float | None = None
+    p95: float | None = None

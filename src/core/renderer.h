@@ -6,6 +6,14 @@
 #include <cstdint>
 #include <vector>
 
+struct FrameMetrics {
+    float mean_lum;    // mean BT.709 luminance (0-255 scale)
+    float pct_black;   // fraction of pixels with luminance < 1
+    float pct_clipped; // fraction of pixels with any channel == 255
+    float p50;         // median luminance
+    float p95;         // 95th percentile luminance
+};
+
 class Renderer {
 public:
     ~Renderer();
@@ -41,6 +49,10 @@ public:
 
     // Compute current max luminance from the float accumulation buffer (CPU readback).
     float compute_current_max();
+
+    // Compute per-frame stats from the post-processed RGBA8 buffer.
+    // Must be called after read_pixels() (which populates rgba_buffer_).
+    FrameMetrics compute_frame_metrics() const;
 
 private:
     int width_ = 0, height_ = 0;
