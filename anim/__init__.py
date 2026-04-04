@@ -6,6 +6,7 @@ from .builders import hemispherical_lens as hemispherical_lens
 from .builders import mirror_box as mirror_box
 from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
+from .builders import rectangle as rectangle
 from .builders import regular_polygon as regular_polygon
 from .builders import thick_arc as thick_arc
 from .easing import EASINGS as EASINGS
@@ -35,6 +36,7 @@ from .types import Group as Group
 from .types import Look as Look
 from .types import Material as Material
 from .types import PointLight as PointLight
+from .types import Polygon as Polygon
 from .types import Quality as Quality
 from .types import Scene as Scene
 from .types import Segment as Segment
@@ -95,6 +97,8 @@ __all__ = [
     "opaque_mirror",
     "plano_convex_lens",
     "polygon",
+    "Polygon",
+    "rectangle",
     "regular_polygon",
     "render",
     "render_contact_sheet",

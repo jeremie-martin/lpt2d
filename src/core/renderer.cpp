@@ -461,6 +461,17 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 fill_material(gb, b.material);
                 gpu_beziers.push_back(gb);
             },
+            [&](const Polygon& p) {
+                int n = (int)p.vertices.size();
+                if (n < 2) return;
+                for (int i = 0; i < n; ++i) {
+                    GPUSegment gs{};
+                    gs.a[0] = p.vertices[i].x;        gs.a[1] = p.vertices[i].y;
+                    gs.b[0] = p.vertices[(i+1)%n].x;  gs.b[1] = p.vertices[(i+1)%n].y;
+                    fill_material(gs, p.material);
+                    segs.push_back(gs);
+                }
+            },
         }, shape);
     }
 
@@ -470,12 +481,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         for (const auto& light : group.lights)
             all_lights.push_back(transform_light(light, group.transform));
 
-    // Auto-generate lights from emissive surfaces.
-    // TODO: compare with shader-only emission (sample emissive surfaces directly
-    // in the compute shader) — may converge differently for complex scenes.
     for (const auto& shape : all_shapes) {
-        if (auto light = emission_light(shape))
-            all_lights.push_back(*light);
+        auto el = emission_light(shape);
+        all_lights.insert(all_lights.end(), el.begin(), el.end());
     }
 
     std::vector<GPULight> gpu_lights;

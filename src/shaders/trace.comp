@@ -293,13 +293,16 @@ void main() {
     rng_state = gid * 1099087573u + uSeed;
     pcg_next(); pcg_next();
 
-    // Choose light (weighted)
+    // Choose light (weighted, binary search over cumulative weights)
     float total_w = light_cum_weights[uNumLights - 1u];
     float r = rand01() * total_w;
-    uint li = 0u;
-    for (uint i = 0u; i < uNumLights; i++) {
-        if (r <= light_cum_weights[i]) { li = i; break; }
+    uint lo = 0u, hi = uNumLights - 1u;
+    while (lo < hi) {
+        uint mid = (lo + hi) / 2u;
+        if (light_cum_weights[mid] < r) lo = mid + 1u;
+        else hi = mid;
     }
+    uint li = lo;
     GPULight lt = lights[li];
 
     // Generate ray

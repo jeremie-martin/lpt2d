@@ -43,6 +43,7 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
             [](const Segment& s) -> Vec2 { return (s.a + s.b) * 0.5f; },
             [](const Arc& a) -> Vec2 { return a.center; },
             [](const Bezier& b) -> Vec2 { return (b.p0 + b.p1 + b.p2) * (1.0f / 3.0f); },
+            [](const Polygon& p) -> Vec2 { return p.centroid(); },
         }, *shape);
     }
     if (const Light* light = resolve_light(scene, id)) {
@@ -128,6 +129,13 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
                 Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
                 best = std::min(best, (wp - p).length());
             }
+            return best;
+        },
+        [&](const Polygon& p) -> float {
+            float best = 1e30f;
+            int n = (int)p.vertices.size();
+            for (int i = 0; i < n; ++i)
+                best = std::min(best, point_seg_dist(wp, p.vertices[i], p.vertices[(i + 1) % n]));
             return best;
         },
     }, shape);
@@ -292,6 +300,7 @@ void translate_shape(Shape& s, Vec2 delta) {
         [&](Segment& seg) { seg.a = seg.a + delta; seg.b = seg.b + delta; },
         [&](Arc& a) { a.center = a.center + delta; },
         [&](Bezier& b) { b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta; },
+        [&](Polygon& p) { for (auto& v : p.vertices) v = v + delta; },
     }, s);
 }
 
@@ -317,6 +326,7 @@ static void rotate_shape(Shape& s, Vec2 pivot, float angle) {
             b.p1 = rotate_around(b.p1, pivot, angle);
             b.p2 = rotate_around(b.p2, pivot, angle);
         },
+        [&](Polygon& p) { for (auto& v : p.vertices) v = rotate_around(v, pivot, angle); },
     }, s);
 }
 
@@ -353,6 +363,7 @@ static void scale_shape(Shape& s, Vec2 pivot, float fx, float fy) {
             b.p1 = scale_around(b.p1, pivot, fx, fy);
             b.p2 = scale_around(b.p2, pivot, fx, fy);
         },
+        [&](Polygon& p) { for (auto& v : p.vertices) v = scale_around(v, pivot, fx, fy); },
     }, s);
 }
 
@@ -462,6 +473,10 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                     handles.push_back({Handle::Position, id, 1, b.p1}); // control point
                     handles.push_back({Handle::Position, id, 2, b.p2});
                 },
+                [&](const Polygon& p) {
+                    for (int i = 0; i < (int)p.vertices.size(); ++i)
+                        handles.push_back({Handle::Position, id, i, p.vertices[i]});
+                },
             }, *shape);
         }
         if (const Light* light = resolve_light(scene, id)) {
@@ -539,6 +554,10 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                 if (handle.param_index == 0) b.p0 = wp;
                 else if (handle.param_index == 1) b.p1 = wp;
                 else b.p2 = wp;
+            },
+            [&](Polygon& p) {
+                if (handle.param_index >= 0 && handle.param_index < (int)p.vertices.size())
+                    p.vertices[handle.param_index] = wp;
             },
         }, *shape);
     }

@@ -111,6 +111,16 @@ Bounds shape_bounds(const Shape& s) {
                               };
                               return Bounds{lo, hi};
                           },
+                          [](const Polygon& p) {
+                              if (p.vertices.empty()) return Bounds{{0, 0}, {0, 0}};
+                              float inf = std::numeric_limits<float>::max();
+                              Vec2 lo{inf, inf}, hi{-inf, -inf};
+                              for (auto& v : p.vertices) {
+                                  lo.x = std::min(lo.x, v.x); lo.y = std::min(lo.y, v.y);
+                                  hi.x = std::max(hi.x, v.x); hi.y = std::max(hi.y, v.y);
+                              }
+                              return Bounds{lo, hi};
+                          },
                       },
                       s);
 }
@@ -257,6 +267,20 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez) {
     return best;
 }
 
+std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
+    std::optional<Hit> best;
+    int n = (int)poly.vertices.size();
+    for (int i = 0; i < n; ++i) {
+        Segment edge{poly.vertices[i], poly.vertices[(i + 1) % n], poly.material};
+        auto hit = intersect(ray, edge);
+        if (hit && (!best || hit->t < best->t)) {
+            best = hit;
+            best->material = &poly.material; // re-point to polygon (edge Segment is stack-local)
+        }
+    }
+    return best;
+}
+
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
     std::optional<Hit> closest;
 
@@ -266,6 +290,7 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
                                   [&](const Segment& s) { return intersect(ray, s); },
                                   [&](const Arc& a) { return intersect(ray, a); },
                                   [&](const Bezier& b) { return intersect(ray, b); },
+                                  [&](const Polygon& p) { return intersect(ray, p); },
                               },
                               shape);
 
@@ -367,6 +392,11 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
             r.p2 = t.apply(b.p2);
             return r;
         },
+        [&](const Polygon& p) -> Shape {
+            Polygon r = p;
+            for (auto& v : r.vertices) v = t.apply(v);
+            return r;
+        },
     }, s);
 }
 
@@ -409,8 +439,21 @@ float shape_perimeter(const Shape& s) {
         [](const Segment& seg) { return (seg.b - seg.a).length(); },
         [](const Arc& a) { return a.radius * clamp_arc_sweep(a.sweep); },
         [](const Bezier& b) {
-            // Chord length approximation (p0→p2)
-            return (b.p2 - b.p0).length();
+            float len = 0;
+            Vec2 prev = b.p0;
+            for (int i = 1; i <= 32; ++i) {
+                Vec2 cur = bezier_eval(b, (float)i / 32.0f);
+                len += (cur - prev).length();
+                prev = cur;
+            }
+            return len;
+        },
+        [](const Polygon& p) {
+            float sum = 0;
+            int n = (int)p.vertices.size();
+            for (int i = 0; i < n; ++i)
+                sum += (p.vertices[(i + 1) % n] - p.vertices[i]).length();
+            return sum;
         },
     }, s);
 }
@@ -419,27 +462,75 @@ static const Material& get_material(const Shape& s) {
     return std::visit([](const auto& shape) -> const Material& { return shape.material; }, s);
 }
 
-std::optional<Light> emission_light(const Shape& s) {
+// Emission sampling constants
+static constexpr float EMISSION_SAMPLE_SPACING = 0.02f;
+static constexpr int EMISSION_MIN_POINTS = 4;
+static constexpr int EMISSION_MAX_POINTS = 128;
+
+static int emission_point_count(float perimeter) {
+    int n = std::max(EMISSION_MIN_POINTS, (int)std::round(perimeter / EMISSION_SAMPLE_SPACING));
+    return std::min(n, EMISSION_MAX_POINTS);
+}
+
+std::vector<Light> emission_light(const Shape& s) {
     const Material& mat = get_material(s);
-    if (mat.emission <= 0.0f) return std::nullopt;
+    if (mat.emission <= 0.0f) return {};
 
-    float intensity = mat.emission * shape_perimeter(s);
+    float perimeter = shape_perimeter(s);
+    if (perimeter <= 0.0f) return {};
+    int N = emission_point_count(perimeter);
+    float per_point = mat.emission * perimeter / N;
 
-    return std::visit(overloaded{
-        [&](const Circle& c) -> Light {
-            return PointLight{c.center, intensity};
+    std::vector<Light> lights;
+    lights.reserve(N);
+
+    std::visit(overloaded{
+        [&](const Circle& c) {
+            for (int i = 0; i < N; ++i) {
+                float angle = TWO_PI * i / N;
+                Vec2 pos = c.center + Vec2{c.radius * std::cos(angle), c.radius * std::sin(angle)};
+                lights.push_back(PointLight{pos, per_point});
+            }
         },
-        [&](const Segment& seg) -> Light {
-            return SegmentLight{seg.a, seg.b, intensity};
+        [&](const Segment& seg) {
+            for (int i = 0; i < N; ++i) {
+                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
+                Vec2 pos = seg.a + (seg.b - seg.a) * t;
+                lights.push_back(PointLight{pos, per_point});
+            }
         },
-        [&](const Arc& a) -> Light {
-            // Chord approximation: segment from start-point to end-point
-            return SegmentLight{arc_start_point(a), arc_end_point(a), intensity};
+        [&](const Arc& a) {
+            float sweep = clamp_arc_sweep(a.sweep);
+            for (int i = 0; i < N; ++i) {
+                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
+                float angle = a.angle_start + sweep * t;
+                lights.push_back(PointLight{arc_point(a, angle), per_point});
+            }
         },
-        [&](const Bezier& b) -> Light {
-            return SegmentLight{b.p0, b.p2, intensity};
+        [&](const Bezier& b) {
+            for (int i = 0; i < N; ++i) {
+                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
+                lights.push_back(PointLight{bezier_eval(b, t), per_point});
+            }
+        },
+        [&](const Polygon& p) {
+            // Distribute points along edges proportional to edge length
+            int n = (int)p.vertices.size();
+            if (n < 2) return;
+            for (int i = 0; i < n; ++i) {
+                Vec2 a = p.vertices[i], b = p.vertices[(i + 1) % n];
+                float edge_len = (b - a).length();
+                int edge_pts = std::max(1, (int)std::round(N * edge_len / perimeter));
+                float edge_intensity = per_point * N * edge_len / (perimeter * edge_pts);
+                for (int j = 0; j < edge_pts; ++j) {
+                    float t = (edge_pts == 1) ? 0.5f : (float)j / (edge_pts - 1);
+                    lights.push_back(PointLight{a + (b - a) * t, edge_intensity});
+                }
+            }
         },
     }, s);
+
+    return lights;
 }
 
 // --- Shot types ---

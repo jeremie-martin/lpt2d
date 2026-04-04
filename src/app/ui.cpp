@@ -134,6 +134,11 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
             }
             dl->AddCircleFilled(cv.to_screen(b.p1), 3.0f, col);
         },
+        [&](const Polygon& p) {
+            int n = (int)p.vertices.size();
+            for (int i = 0; i < n; ++i)
+                dl->AddLine(cv.to_screen(p.vertices[i]), cv.to_screen(p.vertices[(i + 1) % n]), col, th);
+        },
     }, shape);
 }
 

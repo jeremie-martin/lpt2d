@@ -341,6 +341,11 @@ int App::run(const AppConfig& config) {
                         Arc preview = make_default_arc(ed.create_start, mw);
                         draw_shape_overlay(dl, cv, preview, COL_PREVIEW, 1.5f * dpi_scale);
                     }
+                } else if (ed.tool == EditTool::Polygon) {
+                    ImVec2 a = cv.to_screen(ed.create_start);
+                    ImVec2 b = io.MousePos;
+                    dl->AddRect(ImVec2(std::min(a.x,b.x), std::min(a.y,b.y)),
+                                ImVec2(std::max(a.x,b.x), std::max(a.y,b.y)), COL_PREVIEW, 0.0f, 0, 1.5f * dpi_scale);
                 } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier) {
                     dl->AddLine(cv.to_screen(ed.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
@@ -608,6 +613,7 @@ int App::run(const AppConfig& config) {
                                         [&](const Segment& s) { ed.drag_offsets.push_back({s.a - mw, s.b - mw}); },
                                         [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw, {}}); },
                                         [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw, b.p2 - mw}); },
+                                        [&](const Polygon& p) { ed.drag_offsets.push_back({p.centroid() - mw, {}}); },
                                     }, *shape);
                                 } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                                     std::visit(overloaded{
@@ -674,6 +680,11 @@ int App::run(const AppConfig& config) {
                             Vec2 delta = (mw + off.a) - b.p0;
                             b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta;
                         },
+                        [&](Polygon& p) {
+                            if (p.vertices.empty()) return;
+                            Vec2 delta = (mw + off.a) - p.centroid();
+                            for (auto& v : p.vertices) v = v + delta;
+                        },
                     }, *shape);
                 } else if (Light* light = resolve_light(ed.shot.scene, sid)) {
                     std::visit(overloaded{
@@ -716,6 +727,15 @@ int App::run(const AppConfig& config) {
                 } else if (ed.tool == EditTool::Bezier && dist > 0.01f) {
                     Vec2 mid = (ed.create_start + end) * 0.5f;
                     ed.shot.scene.shapes.push_back(Bezier{ed.create_start, mid, end, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::Polygon && dist > 0.01f) {
+                    Vec2 a = ed.create_start, b = end;
+                    Polygon p;
+                    p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
+                    p.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ed.shot.scene.shapes.push_back(p);
                     ed.clear_selection();
                     ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
@@ -842,6 +862,7 @@ int App::run(const AppConfig& config) {
             tbtn("Segment", EditTool::Segment);
             tbtn("Arc", EditTool::Arc); ImGui::SameLine();
             tbtn("Bezier", EditTool::Bezier); ImGui::SameLine();
+            tbtn("Polygon", EditTool::Polygon); ImGui::SameLine();
             tbtn("Erase", EditTool::Erase);
             tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
             tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
@@ -928,6 +949,9 @@ int App::run(const AppConfig& config) {
                     [&](const Bezier& b) {
                         std::snprintf(lbl, sizeof(lbl), "Bezier %d (%s)", i, material_name(b.material));
                     },
+                    [&](const Polygon& p) {
+                        std::snprintf(lbl, sizeof(lbl), "Polygon %d [%dv] (%s)", i, (int)p.vertices.size(), material_name(p.material));
+                    },
                 }, ed.shot.scene.shapes[i]);
                 // Material color swatch
                 ImVec4 mc = std::visit([](const auto& s) { return material_color(s.material); }, ed.shot.scene.shapes[i]);
@@ -989,6 +1013,7 @@ int App::run(const AppConfig& config) {
                             [&](const Segment&) { std::snprintf(mlbl, sizeof(mlbl), "  Segment %d", j); },
                             [&](const Arc&) { std::snprintf(mlbl, sizeof(mlbl), "  Arc %d", j); },
                             [&](const Bezier&) { std::snprintf(mlbl, sizeof(mlbl), "  Bezier %d", j); },
+                            [&](const Polygon&) { std::snprintf(mlbl, sizeof(mlbl), "  Polygon %d", j); },
                         }, group.shapes[j]);
                         if (ImGui::Selectable(mlbl, mid_sel)) {
                             ed.clear_selection();
@@ -1088,6 +1113,16 @@ int App::run(const AppConfig& config) {
                         changed |= ImGui::DragFloat2("P2", &b.p2.x, 0.01f);
                         changed |= edit_material(b.material);
                         show_material_match(b.material);
+                    },
+                    [&](Polygon& p) {
+                        ImGui::Text("Vertices: %d", (int)p.vertices.size());
+                        for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
+                            char vlbl[16];
+                            std::snprintf(vlbl, sizeof(vlbl), "V%d", vi);
+                            changed |= ImGui::DragFloat2(vlbl, &p.vertices[vi].x, 0.01f);
+                        }
+                        changed |= edit_material(p.material);
+                        show_material_match(p.material);
                     },
                 }, shape);
             }

@@ -5,16 +5,12 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from .types import Arc, Circle, Material, Segment, Shape
+from .types import Arc, Circle, Material, Polygon, Segment, Shape
 
 
-def polygon(vertices: list[list[float]], material: Material) -> list[Segment]:
+def polygon(vertices: list[list[float]], material: Material) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
-    n = len(vertices)
-    return [
-        Segment(a=list(vertices[i]), b=list(vertices[(i + 1) % n]), material=material)
-        for i in range(n)
-    ]
+    return Polygon(vertices=[list(v) for v in vertices], material=material)
 
 
 def regular_polygon(
@@ -23,7 +19,7 @@ def regular_polygon(
     n: int,
     material: Material,
     rotation: float = 0.0,
-) -> list[Segment]:
+) -> Polygon:
     """Regular *n*-sided polygon inscribed in a circle.
 
     *rotation* offsets the first vertex (radians, 0 = right).
@@ -37,6 +33,21 @@ def regular_polygon(
         for i in range(n)
     ]
     return polygon(verts, material)
+
+
+def rectangle(
+    center: tuple[float, float],
+    width: float,
+    height: float,
+    material: Material,
+) -> Polygon:
+    """Axis-aligned rectangle centered at *center*."""
+    cx, cy = center
+    hw, hh = width / 2, height / 2
+    return polygon(
+        [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]],
+        material,
+    )
 
 
 def mirror_box(half_w: float, half_h: float, material: Material) -> list[Segment]:

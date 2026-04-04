@@ -177,7 +177,20 @@ class Bezier:
         }
 
 
-Shape = Circle | Segment | Arc | Bezier
+@dataclass
+class Polygon:
+    vertices: list[list[float]] = field(default_factory=list)
+    material: Material = field(default_factory=Material)
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "polygon",
+            "vertices": self.vertices,
+            "material": self.material.to_dict(),
+        }
+
+
+Shape = Circle | Segment | Arc | Bezier | Polygon
 
 
 # --- Lights ---
@@ -312,6 +325,9 @@ _SHAPE_PARSERS = {
     ),
     "bezier": lambda d: Bezier(
         p0=d["p0"], p1=d["p1"], p2=d["p2"], material=Material.from_dict(d.get("material", {}))
+    ),
+    "polygon": lambda d: Polygon(
+        vertices=d["vertices"], material=Material.from_dict(d.get("material", {}))
     ),
 }
 

@@ -57,6 +57,77 @@ static void write_json_string(std::ostream& os, const std::string& s) {
     os << '"';
 }
 
+static void write_shape(std::ostream& f, const Shape& shape, int d) {
+    std::visit(overloaded{
+        [&](const Circle& c) {
+            write_indent(f, d); f << "\"type\": \"circle\",\n";
+            write_indent(f, d); write_vec2(f, "center", c.center); f << ",\n";
+            write_indent(f, d); f << "\"radius\": " << fmt(c.radius) << ",\n";
+            write_material(f, c.material, d); f << "\n";
+        },
+        [&](const Segment& s) {
+            write_indent(f, d); f << "\"type\": \"segment\",\n";
+            write_indent(f, d); write_vec2(f, "a", s.a); f << ",\n";
+            write_indent(f, d); write_vec2(f, "b", s.b); f << ",\n";
+            write_material(f, s.material, d); f << "\n";
+        },
+        [&](const Arc& a) {
+            write_indent(f, d); f << "\"type\": \"arc\",\n";
+            write_indent(f, d); write_vec2(f, "center", a.center); f << ",\n";
+            write_indent(f, d); f << "\"radius\": " << fmt(a.radius) << ",\n";
+            write_indent(f, d); f << "\"angle_start\": " << fmt(a.angle_start) << ",\n";
+            write_indent(f, d); f << "\"sweep\": " << fmt(a.sweep) << ",\n";
+            write_material(f, a.material, d); f << "\n";
+        },
+        [&](const Bezier& b) {
+            write_indent(f, d); f << "\"type\": \"bezier\",\n";
+            write_indent(f, d); write_vec2(f, "p0", b.p0); f << ",\n";
+            write_indent(f, d); write_vec2(f, "p1", b.p1); f << ",\n";
+            write_indent(f, d); write_vec2(f, "p2", b.p2); f << ",\n";
+            write_material(f, b.material, d); f << "\n";
+        },
+        [&](const Polygon& p) {
+            write_indent(f, d); f << "\"type\": \"polygon\",\n";
+            write_indent(f, d); f << "\"vertices\": [";
+            for (int j = 0; j < (int)p.vertices.size(); ++j) {
+                if (j > 0) f << ", ";
+                f << "[" << fmt(p.vertices[j].x) << ", " << fmt(p.vertices[j].y) << "]";
+            }
+            f << "],\n";
+            write_material(f, p.material, d); f << "\n";
+        },
+    }, shape);
+}
+
+static void write_light(std::ostream& f, const Light& light, int d) {
+    std::visit(overloaded{
+        [&](const PointLight& l) {
+            write_indent(f, d); f << "\"type\": \"point\",\n";
+            write_indent(f, d); write_vec2(f, "pos", l.pos); f << ",\n";
+            write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
+            write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+            write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+        },
+        [&](const SegmentLight& l) {
+            write_indent(f, d); f << "\"type\": \"segment\",\n";
+            write_indent(f, d); write_vec2(f, "a", l.a); f << ",\n";
+            write_indent(f, d); write_vec2(f, "b", l.b); f << ",\n";
+            write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
+            write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+            write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+        },
+        [&](const BeamLight& l) {
+            write_indent(f, d); f << "\"type\": \"beam\",\n";
+            write_indent(f, d); write_vec2(f, "origin", l.origin); f << ",\n";
+            write_indent(f, d); write_vec2(f, "direction", l.direction); f << ",\n";
+            write_indent(f, d); f << "\"angular_width\": " << fmt(l.angular_width) << ",\n";
+            write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
+            write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+            write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+        },
+    }, light);
+}
+
 // ─── Tonemap/normalize to string ────────────────────────────────────────
 
 static const char* tonemap_to_string(ToneMap tm) {
@@ -182,35 +253,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
     f << "  \"shapes\": [\n";
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
         f << "    {\n";
-        std::visit(overloaded{
-            [&](const Circle& c) {
-                f << "      \"type\": \"circle\",\n";
-                f << "      "; write_vec2(f, "center", c.center); f << ",\n";
-                f << "      \"radius\": " << fmt(c.radius) << ",\n";
-                write_material(f, c.material, 3); f << "\n";
-            },
-            [&](const Segment& s) {
-                f << "      \"type\": \"segment\",\n";
-                f << "      "; write_vec2(f, "a", s.a); f << ",\n";
-                f << "      "; write_vec2(f, "b", s.b); f << ",\n";
-                write_material(f, s.material, 3); f << "\n";
-            },
-            [&](const Arc& a) {
-                f << "      \"type\": \"arc\",\n";
-                f << "      "; write_vec2(f, "center", a.center); f << ",\n";
-                f << "      \"radius\": " << fmt(a.radius) << ",\n";
-                f << "      \"angle_start\": " << fmt(a.angle_start) << ",\n";
-                f << "      \"sweep\": " << fmt(a.sweep) << ",\n";
-                write_material(f, a.material, 3); f << "\n";
-            },
-            [&](const Bezier& b) {
-                f << "      \"type\": \"bezier\",\n";
-                f << "      "; write_vec2(f, "p0", b.p0); f << ",\n";
-                f << "      "; write_vec2(f, "p1", b.p1); f << ",\n";
-                f << "      "; write_vec2(f, "p2", b.p2); f << ",\n";
-                write_material(f, b.material, 3); f << "\n";
-            },
-        }, scene.shapes[i]);
+        write_shape(f, scene.shapes[i], 3);
         f << "    }" << (i + 1 < (int)scene.shapes.size() ? "," : "") << "\n";
     }
     f << "  ],\n";
@@ -219,32 +262,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
     f << "  \"lights\": [\n";
     for (int i = 0; i < (int)scene.lights.size(); ++i) {
         f << "    {\n";
-        std::visit(overloaded{
-            [&](const PointLight& l) {
-                f << "      \"type\": \"point\",\n";
-                f << "      "; write_vec2(f, "pos", l.pos); f << ",\n";
-                f << "      \"intensity\": " << fmt(l.intensity) << ",\n";
-                f << "      \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                f << "      \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-            },
-            [&](const SegmentLight& l) {
-                f << "      \"type\": \"segment\",\n";
-                f << "      "; write_vec2(f, "a", l.a); f << ",\n";
-                f << "      "; write_vec2(f, "b", l.b); f << ",\n";
-                f << "      \"intensity\": " << fmt(l.intensity) << ",\n";
-                f << "      \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                f << "      \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-            },
-            [&](const BeamLight& l) {
-                f << "      \"type\": \"beam\",\n";
-                f << "      "; write_vec2(f, "origin", l.origin); f << ",\n";
-                f << "      "; write_vec2(f, "direction", l.direction); f << ",\n";
-                f << "      \"angular_width\": " << fmt(l.angular_width) << ",\n";
-                f << "      \"intensity\": " << fmt(l.intensity) << ",\n";
-                f << "      \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                f << "      \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-            },
-        }, scene.lights[i]);
+        write_light(f, scene.lights[i], 3);
         f << "    }" << (i + 1 < (int)scene.lights.size() ? "," : "") << "\n";
     }
     f << "  ]" << (scene.groups.empty() ? "\n" : ",\n");
@@ -266,35 +284,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
             f << "      \"shapes\": [\n";
             for (int i = 0; i < (int)group.shapes.size(); ++i) {
                 f << "        {\n";
-                std::visit(overloaded{
-                    [&](const Circle& c) {
-                        f << "          \"type\": \"circle\",\n";
-                        f << "          "; write_vec2(f, "center", c.center); f << ",\n";
-                        f << "          \"radius\": " << fmt(c.radius) << ",\n";
-                        write_material(f, c.material, 5); f << "\n";
-                    },
-                    [&](const Segment& s) {
-                        f << "          \"type\": \"segment\",\n";
-                        f << "          "; write_vec2(f, "a", s.a); f << ",\n";
-                        f << "          "; write_vec2(f, "b", s.b); f << ",\n";
-                        write_material(f, s.material, 5); f << "\n";
-                    },
-                    [&](const Arc& a) {
-                        f << "          \"type\": \"arc\",\n";
-                        f << "          "; write_vec2(f, "center", a.center); f << ",\n";
-                        f << "          \"radius\": " << fmt(a.radius) << ",\n";
-                        f << "          \"angle_start\": " << fmt(a.angle_start) << ",\n";
-                        f << "          \"sweep\": " << fmt(a.sweep) << ",\n";
-                        write_material(f, a.material, 5); f << "\n";
-                    },
-                    [&](const Bezier& b) {
-                        f << "          \"type\": \"bezier\",\n";
-                        f << "          "; write_vec2(f, "p0", b.p0); f << ",\n";
-                        f << "          "; write_vec2(f, "p1", b.p1); f << ",\n";
-                        f << "          "; write_vec2(f, "p2", b.p2); f << ",\n";
-                        write_material(f, b.material, 5); f << "\n";
-                    },
-                }, group.shapes[i]);
+                write_shape(f, group.shapes[i], 5);
                 f << "        }" << (i + 1 < (int)group.shapes.size() ? "," : "") << "\n";
             }
             f << "      ],\n";
@@ -303,32 +293,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
             f << "      \"lights\": [\n";
             for (int i = 0; i < (int)group.lights.size(); ++i) {
                 f << "        {\n";
-                std::visit(overloaded{
-                    [&](const PointLight& l) {
-                        f << "          \"type\": \"point\",\n";
-                        f << "          "; write_vec2(f, "pos", l.pos); f << ",\n";
-                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
-                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-                    },
-                    [&](const SegmentLight& l) {
-                        f << "          \"type\": \"segment\",\n";
-                        f << "          "; write_vec2(f, "a", l.a); f << ",\n";
-                        f << "          "; write_vec2(f, "b", l.b); f << ",\n";
-                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
-                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-                    },
-                    [&](const BeamLight& l) {
-                        f << "          \"type\": \"beam\",\n";
-                        f << "          "; write_vec2(f, "origin", l.origin); f << ",\n";
-                        f << "          "; write_vec2(f, "direction", l.direction); f << ",\n";
-                        f << "          \"angular_width\": " << fmt(l.angular_width) << ",\n";
-                        f << "          \"intensity\": " << fmt(l.intensity) << ",\n";
-                        f << "          \"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
-                        f << "          \"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
-                    },
-                }, group.lights[i]);
+                write_light(f, group.lights[i], 5);
                 f << "        }" << (i + 1 < (int)group.lights.size() ? "," : "") << "\n";
             }
             f << "      ]\n";
@@ -517,6 +482,14 @@ static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out,
             b.p2 = read_vec2(sv.get("p2"));
             b.material = read_material(sv.get("material"), materials);
             out.push_back(b);
+        } else if (t == "polygon") {
+            Polygon p;
+            if (auto* verts = sv.get("vertices")) {
+                for (auto& v : verts->arr)
+                    p.vertices.push_back(read_vec2(&v));
+            }
+            p.material = read_material(sv.get("material"), materials);
+            out.push_back(p);
         }
     }
 }

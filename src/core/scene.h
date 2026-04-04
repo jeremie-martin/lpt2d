@@ -146,7 +146,24 @@ struct Bezier {
     Material material;
 };
 
-using Shape = std::variant<Circle, Segment, Arc, Bezier>;
+inline Vec2 bezier_eval(const Bezier& b, float t) {
+    float u = 1.0f - t;
+    return b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
+}
+
+struct Polygon {
+    std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
+    Material material;
+
+    Vec2 centroid() const {
+        if (vertices.empty()) return {0, 0};
+        Vec2 c{0, 0};
+        for (auto& v : vertices) c = c + v;
+        return c * (1.0f / vertices.size());
+    }
+};
+
+using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon>;
 
 // --- Lights ---
 
@@ -211,6 +228,7 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle);
 std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
 std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
+std::optional<Hit> intersect(const Ray& ray, const Polygon& poly);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // Scene bounds (AABB with padding)
@@ -351,6 +369,7 @@ Light transform_light(const Light& l, const Transform2D& t);
 // Perimeter (arc length) of a shape — used for emission light intensity scaling
 float shape_perimeter(const Shape& s);
 
-// Generate a Light that approximates emission from an emissive shape.
-// Returns nullopt if the shape's material has no emission.
-std::optional<Light> emission_light(const Shape& s);
+// Generate lights that approximate emission from an emissive shape.
+// Returns empty vector if the shape's material has no emission.
+// Distributes point lights along the shape's surface for physically correct surface glow.
+std::vector<Light> emission_light(const Shape& s);
