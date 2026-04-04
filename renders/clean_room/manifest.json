@@ -141,7 +141,10 @@
       "description": "A simplified two-lens scan with restrained breathing motion.",
       "directory": "lenses/breathing_lenses",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -167,7 +170,10 @@
       "description": "A slow prism crown with a lead beam and a softer trailing echo.",
       "directory": "prisms/prism_crown",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -220,7 +226,10 @@
       "description": "Mirror slats open and close into a rhythmic gated field.",
       "directory": "mirrors/aperture_waltz",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -231,7 +240,10 @@
       "description": "A curved resonator cavity with a wall-safe warm beam through the center gap.",
       "directory": "arcs/arc_resonator",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -256,7 +268,10 @@
       "description": "A five-blade mirror fan catches a beam through a small prism.",
       "directory": "mirrors/mirror_fan",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -463,7 +478,10 @@
       "description": "A ribbon pair bends into an off-center beam exchange.",
       "directory": "ribbons/ribbon_exchange",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -573,7 +591,10 @@
       "description": "Three beams strike a staggered splitter trident through the room center.",
       "directory": "crossfires/trident_crossfire",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -947,7 +968,10 @@
       "description": "Two arc families trade the spotlight across the room with a left-top support beam.",
       "directory": "arcs/arc_exchange_toplit",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -1409,7 +1433,10 @@
       "description": "A paired tower stack keeps the rails close under a warm-white lane.",
       "directory": "beacons/beacon_tower_warm",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -1640,7 +1667,10 @@
       "description": "A quay of rails and stacked optics stays broad but contained under a warm-white lane.",
       "directory": "beacons/beacon_quay_warm",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -2419,7 +2449,10 @@
       "description": "Wreath canopy spokes crown the scene with warm and white light.",
       "directory": "canopies/canopy_spoke_wreath_crest",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -2983,7 +3016,10 @@
       "description": "Choir splitter aisles redirect warm and white light through a mirror cloister.",
       "directory": "cloisters/cloister_web_choir_crest",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -3016,7 +3052,10 @@
       "description": "Crossing splitter aisles redirect warm and white light through a mirror cloister.",
       "directory": "cloisters/cloister_web_crossing_crest",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -3294,7 +3333,10 @@
       "description": "Fanline mirror fins sweep a clean crest beam field.",
       "directory": "fins/fin_fanline_crest",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -3558,7 +3600,10 @@
       "description": "Veil mirror fins sweep a clean crest beam field.",
       "directory": "fins/fin_veil_crest",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -3902,7 +3947,10 @@
       "description": "A compass aperture keeps a bright axial cross. dual-side beams.",
       "directory": "gates/gate_compass_dual",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -4001,7 +4049,10 @@
       "description": "A wicket gate ripples between soft rails. dual-side beams.",
       "directory": "gates/gate_wicket_rails_dual",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -4540,7 +4591,10 @@
       "description": "Hybrid Splitter Crownline redirects warm and white beams through a clean splitter web.",
       "directory": "hybrids/hybrid_splitter_crownline",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -4631,7 +4685,10 @@
       "description": "Hybrid Splitter Arcade redirects warm and white beams through a clean splitter web.",
       "directory": "hybrids/hybrid_splitter_arcade",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -5038,7 +5095,10 @@
       "description": "White diamond gate with top beam.",
       "directory": "lenses/diamond_gate_white",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -5536,7 +5596,10 @@
       "description": "Nimbus forms a halo mandala under a warm side beam and a soft top support beam.",
       "directory": "mandalas/mandala_halo_nimbus",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -5580,7 +5643,10 @@
       "description": "Tiara forms a crown mandala under a warm side beam and a soft top support beam.",
       "directory": "mandalas/mandala_crown_tiara",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -6166,7 +6232,10 @@
       "description": "Parasol arcs circle a warm-white core.",
       "directory": "orbits/orbital_arc_parasol",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -6375,7 +6444,10 @@
       "description": "Braid prisms orbit a bright mirror-room center.",
       "directory": "orbits/orbital_prism_braid",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -6947,7 +7019,10 @@
       "description": "A thin prism foil catches a bright side beam.",
       "directory": "prisms/prism_foil",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -7519,7 +7594,10 @@
       "description": "Two ribbons stay wide apart for a simple warm-white lane.",
       "directory": "ribbons/ribbon_lane",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -8256,7 +8334,10 @@
       "description": "Twin compass hubs hold a narrow center gap.",
       "directory": "rotors/rotor_compass_split",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -8740,7 +8821,10 @@
       "description": "Windowed blades reveal a bright inner beam.",
       "directory": "rotors/rotor_iris_window",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -9059,7 +9143,10 @@
       "description": "Stacked spine columns with focus nodes and mirror rails under top beam.",
       "directory": "spines/spine_axis_beam",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -9191,7 +9278,10 @@
       "description": "Swaying spine columns with round nodes and splitter rails under left-plus-top beams.",
       "directory": "spines/spine_bridge_brace",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -9700,7 +9790,10 @@
       "description": "A keel-shaped web keeps the center line luminous.",
       "directory": "splitters/splitter_keel",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -9865,7 +9958,10 @@
       "description": "A trellis web catches a warm beam and a white lift.",
       "directory": "splitters/splitter_trellis",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -10591,7 +10687,10 @@
       "description": "A causeway web stays bright with a triad of structural beams.",
       "directory": "trusses/truss_causeway",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -10704,7 +10803,10 @@
       "description": "A keelway web stays bright under a centered warm beam.",
       "directory": "trusses/truss_keelway",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -11315,7 +11417,10 @@
       "description": "Rose radial ribs crown a vaulted mirror room.",
       "directory": "vaults/vault_spoke_rose_warm",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -11612,7 +11717,10 @@
       "description": "Veil well collar with left-plus-top beams.",
       "directory": "wells/well_collar_veil",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0
@@ -11667,7 +11775,10 @@
       "description": "Rail well spine with left-plus-top beams.",
       "directory": "wells/well_spine_rail",
       "assets": [
-        "frame_000.json"
+        "frame_000.json",
+        "preview.mp4",
+        "sheet.png",
+        "tuning.json"
       ],
       "room_fit": true,
       "max_overrun": 0.0

@@ -1,0 +1,898 @@
+{
+  "generated_on": "2026-04-04",
+  "target_per_family": 3,
+  "family_count": 20,
+  "scene_count": 59,
+  "notes": "Three promoted clean-room scenes per family selected from library_audit. crossfires currently has only two authored scenes, so the total is 59 rather than 60.",
+  "families": [
+    {
+      "family": "arcs",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "arc_resonator_dual_beam",
+          "description": "Warm and white beams crossing a resonator gap with independently animated arcs.",
+          "score": 8.613413,
+          "lit_p90": 148.5,
+          "clipped_pct": 0.024097,
+          "assets": [
+            "arcs/arc_resonator_dual_beam/frame_000.json",
+            "arcs/arc_resonator_dual_beam/preview.mp4",
+            "arcs/arc_resonator_dual_beam/sheet.png",
+            "arcs/arc_resonator_dual_beam/tuning.json"
+          ]
+        },
+        {
+          "scene": "arc_resonator",
+          "description": "A curved resonator cavity with a wall-safe warm beam through the center gap.",
+          "score": 4.906822,
+          "lit_p90": 106.5,
+          "clipped_pct": 0.012344,
+          "assets": [
+            "arcs/arc_resonator/frame_000.json",
+            "arcs/arc_resonator/preview.mp4",
+            "arcs/arc_resonator/sheet.png",
+            "arcs/arc_resonator/tuning.json"
+          ]
+        },
+        {
+          "scene": "arc_exchange_toplit",
+          "description": "Two arc families trade the spotlight across the room with a left-top support beam.",
+          "score": 7.871664,
+          "lit_p90": 130.0,
+          "clipped_pct": 0.023424,
+          "assets": [
+            "arcs/arc_exchange_toplit/frame_000.json",
+            "arcs/arc_exchange_toplit/preview.mp4",
+            "arcs/arc_exchange_toplit/sheet.png",
+            "arcs/arc_exchange_toplit/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "beacons",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "beacon_rampart_warm",
+          "description": "A staggered rampart of lights keeps a firm silhouette under a warm-white lane.",
+          "score": 7.084435,
+          "lit_p90": 128.0,
+          "clipped_pct": 0.020508,
+          "assets": [
+            "beacons/beacon_rampart_warm/frame_000.json",
+            "beacons/beacon_rampart_warm/preview.mp4",
+            "beacons/beacon_rampart_warm/sheet.png",
+            "beacons/beacon_rampart_warm/tuning.json"
+          ]
+        },
+        {
+          "scene": "beacon_quay_warm",
+          "description": "A quay of rails and stacked optics stays broad but contained under a warm-white lane.",
+          "score": 8.503672,
+          "lit_p90": 125.0,
+          "clipped_pct": 0.024006,
+          "assets": [
+            "beacons/beacon_quay_warm/frame_000.json",
+            "beacons/beacon_quay_warm/preview.mp4",
+            "beacons/beacon_quay_warm/sheet.png",
+            "beacons/beacon_quay_warm/tuning.json"
+          ]
+        },
+        {
+          "scene": "beacon_tower_warm",
+          "description": "A paired tower stack keeps the rails close under a warm-white lane.",
+          "score": 8.865036,
+          "lit_p90": 144.25,
+          "clipped_pct": 0.026697,
+          "assets": [
+            "beacons/beacon_tower_warm/frame_000.json",
+            "beacons/beacon_tower_warm/preview.mp4",
+            "beacons/beacon_tower_warm/sheet.png",
+            "beacons/beacon_tower_warm/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "canopies",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "canopy_fin_awning_crest",
+          "description": "Awning canopy fins hang in a bright crest room.",
+          "score": 6.801655,
+          "lit_p90": 134.25,
+          "clipped_pct": 0.020503,
+          "assets": [
+            "canopies/canopy_fin_awning_crest/frame_000.json",
+            "canopies/canopy_fin_awning_crest/preview.mp4",
+            "canopies/canopy_fin_awning_crest/sheet.png",
+            "canopies/canopy_fin_awning_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "canopy_spoke_spray_crest",
+          "description": "Spray canopy spokes crown the scene with warm and white light.",
+          "score": 7.029072,
+          "lit_p90": 110.0,
+          "clipped_pct": 0.019214,
+          "assets": [
+            "canopies/canopy_spoke_spray_crest/frame_000.json",
+            "canopies/canopy_spoke_spray_crest/preview.mp4",
+            "canopies/canopy_spoke_spray_crest/sheet.png",
+            "canopies/canopy_spoke_spray_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "canopy_spoke_wreath_crest",
+          "description": "Wreath canopy spokes crown the scene with warm and white light.",
+          "score": 7.12907,
+          "lit_p90": 108.75,
+          "clipped_pct": 0.019336,
+          "assets": [
+            "canopies/canopy_spoke_wreath_crest/frame_000.json",
+            "canopies/canopy_spoke_wreath_crest/preview.mp4",
+            "canopies/canopy_spoke_wreath_crest/sheet.png",
+            "canopies/canopy_spoke_wreath_crest/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "cloisters",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "cloister_web_apse_crest",
+          "description": "Apse splitter aisles redirect warm and white light through a mirror cloister.",
+          "score": 6.938145,
+          "lit_p90": 122.0,
+          "clipped_pct": 0.019957,
+          "assets": [
+            "cloisters/cloister_web_apse_crest/frame_000.json",
+            "cloisters/cloister_web_apse_crest/preview.mp4",
+            "cloisters/cloister_web_apse_crest/sheet.png",
+            "cloisters/cloister_web_apse_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "cloister_web_crossing_crest",
+          "description": "Crossing splitter aisles redirect warm and white light through a mirror cloister.",
+          "score": 6.713615,
+          "lit_p90": 90.5,
+          "clipped_pct": 0.015512,
+          "assets": [
+            "cloisters/cloister_web_crossing_crest/frame_000.json",
+            "cloisters/cloister_web_crossing_crest/preview.mp4",
+            "cloisters/cloister_web_crossing_crest/sheet.png",
+            "cloisters/cloister_web_crossing_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "cloister_web_choir_crest",
+          "description": "Choir splitter aisles redirect warm and white light through a mirror cloister.",
+          "score": 7.12811,
+          "lit_p90": 124.0,
+          "clipped_pct": 0.020265,
+          "assets": [
+            "cloisters/cloister_web_choir_crest/frame_000.json",
+            "cloisters/cloister_web_choir_crest/preview.mp4",
+            "cloisters/cloister_web_choir_crest/sheet.png",
+            "cloisters/cloister_web_choir_crest/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "crossfires",
+      "selected_count": 2,
+      "representatives": [
+        {
+          "scene": "corner_crossfire",
+          "description": "Cool and warm corner beams cross through a simple glass doublet.",
+          "score": 15.763773,
+          "lit_p90": 156.25,
+          "clipped_pct": 0.042092,
+          "assets": [
+            "crossfires/corner_crossfire/frame_000.json",
+            "crossfires/corner_crossfire/preview.mp4",
+            "crossfires/corner_crossfire/sheet.png",
+            "crossfires/corner_crossfire/tuning.json"
+          ]
+        },
+        {
+          "scene": "trident_crossfire",
+          "description": "Three beams strike a staggered splitter trident through the room center.",
+          "score": 11.503838,
+          "lit_p90": 147.25,
+          "clipped_pct": 0.029379,
+          "assets": [
+            "crossfires/trident_crossfire/frame_000.json",
+            "crossfires/trident_crossfire/preview.mp4",
+            "crossfires/trident_crossfire/sheet.png",
+            "crossfires/trident_crossfire/tuning.json"
+          ]
+        }
+      ],
+      "note": "This family currently has fewer than three authored scenes."
+    },
+    {
+      "family": "fins",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "fin_bracket_crest",
+          "description": "Bracket mirror fins sweep a clean crest beam field.",
+          "score": 5.614259,
+          "lit_p90": 115.0,
+          "clipped_pct": 0.016189,
+          "assets": [
+            "fins/fin_bracket_crest/frame_000.json",
+            "fins/fin_bracket_crest/preview.mp4",
+            "fins/fin_bracket_crest/sheet.png",
+            "fins/fin_bracket_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "fin_fanline_crest",
+          "description": "Fanline mirror fins sweep a clean crest beam field.",
+          "score": 5.962045,
+          "lit_p90": 126.5,
+          "clipped_pct": 0.017891,
+          "assets": [
+            "fins/fin_fanline_crest/frame_000.json",
+            "fins/fin_fanline_crest/preview.mp4",
+            "fins/fin_fanline_crest/sheet.png",
+            "fins/fin_fanline_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "fin_veil_crest",
+          "description": "Veil mirror fins sweep a clean crest beam field.",
+          "score": 6.222066,
+          "lit_p90": 122.5,
+          "clipped_pct": 0.018368,
+          "assets": [
+            "fins/fin_veil_crest/frame_000.json",
+            "fins/fin_veil_crest/preview.mp4",
+            "fins/fin_veil_crest/sheet.png",
+            "fins/fin_veil_crest/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "gates",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "gate_portcullis_dual",
+          "description": "A portcullis grid rises in a calm, readable lattice. dual-side beams.",
+          "score": 6.923769,
+          "lit_p90": 143.75,
+          "clipped_pct": 0.021523,
+          "assets": [
+            "gates/gate_portcullis_dual/frame_000.json",
+            "gates/gate_portcullis_dual/preview.mp4",
+            "gates/gate_portcullis_dual/sheet.png",
+            "gates/gate_portcullis_dual/tuning.json"
+          ]
+        },
+        {
+          "scene": "gate_compass_dual",
+          "description": "A compass aperture keeps a bright axial cross. dual-side beams.",
+          "score": 7.093601,
+          "lit_p90": 94.5,
+          "clipped_pct": 0.016879,
+          "assets": [
+            "gates/gate_compass_dual/frame_000.json",
+            "gates/gate_compass_dual/preview.mp4",
+            "gates/gate_compass_dual/sheet.png",
+            "gates/gate_compass_dual/tuning.json"
+          ]
+        },
+        {
+          "scene": "gate_wicket_rails_dual",
+          "description": "A wicket gate ripples between soft rails. dual-side beams.",
+          "score": 8.603501,
+          "lit_p90": 135.5,
+          "clipped_pct": 0.025582,
+          "assets": [
+            "gates/gate_wicket_rails_dual/frame_000.json",
+            "gates/gate_wicket_rails_dual/preview.mp4",
+            "gates/gate_wicket_rails_dual/sheet.png",
+            "gates/gate_wicket_rails_dual/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "hybrids",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "hybrid_splitter_compassline",
+          "description": "Hybrid Splitter Compassline redirects warm and white beams through a clean splitter web.",
+          "score": 9.128659,
+          "lit_p90": 117.5,
+          "clipped_pct": 0.025799,
+          "assets": [
+            "hybrids/hybrid_splitter_compassline/frame_000.json",
+            "hybrids/hybrid_splitter_compassline/preview.mp4",
+            "hybrids/hybrid_splitter_compassline/sheet.png",
+            "hybrids/hybrid_splitter_compassline/tuning.json"
+          ]
+        },
+        {
+          "scene": "hybrid_splitter_arcade",
+          "description": "Hybrid Splitter Arcade redirects warm and white beams through a clean splitter web.",
+          "score": 5.907921,
+          "lit_p90": 109.25,
+          "clipped_pct": 0.016359,
+          "assets": [
+            "hybrids/hybrid_splitter_arcade/frame_000.json",
+            "hybrids/hybrid_splitter_arcade/preview.mp4",
+            "hybrids/hybrid_splitter_arcade/sheet.png",
+            "hybrids/hybrid_splitter_arcade/tuning.json"
+          ]
+        },
+        {
+          "scene": "hybrid_splitter_crownline",
+          "description": "Hybrid Splitter Crownline redirects warm and white beams through a clean splitter web.",
+          "score": 7.677809,
+          "lit_p90": 110.75,
+          "clipped_pct": 0.02145,
+          "assets": [
+            "hybrids/hybrid_splitter_crownline/frame_000.json",
+            "hybrids/hybrid_splitter_crownline/preview.mp4",
+            "hybrids/hybrid_splitter_crownline/sheet.png",
+            "hybrids/hybrid_splitter_crownline/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "lenses",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "orbiting_triplet",
+          "description": "Three-lens cluster with a wall-safe orbiting beam.",
+          "score": 5.386234,
+          "lit_p90": 111.5,
+          "clipped_pct": 0.014379,
+          "assets": [
+            "lenses/orbiting_triplet/frame_000.json",
+            "lenses/orbiting_triplet/preview.mp4",
+            "lenses/orbiting_triplet/sheet.png",
+            "lenses/orbiting_triplet/tuning.json"
+          ]
+        },
+        {
+          "scene": "breathing_lenses",
+          "description": "A simplified two-lens scan with restrained breathing motion.",
+          "score": 5.288837,
+          "lit_p90": 109.0,
+          "clipped_pct": 0.013529,
+          "assets": [
+            "lenses/breathing_lenses/frame_000.json",
+            "lenses/breathing_lenses/preview.mp4",
+            "lenses/breathing_lenses/sheet.png",
+            "lenses/breathing_lenses/tuning.json"
+          ]
+        },
+        {
+          "scene": "diamond_gate_white",
+          "description": "White diamond gate with top beam.",
+          "score": 5.328144,
+          "lit_p90": 91.0,
+          "clipped_pct": 0.010985,
+          "assets": [
+            "lenses/diamond_gate_white/frame_000.json",
+            "lenses/diamond_gate_white/preview.mp4",
+            "lenses/diamond_gate_white/sheet.png",
+            "lenses/diamond_gate_white/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "mandalas",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "mandala_rosette_crest",
+          "description": "Crest forms a rosette mandala under a warm side beam and a soft top support beam.",
+          "score": 7.267936,
+          "lit_p90": 107.25,
+          "clipped_pct": 0.019418,
+          "assets": [
+            "mandalas/mandala_rosette_crest/frame_000.json",
+            "mandalas/mandala_rosette_crest/preview.mp4",
+            "mandalas/mandala_rosette_crest/sheet.png",
+            "mandalas/mandala_rosette_crest/tuning.json"
+          ]
+        },
+        {
+          "scene": "mandala_crown_tiara",
+          "description": "Tiara forms a crown mandala under a warm side beam and a soft top support beam.",
+          "score": 7.559845,
+          "lit_p90": 95.5,
+          "clipped_pct": 0.017565,
+          "assets": [
+            "mandalas/mandala_crown_tiara/frame_000.json",
+            "mandalas/mandala_crown_tiara/preview.mp4",
+            "mandalas/mandala_crown_tiara/sheet.png",
+            "mandalas/mandala_crown_tiara/tuning.json"
+          ]
+        },
+        {
+          "scene": "mandala_halo_nimbus",
+          "description": "Nimbus forms a halo mandala under a warm side beam and a soft top support beam.",
+          "score": 7.707592,
+          "lit_p90": 105.25,
+          "clipped_pct": 0.020265,
+          "assets": [
+            "mandalas/mandala_halo_nimbus/frame_000.json",
+            "mandalas/mandala_halo_nimbus/preview.mp4",
+            "mandalas/mandala_halo_nimbus/sheet.png",
+            "mandalas/mandala_halo_nimbus/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "mirrors",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "mirror_shutters",
+          "description": "Opposed mirror shutters open and close around a downward beam.",
+          "score": 5.774854,
+          "lit_p90": 140.25,
+          "clipped_pct": 0.01694,
+          "assets": [
+            "mirrors/mirror_shutters/frame_000.json",
+            "mirrors/mirror_shutters/hq.mp4",
+            "mirrors/mirror_shutters/preview.mp4",
+            "mirrors/mirror_shutters/sheet.png",
+            "mirrors/mirror_shutters/tuning.json"
+          ]
+        },
+        {
+          "scene": "aperture_waltz",
+          "description": "Mirror slats open and close into a rhythmic gated field.",
+          "score": 5.111276,
+          "lit_p90": 137.25,
+          "clipped_pct": 0.015278,
+          "assets": [
+            "mirrors/aperture_waltz/frame_000.json",
+            "mirrors/aperture_waltz/preview.mp4",
+            "mirrors/aperture_waltz/sheet.png",
+            "mirrors/aperture_waltz/tuning.json"
+          ]
+        },
+        {
+          "scene": "mirror_fan",
+          "description": "A five-blade mirror fan catches a beam through a small prism.",
+          "score": 8.725973,
+          "lit_p90": 74.0,
+          "clipped_pct": 0.017582,
+          "assets": [
+            "mirrors/mirror_fan/frame_000.json",
+            "mirrors/mirror_fan/preview.mp4",
+            "mirrors/mirror_fan/sheet.png",
+            "mirrors/mirror_fan/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "orbits",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "orbital_arc_calyx",
+          "description": "Calyx arcs circle a warm-white core.",
+          "score": 10.481294,
+          "lit_p90": 132.25,
+          "clipped_pct": 0.030716,
+          "assets": [
+            "orbits/orbital_arc_calyx/frame_000.json",
+            "orbits/orbital_arc_calyx/preview.mp4",
+            "orbits/orbital_arc_calyx/sheet.png",
+            "orbits/orbital_arc_calyx/tuning.json"
+          ]
+        },
+        {
+          "scene": "orbital_prism_braid",
+          "description": "Braid prisms orbit a bright mirror-room center.",
+          "score": 8.014224,
+          "lit_p90": 104.5,
+          "clipped_pct": 0.02099,
+          "assets": [
+            "orbits/orbital_prism_braid/frame_000.json",
+            "orbits/orbital_prism_braid/preview.mp4",
+            "orbits/orbital_prism_braid/sheet.png",
+            "orbits/orbital_prism_braid/tuning.json"
+          ]
+        },
+        {
+          "scene": "orbital_arc_parasol",
+          "description": "Parasol arcs circle a warm-white core.",
+          "score": 8.149283,
+          "lit_p90": 133.5,
+          "clipped_pct": 0.024167,
+          "assets": [
+            "orbits/orbital_arc_parasol/frame_000.json",
+            "orbits/orbital_arc_parasol/preview.mp4",
+            "orbits/orbital_arc_parasol/sheet.png",
+            "orbits/orbital_arc_parasol/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "prisms",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "prism_drum",
+          "description": "A ring of prisms turns like a drum under a warm lead beam.",
+          "score": 12.892553,
+          "lit_p90": 134.5,
+          "clipped_pct": 0.037626,
+          "assets": [
+            "prisms/prism_drum/frame_000.json",
+            "prisms/prism_drum/preview.mp4",
+            "prisms/prism_drum/sheet.png",
+            "prisms/prism_drum/tuning.json"
+          ]
+        },
+        {
+          "scene": "prism_crown",
+          "description": "A slow prism crown with a lead beam and a softer trailing echo.",
+          "score": 4.693656,
+          "lit_p90": 122.0,
+          "clipped_pct": 0.013724,
+          "assets": [
+            "prisms/prism_crown/frame_000.json",
+            "prisms/prism_crown/preview.mp4",
+            "prisms/prism_crown/sheet.png",
+            "prisms/prism_crown/tuning.json"
+          ]
+        },
+        {
+          "scene": "prism_foil",
+          "description": "A thin prism foil catches a bright side beam.",
+          "score": 6.494692,
+          "lit_p90": 96.0,
+          "clipped_pct": 0.015226,
+          "assets": [
+            "prisms/prism_foil/frame_000.json",
+            "prisms/prism_foil/preview.mp4",
+            "prisms/prism_foil/sheet.png",
+            "prisms/prism_foil/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "ribbons",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "waveguide_ribbon",
+          "description": "A clean bezier ribbon waveguide fed by a narrow beam.",
+          "score": 4.924816,
+          "lit_p90": 125.5,
+          "clipped_pct": 0.014553,
+          "assets": [
+            "ribbons/waveguide_ribbon/frame_000.json",
+            "ribbons/waveguide_ribbon/preview.mp4",
+            "ribbons/waveguide_ribbon/sheet.png",
+            "ribbons/waveguide_ribbon/tuning.json"
+          ]
+        },
+        {
+          "scene": "ribbon_exchange",
+          "description": "A ribbon pair bends into an off-center beam exchange.",
+          "score": 12.742202,
+          "lit_p90": 136.0,
+          "clipped_pct": 0.037174,
+          "assets": [
+            "ribbons/ribbon_exchange/frame_000.json",
+            "ribbons/ribbon_exchange/preview.mp4",
+            "ribbons/ribbon_exchange/sheet.png",
+            "ribbons/ribbon_exchange/tuning.json"
+          ]
+        },
+        {
+          "scene": "ribbon_lane",
+          "description": "Two ribbons stay wide apart for a simple warm-white lane.",
+          "score": 13.574695,
+          "lit_p90": 139.25,
+          "clipped_pct": 0.03977,
+          "assets": [
+            "ribbons/ribbon_lane/frame_000.json",
+            "ribbons/ribbon_lane/preview.mp4",
+            "ribbons/ribbon_lane/sheet.png",
+            "ribbons/ribbon_lane/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "rotors",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "iris_gate",
+          "description": "An iris of mirror blades opens and closes under a bright top beam.",
+          "score": 9.852574,
+          "lit_p90": 133.0,
+          "clipped_pct": 0.028854,
+          "assets": [
+            "rotors/iris_gate/frame_000.json",
+            "rotors/iris_gate/preview.mp4",
+            "rotors/iris_gate/sheet.png",
+            "rotors/iris_gate/tuning.json"
+          ]
+        },
+        {
+          "scene": "rotor_compass_split",
+          "description": "Twin compass hubs hold a narrow center gap.",
+          "score": 6.419235,
+          "lit_p90": 133.5,
+          "clipped_pct": 0.019375,
+          "assets": [
+            "rotors/rotor_compass_split/frame_000.json",
+            "rotors/rotor_compass_split/preview.mp4",
+            "rotors/rotor_compass_split/sheet.png",
+            "rotors/rotor_compass_split/tuning.json"
+          ]
+        },
+        {
+          "scene": "rotor_iris_window",
+          "description": "Windowed blades reveal a bright inner beam.",
+          "score": 6.452309,
+          "lit_p90": 127.0,
+          "clipped_pct": 0.018594,
+          "assets": [
+            "rotors/rotor_iris_window/frame_000.json",
+            "rotors/rotor_iris_window/preview.mp4",
+            "rotors/rotor_iris_window/sheet.png",
+            "rotors/rotor_iris_window/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "spines",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "spine_bridge_beamline",
+          "description": "Zigzagged spine columns with round nodes and mirror rails under top beam.",
+          "score": 4.776466,
+          "lit_p90": 119.75,
+          "clipped_pct": 0.012457,
+          "assets": [
+            "spines/spine_bridge_beamline/frame_000.json",
+            "spines/spine_bridge_beamline/preview.mp4",
+            "spines/spine_bridge_beamline/sheet.png",
+            "spines/spine_bridge_beamline/tuning.json"
+          ]
+        },
+        {
+          "scene": "spine_axis_beam",
+          "description": "Stacked spine columns with focus nodes and mirror rails under top beam.",
+          "score": 2.708754,
+          "lit_p90": 97.0,
+          "clipped_pct": 0.004123,
+          "assets": [
+            "spines/spine_axis_beam/frame_000.json",
+            "spines/spine_axis_beam/preview.mp4",
+            "spines/spine_axis_beam/sheet.png",
+            "spines/spine_axis_beam/tuning.json"
+          ]
+        },
+        {
+          "scene": "spine_bridge_brace",
+          "description": "Swaying spine columns with round nodes and splitter rails under left-plus-top beams.",
+          "score": 8.84839,
+          "lit_p90": 119.5,
+          "clipped_pct": 0.024709,
+          "assets": [
+            "spines/spine_bridge_brace/frame_000.json",
+            "spines/spine_bridge_brace/preview.mp4",
+            "spines/spine_bridge_brace/sheet.png",
+            "spines/spine_bridge_brace/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "splitters",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "splitter_braid",
+          "description": "Two beams braid through a reflective beam-splitter cross.",
+          "score": 13.582342,
+          "lit_p90": 154.5,
+          "clipped_pct": 0.036385,
+          "assets": [
+            "splitters/splitter_braid/frame_000.json",
+            "splitters/splitter_braid/preview.mp4",
+            "splitters/splitter_braid/sheet.png",
+            "splitters/splitter_braid/tuning.json"
+          ]
+        },
+        {
+          "scene": "splitter_keel",
+          "description": "A keel-shaped web keeps the center line luminous.",
+          "score": 6.063787,
+          "lit_p90": 104.5,
+          "clipped_pct": 0.016007,
+          "assets": [
+            "splitters/splitter_keel/frame_000.json",
+            "splitters/splitter_keel/preview.mp4",
+            "splitters/splitter_keel/sheet.png",
+            "splitters/splitter_keel/tuning.json"
+          ]
+        },
+        {
+          "scene": "splitter_trellis",
+          "description": "A trellis web catches a warm beam and a white lift.",
+          "score": 6.101027,
+          "lit_p90": 103.25,
+          "clipped_pct": 0.015898,
+          "assets": [
+            "splitters/splitter_trellis/frame_000.json",
+            "splitters/splitter_trellis/preview.mp4",
+            "splitters/splitter_trellis/sheet.png",
+            "splitters/splitter_trellis/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "trusses",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "truss_bastion",
+          "description": "A bastion web anchors the bright central path.",
+          "score": 6.691165,
+          "lit_p90": 117.75,
+          "clipped_pct": 0.019466,
+          "assets": [
+            "trusses/truss_bastion/frame_000.json",
+            "trusses/truss_bastion/preview.mp4",
+            "trusses/truss_bastion/sheet.png",
+            "trusses/truss_bastion/tuning.json"
+          ]
+        },
+        {
+          "scene": "truss_keelway",
+          "description": "A keelway web stays bright under a centered warm beam.",
+          "score": 7.646243,
+          "lit_p90": 113.5,
+          "clipped_pct": 0.021571,
+          "assets": [
+            "trusses/truss_keelway/frame_000.json",
+            "trusses/truss_keelway/preview.mp4",
+            "trusses/truss_keelway/sheet.png",
+            "trusses/truss_keelway/tuning.json"
+          ]
+        },
+        {
+          "scene": "truss_causeway",
+          "description": "A causeway web stays bright with a triad of structural beams.",
+          "score": 7.716931,
+          "lit_p90": 110.75,
+          "clipped_pct": 0.021571,
+          "assets": [
+            "trusses/truss_causeway/frame_000.json",
+            "trusses/truss_causeway/preview.mp4",
+            "trusses/truss_causeway/sheet.png",
+            "trusses/truss_causeway/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "vaults",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "vault_arc_nave_warm",
+          "description": "Nave vaulted arcs gather a clean warm beam relay.",
+          "score": 8.356325,
+          "lit_p90": 129.0,
+          "clipped_pct": 0.024766,
+          "assets": [
+            "vaults/vault_arc_nave_warm/frame_000.json",
+            "vaults/vault_arc_nave_warm/preview.mp4",
+            "vaults/vault_arc_nave_warm/sheet.png",
+            "vaults/vault_arc_nave_warm/tuning.json"
+          ]
+        },
+        {
+          "scene": "vault_fin_span_warm",
+          "description": "Span vault ribs open under a bright warm beam field.",
+          "score": 6.473606,
+          "lit_p90": 126.25,
+          "clipped_pct": 0.019327,
+          "assets": [
+            "vaults/vault_fin_span_warm/frame_000.json",
+            "vaults/vault_fin_span_warm/preview.mp4",
+            "vaults/vault_fin_span_warm/sheet.png",
+            "vaults/vault_fin_span_warm/tuning.json"
+          ]
+        },
+        {
+          "scene": "vault_spoke_rose_warm",
+          "description": "Rose radial ribs crown a vaulted mirror room.",
+          "score": 8.307387,
+          "lit_p90": 115.75,
+          "clipped_pct": 0.023628,
+          "assets": [
+            "vaults/vault_spoke_rose_warm/frame_000.json",
+            "vaults/vault_spoke_rose_warm/preview.mp4",
+            "vaults/vault_spoke_rose_warm/sheet.png",
+            "vaults/vault_spoke_rose_warm/tuning.json"
+          ]
+        }
+      ]
+    },
+    {
+      "family": "wells",
+      "selected_count": 3,
+      "representatives": [
+        {
+          "scene": "well_aperture_window",
+          "description": "Window well aperture with left-plus-top beams.",
+          "score": 6.913361,
+          "lit_p90": 110.75,
+          "clipped_pct": 0.018915,
+          "assets": [
+            "wells/well_aperture_window/frame_000.json",
+            "wells/well_aperture_window/preview.mp4",
+            "wells/well_aperture_window/sheet.png",
+            "wells/well_aperture_window/tuning.json"
+          ]
+        },
+        {
+          "scene": "well_collar_veil",
+          "description": "Veil well collar with left-plus-top beams.",
+          "score": 7.018428,
+          "lit_p90": 105.0,
+          "clipped_pct": 0.018446,
+          "assets": [
+            "wells/well_collar_veil/frame_000.json",
+            "wells/well_collar_veil/preview.mp4",
+            "wells/well_collar_veil/sheet.png",
+            "wells/well_collar_veil/tuning.json"
+          ]
+        },
+        {
+          "scene": "well_spine_rail",
+          "description": "Rail well spine with left-plus-top beams.",
+          "score": 7.115076,
+          "lit_p90": 93.0,
+          "clipped_pct": 0.016224,
+          "assets": [
+            "wells/well_spine_rail/frame_000.json",
+            "wells/well_spine_rail/preview.mp4",
+            "wells/well_spine_rail/sheet.png",
+            "wells/well_spine_rail/tuning.json"
+          ]
+        }
+      ]
+    }
+  ]
+}
