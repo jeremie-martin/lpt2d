@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from .stats import FrameStats, frame_stats
-from .types import Camera2D, Frame, FrameContext, FrameReport, Quality, Scene, Shot, Timeline
+from .types import Camera2D, Canvas, Frame, FrameContext, FrameReport, Look, Quality, Scene, Shot, Timeline, TraceDefaults
 
 DEFAULT_BINARY = "./build/lpt2d-cli"
 
@@ -498,6 +498,77 @@ def render_stats(
     finally:
         renderer.close()
     return results
+
+
+def auto_look(
+    scene_or_animate: Scene | AnimateFn,
+    timeline_or_none: Timeline | float | None = None,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    target_mean: float = 0.35,
+    max_clipping: float = 0.02,
+    tonemap: str = "aces",
+    normalize: str = "rays",
+    binary: str = DEFAULT_BINARY,
+    frame: int = 0,
+) -> Look:
+    """Analyze a scene and return a Look with good exposure settings.
+
+    Works with a static Scene or an (animate, timeline) pair. Renders a
+    low-quality test frame, measures brightness, and computes exposure to
+    hit *target_mean* (0–1 scale) without exceeding *max_clipping*.
+    """
+    # Build animate callback from static Scene
+    if isinstance(scene_or_animate, Scene):
+        scene = scene_or_animate
+        animate: AnimateFn = lambda ctx: Frame(scene=scene)
+        timeline: Timeline | float = 1.0
+    else:
+        animate = scene_or_animate
+        if timeline_or_none is None:
+            raise ValueError("timeline is required when passing an animate callback")
+        timeline = timeline_or_none
+
+    # Render a fast draft with the target tonemap and gamma so the measured
+    # brightness matches what the user will see in the final render.
+    draft_canvas = canvas or Canvas(width=480, height=480)
+    draft_shot = Shot(
+        canvas=draft_canvas,
+        look=Look(exposure=2.0, tonemap=tonemap, normalize=normalize),
+        trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
+    )
+
+    stats_results = render_stats(
+        animate, timeline, frames=frame, settings=draft_shot, camera=camera, binary=binary, fast=True,
+    )
+    if not stats_results:
+        return Look(tonemap=tonemap, normalize=normalize)
+
+    _, _, stats = stats_results[0]
+
+    # Compute exposure adjustment to hit target brightness
+    measured_mean = stats.mean / 255.0
+    if measured_mean > 0.001:
+        # Current exposure is 2.0 (the draft default). Adjust to hit target_mean.
+        exposure = 2.0 + math.log2(target_mean / measured_mean)
+    else:
+        exposure = 4.0  # very dark scene, boost aggressively
+
+    # Clamp to reasonable range
+    exposure = max(-2.0, min(exposure, 10.0))
+
+    if stats.pct_clipped > max_clipping:
+        exposure = exposure - 1.0
+
+    result = Look(exposure=round(exposure, 2), tonemap=tonemap, normalize=normalize)
+
+    # For fixed normalization, calibrate the reference value
+    if normalize == "fixed":
+        ref = calibrate_normalize_ref(animate, timeline, settings=draft_shot, camera=camera, binary=binary, frame=frame)
+        result.normalize_ref = ref
+
+    return result
 
 
 def calibrate_normalize_ref(

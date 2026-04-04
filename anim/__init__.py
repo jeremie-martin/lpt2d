@@ -13,6 +13,7 @@ from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
+from .renderer import auto_look as auto_look
 from .renderer import calibrate_normalize_ref as calibrate_normalize_ref
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
@@ -71,6 +72,7 @@ __all__ = [
     "Look",
     "Material",
     "PointLight",
+    "Polygon",
     "Quality",
     "Renderer",
     "Scene",
@@ -82,6 +84,7 @@ __all__ = [
     "TraceDefaults",
     "Transform2D",
     "Wrap",
+    "auto_look",
     "absorber",
     "ball_lens",
     "beam_splitter",
@@ -97,7 +100,6 @@ __all__ = [
     "opaque_mirror",
     "plano_convex_lens",
     "polygon",
-    "Polygon",
     "rectangle",
     "regular_polygon",
     "render",
