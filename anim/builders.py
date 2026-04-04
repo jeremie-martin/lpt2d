@@ -27,8 +27,8 @@ def regular_polygon(
     cx, cy = center
     verts = [
         [
-            cx + radius * math.cos(rotation + i * math.tau / n),
-            cy + radius * math.sin(rotation + i * math.tau / n),
+            cx + radius * math.cos(rotation - i * math.tau / n),
+            cy + radius * math.sin(rotation - i * math.tau / n),
         ]
         for i in range(n)
     ]
@@ -45,7 +45,7 @@ def rectangle(
     cx, cy = center
     hw, hh = width / 2, height / 2
     return polygon(
-        [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]],
+        [[cx - hw, cy - hh], [cx - hw, cy + hh], [cx + hw, cy + hh], [cx + hw, cy - hh]],
         material,
     )
 
