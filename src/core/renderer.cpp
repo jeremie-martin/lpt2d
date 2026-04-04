@@ -125,9 +125,10 @@ static_assert(sizeof(GPUBezier) == 56);
 
 Renderer::~Renderer() { shutdown(); }
 
-bool Renderer::init(int width, int height) {
+bool Renderer::init(int width, int height, bool half_float) {
     width_ = width;
     height_ = height;
+    half_precision_ = half_float;
 
     glewExperimental = GL_TRUE;
     if (glewContextInit() != GLEW_OK) {
@@ -219,7 +220,8 @@ bool Renderer::create_framebuffers() {
     // Float accumulation texture
     glGenTextures(1, &float_texture_);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, half_precision_ ? GL_RGBA16F : GL_RGBA32F,
+                 width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -656,6 +658,18 @@ void Renderer::update_display(const PostProcess& pp) {
     // Only do the expensive glReadPixels + CPU scan when Max normalization
     // actually needs it.  Other modes compute their divisor without GPU readback.
     // compute_current_max() is still available on demand (e.g. GUI "Capture Ref").
+    // Resolution-independence correction
+    //
+    // Line segments are rasterized with a fixed pixel-space width (1.5 px).
+    // This means per-pixel accumulated energy scales as  N / viewport_scale
+    // (more pixels → each pixel captures a narrower world-space cross-section
+    // of the light field).  Modes that use an external divisor (Rays, Fixed,
+    // Off) must compensate by dividing the divisor by viewport_scale so that
+    // the displayed brightness is independent of canvas resolution and camera
+    // zoom.  Max mode is already self-normalizing (both numerator and
+    // denominator carry the same 1/scale factor, which cancels).
+    float scale = (viewport_scale_ > 0.0f) ? viewport_scale_ : 1.0f;
+
     float divisor;
     switch (pp.normalize) {
     case NormalizeMode::Max: {
@@ -664,14 +678,14 @@ void Renderer::update_display(const PostProcess& pp) {
         break;
     }
     case NormalizeMode::Rays:
-        divisor = (total_rays_ > 0) ? (float)total_rays_ : 1.0f;
+        divisor = (total_rays_ > 0) ? (float)total_rays_ / scale : 1.0f;
         break;
     case NormalizeMode::Fixed:
-        divisor = (pp.normalize_ref > 0.0f) ? pp.normalize_ref : 1.0f;
+        divisor = (pp.normalize_ref > 0.0f) ? pp.normalize_ref / scale : 1.0f;
         break;
     case NormalizeMode::Off:
     default:
-        divisor = 1.0f;
+        divisor = 1.0f / scale;
         break;
     }
 

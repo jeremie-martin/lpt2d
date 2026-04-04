@@ -10,7 +10,7 @@ class Renderer {
 public:
     ~Renderer();
 
-    bool init(int width, int height);
+    bool init(int width, int height, bool half_float = false);
     void resize(int width, int height);
     void shutdown();
     void clear();
@@ -44,10 +44,11 @@ public:
 
 private:
     int width_ = 0, height_ = 0;
+    bool half_precision_ = false; // RGBA16F instead of RGBA32F (fast preview mode)
 
     // Float accumulation FBO
     GLuint fbo_ = 0;
-    GLuint float_texture_ = 0; // GL_RGBA32F
+    GLuint float_texture_ = 0; // GL_RGBA32F or GL_RGBA16F
 
     // Display FBO (8-bit for ImGui / export)
     GLuint display_fbo_ = 0;

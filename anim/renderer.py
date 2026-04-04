@@ -27,7 +27,7 @@ class Renderer:
 
     last_report: FrameReport | None = None
 
-    def __init__(self, shot: Shot | None = None, binary: str = DEFAULT_BINARY):
+    def __init__(self, shot: Shot | None = None, binary: str = DEFAULT_BINARY, fast: bool = False):
         if shot is None:
             shot = Shot()
         canvas = shot.canvas
@@ -74,6 +74,8 @@ class Renderer:
             cmd.extend(["--opacity", str(look.opacity)])
         if trace.intensity != 1.0:
             cmd.extend(["--intensity", str(trace.intensity)])
+        if fast:
+            cmd.append("--fast")
         self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -301,6 +303,7 @@ def render(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
+    fast: bool = False,
     codec: str = "libx264",
     crf: int = 18,
     start: float = 0.0,
@@ -334,7 +337,7 @@ def render(
     else:
         out = FFmpegOutput(output, width, height, timeline.fps, codec, crf)
 
-    renderer = Renderer(shot, binary=binary)
+    renderer = Renderer(shot, binary=binary, fast=fast)
 
     def _render_frame(i: int) -> bytes:
         ctx = timeline.context_at(i)
@@ -383,11 +386,12 @@ def render_still(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
+    fast: bool = False,
 ) -> None:
     """Render a single frame to an image file."""
     timeline, shot = _resolve_args(timeline, settings)
 
-    renderer = Renderer(shot, binary=binary)
+    renderer = Renderer(shot, binary=binary, fast=fast)
     try:
         ctx = timeline.context_at(frame)
         result = animate(ctx)
@@ -412,6 +416,7 @@ def render_contact_sheet(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
+    fast: bool = False,
 ) -> None:
     """Render a grid of frames spread across the timeline."""
     timeline, shot = _resolve_args(timeline, settings)
@@ -425,7 +430,7 @@ def render_contact_sheet(
     total = timeline.total_frames
     indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
 
-    renderer = Renderer(shot, binary=binary)
+    renderer = Renderer(shot, binary=binary, fast=fast)
     try:
         frames_rgb: list[bytes] = []
         for idx, fi in enumerate(indices):
@@ -463,6 +468,7 @@ def render_stats(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
+    fast: bool = False,
 ) -> list[tuple[int, float, FrameStats]]:
     """Render frames and return their statistics. No file output."""
     timeline, shot = _resolve_args(timeline, settings)
@@ -479,7 +485,7 @@ def render_stats(
     w, h = shot.canvas.width, shot.canvas.height
     aspect = shot.canvas.aspect
 
-    renderer = Renderer(shot, binary=binary)
+    renderer = Renderer(shot, binary=binary, fast=fast)
     results: list[tuple[int, float, FrameStats]] = []
     try:
         for fi in indices:
@@ -501,6 +507,7 @@ def calibrate_normalize_ref(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
+    fast: bool = False,
     frame: int = 0,
 ) -> float:
     """Render one frame with max-normalize to determine a good normalize_ref.
@@ -513,7 +520,7 @@ def calibrate_normalize_ref(
     # Force max mode so the C++ renderer computes and reports true HDR peak.
     cal_shot = replace(shot, look=replace(shot.look, normalize="max", normalize_pct=1.0))
 
-    renderer = Renderer(cal_shot, binary=binary)
+    renderer = Renderer(cal_shot, binary=binary, fast=fast)
     try:
         ctx = timeline.context_at(frame)
         result = animate(ctx)

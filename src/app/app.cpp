@@ -1292,7 +1292,7 @@ int App::run(const AppConfig& config) {
         // -- Display --
         if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Display");
-            ImGui::SliderFloat("Exposure", &ed.shot.look.exposure, -5.0f, 5.0f);
+            ImGui::SliderFloat("Exposure", &ed.shot.look.exposure, -15.0f, 15.0f);
             ImGui::SliderFloat("Contrast", &ed.shot.look.contrast, 0.1f, 3.0f);
             ImGui::SliderFloat("Gamma", &ed.shot.look.gamma, 0.5f, 4.0f);
             ImGui::SliderFloat("White point", &ed.shot.look.white_point, 0.1f, 10.0f);

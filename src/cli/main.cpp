@@ -33,6 +33,7 @@ static void print_usage() {
               << "  --background <r,g,b>     Background color, linear RGB 0-1 (overrides shot look)\n"
               << "  --opacity <float>        Global opacity 0-1 (overrides shot look)\n"
               << "  --intensity <float>      Trace intensity multiplier (overrides shot trace)\n"
+              << "  --fast                   Half-precision FBO (RGBA16F) — ~3x faster, slight precision loss\n"
               << "  --stream                 Streaming mode: read JSON shots from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -91,7 +92,7 @@ static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
     }
 }
 
-static int run_stream(const Shot& session, int64_t default_rays) {
+static int run_stream(const Shot& session, int64_t default_rays, bool fast) {
     HeadlessGL gl;
     if (!gl.init()) return 1;
 
@@ -101,7 +102,7 @@ static int run_stream(const Shot& session, int64_t default_rays) {
     PostProcess default_pp = session.look;
 
     Renderer renderer;
-    if (!renderer.init(width, height)) return 1;
+    if (!renderer.init(width, height, fast)) return 1;
 
     const size_t frame_bytes = (size_t)width * height * 3;
     std::vector<uint8_t> pixels;
@@ -196,6 +197,7 @@ int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     bool stream_mode = false;
+    bool fast_mode = false;
     CLIOverrides overrides;
 
     for (int i = 1; i < argc; ++i) {
@@ -242,6 +244,8 @@ int main(int argc, char** argv) {
             overrides.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--intensity") == 0 && i + 1 < argc) {
             overrides.intensity = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--fast") == 0) {
+            fast_mode = true;
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
@@ -258,7 +262,7 @@ int main(int argc, char** argv) {
         // Stream mode: use default shot (no scene file needed), apply CLI overrides
         Shot session;
         apply_overrides(session, overrides);
-        return run_stream(session, session.trace.rays);
+        return run_stream(session, session.trace.rays, fast_mode);
     }
 
     // Load shot (scene file provides defaults for everything)
@@ -273,7 +277,7 @@ int main(int argc, char** argv) {
     int height = shot.canvas.height;
 
     Renderer renderer;
-    if (!renderer.init(width, height))
+    if (!renderer.init(width, height, fast_mode))
         return 1;
 
     // Resolve camera bounds
