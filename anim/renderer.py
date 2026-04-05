@@ -544,7 +544,7 @@ def auto_look(
     canvas: Canvas | None = None,
     target_mean: float = 0.35,
     max_clipping: float = 0.02,
-    tonemap: str = "aces",
+    tonemap: str = "reinhardx",
     normalize: str = "rays",
     binary: str = DEFAULT_BINARY,
     frame: int = 0,
@@ -571,7 +571,7 @@ def auto_look(
     draft_canvas = canvas or Canvas(width=480, height=480)
     draft_shot = Shot(
         canvas=draft_canvas,
-        look=Look(exposure=2.0, tonemap=tonemap, normalize=normalize),
+        look=Look(exposure=-5.0, tonemap=tonemap, normalize=normalize),
         trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
     )
 
@@ -592,13 +592,13 @@ def auto_look(
     # Compute exposure adjustment to hit target brightness
     measured_mean = stats.mean / 255.0
     if measured_mean > 0.001:
-        # Current exposure is 2.0 (the draft default). Adjust to hit target_mean.
-        exposure = 2.0 + math.log2(target_mean / measured_mean)
+        # Current exposure is -5.0 (the draft default). Adjust to hit target_mean.
+        exposure = -5.0 + math.log2(target_mean / measured_mean)
     else:
-        exposure = 4.0  # very dark scene, boost aggressively
+        exposure = -1.0  # very dark scene, boost aggressively
 
     # Clamp to reasonable range
-    exposure = max(-2.0, min(exposure, 10.0))
+    exposure = max(-15.0, min(exposure, 10.0))
 
     if stats.pct_clipped > max_clipping:
         exposure = exposure - 1.0

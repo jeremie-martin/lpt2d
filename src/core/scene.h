@@ -324,11 +324,11 @@ struct TraceConfig {
 };
 
 struct PostProcess {
-    float exposure = 2.0f;
+    float exposure = -5.0f;
     float contrast = 1.0f;
-    float gamma = 2.2f;
-    ToneMap tone_map = ToneMap::ACES;
-    float white_point = 1.0f;
+    float gamma = 2.0f;
+    ToneMap tone_map = ToneMap::ReinhardExtended;
+    float white_point = 0.5f;
     NormalizeMode normalize = NormalizeMode::Rays;
     float normalize_ref = 0.0f; // divisor for Fixed mode
     float normalize_pct = 1.0f; // percentile for Max mode (1.0=max, 0.99=P99)

@@ -45,16 +45,16 @@ def test_group_clone():
 
 
 def test_shot_with_look():
-    shot = Shot(look=Look(exposure=2.0, tonemap="aces"))
+    shot = Shot(look=Look(exposure=-5.0, tonemap="reinhardx"))
     new_shot = shot.with_look(exposure=5.0, tonemap="reinhard")
     # Original unchanged
-    assert shot.look.exposure == 2.0
-    assert shot.look.tonemap == "aces"
+    assert shot.look.exposure == -5.0
+    assert shot.look.tonemap == "reinhardx"
     # New shot has overrides
     assert new_shot.look.exposure == 5.0
     assert new_shot.look.tonemap == "reinhard"
     # Other fields preserved
-    assert new_shot.look.gamma == 2.2
+    assert new_shot.look.gamma == 2.0
 
 
 def test_shot_with_trace():
@@ -66,8 +66,8 @@ def test_shot_with_trace():
 
 
 def test_look_with_overrides():
-    look = Look(exposure=2.0, gamma=2.2)
+    look = Look(exposure=-5.0, gamma=2.0)
     new_look = look.with_overrides(exposure=4.0)
-    assert look.exposure == 2.0
+    assert look.exposure == -5.0
     assert new_look.exposure == 4.0
-    assert new_look.gamma == 2.2
+    assert new_look.gamma == 2.0

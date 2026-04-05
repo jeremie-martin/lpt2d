@@ -19,6 +19,24 @@
 #include <cstring>
 #include <iostream>
 
+namespace {
+
+constexpr int kGuiTraceBatch = 20'000;
+constexpr float kDefaultRoomHalfWidth = 1.0f;
+constexpr float kDefaultRoomHalfHeight = kDefaultRoomHalfWidth * 9.0f / 16.0f;
+
+Material gui_wall_material() {
+    return mat_mirror(0.95f, 0.1f);
+}
+
+void apply_gui_shot_defaults(Shot& shot) {
+    // The GUI keeps trace batch as a session-only control. It is not loaded
+    // from authored JSON and is stripped back to authored defaults on save.
+    shot.trace.batch = kGuiTraceBatch;
+}
+
+} // namespace
+
 // ─── App::run ───────────────────────────────────────────────────────────
 
 int App::run(const AppConfig& config) {
@@ -76,7 +94,7 @@ int App::run(const AppConfig& config) {
             std::cerr << "Unknown scene: " << config.initial_scene << ", using " << builtins[0].name << "\n";
     }
     ed.shot = load_builtin_scene(builtins[current_scene]);
-    ed.shot.trace.batch = 50000; // interactive batch size
+    apply_gui_shot_defaults(ed.shot);
     ed.scene_bounds = compute_bounds(ed.shot.scene);
     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
 
@@ -148,7 +166,10 @@ int App::run(const AppConfig& config) {
 
     auto do_save = [&]() {
         std::string path = ed.save_path.empty() ? (ed.shot.name + ".json") : ed.save_path;
-        if (save_shot_json(ed.shot, path)) {
+        Shot saved = ed.shot;
+        // GUI batch is session-only; authored JSON falls back to TraceDefaults batch.
+        saved.trace.batch = TraceDefaults{}.batch;
+        if (save_shot_json(saved, path)) {
             ed.save_path = path;
             ed.dirty = false;
             std::cerr << "Saved: " << path << "\n";
@@ -910,6 +931,7 @@ int App::run(const AppConfig& config) {
                     if (ImGui::Selectable(builtins[i].name.c_str(), i == current_scene)) {
                         current_scene = i;
                         ed.shot = load_builtin_scene(builtins[i]);
+                        apply_gui_shot_defaults(ed.shot);
                         reset_editor();
                     }
                 }
@@ -917,10 +939,14 @@ int App::run(const AppConfig& config) {
             }
             if (ImGui::Button("New Scene")) {
                 current_scene = -1;
-                ed.shot.scene = Scene{};
+                ed.shot = Shot{};
                 ed.shot.name = "custom";
-                add_box_walls(ed.shot.scene, 1.0f, 0.7f, mat_mirror(0.95f));
+                add_box_walls(ed.shot.scene, kDefaultRoomHalfWidth, kDefaultRoomHalfHeight,
+                              gui_wall_material());
                 ed.shot.scene.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
+                ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
+                                               {kDefaultRoomHalfWidth, kDefaultRoomHalfHeight}};
+                apply_gui_shot_defaults(ed.shot);
                 reset_editor();
             }
 
@@ -941,6 +967,7 @@ int App::run(const AppConfig& config) {
                 if (ImGui::Button("OK") && load_path_buf[0]) {
                     Shot loaded = load_shot_json(load_path_buf);
                     if (!loaded.scene.shapes.empty() || !loaded.scene.lights.empty() || !loaded.scene.groups.empty()) {
+                        apply_gui_shot_defaults(loaded);
                         ed.shot = loaded;
                         ed.save_path = load_path_buf;
                         current_scene = -1;
@@ -1527,7 +1554,7 @@ int App::run(const AppConfig& config) {
             // Look presets
             static const struct { const char* name; float exp; float contrast; float gamma;
                                   ToneMap tm; float wp; NormalizeMode norm; float ambient; } look_presets[] = {
-                {"Default",       2.0f, 1.0f, 2.2f, ToneMap::ACES,             1.0f, NormalizeMode::Rays, 0.0f},
+                {"Default",      -5.0f, 1.0f, 2.0f, ToneMap::ReinhardExtended, 0.5f, NormalizeMode::Rays, 0.0f},
                 {"Bright",        4.0f, 1.1f, 2.2f, ToneMap::ACES,             1.5f, NormalizeMode::Rays, 0.0f},
                 {"Dark/Moody",    1.0f, 1.3f, 2.4f, ToneMap::ACES,             0.8f, NormalizeMode::Rays, 0.0f},
                 {"Linear",        0.0f, 1.0f, 1.0f, ToneMap::None,             1.0f, NormalizeMode::Max,  0.0f},

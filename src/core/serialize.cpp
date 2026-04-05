@@ -227,12 +227,19 @@ static void write_look(std::ostream& f, const Look& look) {
 }
 
 static void write_trace(std::ostream& f, const TraceDefaults& trace) {
-    f << "  \"trace\": {\n";
-    f << "    \"rays\": " << trace.rays << ",\n";
-    f << "    \"batch\": " << trace.batch << ",\n";
-    f << "    \"depth\": " << trace.depth;
-    if (trace.intensity != 1.0f) {
-        f << ",\n    \"intensity\": " << fmt(trace.intensity);
+    TraceDefaults def; // defaults for comparison
+    std::vector<std::pair<std::string, std::string>> entries;
+    if (trace.rays != def.rays) entries.push_back({"\"rays\"", std::to_string(trace.rays)});
+    if (trace.batch != def.batch) entries.push_back({"\"batch\"", std::to_string(trace.batch)});
+    if (trace.depth != def.depth) entries.push_back({"\"depth\"", std::to_string(trace.depth)});
+    if (trace.intensity != def.intensity) entries.push_back({"\"intensity\"", fmt(trace.intensity)});
+
+    if (entries.empty()) return;
+
+    f << "  \"trace\": {";
+    for (int i = 0; i < (int)entries.size(); ++i) {
+        if (i > 0) f << ",";
+        f << "\n    " << entries[i].first << ": " << entries[i].second;
     }
     f << "\n  },\n";
 }
@@ -620,10 +627,10 @@ static Canvas read_canvas(const JsonValue* v) {
 static Look read_look(const JsonValue* v) {
     Look look;
     if (!v || v->type != JsonValue::Object) return look;
-    if (auto* f = v->get("exposure")) look.exposure = f->as_float(2.0f);
+    if (auto* f = v->get("exposure")) look.exposure = f->as_float(-5.0f);
     if (auto* f = v->get("contrast")) look.contrast = f->as_float(1.0f);
-    if (auto* f = v->get("gamma")) look.gamma = f->as_float(2.2f);
-    if (auto* f = v->get("white_point")) look.white_point = f->as_float(1.0f);
+    if (auto* f = v->get("gamma")) look.gamma = f->as_float(2.0f);
+    if (auto* f = v->get("white_point")) look.white_point = f->as_float(0.5f);
     if (auto* f = v->get("tonemap"))
         if (auto tm = parse_tonemap(f->as_string())) look.tone_map = *tm;
     if (auto* f = v->get("normalize"))

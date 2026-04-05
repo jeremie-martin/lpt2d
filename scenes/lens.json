@@ -1,10 +1,29 @@
 {
   "version": 4,
   "name": "lens_gallery",
-  "camera": { "bounds": [-1.65, -1.02, 1.65, 1.02] },
-  "canvas": { "width": 1920, "height": 1080 },
-  "look": { "exposure": 2, "tonemap": "aces", "normalize": "rays" },
-  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
+  "camera": {
+    "bounds": [
+      -1.55,
+      -0.871875,
+      1.55,
+      0.871875
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -5,
+    "gamma": 2,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays"
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "materials": {
     "glass": {
       "ior": 1.5,
@@ -15,27 +34,77 @@
       "cauchy_b": 20000,
       "albedo": 1
     },
-    "absorber": {
+    "mirror_wall": {
       "ior": 1,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 0,
+      "roughness": 0.1,
+      "metallic": 1,
+      "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.05
+      "albedo": 0.95
     }
   },
   "shapes": [
-    { "type": "segment", "a": [-1.55, -0.92], "b": [1.55, -0.92], "material": "absorber" },
-    { "type": "segment", "a": [1.55, 0.92], "b": [-1.55, 0.92], "material": "absorber" },
-    { "type": "segment", "a": [-1.55, 0.92], "b": [-1.55, -0.92], "material": "absorber" },
-    { "type": "segment", "a": [1.55, -0.92], "b": [1.55, 0.92], "material": "absorber" }
+    {
+      "type": "segment",
+      "a": [
+        -1.55,
+        -0.871875
+      ],
+      "b": [
+        1.55,
+        -0.871875
+      ],
+      "material": "mirror_wall"
+    },
+    {
+      "type": "segment",
+      "a": [
+        1.55,
+        0.871875
+      ],
+      "b": [
+        -1.55,
+        0.871875
+      ],
+      "material": "mirror_wall"
+    },
+    {
+      "type": "segment",
+      "a": [
+        -1.55,
+        0.871875
+      ],
+      "b": [
+        -1.55,
+        -0.871875
+      ],
+      "material": "mirror_wall"
+    },
+    {
+      "type": "segment",
+      "a": [
+        1.55,
+        -0.871875
+      ],
+      "b": [
+        1.55,
+        0.871875
+      ],
+      "material": "mirror_wall"
+    }
   ],
   "lights": [
     {
       "type": "beam",
-      "origin": [-1.35, 0.55],
-      "direction": [1, 0],
+      "origin": [
+        -1.35,
+        0.55
+      ],
+      "direction": [
+        1,
+        0
+      ],
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
@@ -43,8 +112,14 @@
     },
     {
       "type": "beam",
-      "origin": [-1.35, 0.18],
-      "direction": [1, 0],
+      "origin": [
+        -1.35,
+        0.18
+      ],
+      "direction": [
+        1,
+        0
+      ],
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
@@ -52,8 +127,14 @@
     },
     {
       "type": "beam",
-      "origin": [-1.35, -0.18],
-      "direction": [1, 0],
+      "origin": [
+        -1.35,
+        -0.18
+      ],
+      "direction": [
+        1,
+        0
+      ],
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
@@ -61,8 +142,14 @@
     },
     {
       "type": "beam",
-      "origin": [-1.35, -0.55],
-      "direction": [1, 0],
+      "origin": [
+        -1.35,
+        -0.55
+      ],
+      "direction": [
+        1,
+        0
+      ],
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
@@ -73,55 +160,193 @@
     {
       "name": "biconvex",
       "transform": {
-        "translate": [0, 0.55],
+        "translate": [
+          0,
+          0.55
+        ],
         "rotate": 0,
-        "scale": [1, 1]
+        "scale": [
+          1,
+          1
+        ]
       },
       "shapes": [
-        { "type": "arc", "center": [0.28, 0], "radius": 0.34, "angle_start": 2.6179939, "sweep": 1.0471976, "material": "glass" },
-        { "type": "segment", "a": [-0.0144486, 0.17], "b": [0.002486, 0.17], "material": "glass" },
-        { "type": "arc", "center": [-0.22, 0], "radius": 0.28, "angle_start": 5.6307254, "sweep": 1.3049198, "material": "glass" },
-        { "type": "segment", "a": [0.002486, -0.17], "b": [-0.0144486, -0.17], "material": "glass" }
+        {
+          "type": "arc",
+          "center": [
+            0.28,
+            0
+          ],
+          "radius": 0.34,
+          "angle_start": 2.6179939,
+          "sweep": 1.0471976,
+          "material": "glass"
+        },
+        {
+          "type": "segment",
+          "a": [
+            -0.0144486,
+            0.17
+          ],
+          "b": [
+            0.002486,
+            0.17
+          ],
+          "material": "glass"
+        },
+        {
+          "type": "arc",
+          "center": [
+            -0.22,
+            0
+          ],
+          "radius": 0.28,
+          "angle_start": 5.6307254,
+          "sweep": 1.3049198,
+          "material": "glass"
+        },
+        {
+          "type": "segment",
+          "a": [
+            0.002486,
+            -0.17
+          ],
+          "b": [
+            -0.0144486,
+            -0.17
+          ],
+          "material": "glass"
+        }
       ],
       "lights": []
     },
     {
       "name": "plano_convex",
       "transform": {
-        "translate": [0, 0.18],
+        "translate": [
+          0,
+          0.18
+        ],
         "rotate": 0,
-        "scale": [1, 1]
+        "scale": [
+          1,
+          1
+        ]
       },
       "shapes": [
-        { "type": "segment", "a": [-0.06, -0.17], "b": [-0.06, 0.17], "material": "glass" },
-        { "type": "segment", "a": [-0.06, 0.17], "b": [0.002486, 0.17], "material": "glass" },
-        { "type": "arc", "center": [-0.22, 0], "radius": 0.28, "angle_start": 5.6307254, "sweep": 1.3049198, "material": "glass" },
-        { "type": "segment", "a": [0.002486, -0.17], "b": [-0.06, -0.17], "material": "glass" }
+        {
+          "type": "segment",
+          "a": [
+            -0.06,
+            -0.17
+          ],
+          "b": [
+            -0.06,
+            0.17
+          ],
+          "material": "glass"
+        },
+        {
+          "type": "segment",
+          "a": [
+            -0.06,
+            0.17
+          ],
+          "b": [
+            0.002486,
+            0.17
+          ],
+          "material": "glass"
+        },
+        {
+          "type": "arc",
+          "center": [
+            -0.22,
+            0
+          ],
+          "radius": 0.28,
+          "angle_start": 5.6307254,
+          "sweep": 1.3049198,
+          "material": "glass"
+        },
+        {
+          "type": "segment",
+          "a": [
+            0.002486,
+            -0.17
+          ],
+          "b": [
+            -0.06,
+            -0.17
+          ],
+          "material": "glass"
+        }
       ],
       "lights": []
     },
     {
       "name": "hemispherical",
       "transform": {
-        "translate": [0, -0.18],
+        "translate": [
+          0,
+          -0.18
+        ],
         "rotate": 0,
-        "scale": [1, 1]
+        "scale": [
+          1,
+          1
+        ]
       },
       "shapes": [
-        { "type": "segment", "a": [-0.085, -0.17], "b": [-0.085, 0.17], "material": "glass" },
-        { "type": "arc", "center": [-0.085, 0], "radius": 0.17, "angle_start": 4.712389, "sweep": 3.1415927, "material": "glass" }
+        {
+          "type": "segment",
+          "a": [
+            -0.085,
+            -0.17
+          ],
+          "b": [
+            -0.085,
+            0.17
+          ],
+          "material": "glass"
+        },
+        {
+          "type": "arc",
+          "center": [
+            -0.085,
+            0
+          ],
+          "radius": 0.17,
+          "angle_start": 4.712389,
+          "sweep": 3.1415927,
+          "material": "glass"
+        }
       ],
       "lights": []
     },
     {
       "name": "ball",
       "transform": {
-        "translate": [0, -0.55],
+        "translate": [
+          0,
+          -0.55
+        ],
         "rotate": 0,
-        "scale": [1, 1]
+        "scale": [
+          1,
+          1
+        ]
       },
       "shapes": [
-        { "type": "circle", "center": [0, 0], "radius": 0.17, "material": "glass" }
+        {
+          "type": "circle",
+          "center": [
+            0,
+            0
+          ],
+          "radius": 0.17,
+          "material": "glass"
+        }
       ],
       "lights": []
     }

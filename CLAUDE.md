@@ -27,7 +27,7 @@ Produces three targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (head
 python anim/examples/orbiting_beam.py
 ```
 
-Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--ambient`, `--background`, `--opacity`, `--intensity`. All flags override the shot file's saved values.
+Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--gamma`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--white-point`, `--ambient`, `--background`, `--opacity`, `--intensity`. All flags override the shot file's saved values.
 
 ## Benchmarking
 
@@ -50,7 +50,7 @@ The central concept is the **Shot** — the complete authored document that pres
 - **Look**: post-processing settings (exposure, tonemap, gamma, normalize, etc.)
 - **TraceDefaults**: ray tracing quality (rays, batch, depth, intensity)
 
-The GUI save/load, CLI, and Python API all operate on Shots. "Save" preserves the full visual result.
+The GUI save/load, CLI, and Python API all operate on Shots. The one GUI-only exception is trace batch size: the GUI always uses a session batch of `20_000`, ignores any saved `trace.batch` when loading, and omits `trace.batch` when saving.
 
 ### Layer model
 
@@ -140,7 +140,7 @@ src/
 - **Enter-group editing**: Double-click a group member to enter the group. Properties panel shows individual member materials. Escape exits.
 - **Material Library**: Named materials with create/edit/delete/apply-to-selection. Preset buttons for common materials.
 - **Undo/Redo**: Ctrl+Z/Ctrl+Shift+Z, 200-level history (tracks Scene only, not Look/TraceDefaults).
-- **Save/Load**: Ctrl+S/Ctrl+O saves/loads the full Shot (scene content + camera + look + trace + canvas).
+- **Save/Load**: Ctrl+S/Ctrl+O saves/loads the Shot (scene content + camera + look + trace + canvas), except GUI trace batch size, which is session-only and always resets to `20_000`.
 
 ### Important constraints
 
@@ -156,13 +156,13 @@ src/
 {
   "version": 4,
   "name": "scene_name",
-  "camera": { "bounds": [-1.3, -0.9, 1.3, 0.9] },
+  "camera": { "bounds": [-1.2, -0.675, 1.2, 0.675] },
   "canvas": { "width": 1920, "height": 1080 },
-  "look": { "exposure": 2, "tonemap": "aces", "normalize": "rays" },
-  "trace": { "rays": 10000000, "batch": 200000, "depth": 12 },
+  "look": { "exposure": -5, "gamma": 2, "tonemap": "reinhardx", "white_point": 0.5, "normalize": "rays" },
+  "trace": { "rays": 10000000, "depth": 12 },
   "materials": {
     "glass": {"ior": 1.5, "transmission": 1, "cauchy_b": 20000},
-    "mirror": {"metallic": 1, "albedo": 0.95, "transmission": 1}
+    "mirror": {"metallic": 1, "roughness": 0.1, "albedo": 0.95, "transmission": 1}
   },
   "shapes": [
     {"type": "circle", "center": [0, 0], "radius": 0.2, "material": "glass"},
@@ -189,9 +189,9 @@ Camera, canvas, look, and trace blocks are at the root level alongside scene con
 
 **Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
 
-**Look** only needs to include non-default values. Defaults: exposure=2, contrast=1, gamma=2.2, tonemap=aces, white_point=1, normalize=rays, ambient=0, background=[0,0,0], opacity=1.
+**Look** only needs to include non-default values. Defaults: exposure=-5, contrast=1, gamma=2, tonemap=reinhardx, white_point=0.5, normalize=rays, ambient=0, background=[0,0,0], opacity=1.
 
-**Trace** only needs to include non-default values. Defaults: rays=10M, batch=200K, depth=12, intensity=1.
+**Trace** only needs to include non-default values. Defaults: rays=10M, batch=200K, depth=12, intensity=1. The GUI does not persist `trace.batch`: it always uses `20_000` as an interactive session default.
 
 ### Python animation API
 

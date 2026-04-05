@@ -601,11 +601,11 @@ class Canvas:
 class Look:
     """Post-processing / display settings."""
 
-    exposure: float = 2.0
+    exposure: float = -5.0
     contrast: float = 1.0
-    gamma: float = 2.2
-    tonemap: str = "aces"
-    white_point: float = 1.0
+    gamma: float = 2.0
+    tonemap: str = "reinhardx"
+    white_point: float = 0.5
     normalize: str = "rays"  # "max" | "rays" | "fixed" | "off"
     normalize_ref: float = 0.0
     normalize_pct: float = 1.0
@@ -631,11 +631,11 @@ class Look:
     @staticmethod
     def from_dict(d: dict) -> Look:
         return Look(
-            exposure=d.get("exposure", 2.0),
+            exposure=d.get("exposure", -5.0),
             contrast=d.get("contrast", 1.0),
-            gamma=d.get("gamma", 2.2),
-            tonemap=d.get("tonemap", "aces"),
-            white_point=d.get("white_point", 1.0),
+            gamma=d.get("gamma", 2.0),
+            tonemap=d.get("tonemap", "reinhardx"),
+            white_point=d.get("white_point", 0.5),
             normalize=d.get("normalize", "rays"),
             normalize_ref=d.get("normalize_ref", 0.0),
             normalize_pct=d.get("normalize_pct", 1.0),
