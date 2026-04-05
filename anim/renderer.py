@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from .stats import FrameStats, QualityGate, check_quality, frame_stats
+from .stats import FrameStats, QualityGate, check_quality, frame_stats, frame_stats_from_report
 from .types import (
     Camera2D,
     Canvas,
@@ -38,7 +38,13 @@ class Renderer:
 
     last_report: FrameReport | None = None
 
-    def __init__(self, shot: Shot | None = None, binary: str = DEFAULT_BINARY, fast: bool = False):
+    def __init__(
+        self,
+        shot: Shot | None = None,
+        binary: str = DEFAULT_BINARY,
+        fast: bool = False,
+        histogram: bool = False,
+    ):
         if shot is None:
             shot = Shot()
         canvas = shot.canvas
@@ -50,7 +56,6 @@ class Renderer:
         cmd = [
             binary,
             "--stream",
-            "--histogram",
             "--width",
             str(canvas.width),
             "--height",
@@ -72,6 +77,8 @@ class Renderer:
             "--white-point",
             str(look.white_point),
         ]
+        if histogram:
+            cmd.append("--histogram")
         cmd.extend(["--normalize", look.normalize])
         if look.normalize_ref > 0:
             cmd.extend(["--normalize-ref", str(look.normalize_ref)])
@@ -551,7 +558,7 @@ def render_stats(
     w, h = shot.canvas.width, shot.canvas.height
     aspect = shot.canvas.aspect
 
-    renderer = Renderer(shot, binary=binary, fast=fast)
+    renderer = Renderer(shot, binary=binary, fast=fast, histogram=True)
     results: list[tuple[int, float, FrameStats]] = []
     try:
         for fi in indices:
@@ -560,7 +567,12 @@ def render_stats(
             f = result if isinstance(result, Frame) else Frame(scene=result)
             wire = _build_wire_json(f, camera, aspect)
             rgb = renderer.render_frame(wire)
-            results.append((fi, ctx.time, frame_stats(rgb, w, h)))
+            stats = None
+            if renderer.last_report is not None:
+                stats = frame_stats_from_report(renderer.last_report, w, h)
+            if stats is None:
+                stats = frame_stats(rgb, w, h)
+            results.append((fi, ctx.time, stats))
     finally:
         renderer.close()
     return results

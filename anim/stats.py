@@ -121,6 +121,52 @@ def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
     )
 
 
+def frame_stats_from_report(report: FrameReport, width: int, height: int) -> FrameStats | None:
+    """Reconstruct FrameStats from a renderer histogram report when available."""
+    histogram = report.histogram
+    if histogram is None or len(histogram) != 256:
+        return None
+
+    total = sum(histogram)
+    if total <= 0:
+        return None
+
+    bins = np.arange(256, dtype=np.float64)
+    hist = np.asarray(histogram, dtype=np.float64)
+
+    mean = report.mean if report.mean is not None else float(np.dot(hist, bins) / total)
+    variance = float(np.dot(hist, bins * bins) / total) - mean * mean
+    std = variance**0.5 if variance > 0 else 0.0
+
+    nonzero = np.nonzero(histogram)[0]
+    lum_min = int(nonzero[0])
+    lum_max = int(nonzero[-1])
+
+    pct_black = report.pct_black if report.pct_black is not None else float(histogram[0] / total)
+    if report.pct_clipped is None:
+        return None
+
+    cdf = np.cumsum(hist)
+
+    def _percentile(p: float) -> float:
+        idx = np.searchsorted(cdf, p * total)
+        return float(min(idx, 255))
+
+    return FrameStats(
+        mean=mean,
+        max=lum_max,
+        min=lum_min,
+        std=std,
+        pct_black=pct_black,
+        pct_clipped=report.pct_clipped,
+        p05=_percentile(0.05),
+        p50=report.p50 if report.p50 is not None else _percentile(0.50),
+        p95=report.p95 if report.p95 is not None else _percentile(0.95),
+        width=width,
+        height=height,
+    )
+
+
 # --- Quality gates ---
 
 
