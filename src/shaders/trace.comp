@@ -19,14 +19,15 @@ struct GPUSeg {
 };
 
 struct GPULight {
-    uint type;
+    uint type;       // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
     float intensity;
     vec2 pos_a;
     vec2 pos_b;
+    vec2 dir;        // direction for parallel_beam and spot
     float angular_width;
+    float falloff;   // spot cosine-power exponent
     float wavelength_min;
     float wavelength_max;
-    float _pad;
 };
 
 struct LineSeg {
@@ -321,12 +322,22 @@ void main() {
         vec2 tangent = normalize(seg_d);
         float a = (rand01() - 0.5) * PI;
         rd = normal * cos(a) + tangent * sin(a);
-    } else {
+    } else if (lt.type == 2u) {
         // Beam light: origin + direction ± angular half-width
         ro = lt.pos_a;
-        float base_angle = atan(lt.pos_b.y, lt.pos_b.x);
-        float a = base_angle + (rand01() - 0.5) * 2.0 * lt.angular_width;
-        rd = vec2(cos(a), sin(a));
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.pos_b, spread);
+    } else if (lt.type == 3u) {
+        // Parallel segment beam: random point on segment, directed
+        float t = rand01();
+        ro = mix(lt.pos_a, lt.pos_b, t);
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.dir, spread);
+    } else {
+        // Spot light: point source with cosine-power angular falloff
+        ro = lt.pos_a;
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.dir, spread);
     }
 
     // Random wavelength → color (per-light spectral range)
@@ -337,6 +348,12 @@ void main() {
     // estimator f(x)/p(x) where f = w_i * base and p = w_i / W, giving W * base.
     // Adding a light source ADDS energy — existing lights keep their brightness.
     vec4 color = vec4(rgb * uIntensity * total_w, uIntensity * total_w);
+
+    // Spot light angular falloff (cosine-power attenuation)
+    if (lt.type == 4u && lt.falloff > 0.0) {
+        // dot(rd, lt.dir) = cos(spread) since both are unit vectors
+        color *= pow(max(dot(rd, lt.dir), 0.0), lt.falloff);
+    }
 
     // Trace
     float current_absorption = 0.0;

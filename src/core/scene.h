@@ -190,7 +190,26 @@ struct BeamLight {
     float wavelength_max = 780.0f;
 };
 
-using Light = std::variant<PointLight, SegmentLight, BeamLight>;
+struct ParallelBeamLight {
+    Vec2 a, b;                      // segment endpoints (emission aperture)
+    Vec2 direction{1.0f, 0.0f};     // normalized beam direction
+    float angular_width = 0.0f;     // full cone angle in radians (0 = perfectly collimated)
+    float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+};
+
+struct SpotLight {
+    Vec2 pos;
+    Vec2 direction{1.0f, 0.0f};     // normalized
+    float angular_width = 0.5f;     // full cone angle in radians
+    float falloff = 2.0f;           // cosine-power exponent (0=uniform, higher=sharper)
+    float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+};
+
+using Light = std::variant<PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight>;
 
 // --- Groups ---
 

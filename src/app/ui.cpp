@@ -142,11 +142,22 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
     }, shape);
 }
 
+static void draw_direction_cone(ImDrawList* dl, const CameraView& cv, Vec2 origin,
+                                Vec2 direction, float angular_width, ImU32 col, float th) {
+    Vec2 d = direction.normalized();
+    dl->AddLine(cv.to_screen(origin), cv.to_screen(origin + d * 0.3f), col, th);
+    float half_w = angular_width * 0.5f;
+    float base_a = std::atan2(d.y, d.x);
+    Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
+    Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
+    dl->AddLine(cv.to_screen(origin), cv.to_screen(origin + w1 * 0.2f), col, th * 0.5f);
+    dl->AddLine(cv.to_screen(origin), cv.to_screen(origin + w2 * 0.2f), col, th * 0.5f);
+}
+
 void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light, ImU32 col, float th, float dpi) {
     std::visit(overloaded{
         [&](const PointLight& l) {
-            float r = 4.0f * dpi;
-            dl->AddCircleFilled(cv.to_screen(l.pos), r, col);
+            dl->AddCircleFilled(cv.to_screen(l.pos), 4.0f * dpi, col);
         },
         [&](const SegmentLight& l) {
             ImVec2 a = cv.to_screen(l.a), b = cv.to_screen(l.b);
@@ -155,17 +166,8 @@ void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light
             dl->AddCircleFilled(b, 3.0f * dpi, col);
         },
         [&](const BeamLight& l) {
-            ImVec2 o = cv.to_screen(l.origin);
-            dl->AddCircleFilled(o, 4.0f * dpi, col);
-            Vec2 d = l.direction.normalized();
-            ImVec2 tip = cv.to_screen(l.origin + d * 0.3f);
-            dl->AddLine(o, tip, col, th);
-            float half_w = l.angular_width * 0.5f;
-            float base_a = std::atan2(d.y, d.x);
-            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
-            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
-            dl->AddLine(o, cv.to_screen(l.origin + w1 * 0.2f), col, th * 0.5f);
-            dl->AddLine(o, cv.to_screen(l.origin + w2 * 0.2f), col, th * 0.5f);
+            dl->AddCircleFilled(cv.to_screen(l.origin), 4.0f * dpi, col);
+            draw_direction_cone(dl, cv, l.origin, l.direction, l.angular_width, col, th);
         },
         [&](const ParallelBeamLight& l) {
             ImVec2 sa = cv.to_screen(l.a), sb = cv.to_screen(l.b);
@@ -173,28 +175,11 @@ void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light
             dl->AddCircleFilled(sa, 3.0f * dpi, col);
             dl->AddCircleFilled(sb, 3.0f * dpi, col);
             Vec2 mid = (l.a + l.b) * 0.5f;
-            Vec2 d = l.direction.normalized();
-            ImVec2 tip = cv.to_screen(mid + d * 0.3f);
-            dl->AddLine(cv.to_screen(mid), tip, col, th);
-            float half_w = l.angular_width * 0.5f;
-            float base_a = std::atan2(d.y, d.x);
-            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
-            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
-            dl->AddLine(cv.to_screen(mid), cv.to_screen(mid + w1 * 0.2f), col, th * 0.5f);
-            dl->AddLine(cv.to_screen(mid), cv.to_screen(mid + w2 * 0.2f), col, th * 0.5f);
+            draw_direction_cone(dl, cv, mid, l.direction, l.angular_width, col, th);
         },
         [&](const SpotLight& l) {
-            ImVec2 o = cv.to_screen(l.pos);
-            dl->AddCircleFilled(o, 4.0f * dpi, col);
-            Vec2 d = l.direction.normalized();
-            ImVec2 tip = cv.to_screen(l.pos + d * 0.3f);
-            dl->AddLine(o, tip, col, th);
-            float half_w = l.angular_width * 0.5f;
-            float base_a = std::atan2(d.y, d.x);
-            Vec2 w1{std::cos(base_a + half_w), std::sin(base_a + half_w)};
-            Vec2 w2{std::cos(base_a - half_w), std::sin(base_a - half_w)};
-            dl->AddLine(o, cv.to_screen(l.pos + w1 * 0.2f), col, th * 0.5f);
-            dl->AddLine(o, cv.to_screen(l.pos + w2 * 0.2f), col, th * 0.5f);
+            dl->AddCircleFilled(cv.to_screen(l.pos), 4.0f * dpi, col);
+            draw_direction_cone(dl, cv, l.pos, l.direction, l.angular_width, col, th);
         },
     }, light);
 }

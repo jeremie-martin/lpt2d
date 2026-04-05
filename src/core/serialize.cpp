@@ -125,6 +125,26 @@ static void write_light(std::ostream& f, const Light& light, int d) {
             write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
             write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
         },
+        [&](const ParallelBeamLight& l) {
+            write_indent(f, d); f << "\"type\": \"parallel_beam\",\n";
+            write_indent(f, d); write_vec2(f, "a", l.a); f << ",\n";
+            write_indent(f, d); write_vec2(f, "b", l.b); f << ",\n";
+            write_indent(f, d); write_vec2(f, "direction", l.direction); f << ",\n";
+            write_indent(f, d); f << "\"angular_width\": " << fmt(l.angular_width) << ",\n";
+            write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
+            write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+            write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+        },
+        [&](const SpotLight& l) {
+            write_indent(f, d); f << "\"type\": \"spot\",\n";
+            write_indent(f, d); write_vec2(f, "pos", l.pos); f << ",\n";
+            write_indent(f, d); write_vec2(f, "direction", l.direction); f << ",\n";
+            write_indent(f, d); f << "\"angular_width\": " << fmt(l.angular_width) << ",\n";
+            write_indent(f, d); f << "\"falloff\": " << fmt(l.falloff) << ",\n";
+            write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
+            write_indent(f, d); f << "\"wavelength_min\": " << fmt(l.wavelength_min) << ",\n";
+            write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
+        },
     }, light);
 }
 
@@ -524,6 +544,30 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
             else l.direction = {1, 0};
             if (auto* v = lv.get("angular_width")) l.angular_width = v->as_float(0.1f);
+            if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
+            if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
+            if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
+            out.push_back(l);
+        } else if (t == "parallel_beam") {
+            ParallelBeamLight l;
+            l.a = read_vec2(lv.get("a"));
+            l.b = read_vec2(lv.get("b"));
+            l.direction = read_vec2(lv.get("direction"));
+            if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+            else l.direction = {1, 0};
+            if (auto* v = lv.get("angular_width")) l.angular_width = v->as_float(0.0f);
+            if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
+            if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
+            if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
+            out.push_back(l);
+        } else if (t == "spot") {
+            SpotLight l;
+            l.pos = read_vec2(lv.get("pos"));
+            l.direction = read_vec2(lv.get("direction"));
+            if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
+            else l.direction = {1, 0};
+            if (auto* v = lv.get("angular_width")) l.angular_width = v->as_float(0.5f);
+            if (auto* v = lv.get("falloff")) l.falloff = v->as_float(2.0f);
             if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
             if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
             if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);

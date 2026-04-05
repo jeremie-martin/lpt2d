@@ -139,6 +139,15 @@ Bounds light_bounds(const Light& l) {
                           [](const BeamLight& light) {
                               return Bounds{light.origin, light.origin};
                           },
+                          [](const ParallelBeamLight& light) {
+                              return Bounds{
+                                  {std::min(light.a.x, light.b.x), std::min(light.a.y, light.b.y)},
+                                  {std::max(light.a.x, light.b.x), std::max(light.a.y, light.b.y)},
+                              };
+                          },
+                          [](const SpotLight& light) {
+                              return Bounds{light.pos, light.pos};
+                          },
                       },
                       l);
 }
@@ -420,6 +429,23 @@ Light transform_light(const Light& l, const Transform2D& t) {
             Vec2 d = t.apply_direction(bl.direction);
             r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
             r.angular_width = std::clamp(bl.angular_width * std::sqrt(std::abs(t.scale.x * t.scale.y)), 0.01f, PI);
+            return r;
+        },
+        [&](const ParallelBeamLight& pl) -> Light {
+            ParallelBeamLight r = pl;
+            r.a = t.apply(pl.a);
+            r.b = t.apply(pl.b);
+            Vec2 d = t.apply_direction(pl.direction);
+            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
+            // angular_width is collimation quality — doesn't scale with spatial transforms
+            return r;
+        },
+        [&](const SpotLight& sl) -> Light {
+            SpotLight r = sl;
+            r.pos = t.apply(sl.pos);
+            Vec2 d = t.apply_direction(sl.direction);
+            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
+            r.angular_width = std::clamp(sl.angular_width * std::sqrt(std::abs(t.scale.x * t.scale.y)), 0.01f, PI);
             return r;
         },
     }, l);

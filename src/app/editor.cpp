@@ -51,6 +51,8 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
             [](const PointLight& l) -> Vec2 { return l.pos; },
             [](const SegmentLight& l) -> Vec2 { return (l.a + l.b) * 0.5f; },
             [](const BeamLight& l) -> Vec2 { return l.origin; },
+            [](const ParallelBeamLight& l) -> Vec2 { return (l.a + l.b) * 0.5f; },
+            [](const SpotLight& l) -> Vec2 { return l.pos; },
         }, *light);
     }
     if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
@@ -146,6 +148,8 @@ static float light_distance(Vec2 wp, const Light& light) {
         [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
         [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
         [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
+        [&](const ParallelBeamLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
+        [&](const SpotLight& l) -> float { return (wp - l.pos).length(); },
     }, light);
 }
 
@@ -309,6 +313,8 @@ void translate_light(Light& l, Vec2 delta) {
         [&](PointLight& pl) { pl.pos = pl.pos + delta; },
         [&](SegmentLight& sl) { sl.a = sl.a + delta; sl.b = sl.b + delta; },
         [&](BeamLight& bl) { bl.origin = bl.origin + delta; },
+        [&](ParallelBeamLight& pl) { pl.a = pl.a + delta; pl.b = pl.b + delta; },
+        [&](SpotLight& sl) { sl.pos = sl.pos + delta; },
     }, l);
 }
 
@@ -339,6 +345,19 @@ static void rotate_light(Light& l, Vec2 pivot, float angle) {
             float c = std::cos(angle), s = std::sin(angle);
             Vec2 d = bl.direction;
             bl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
+        },
+        [&](ParallelBeamLight& pl) {
+            pl.a = rotate_around(pl.a, pivot, angle);
+            pl.b = rotate_around(pl.b, pivot, angle);
+            float c = std::cos(angle), s = std::sin(angle);
+            Vec2 d = pl.direction;
+            pl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
+        },
+        [&](SpotLight& sl) {
+            sl.pos = rotate_around(sl.pos, pivot, angle);
+            float c = std::cos(angle), s = std::sin(angle);
+            Vec2 d = sl.direction;
+            sl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
         },
     }, l);
 }
@@ -374,6 +393,15 @@ static void scale_light(Light& l, Vec2 pivot, float fx, float fy) {
         [&](BeamLight& bl) {
             bl.origin = scale_around(bl.origin, pivot, fx, fy);
             bl.angular_width = std::clamp(bl.angular_width * std::sqrt(fx * fy), 0.01f, PI);
+        },
+        [&](ParallelBeamLight& pl) {
+            pl.a = scale_around(pl.a, pivot, fx, fy);
+            pl.b = scale_around(pl.b, pivot, fx, fy);
+            // angular_width is collimation quality — doesn't scale with spatial transforms
+        },
+        [&](SpotLight& sl) {
+            sl.pos = scale_around(sl.pos, pivot, fx, fy);
+            sl.angular_width = std::clamp(sl.angular_width * std::sqrt(fx * fy), 0.01f, PI);
         },
     }, l);
 }
@@ -492,6 +520,16 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                     handles.push_back({Handle::Position, id, 0, l.origin});
                     handles.push_back({Handle::Direction, id, 0, l.origin + l.direction.normalized() * 0.3f});
                 },
+                [&](const ParallelBeamLight& l) {
+                    handles.push_back({Handle::Position, id, 0, l.a});
+                    handles.push_back({Handle::Position, id, 1, l.b});
+                    Vec2 mid = (l.a + l.b) * 0.5f;
+                    handles.push_back({Handle::Direction, id, 0, mid + l.direction.normalized() * 0.3f});
+                },
+                [&](const SpotLight& l) {
+                    handles.push_back({Handle::Position, id, 0, l.pos});
+                    handles.push_back({Handle::Direction, id, 0, l.pos + l.direction.normalized() * 0.3f});
+                },
             }, *light);
         }
         if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
@@ -576,6 +614,24 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                     l.origin = wp;
                 } else if (handle.kind == Handle::Direction) {
                     Vec2 d = wp - l.origin;
+                    if (d.length_sq() > 1e-6f) l.direction = d.normalized();
+                }
+            },
+            [&](ParallelBeamLight& l) {
+                if (handle.kind == Handle::Position) {
+                    if (handle.param_index == 0) l.a = wp;
+                    else l.b = wp;
+                } else if (handle.kind == Handle::Direction) {
+                    Vec2 mid = (l.a + l.b) * 0.5f;
+                    Vec2 d = wp - mid;
+                    if (d.length_sq() > 1e-6f) l.direction = d.normalized();
+                }
+            },
+            [&](SpotLight& l) {
+                if (handle.kind == Handle::Position) {
+                    l.pos = wp;
+                } else if (handle.kind == Handle::Direction) {
+                    Vec2 d = wp - l.pos;
                     if (d.length_sq() > 1e-6f) l.direction = d.normalized();
                 }
             },
