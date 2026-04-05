@@ -89,6 +89,9 @@ The canonical pack is intentionally compact and workflow-first. The built-in
 scene set remains important because it still drives runtime discovery and the
 general `benchmark.sh` performance workflow.
 
+Built-in authored JSON, the Python API, the CLI, and the GUI all target the
+current v5 authored format.
+
 ## Design Priorities
 
 - Physical accuracy is non-negotiable.

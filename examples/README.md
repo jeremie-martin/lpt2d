@@ -15,8 +15,8 @@ the project is meant to be used now.
   Builder/composition authoring: reusable optical motifs, repeated structure,
   and group-driven composition.
 - [twin_prisms_scene_patch.py](/home/holo/prog/lpt2d/examples/python/twin_prisms_scene_patch.py)
-  Load-modify-animate authoring: start from a saved shot, patch it
-  procedurally, and animate the result.
+  Load-modify-animate authoring: start from a saved shot, patch named groups,
+  shared materials, and lights procedurally, and animate the result.
 
 Run them from the repo root, for example:
 

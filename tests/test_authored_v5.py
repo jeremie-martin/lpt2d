@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
 from anim import renderer as renderer_mod
 from anim.types import BeamLight, Circle, Frame, Group, Material, Scene, Segment, Shot
+
+
+CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
 
 
 def _make_bound_scene() -> Scene:
@@ -37,7 +42,7 @@ def _make_bound_scene() -> Scene:
                 ],
             )
         ],
-    ).sync_material_bindings()
+    )
 
 
 def test_v5_round_trip_preserves_ids_and_material_bindings():
@@ -109,15 +114,13 @@ def test_shared_material_edits_propagate_and_detach_to_inline():
     lens_a = scene.require_shape("lens_a")
     lens_b = scene.require_shape("lens_b")
 
-    scene.materials["glass"].ior = 1.7
-    scene.sync_material_bindings()
+    scene.require_material("glass").ior = 1.7
 
     assert lens_a.material.ior == pytest.approx(1.7)
     assert lens_b.material.ior == pytest.approx(1.7)
 
     scene.detach_material("lens_a")
-    scene.materials["glass"].ior = 1.9
-    scene.sync_material_bindings()
+    scene.require_material("glass").ior = 1.9
 
     assert lens_a.material_id is None
     assert lens_a.material.ior == pytest.approx(1.7)
@@ -127,6 +130,43 @@ def test_shared_material_edits_propagate_and_detach_to_inline():
     scene.bind_material("lens_a", "glass")
     assert lens_a.material_id == "glass"
     assert lens_a.material.ior == pytest.approx(1.9)
+
+
+def test_set_material_rebinds_existing_shared_shapes():
+    scene = _make_bound_scene()
+
+    replacement = scene.set_material("glass", Material(ior=1.8, transmission=1.0, absorption=0.2))
+
+    lens = scene.require_shape("lens_a")
+    assert lens.material is replacement
+    assert lens.material_id == "glass"
+    assert lens.material.absorption == pytest.approx(0.2)
+
+
+def test_delete_material_detaches_bound_shapes():
+    scene = _make_bound_scene()
+    scene.require_material("glass").ior = 1.7
+
+    removed = scene.delete_material("glass")
+
+    lens = scene.require_shape("lens_a")
+    assert removed.ior == pytest.approx(1.7)
+    assert lens.material_id is None
+    assert lens.material.ior == pytest.approx(1.7)
+    assert scene.find_material("glass") is None
+
+
+def test_rename_material_rebinds_shapes_after_library_replacement():
+    scene = Scene(shapes=[Circle(id="lens", radius=0.2, material_id="glass")])
+    scene.materials["glass"] = Material(ior=1.8, transmission=1.0)
+
+    scene.rename_material("glass", "glass_hot")
+
+    lens = scene.require_shape("lens")
+    rebound = scene.require_material("glass_hot")
+    assert lens.material_id == "glass_hot"
+    assert lens.material is rebound
+    assert lens.material.ior == pytest.approx(1.8)
 
 
 def test_shot_to_json_does_not_mutate_shared_scene_ids():
@@ -155,9 +195,96 @@ def test_wire_json_does_not_mutate_scene_or_force_material_sync():
     )
 
     assert scene.shapes[0].id == ""
-    assert scene.shapes[0].material.ior == pytest.approx(1.0)
+    assert scene.shapes[0].material.ior == pytest.approx(1.7)
     assert wire["shapes"][0]["material_id"] == "glass"
     assert "material" not in wire["shapes"][0]
+
+
+def test_v5_rejects_older_shot_version():
+    outdated = {
+        "version": 4,
+        "name": "outdated",
+        "shapes": [],
+        "lights": [],
+        "groups": [],
+    }
+
+    with pytest.raises(ValueError, match=r"unsupported shot version: 4 \(expected 5\)"):
+        Shot.from_json(json.dumps(outdated))
+
+
+def test_cpp_cli_rejects_older_shot_version(tmp_path):
+    outdated_path = tmp_path / "outdated_v4.json"
+    output = tmp_path / "outdated_v4.png"
+    outdated_path.write_text(
+        json.dumps(
+            {
+                "version": 4,
+                "name": "outdated",
+                "shapes": [],
+                "lights": [],
+                "groups": [],
+            }
+        )
+    )
+
+    result = subprocess.run(
+        [str(CLI_BINARY), "--scene", str(outdated_path), "--output", str(output)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "Unsupported shot version (expected 5)" in result.stderr
+    assert not output.exists()
+
+
+def test_cpp_stream_rejects_older_shot_version():
+    result = subprocess.run(
+        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
+        input=json.dumps({"version": 4, "shapes": [], "lights": [], "groups": []}) + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "frame 0: Unsupported shot version (expected 5)" in result.stderr
+
+
+def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
+    bad_path = tmp_path / "trailing_garbage.json"
+    output = tmp_path / "trailing_garbage.png"
+    bad_path.write_text('{"version":5,"shapes":[],"lights":[],"groups":[]} trailing')
+
+    result = subprocess.run(
+        [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid JSON" in result.stderr
+    assert not output.exists()
+
+
+def test_cpp_stream_rejects_truncated_json():
+    result = subprocess.run(
+        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
+        input='{"version":5,"shapes":[],"lights":[],"groups":[]\n',
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "frame 0: Invalid JSON" in result.stderr
 
 
 def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):

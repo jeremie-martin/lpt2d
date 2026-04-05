@@ -58,6 +58,10 @@ def _material_payload(material: Material, material_id: str | None) -> dict:
     return {"material": material.to_dict()}
 
 
+def _clone_material(material: Material) -> Material:
+    return replace(material)
+
+
 def glass(ior: float, cauchy_b: float = 0.0, absorption: float = 0.0) -> Material:
     return Material(ior=ior, transmission=1.0, absorption=absorption, cauchy_b=cauchy_b)
 
@@ -465,7 +469,7 @@ def _parse_shape_material(d: dict, materials: dict[str, Material]) -> tuple[Mate
             raise ValueError("material_id must be a non-empty string")
         if material_id not in materials:
             raise ValueError(f"unknown material_id: {material_id}")
-        return Material.from_dict(materials[material_id].to_dict()), material_id
+        return materials[material_id], material_id
     return Material.from_dict(d["material"]), None
 
 
@@ -594,6 +598,9 @@ class Scene:
     groups: list[Group] = field(default_factory=list)
     materials: dict[str, Material] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        self._link_known_material_bindings()
+
     def _iter_shapes(self):
         for shape in self.shapes:
             yield shape
@@ -607,6 +614,12 @@ class Scene:
         for group in self.groups:
             for light in group.lights:
                 yield light
+
+    def _link_known_material_bindings(self) -> None:
+        for shape in self._iter_shapes():
+            material_id = getattr(shape, "material_id", None)
+            if material_id and material_id in self.materials:
+                shape.material = self.materials[material_id]
 
     def _next_entity_id(self, prefix: str, used: set[str]) -> str:
         suffix = 0
@@ -641,7 +654,7 @@ class Scene:
             if material_id:
                 if material_id not in self.materials:
                     raise ValueError(f"unknown material_id: {material_id}")
-                shape.material = Material.from_dict(self.materials[material_id].to_dict())
+                shape.material = self.materials[material_id]
         return self
 
     def validate(self) -> Scene:
@@ -753,33 +766,58 @@ class Scene:
             raise ValueError(f"unknown light id: {entity_id}")
         return light
 
-    def bind_material(self, shape_id: str, material_id: str) -> Shape:
-        if material_id not in self.materials:
+    def find_material(self, material_id: str) -> Material | None:
+        return self.materials.get(material_id)
+
+    def require_material(self, material_id: str) -> Material:
+        material = self.find_material(material_id)
+        if material is None:
             raise ValueError(f"unknown material_id: {material_id}")
+        return material
+
+    def set_material(self, material_id: str, material: Material) -> Material:
+        if not material_id:
+            raise ValueError("material ids must be non-empty")
+        self.materials[material_id] = material
+        for shape in self._iter_shapes():
+            if shape.material_id == material_id:
+                shape.material = material
+        return material
+
+    def bind_material(self, shape_id: str, material_id: str) -> Shape:
+        material = self.require_material(material_id)
         shape = self.require_shape(shape_id)
         shape.material_id = material_id
-        shape.material = Material.from_dict(self.materials[material_id].to_dict())
+        shape.material = material
         return shape
 
     def detach_material(self, shape_id: str) -> Shape:
         shape = self.require_shape(shape_id)
         shape.material_id = None
-        shape.material = Material.from_dict(shape.material.to_dict())
+        shape.material = _clone_material(shape.material)
         return shape
 
     def rename_material(self, old_id: str, new_id: str) -> None:
-        if old_id not in self.materials:
-            raise ValueError(f"unknown material_id: {old_id}")
+        material = self.require_material(old_id)
         if not new_id:
             raise ValueError("material ids must be non-empty")
         if old_id != new_id and new_id in self.materials:
             raise ValueError(f"duplicate material_id: {new_id}")
-        material = self.materials.pop(old_id)
+        self.materials.pop(old_id)
         self.materials[new_id] = material
         for shape in self._iter_shapes():
             if shape.material_id == old_id:
                 shape.material_id = new_id
-        self.sync_material_bindings()
+                shape.material = material
+
+    def delete_material(self, material_id: str) -> Material:
+        material = self.require_material(material_id)
+        self.materials.pop(material_id)
+        for shape in self._iter_shapes():
+            if shape.material_id == material_id:
+                shape.material_id = None
+                shape.material = _clone_material(material)
+        return material
 
     def clone(self) -> Scene:
         """Deep copy of the scene. Safe to mutate without affecting the original."""
@@ -1007,12 +1045,11 @@ class Shot:
 
     @staticmethod
     def from_json(s: str) -> Shot:
-        """Parse shot from a JSON string (v5 format)."""
+        """Parse shot from JSON."""
         d = json.loads(s)
-        if d.get("version") != SHOT_JSON_VERSION:
-            raise ValueError(
-                f"unsupported shot version: {d.get('version')} (expected {SHOT_JSON_VERSION})"
-            )
+        version = d.get("version")
+        if version != SHOT_JSON_VERSION:
+            raise ValueError(f"unsupported shot version: {version} (expected {SHOT_JSON_VERSION})")
         shot = Shot(name=d.get("name", ""))
         # Shot-level blocks
         if "camera" in d:

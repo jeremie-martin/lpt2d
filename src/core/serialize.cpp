@@ -400,6 +400,7 @@ struct JsonValue {
 struct Parser {
     const char* p;
     const char* end;
+    bool failed = false;
 
     void skip_ws() {
         while (p < end && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t')) ++p;
@@ -407,17 +408,34 @@ struct Parser {
 
     bool match(char c) { skip_ws(); if (p < end && *p == c) { ++p; return true; } return false; }
 
+    bool expect(char c) {
+        if (match(c)) return true;
+        failed = true;
+        return false;
+    }
+
     std::string parse_string() {
         skip_ws();
-        if (p >= end || *p != '"') return {};
+        if (p >= end || *p != '"') {
+            failed = true;
+            return {};
+        }
         ++p;
         std::string s;
-        while (p < end && *p != '"') {
-            if (*p == '\\' && p + 1 < end) { ++p; s += *p; }
-            else s += *p;
+        while (p < end) {
+            if (*p == '"') {
+                ++p;
+                return s;
+            }
+            if (*p == '\\' && p + 1 < end) {
+                ++p;
+                s += *p;
+            } else {
+                s += *p;
+            }
             ++p;
         }
-        if (p < end) ++p; // closing "
+        failed = true;
         return s;
     }
 
@@ -425,13 +443,20 @@ struct Parser {
         skip_ws();
         char* num_end = nullptr;
         double val = std::strtod(p, &num_end);
-        if (num_end > p) p = num_end;
+        if (num_end > p) {
+            p = num_end;
+            return val;
+        }
+        failed = true;
         return val;
     }
 
     JsonValue parse_value() {
         skip_ws();
-        if (p >= end) return {};
+        if (p >= end) {
+            failed = true;
+            return {};
+        }
 
         if (*p == '"') {
             JsonValue v;
@@ -446,9 +471,9 @@ struct Parser {
             skip_ws();
             if (p < end && *p != ']') {
                 v.arr.push_back(parse_value());
-                while (match(',')) v.arr.push_back(parse_value());
+                while (!failed && match(',')) v.arr.push_back(parse_value());
             }
-            match(']');
+            expect(']');
             return v;
         }
         if (*p == '{') {
@@ -458,15 +483,15 @@ struct Parser {
             skip_ws();
             if (p < end && *p != '}') {
                 v.obj_keys.push_back(parse_string());
-                match(':');
+                if (!expect(':')) return v;
                 v.obj_vals.push_back(parse_value());
-                while (match(',')) {
+                while (!failed && match(',')) {
                     v.obj_keys.push_back(parse_string());
-                    match(':');
+                    if (!expect(':')) return v;
                     v.obj_vals.push_back(parse_value());
                 }
             }
-            match('}');
+            expect('}');
             return v;
         }
         if (p + 4 <= end && memcmp(p, "null", 4) == 0) { p += 4; return {}; }
@@ -751,16 +776,29 @@ static TraceDefaults read_trace(const JsonValue* v) {
 
 } // anonymous namespace
 
-Shot load_shot_json_string(std::string_view json_content) {
+std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std::string* error) {
+    if (error) error->clear();
+    auto fail = [&](std::string message) -> std::optional<Shot> {
+        if (error) {
+            *error = std::move(message);
+        } else {
+            std::cerr << message << "\n";
+        }
+        return std::nullopt;
+    };
+
     Parser parser{json_content.data(), json_content.data() + json_content.size()};
     JsonValue root = parser.parse_value();
+    parser.skip_ws();
 
-    if (root.type != JsonValue::Object) { std::cerr << "Invalid JSON\n"; return {}; }
+    if (parser.failed || parser.p != parser.end || root.type != JsonValue::Object)
+        return fail("Invalid JSON");
     auto* version = root.get("version");
-    if (!version || version->type != JsonValue::Number || (int)version->number != SHOT_JSON_VERSION) {
-        std::cerr << "Unsupported shot version (expected " << SHOT_JSON_VERSION << ")\n";
-        return {};
-    }
+    if (!version || version->type != JsonValue::Number)
+        return fail("Unsupported shot version");
+    const int shot_version = (int)version->number;
+    if (shot_version != SHOT_JSON_VERSION)
+        return fail("Unsupported shot version (expected " + std::to_string(SHOT_JSON_VERSION) + ")");
 
     Shot shot;
     if (auto* n = root.get("name")) shot.name = n->as_string();
@@ -773,30 +811,26 @@ Shot load_shot_json_string(std::string_view json_content) {
 
     // Scene content
     auto& scene = shot.scene;
-    std::string error;
+    std::string parse_error;
 
     // Parse named materials library (must come before shapes to resolve references)
     if (auto* mats = root.get("materials")) {
         if (mats->type == JsonValue::Object) {
             for (int i = 0; i < (int)mats->obj_keys.size(); ++i) {
-                if (mats->obj_keys[i].empty()) {
-                    std::cerr << "Material ids must be non-empty\n";
-                    return {};
-                }
+                if (mats->obj_keys[i].empty())
+                    return fail("Material ids must be non-empty");
                 scene.materials[mats->obj_keys[i]] = read_material_obj(&mats->obj_vals[i]);
             }
         }
     }
 
-    read_shapes(root.get("shapes"), scene.shapes, scene.materials, &error);
-    if (!error.empty()) {
-        std::cerr << "Failed to read shapes: " << error << "\n";
-        return {};
+    read_shapes(root.get("shapes"), scene.shapes, scene.materials, &parse_error);
+    if (!parse_error.empty()) {
+        return fail("Failed to read shapes: " + parse_error);
     }
-    read_lights(root.get("lights"), scene.lights, &error);
-    if (!error.empty()) {
-        std::cerr << "Failed to read lights: " << error << "\n";
-        return {};
+    read_lights(root.get("lights"), scene.lights, &parse_error);
+    if (!parse_error.empty()) {
+        return fail("Failed to read lights: " + parse_error);
     }
 
     // Groups
@@ -805,10 +839,8 @@ Shot load_shot_json_string(std::string_view json_content) {
             if (gv.type != JsonValue::Object) continue;
             Group group;
             if (auto* id = gv.get("id")) group.id = id->as_string();
-            if (group.id.empty()) {
-                std::cerr << "Group entries require non-empty id\n";
-                return {};
-            }
+            if (group.id.empty())
+                return fail("Group entries require non-empty id");
             if (auto* tf = gv.get("transform")) {
                 group.transform.translate = read_vec2(tf->get("translate"));
                 if (auto* r = tf->get("rotate")) group.transform.rotate = r->as_float();
@@ -816,42 +848,60 @@ Shot load_shot_json_string(std::string_view json_content) {
                 if (group.transform.scale.x == 0) group.transform.scale.x = 1;
                 if (group.transform.scale.y == 0) group.transform.scale.y = 1;
             }
-            read_shapes(gv.get("shapes"), group.shapes, scene.materials, &error);
-            if (!error.empty()) {
-                std::cerr << "Failed to read group shapes: " << error << "\n";
-                return {};
+            read_shapes(gv.get("shapes"), group.shapes, scene.materials, &parse_error);
+            if (!parse_error.empty()) {
+                return fail("Failed to read group shapes: " + parse_error);
             }
-            read_lights(gv.get("lights"), group.lights, &error);
-            if (!error.empty()) {
-                std::cerr << "Failed to read group lights: " << error << "\n";
-                return {};
+            read_lights(gv.get("lights"), group.lights, &parse_error);
+            if (!parse_error.empty()) {
+                return fail("Failed to read group lights: " + parse_error);
             }
             scene.groups.push_back(std::move(group));
         }
     }
 
     sync_material_bindings(scene);
-    if (!validate_scene(scene, &error)) {
-        std::cerr << "Invalid scene: " << error << "\n";
-        return {};
+    if (!validate_scene(scene, &parse_error)) {
+        return fail("Invalid scene: " + parse_error);
     }
 
     return shot;
 }
 
-Shot load_shot_json(const std::string& path) {
+Shot load_shot_json_string(std::string_view json_content) {
+    if (auto shot = try_load_shot_json_string(json_content))
+        return *shot;
+    return {};
+}
+
+std::optional<Shot> try_load_shot_json(const std::string& path, std::string* error) {
+    if (error) error->clear();
     std::ifstream f(path);
-    if (!f) { std::cerr << "Failed to open " << path << "\n"; return {}; }
+    if (!f) {
+        if (error) {
+            *error = "Failed to open " + path;
+        } else {
+            std::cerr << "Failed to open " << path << "\n";
+        }
+        return std::nullopt;
+    }
 
     std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-    return load_shot_json_string(content);
+    return try_load_shot_json_string(content, error);
+}
+
+Shot load_shot_json(const std::string& path) {
+    if (auto shot = try_load_shot_json(path))
+        return *shot;
+    return {};
 }
 
 FrameOverrides parse_frame_overrides(std::string_view json) {
     FrameOverrides fo;
     Parser parser{json.data(), json.data() + json.size()};
     JsonValue root = parser.parse_value();
-    if (root.type != JsonValue::Object) return fo;
+    parser.skip_ws();
+    if (parser.failed || parser.p != parser.end || root.type != JsonValue::Object) return fo;
 
     auto* render = root.get("render");
     if (!render || render->type != JsonValue::Object) return fo;

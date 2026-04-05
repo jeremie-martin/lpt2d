@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -43,11 +44,23 @@ static void print_usage() {
 }
 
 static Shot resolve_shot(const std::string& arg) {
+    namespace fs = std::filesystem;
+
     // Try built-in name first
     if (auto s = find_builtin_scene(arg)) return *s;
-    // Then try as a file path
-    Shot s = load_shot_json(arg);
-    if (!s.scene.shapes.empty() || !s.scene.lights.empty() || !s.scene.groups.empty()) return s;
+
+    const fs::path candidate{arg};
+    const bool looks_like_path = candidate.has_extension()
+        || arg.find('/') != std::string::npos
+        || arg.find('\\') != std::string::npos;
+    if (looks_like_path || fs::exists(candidate)) {
+        std::string error;
+        if (auto s = try_load_shot_json(arg, &error)) return *s;
+        if (!error.empty())
+            std::cerr << error << "\n";
+        std::exit(1);
+    }
+
     std::cerr << "Unknown scene: " << arg << "\n";
     std::cerr << "Available: ";
     for (auto& entry : get_builtin_scenes())
@@ -125,7 +138,13 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
             continue;
         }
 
-        Shot frame_shot = load_shot_json_string(line);
+        std::string frame_error;
+        auto frame_shot = try_load_shot_json_string(line, &frame_error);
+        if (!frame_shot) {
+            std::cerr << "frame " << frame << ": "
+                      << (frame_error.empty() ? "Failed to parse shot" : frame_error) << "\n";
+            return 1;
+        }
 
         // Parse per-frame render overrides
         FrameOverrides fo = parse_frame_overrides(line);
@@ -156,12 +175,13 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         Bounds bounds;
         if (fo.bounds) {
             bounds = *fo.bounds;
-        } else if (frame_shot.scene.shapes.empty() && frame_shot.scene.lights.empty() && frame_shot.scene.groups.empty()) {
+        } else if (frame_shot->scene.shapes.empty() && frame_shot->scene.lights.empty()
+                   && frame_shot->scene.groups.empty()) {
             bounds = {{-1, -1}, {1, 1}};
         } else {
-            bounds = compute_bounds(frame_shot.scene);
+            bounds = compute_bounds(frame_shot->scene);
         }
-        renderer.upload_scene(frame_shot.scene, bounds);
+        renderer.upload_scene(frame_shot->scene, bounds);
         renderer.clear();
 
         // Trace rays in batched dispatches (skip if no lights)

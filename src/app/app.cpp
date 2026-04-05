@@ -1301,23 +1301,34 @@ int App::run(const AppConfig& config) {
 
             // Load popup (can be triggered by Ctrl+O shortcut)
             static char load_path_buf[256] = "";
+            static std::string load_error_message;
             if (open_load_popup) { ImGui::OpenPopup("Load Scene##popup"); open_load_popup = false; }
             if (ImGui::BeginPopup("Load Scene##popup")) {
                 ImGui::Text("File path:");
-                ImGui::InputText("##loadpath", load_path_buf, sizeof(load_path_buf));
+                if (ImGui::InputText("##loadpath", load_path_buf, sizeof(load_path_buf)))
+                    load_error_message.clear();
+                if (!load_error_message.empty())
+                    ImGui::TextWrapped("%s", load_error_message.c_str());
                 if (ImGui::Button("OK") && load_path_buf[0]) {
-                    Shot loaded = load_shot_json(load_path_buf);
-                    if (!loaded.scene.shapes.empty() || !loaded.scene.lights.empty() || !loaded.scene.groups.empty()) {
-                        apply_gui_shot_defaults(loaded);
-                        ed.shot = loaded;
+                    std::string error;
+                    if (auto loaded = try_load_shot_json(load_path_buf, &error)) {
+                        apply_gui_shot_defaults(*loaded);
+                        ed.shot = *loaded;
                         ed.save_path = load_path_buf;
                         current_scene = -1;
+                        load_error_message.clear();
                         reset_editor();
+                    } else {
+                        load_error_message = error.empty() ? "Failed to load scene" : error;
                     }
-                    ImGui::CloseCurrentPopup();
+                    if (load_error_message.empty())
+                        ImGui::CloseCurrentPopup();
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Cancel")) ImGui::CloseCurrentPopup();
+                if (ImGui::Button("Cancel")) {
+                    load_error_message.clear();
+                    ImGui::CloseCurrentPopup();
+                }
                 ImGui::EndPopup();
             }
             ImGui::PopID();

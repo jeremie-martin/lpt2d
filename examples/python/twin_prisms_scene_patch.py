@@ -1,8 +1,8 @@
 """Canonical example: load, patch, and animate a saved shot.
 
 This example shows the current best available load-modify-animate workflow:
-start from a saved JSON shot, patch named groups and a top-level light, then
-animate the result frame by frame.
+start from a saved JSON shot, patch named groups, a shared material asset, and
+a top-level light, then animate the result frame by frame.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from anim import BeamLight, Canvas, Frame, FrameContext, Look, Shot
 from anim.examples_support import REPO_ROOT, run_example
 
 NAME = "twin_prisms_scene_patch"
-SUMMARY = "Load a saved shot, patch named groups, and animate the result."
+SUMMARY = "Load a saved shot, patch named groups, a shared material, and animate the result."
 WORKFLOW = "load-modify-animate"
 DURATION = 10.0
 
@@ -63,12 +63,15 @@ def frame(ctx: FrameContext) -> Frame:
 
     left = scene.require_group("prism_left")
     right = scene.require_group("prism_right")
+    prism_glass = scene.require_material("prism_glass")
 
     left.transform.translate[1] += 0.16 * swing
     right.transform.translate[1] -= 0.18 * swing
     left.transform.rotate += 0.16 * swing
     right.transform.rotate += 0.22 * swing
     right.transform.scale = [0.8 + 0.05 * swing, 0.8 + 0.05 * swing]
+    prism_glass.cauchy_b = 26_000 + 6_000 * max(0.0, swing)
+    prism_glass.absorption = 0.24 + 0.12 * (0.5 + 0.5 * math.cos(math.tau * ctx.progress))
 
     beam = _require_primary_beam(scene)
     beam.origin[1] = 0.1 * swing
