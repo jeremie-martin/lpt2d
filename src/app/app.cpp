@@ -14,6 +14,7 @@
 #include <imgui_impl_opengl3.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstring>
@@ -118,19 +119,208 @@ int App::run(const AppConfig& config) {
         float angle = delta.length_sq() > 1e-10f
             ? normalize_angle(std::atan2(delta.y, delta.x))
             : 0.0f;
-        return Arc{
-            center,
-            std::max(delta.length(), 0.02f),
-            normalize_angle(angle - 0.5f * PI),
-            PI,
-            mat_glass(1.5f, 20000.0f, 0.3f),
+        Arc arc;
+        arc.center = center;
+        arc.radius = std::max(delta.length(), 0.02f);
+        arc.angle_start = normalize_angle(angle - 0.5f * PI);
+        arc.sweep = PI;
+        arc.material = mat_glass(1.5f, 20000.0f, 0.3f);
+        return arc;
+    };
+    auto object_fallback_label = [](const char* kind, int index) {
+        return std::string(kind) + " " + std::to_string(index);
+    };
+    auto selection_label = [](const std::string& visible, const std::string& key) {
+        return visible + "##" + key;
+    };
+    auto shape_authored_id = [](const Shape& shape) -> const std::string& {
+        return std::visit([](const auto& value) -> const std::string& {
+            return value.id;
+        }, shape);
+    };
+    auto shape_authored_id_mut = [](Shape& shape) -> std::string& {
+        return std::visit([](auto& value) -> std::string& {
+            return value.id;
+        }, shape);
+    };
+    auto shape_material_id = [](const Shape& shape) -> const std::string& {
+        return std::visit([](const auto& value) -> const std::string& {
+            return value.material_id;
+        }, shape);
+    };
+    auto shape_material_id_mut = [](Shape& shape) -> std::string& {
+        return std::visit([](auto& value) -> std::string& {
+            return value.material_id;
+        }, shape);
+    };
+    auto shape_material_mut = [](Shape& shape) -> Material& {
+        return std::visit([](auto& value) -> Material& {
+            return value.material;
+        }, shape);
+    };
+    auto light_authored_id = [](const Light& light) -> const std::string& {
+        return std::visit([](const auto& value) -> const std::string& {
+            return value.id;
+        }, light);
+    };
+    auto light_authored_id_mut = [](Light& light) -> std::string& {
+        return std::visit([](auto& value) -> std::string& {
+            return value.id;
+        }, light);
+    };
+    auto shape_display_name = [&](const Shape& shape, int index) {
+        const std::string& authored_id = shape_authored_id(shape);
+        if (!authored_id.empty()) return authored_id;
+        return std::visit(overloaded{
+            [&](const Circle&) { return object_fallback_label("Circle", index); },
+            [&](const Segment&) { return object_fallback_label("Segment", index); },
+            [&](const Arc&) { return object_fallback_label("Arc", index); },
+            [&](const Bezier&) { return object_fallback_label("Bezier", index); },
+            [&](const Polygon&) { return object_fallback_label("Polygon", index); },
+            [&](const Ellipse&) { return object_fallback_label("Ellipse", index); },
+        }, shape);
+    };
+    auto light_display_name = [&](const Light& light, int index) {
+        const std::string& authored_id = light_authored_id(light);
+        if (!authored_id.empty()) return authored_id;
+        return std::visit(overloaded{
+            [&](const PointLight&) { return object_fallback_label("Point Light", index); },
+            [&](const SegmentLight&) { return object_fallback_label("Segment Light", index); },
+            [&](const BeamLight&) { return object_fallback_label("Beam Light", index); },
+            [&](const ParallelBeamLight&) { return object_fallback_label("Parallel Beam", index); },
+            [&](const SpotLight&) { return object_fallback_label("Spot Light", index); },
+        }, light);
+    };
+    auto group_display_name = [&](const Group& group, int index) {
+        if (!group.id.empty()) return group.id;
+        return object_fallback_label("Group", index);
+    };
+    auto entity_id_available = [&](std::string_view candidate, std::string_view current) {
+        if (candidate.empty()) return false;
+        if (candidate == current) return true;
+        return !find_shape(ed.shot.scene, candidate)
+            && !find_light(ed.shot.scene, candidate)
+            && !find_group(ed.shot.scene, candidate);
+    };
+    auto material_id_available = [&](std::string_view candidate, std::string_view current) {
+        if (candidate.empty()) return false;
+        if (candidate == current) return true;
+        return !ed.shot.scene.materials.contains(std::string(candidate));
+    };
+    auto rewrite_shape_material_binding = [&](Shape& shape, std::string_view old_id, std::string_view new_id) {
+        if (shape_material_id(shape) == old_id)
+            shape_material_id_mut(shape) = std::string(new_id);
+    };
+    auto detach_shape_if_missing_material = [&](Shape& shape) {
+        const std::string& material_id = shape_material_id(shape);
+        if (!material_id.empty() && !ed.shot.scene.materials.contains(material_id))
+            shape_material_id_mut(shape).clear();
+    };
+    auto for_each_clipboard_shape = [&](auto&& fn) {
+        for (auto& shape : ed.clipboard.shapes)
+            fn(shape);
+        for (auto& group : ed.clipboard.groups)
+            for (auto& shape : group.shapes)
+                fn(shape);
+    };
+    auto rewrite_clipboard_material_binding = [&](std::string_view old_id, std::string_view new_id) {
+        for_each_clipboard_shape([&](Shape& shape) {
+            rewrite_shape_material_binding(shape, old_id, new_id);
+        });
+    };
+    auto detach_clipboard_material_binding = [&](std::string_view material_id) {
+        for_each_clipboard_shape([&](Shape& shape) {
+            if (shape_material_id(shape) == material_id)
+                shape_material_id_mut(shape).clear();
+        });
+    };
+    auto sanitize_clipboard_material_bindings = [&]() {
+        for_each_clipboard_shape([&](Shape& shape) {
+            detach_shape_if_missing_material(shape);
+        });
+    };
+    auto rename_material_binding = [&](std::string_view old_id, std::string_view new_id) {
+        if (old_id == new_id) return;
+        auto it = ed.shot.scene.materials.find(std::string(old_id));
+        if (it == ed.shot.scene.materials.end()) return;
+
+        Material material = it->second;
+        ed.shot.scene.materials.erase(it);
+        ed.shot.scene.materials[std::string(new_id)] = material;
+
+        auto rewrite_shapes = [&](auto& shapes) {
+            for (auto& shape : shapes) {
+                rewrite_shape_material_binding(shape, old_id, new_id);
+            }
         };
+        rewrite_shapes(ed.shot.scene.shapes);
+        for (auto& group : ed.shot.scene.groups)
+            rewrite_shapes(group.shapes);
+        sync_material_bindings(ed.shot.scene);
+        rewrite_clipboard_material_binding(old_id, new_id);
+    };
+    auto bind_shape_material = [&](Shape& shape, std::string_view material_id) {
+        auto it = ed.shot.scene.materials.find(std::string(material_id));
+        if (it == ed.shot.scene.materials.end()) return;
+        shape_material_id_mut(shape) = it->first;
+        shape_material_mut(shape) = it->second;
+    };
+    auto detach_shape_material = [&](Shape& shape) {
+        shape_material_id_mut(shape).clear();
+    };
+    auto material_usage_count = [&](std::string_view material_id) {
+        int count = 0;
+        auto count_shapes = [&](const auto& shapes) {
+            for (const auto& shape : shapes)
+                if (shape_material_id(shape) == material_id)
+                    ++count;
+        };
+        count_shapes(ed.shot.scene.shapes);
+        for (const auto& group : ed.shot.scene.groups)
+            count_shapes(group.shapes);
+        return count;
+    };
+    auto apply_material_to_selection = [&](std::string_view material_id) {
+        bool changed = false;
+        for (const auto& id : ed.selection) {
+            if (Shape* shape = resolve_shape(ed.shot.scene, id)) {
+                bind_shape_material(*shape, material_id);
+                changed = true;
+                continue;
+            }
+            if (id.type == SelectionRef::Group && id.index >= 0 && id.index < (int)ed.shot.scene.groups.size()) {
+                for (auto& shape : ed.shot.scene.groups[id.index].shapes) {
+                    bind_shape_material(shape, material_id);
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    };
+    auto detach_material_from_selection = [&](std::string_view material_id) {
+        bool changed = false;
+        auto maybe_detach = [&](Shape& shape) {
+            if (shape_material_id(shape) == material_id) {
+                detach_shape_material(shape);
+                changed = true;
+            }
+        };
+        for (const auto& id : ed.selection) {
+            if (Shape* shape = resolve_shape(ed.shot.scene, id)) {
+                maybe_detach(*shape);
+                continue;
+            }
+            if (id.type == SelectionRef::Group && id.index >= 0 && id.index < (int)ed.shot.scene.groups.size()) {
+                for (auto& shape : ed.shot.scene.groups[id.index].shapes)
+                    maybe_detach(shape);
+            }
+        }
+        return changed;
     };
 
     // Build a filtered scene applying editor visibility/solo state.
     auto build_render_scene = [&]() -> Scene {
         Scene filtered;
-        filtered.materials = ed.shot.scene.materials;
         for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i)
             if (ed.is_shape_visible(i))
                 filtered.shapes.push_back(ed.shot.scene.shapes[i]);
@@ -171,6 +361,8 @@ int App::run(const AppConfig& config) {
     // Renderer viewport always tracks the camera's visible bounds.
     // Bounds computed from FULL scene (hiding objects doesn't shift viewport).
     auto reload = [&]() {
+        ensure_scene_entity_ids(ed.shot.scene);
+        sync_material_bindings(ed.shot.scene);
         if (ed.shot.scene.shapes.empty() && ed.shot.scene.lights.empty() && ed.shot.scene.groups.empty())
             ed.scene_bounds = {{-1, -1}, {1, 1}};
         else
@@ -200,7 +392,7 @@ int App::run(const AppConfig& config) {
         for (auto& sid : ed.selection) {
             if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) ed.clipboard.shapes.push_back(*shape);
             else if (const Light* light = resolve_light(ed.shot.scene, sid)) ed.clipboard.lights.push_back(*light);
-            else if (sid.type == ObjectId::Group) ed.clipboard.groups.push_back(ed.shot.scene.groups[sid.index]);
+            else if (sid.type == SelectionRef::Group) ed.clipboard.groups.push_back(ed.shot.scene.groups[sid.index]);
         }
         ed.clipboard.centroid = ed.selection_centroid();
     };
@@ -227,16 +419,16 @@ int App::run(const AppConfig& config) {
 
         // Sort selection in reverse order so deletion doesn't invalidate indices
         auto sorted = ed.selection;
-        std::sort(sorted.begin(), sorted.end(), [](const ObjectId& a, const ObjectId& b) {
+        std::sort(sorted.begin(), sorted.end(), [](const SelectionRef& a, const SelectionRef& b) {
             if (a.type != b.type) return a.type > b.type; // groups (2) > lights (1) > shapes (0)
             return a.index > b.index; // higher indices first
         });
         for (auto& id : sorted) {
-            if (id.type == ObjectId::Shape && id.index < (int)ed.shot.scene.shapes.size())
+            if (id.type == SelectionRef::Shape && id.index < (int)ed.shot.scene.shapes.size())
                 ed.shot.scene.shapes.erase(ed.shot.scene.shapes.begin() + id.index);
-            else if (id.type == ObjectId::Light && id.index < (int)ed.shot.scene.lights.size())
+            else if (id.type == SelectionRef::Light && id.index < (int)ed.shot.scene.lights.size())
                 ed.shot.scene.lights.erase(ed.shot.scene.lights.begin() + id.index);
-            else if (id.type == ObjectId::Group && id.index < (int)ed.shot.scene.groups.size())
+            else if (id.type == SelectionRef::Group && id.index < (int)ed.shot.scene.groups.size())
                 ed.shot.scene.groups.erase(ed.shot.scene.groups.begin() + id.index);
         }
         ed.clear_selection();
@@ -324,7 +516,7 @@ int App::run(const AppConfig& config) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
             for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
-                ObjectId id{ObjectId::Shape, i};
+                SelectionRef id{SelectionRef::Shape, i};
                 bool is_sel = ed.is_selected(id);
                 bool is_hov = (ed.hovered == id);
                 bool hidden = !ed.is_shape_visible(i);
@@ -343,7 +535,7 @@ int App::run(const AppConfig& config) {
             }
 
             for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
-                ObjectId id{ObjectId::Light, i};
+                SelectionRef id{SelectionRef::Light, i};
                 bool is_sel = ed.is_selected(id);
                 bool is_hov = (ed.hovered == id);
                 bool hidden = !ed.is_light_visible(i);
@@ -361,7 +553,7 @@ int App::run(const AppConfig& config) {
 
             // Draw groups
             for (int g = 0; g < (int)ed.shot.scene.groups.size(); ++g) {
-                ObjectId gid{ObjectId::Group, g};
+                SelectionRef gid{SelectionRef::Group, g};
                 bool is_sel = ed.is_selected(gid);
                 bool is_hov = (ed.hovered == gid);
                 bool hidden = !ed.is_group_visible(g);
@@ -460,17 +652,17 @@ int App::run(const AppConfig& config) {
                 };
 
                 for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
-                    ObjectId id{ObjectId::Shape, i};
+                    SelectionRef id{SelectionRef::Shape, i};
                     if (ed.is_selected(id) || !ed.is_shape_visible(i)) continue;
                     if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
-                    ObjectId id{ObjectId::Light, i};
+                    SelectionRef id{SelectionRef::Light, i};
                     if (ed.is_selected(id) || !ed.is_light_visible(i)) continue;
                     if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
-                    ObjectId id{ObjectId::Group, i};
+                    SelectionRef id{SelectionRef::Group, i};
                     if (ed.is_selected(id) || !ed.is_group_visible(i)) continue;
                     if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
@@ -708,10 +900,10 @@ int App::run(const AppConfig& config) {
         // Hover detection (Select tool only, skip during camera drag)
         if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()
             && ed.cam_handle_dragging == CameraHandle::None) {
-            ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
+            SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
             ed.hovered = hit;
         } else if (!vp_hovered) {
-            ed.hovered = {ObjectId::Shape, -1};
+            ed.hovered = {SelectionRef::Shape, -1};
         }
 
         // --- Viewport navigation: pan & zoom ---
@@ -756,12 +948,12 @@ int App::run(const AppConfig& config) {
             if (ImGui::IsMouseDoubleClicked(0) && ed.tool == EditTool::Select) {
                 if (ed.editing_group < 0) {
                     // Not inside a group — double-click on group member enters it
-                    ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, -1);
-                    if (hit.type == ObjectId::Group && hit.index >= 0) {
+                    SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, -1);
+                    if (hit.type == SelectionRef::Group && hit.index >= 0) {
                         ed.editing_group = hit.index;
                         ed.clear_selection();
                         // Select the specific member that was clicked
-                        ObjectId member = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
+                        SelectionRef member = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
                         if (member.index >= 0) ed.select(member);
                         reload();
                     }
@@ -781,7 +973,7 @@ int App::run(const AppConfig& config) {
                         ed.active_handle = handles[h_idx];
                     } else {
                         // Hit test objects
-                        ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
+                        SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
 
                         if (hit.index >= 0) {
                             if (io.KeyShift) {
@@ -812,7 +1004,7 @@ int App::run(const AppConfig& config) {
                                         [&](const ParallelBeamLight& l) { ed.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
                                         [&](const SpotLight& l) { ed.drag_offsets.push_back({l.pos - mw_raw, {}}); },
                                     }, *light);
-                                } else if (sid.type == ObjectId::Group) {
+                                } else if (sid.type == SelectionRef::Group) {
                                     auto& g = ed.shot.scene.groups[sid.index];
                                     ed.drag_offsets.push_back({g.transform.translate - mw_raw, {}});
                                 }
@@ -825,7 +1017,7 @@ int App::run(const AppConfig& config) {
                         }
                     }
                 } else if (ed.tool == EditTool::Erase) {
-                    ObjectId hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
+                    SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
                     if (hit.index >= 0) {
                         ed.clear_selection();
                         ed.select(hit);
@@ -833,21 +1025,38 @@ int App::run(const AppConfig& config) {
                     }
                 } else if (ed.tool == EditTool::PointLight) {
                     ed.undo.push(ed.shot.scene);
-                    ed.shot.scene.lights.push_back(PointLight{mw, 1.0f});
+                    PointLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "point_light");
+                    light.pos = mw;
+                    light.intensity = 1.0f;
+                    ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
-                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     reload();
                 } else if (ed.tool == EditTool::BeamLight) {
                     ed.undo.push(ed.shot.scene);
-                    ed.shot.scene.lights.push_back(BeamLight{mw, {1.0f, 0.0f}, 0.1f, 1.0f});
+                    BeamLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "beam_light");
+                    light.origin = mw;
+                    light.direction = {1.0f, 0.0f};
+                    light.angular_width = 0.1f;
+                    light.intensity = 1.0f;
+                    ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
-                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     reload();
                 } else if (ed.tool == EditTool::SpotLight) {
                     ed.undo.push(ed.shot.scene);
-                    ed.shot.scene.lights.push_back(SpotLight{mw, {1.0f, 0.0f}, 0.5f, 2.0f, 1.0f});
+                    SpotLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "spot_light");
+                    light.pos = mw;
+                    light.direction = {1.0f, 0.0f};
+                    light.angular_width = 0.5f;
+                    light.falloff = 2.0f;
+                    light.intensity = 1.0f;
+                    ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
-                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     reload();
                 } else if (ed.tool == EditTool::Measure) {
                     if (!ed.measure_active) {
@@ -899,7 +1108,7 @@ int App::run(const AppConfig& config) {
                         [&](ParallelBeamLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
                         [&](SpotLight& l) { l.pos = mw + off.a; },
                     }, *light);
-                } else if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()) {
+                } else if (sid.type == SelectionRef::Group && sid.index < (int)ed.shot.scene.groups.size()) {
                     ed.shot.scene.groups[sid.index].transform.translate = mw + off.a;
                 }
             }
@@ -917,56 +1126,94 @@ int App::run(const AppConfig& config) {
 
                 if (ed.tool == EditTool::Circle) {
                     float r = std::max(dist, 0.02f);
-                    ed.shot.scene.shapes.push_back(Circle{ed.create_start, r, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    Circle circle;
+                    circle.id = next_scene_entity_id(ed.shot.scene, "circle");
+                    circle.center = ed.create_start;
+                    circle.radius = r;
+                    circle.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ed.shot.scene.shapes.push_back(circle);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Segment && dist > 0.01f) {
-                    ed.shot.scene.shapes.push_back(Segment{ed.create_start, end, mat_mirror(0.95f)});
+                    Segment segment;
+                    segment.id = next_scene_entity_id(ed.shot.scene, "segment");
+                    segment.a = ed.create_start;
+                    segment.b = end;
+                    segment.material = mat_mirror(0.95f);
+                    ed.shot.scene.shapes.push_back(segment);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Arc) {
-                    ed.shot.scene.shapes.push_back(make_default_arc(ed.create_start, end));
+                    Arc arc = make_default_arc(ed.create_start, end);
+                    arc.id = next_scene_entity_id(ed.shot.scene, "arc");
+                    ed.shot.scene.shapes.push_back(arc);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Bezier && dist > 0.01f) {
                     Vec2 mid = (ed.create_start + end) * 0.5f;
-                    ed.shot.scene.shapes.push_back(Bezier{ed.create_start, mid, end, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    Bezier bezier;
+                    bezier.id = next_scene_entity_id(ed.shot.scene, "bezier");
+                    bezier.p0 = ed.create_start;
+                    bezier.p1 = mid;
+                    bezier.p2 = end;
+                    bezier.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ed.shot.scene.shapes.push_back(bezier);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Polygon && dist > 0.01f) {
                     Vec2 a = ed.create_start, b = end;
                     Polygon p;
+                    p.id = next_scene_entity_id(ed.shot.scene, "polygon");
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
                     if (!polygon_is_clockwise(p))
                         std::reverse(p.vertices.begin(), p.vertices.end());
                     p.material = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(p);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::Ellipse && dist > 0.01f) {
                     Vec2 center = (ed.create_start + end) * 0.5f;
                     float sa = std::max(std::abs(end.x - ed.create_start.x) * 0.5f, 0.02f);
                     float sb = std::max(std::abs(end.y - ed.create_start.y) * 0.5f, 0.02f);
-                    ed.shot.scene.shapes.push_back(Ellipse{center, sa, sb, 0.0f, mat_glass(1.5f, 20000.0f, 0.3f)});
+                    Ellipse ellipse;
+                    ellipse.id = next_scene_entity_id(ed.shot.scene, "ellipse");
+                    ellipse.center = center;
+                    ellipse.semi_a = sa;
+                    ellipse.semi_b = sb;
+                    ellipse.rotation = 0.0f;
+                    ellipse.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ed.shot.scene.shapes.push_back(ellipse);
                     ed.clear_selection();
-                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::SegmentLight && dist > 0.01f) {
-                    ed.shot.scene.lights.push_back(SegmentLight{ed.create_start, end, 1.0f});
+                    SegmentLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "segment_light");
+                    light.a = ed.create_start;
+                    light.b = end;
+                    light.intensity = 1.0f;
+                    ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
-                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     created = true;
                 } else if (ed.tool == EditTool::ParallelBeamLight && dist > 0.01f) {
                     Vec2 seg_dir = end - ed.create_start;
                     Vec2 perp = Vec2{-seg_dir.y, seg_dir.x}.normalized();
-                    ed.shot.scene.lights.push_back(ParallelBeamLight{ed.create_start, end, perp, 0.0f, 1.0f});
+                    ParallelBeamLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "parallel_beam_light");
+                    light.a = ed.create_start;
+                    light.b = end;
+                    light.direction = perp;
+                    light.angular_width = 0.0f;
+                    light.intensity = 1.0f;
+                    ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
-                    ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                    ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     created = true;
                 }
 
@@ -983,17 +1230,17 @@ int App::run(const AppConfig& config) {
 
                 if (!io.KeyShift) ed.clear_selection();
                 for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
-                    ObjectId id{ObjectId::Shape, i};
+                    SelectionRef id{SelectionRef::Shape, i};
                     if (object_in_rect(ed.shot.scene, id, wmin, wmax))
                         ed.select(id);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
-                    ObjectId id{ObjectId::Light, i};
+                    SelectionRef id{SelectionRef::Light, i};
                     if (object_in_rect(ed.shot.scene, id, wmin, wmax))
                         ed.select(id);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
-                    ObjectId id{ObjectId::Group, i};
+                    SelectionRef id{SelectionRef::Group, i};
                     if (object_in_rect(ed.shot.scene, id, wmin, wmax))
                         ed.select(id);
                 }
@@ -1034,7 +1281,10 @@ int App::run(const AppConfig& config) {
                 ed.shot.name = "custom";
                 add_box_walls(ed.shot.scene, kDefaultRoomHalfWidth, kDefaultRoomHalfHeight,
                               gui_wall_material());
-                ed.shot.scene.lights.push_back(PointLight{{0.0f, 0.0f}, 1.0f});
+                PointLight light;
+                light.pos = {0.0f, 0.0f};
+                light.intensity = 1.0f;
+                ed.shot.scene.lights.push_back(light);
                 ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
                                                {kDefaultRoomHalfWidth, kDefaultRoomHalfHeight}};
                 apply_gui_shot_defaults(ed.shot);
@@ -1169,14 +1419,24 @@ int App::run(const AppConfig& config) {
             if (ImGui::SmallButton("Show All")) { ed.show_all(); reload(); }
             if (ed.solo_light >= 0) {
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: Light %d", ed.solo_light);
+                if (ed.solo_light < (int)ed.shot.scene.lights.size()) {
+                    const auto& light = ed.shot.scene.lights[ed.solo_light];
+                    std::string label = light_display_name(light, ed.solo_light);
+                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: %s", label.c_str());
+                }
             } else if (ed.solo_light_group >= 0) {
                 ImGui::SameLine();
-                const auto& gname = ed.shot.scene.groups[ed.solo_light_group].name;
-                if (gname.empty())
-                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: Group %d Light %d", ed.solo_light_group, ed.solo_light_index);
-                else
-                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: %s Light %d", gname.c_str(), ed.solo_light_index);
+                if (ed.solo_light_group < (int)ed.shot.scene.groups.size()) {
+                    const auto& group = ed.shot.scene.groups[ed.solo_light_group];
+                    std::string group_label = group_display_name(group, ed.solo_light_group);
+                    if (ed.solo_light_index >= 0 && ed.solo_light_index < (int)group.lights.size()) {
+                        std::string light_label = light_display_name(group.lights[ed.solo_light_index], ed.solo_light_index);
+                        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f),
+                            "Solo: %s / %s", group_label.c_str(), light_label.c_str());
+                    } else {
+                        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: %s", group_label.c_str());
+                    }
+                }
             }
             int n_items = (int)(ed.shot.scene.shapes.size() + ed.shot.scene.lights.size() + ed.shot.scene.groups.size());
             float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
@@ -1184,29 +1444,10 @@ int App::run(const AppConfig& config) {
             ImGui::BeginChild("##objlist", ImVec2(0, h), ImGuiChildFlags_Borders);
 
             for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
-                ObjectId id{ObjectId::Shape, i};
+                SelectionRef id{SelectionRef::Shape, i};
                 bool is_sel = ed.is_selected(id);
-                char lbl[96];
-                std::visit(overloaded{
-                    [&](const Circle& c) {
-                        std::snprintf(lbl, sizeof(lbl), "Circle %d (%s)", i, material_name(c.material));
-                    },
-                    [&](const Segment& s) {
-                        std::snprintf(lbl, sizeof(lbl), "Segment %d (%s)", i, material_name(s.material));
-                    },
-                    [&](const Arc& a) {
-                        std::snprintf(lbl, sizeof(lbl), "Arc %d (%s)", i, material_name(a.material));
-                    },
-                    [&](const Bezier& b) {
-                        std::snprintf(lbl, sizeof(lbl), "Bezier %d (%s)", i, material_name(b.material));
-                    },
-                    [&](const Polygon& p) {
-                        std::snprintf(lbl, sizeof(lbl), "Polygon %d [%dv] (%s)", i, (int)p.vertices.size(), material_name(p.material));
-                    },
-                    [&](const Ellipse& e) {
-                        std::snprintf(lbl, sizeof(lbl), "Ellipse %d (%s)", i, material_name(e.material));
-                    },
-                }, ed.shot.scene.shapes[i]);
+                const auto& shape = ed.shot.scene.shapes[i];
+                std::string lbl = selection_label(shape_display_name(shape, i), "shape_" + std::to_string(i));
                 // Visibility toggle
                 ImGui::PushID(i + 10000);
                 bool svis = ed.is_shape_visible(i);
@@ -1221,33 +1462,16 @@ int App::run(const AppConfig& config) {
                 ImGui::ColorButton("##sw", mc, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(10, 10));
                 ImGui::PopID();
                 ImGui::SameLine();
-                if (ImGui::Selectable(lbl, is_sel)) {
+                if (ImGui::Selectable(lbl.c_str(), is_sel)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
                 }
             }
 
             for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
-                ObjectId id{ObjectId::Light, i};
+                SelectionRef id{SelectionRef::Light, i};
                 bool is_sel = ed.is_selected(id);
-                char lbl[96];
-                std::visit(overloaded{
-                    [&](const PointLight& l) {
-                        std::snprintf(lbl, sizeof(lbl), "Point Light %d (I=%.1f)", i, l.intensity);
-                    },
-                    [&](const SegmentLight& l) {
-                        std::snprintf(lbl, sizeof(lbl), "Seg Light %d (I=%.1f)", i, l.intensity);
-                    },
-                    [&](const BeamLight& l) {
-                        std::snprintf(lbl, sizeof(lbl), "Beam Light %d (I=%.1f)", i, l.intensity);
-                    },
-                    [&](const ParallelBeamLight& l) {
-                        std::snprintf(lbl, sizeof(lbl), "Par. Beam %d (I=%.1f)", i, l.intensity);
-                    },
-                    [&](const SpotLight& l) {
-                        std::snprintf(lbl, sizeof(lbl), "Spot Light %d (I=%.1f)", i, l.intensity);
-                    },
-                }, ed.shot.scene.lights[i]);
+                std::string lbl = selection_label(light_display_name(ed.shot.scene.lights[i], i), "light_" + std::to_string(i));
                 // Visibility toggle
                 ImGui::PushID(i + 20000);
                 bool lvis = ed.is_light_visible(i);
@@ -1267,23 +1491,23 @@ int App::run(const AppConfig& config) {
                 }
                 ImGui::PopID();
                 ImGui::SameLine();
-                if (ImGui::Selectable(lbl, is_sel)) {
+                if (ImGui::Selectable(lbl.c_str(), is_sel)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
                 }
             }
 
             for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
-                ObjectId id{ObjectId::Group, i};
+                SelectionRef id{SelectionRef::Group, i};
                 bool is_sel = ed.is_selected(id);
                 bool is_editing = (ed.editing_group == i);
-                char lbl[96];
                 const auto& group = ed.shot.scene.groups[i];
                 int n_members = (int)(group.shapes.size() + group.lights.size());
-                if (group.name.empty())
-                    std::snprintf(lbl, sizeof(lbl), "%sGroup %d (%d items)", is_editing ? "> " : "", i, n_members);
-                else
-                    std::snprintf(lbl, sizeof(lbl), "%s%s (%d items)", is_editing ? "> " : "", group.name.c_str(), n_members);
+                std::string group_name = group_display_name(group, i);
+                std::string lbl = group_name;
+                if (is_editing) lbl = "> " + lbl;
+                lbl += " (" + std::to_string(n_members) + " items)";
+                lbl = selection_label(lbl, "group_" + std::to_string(i));
                 // Visibility toggle
                 ImGui::PushID(i + 40000);
                 bool gvis = ed.is_group_visible(i);
@@ -1292,7 +1516,7 @@ int App::run(const AppConfig& config) {
                 }
                 ImGui::PopID();
                 ImGui::SameLine();
-                if (ImGui::Selectable(lbl, is_sel || is_editing)) {
+                if (ImGui::Selectable(lbl.c_str(), is_sel || is_editing)) {
                     if (io.KeyShift) ed.toggle_select(id);
                     else { ed.clear_selection(); ed.select(id); }
                 }
@@ -1300,24 +1524,18 @@ int App::run(const AppConfig& config) {
                 if (is_editing) {
                     ImGui::Indent(12.0f);
                     for (int j = 0; j < (int)group.shapes.size(); ++j) {
-                        ObjectId mid{ObjectId::Shape, j, i};
+                        SelectionRef mid{SelectionRef::Shape, j, i};
                         bool mid_sel = ed.is_selected(mid);
-                        char mlbl[96];
-                        std::visit(overloaded{
-                            [&](const Circle&) { std::snprintf(mlbl, sizeof(mlbl), "  Circle %d", j); },
-                            [&](const Segment&) { std::snprintf(mlbl, sizeof(mlbl), "  Segment %d", j); },
-                            [&](const Arc&) { std::snprintf(mlbl, sizeof(mlbl), "  Arc %d", j); },
-                            [&](const Bezier&) { std::snprintf(mlbl, sizeof(mlbl), "  Bezier %d", j); },
-                            [&](const Polygon&) { std::snprintf(mlbl, sizeof(mlbl), "  Polygon %d", j); },
-                            [&](const Ellipse&) { std::snprintf(mlbl, sizeof(mlbl), "  Ellipse %d", j); },
-                        }, group.shapes[j]);
-                        if (ImGui::Selectable(mlbl, mid_sel)) {
+                        std::string mlbl = selection_label(
+                            "  " + shape_display_name(group.shapes[j], j),
+                            "group_shape_" + std::to_string(i) + "_" + std::to_string(j));
+                        if (ImGui::Selectable(mlbl.c_str(), mid_sel)) {
                             ed.clear_selection();
                             ed.select(mid);
                         }
                     }
                     for (int j = 0; j < (int)group.lights.size(); ++j) {
-                        ObjectId mid{ObjectId::Light, j, i};
+                        SelectionRef mid{SelectionRef::Light, j, i};
                         bool mid_sel = ed.is_selected(mid);
                         // Solo toggle for group light
                         ImGui::PushID(i * 1000 + j + 50000);
@@ -1335,9 +1553,10 @@ int App::run(const AppConfig& config) {
                         }
                         ImGui::PopID();
                         ImGui::SameLine();
-                        char mlbl[64];
-                        std::snprintf(mlbl, sizeof(mlbl), "  Light %d", j);
-                        if (ImGui::Selectable(mlbl, mid_sel)) {
+                        std::string mlbl = selection_label(
+                            "  " + light_display_name(group.lights[j], j),
+                            "group_light_" + std::to_string(i) + "_" + std::to_string(j));
+                        if (ImGui::Selectable(mlbl.c_str(), mid_sel)) {
                             ed.clear_selection();
                             ed.select(mid);
                         }
@@ -1367,47 +1586,94 @@ int App::run(const AppConfig& config) {
 
             if (sid.group >= 0) {
                 ImGui::TextDisabled("Editing group: %s",
-                    ed.shot.scene.groups[sid.group].name.empty() ? "(unnamed)" : ed.shot.scene.groups[sid.group].name.c_str());
+                    ed.shot.scene.groups[sid.group].id.empty() ? "(unnamed)" : ed.shot.scene.groups[sid.group].id.c_str());
                 ImGui::Separator();
             }
 
-            // Named material dropdown for shape properties
-            auto show_material_match = [&](Material& shape_mat) {
-                std::string match;
-                for (auto& [name, m] : ed.shot.scene.materials)
-                    if (shape_mat == m) { match = name; break; }
-
-                if (!match.empty())
-                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f), "= %s", match.c_str());
-
-                if (!ed.shot.scene.materials.empty()) {
-                    if (ImGui::BeginCombo("Material##named", match.empty() ? "(custom)" : match.c_str())) {
-                        for (auto& [name, m] : ed.shot.scene.materials) {
-                            if (ImGui::Selectable(name.c_str(), shape_mat == m)) {
-                                if (!ed.prop_editing) { ed.undo.push(ed.shot.scene); ed.prop_editing = true; }
-                                shape_mat = m;
-                                changed = true;
-                            }
-                        }
-                        ImGui::EndCombo();
-                    }
+            static SelectionRef id_edit_target{SelectionRef::Shape, -2};
+            static std::string id_edit_buffer;
+            auto sync_id_editor = [&](const std::string& current_id) {
+                if (!(id_edit_target == sid)) {
+                    id_edit_target = sid;
+                    id_edit_buffer = current_id;
                 }
+            };
+            auto show_id_editor = [&](const std::string& current_id, auto&& commit) {
+                sync_id_editor(current_id);
+                std::array<char, 128> id_buf{};
+                std::snprintf(id_buf.data(), id_buf.size(), "%s", id_edit_buffer.c_str());
+                if (ImGui::InputText("ID", id_buf.data(), id_buf.size())) {
+                    id_edit_buffer = id_buf.data();
+                }
+                if (ImGui::IsItemDeactivatedAfterEdit()
+                    && id_edit_buffer != current_id
+                    && !id_edit_buffer.empty()
+                    && entity_id_available(id_edit_buffer, current_id)) {
+                    commit(id_edit_buffer);
+                    changed = true;
+                }
+                if (id_edit_buffer.empty()) {
+                    ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "ID must be non-empty");
+                } else if (id_edit_buffer != current_id && !entity_id_available(id_edit_buffer, current_id)) {
+                    ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "ID already in use");
+                }
+            };
+            auto edit_shape_material_binding = [&](Shape& shape) {
+                bool local_changed = false;
+                std::string& material_id = shape_material_id_mut(shape);
+                Material& inline_material = shape_material_mut(shape);
+                const char* preview = material_id.empty() ? "(inline custom)" : material_id.c_str();
+                if (ImGui::BeginCombo("Material", preview)) {
+                    if (ImGui::Selectable("(inline custom)", material_id.empty()) && !material_id.empty()) {
+                        detach_shape_material(shape);
+                        local_changed = true;
+                    }
+                    for (const auto& [name, _] : ed.shot.scene.materials) {
+                        bool selected = material_id == name;
+                        if (ImGui::Selectable(name.c_str(), selected) && material_id != name) {
+                            bind_shape_material(shape, name);
+                            local_changed = true;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (!material_id.empty()) {
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
+                        "Editing shared material asset '%s'", material_id.c_str());
+                    if (ImGui::SmallButton("Detach to Inline")) {
+                        detach_shape_material(shape);
+                        local_changed = true;
+                    }
+                    if (auto it = ed.shot.scene.materials.find(material_id); it != ed.shot.scene.materials.end()) {
+                        local_changed |= edit_material(it->second);
+                    } else {
+                        ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f),
+                            "Missing shared material '%s'", material_id.c_str());
+                    }
+                } else {
+                    ImGui::TextDisabled("Editing inline custom material");
+                    local_changed |= edit_material(inline_material);
+                }
+                return local_changed;
             };
 
             if (Shape* sp = resolve_shape(ed.shot.scene, sid)) {
                 auto& shape = *sp;
+                show_id_editor(shape_authored_id(shape), [&](const std::string& new_id) {
+                    shape_authored_id_mut(shape) = new_id;
+                });
+                ImGui::Separator();
                 std::visit(overloaded{
                     [&](Circle& c) {
                         changed |= ImGui::DragFloat2("Center", &c.center.x, 0.01f);
                         changed |= ImGui::DragFloat("Radius", &c.radius, 0.005f, 0.01f, 5.0f);
-                        changed |= edit_material(c.material);
-                        show_material_match(c.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                     [&](Segment& s) {
                         changed |= ImGui::DragFloat2("Point A", &s.a.x, 0.01f);
                         changed |= ImGui::DragFloat2("Point B", &s.b.x, 0.01f);
-                        changed |= edit_material(s.material);
-                        show_material_match(s.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                     [&](Arc& a) {
                         changed |= ImGui::DragFloat2("Center", &a.center.x, 0.01f);
@@ -1416,15 +1682,13 @@ int App::run(const AppConfig& config) {
                         changed |= ImGui::SliderAngle("Sweep", &a.sweep, 0.0f, 360.0f);
                         a.angle_start = normalize_angle(a.angle_start);
                         a.sweep = clamp_arc_sweep(a.sweep);
-                        changed |= edit_material(a.material);
-                        show_material_match(a.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                     [&](Bezier& b) {
                         changed |= ImGui::DragFloat2("P0", &b.p0.x, 0.01f);
                         changed |= ImGui::DragFloat2("P1 (ctrl)", &b.p1.x, 0.01f);
                         changed |= ImGui::DragFloat2("P2", &b.p2.x, 0.01f);
-                        changed |= edit_material(b.material);
-                        show_material_match(b.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                     [&](Polygon& p) {
                         ImGui::Text("Vertices: %d", (int)p.vertices.size());
@@ -1433,22 +1697,24 @@ int App::run(const AppConfig& config) {
                             std::snprintf(vlbl, sizeof(vlbl), "V%d", vi);
                             changed |= ImGui::DragFloat2(vlbl, &p.vertices[vi].x, 0.01f);
                         }
-                        changed |= edit_material(p.material);
-                        show_material_match(p.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                     [&](Ellipse& e) {
                         changed |= ImGui::DragFloat2("Center", &e.center.x, 0.01f);
                         changed |= ImGui::DragFloat("Semi-A", &e.semi_a, 0.005f, 0.01f, 5.0f);
                         changed |= ImGui::DragFloat("Semi-B", &e.semi_b, 0.005f, 0.01f, 5.0f);
                         changed |= ImGui::SliderAngle("Rotation", &e.rotation, -180.0f, 180.0f);
-                        changed |= edit_material(e.material);
-                        show_material_match(e.material);
+                        changed |= edit_shape_material_binding(shape);
                     },
                 }, shape);
             }
 
             if (Light* lp = resolve_light(ed.shot.scene, sid)) {
                 auto& light = *lp;
+                show_id_editor(light_authored_id(light), [&](const std::string& new_id) {
+                    light_authored_id_mut(light) = new_id;
+                });
+                ImGui::Separator();
                 auto edit_wavelength = [&](float& wl_min, float& wl_max) {
                     changed |= ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
                     changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
@@ -1498,15 +1764,11 @@ int App::run(const AppConfig& config) {
                 }, light);
             }
 
-            if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()) {
+            if (sid.type == SelectionRef::Group && sid.index < (int)ed.shot.scene.groups.size()) {
                 auto& group = ed.shot.scene.groups[sid.index];
-                static char name_buf[64];
-                strncpy(name_buf, group.name.c_str(), sizeof(name_buf) - 1);
-                name_buf[sizeof(name_buf) - 1] = '\0';
-                if (ImGui::InputText("Name", name_buf, sizeof(name_buf))) {
-                    group.name = name_buf;
-                    changed = true;
-                }
+                show_id_editor(group.id, [&](const std::string& new_id) {
+                    group.id = new_id;
+                });
                 ImGui::Separator();
                 ImGui::Text("Transform");
                 changed |= ImGui::DragFloat2("Translate", &group.transform.translate.x, 0.01f);
@@ -1539,83 +1801,100 @@ int App::run(const AppConfig& config) {
         if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Materials");
             static std::string selected_mat_name;
+            static std::string material_name_buffer;
             static char new_name_buf[64] = "";
+            static bool material_editing = false;
 
             // Material list
             auto& mats = ed.shot.scene.materials;
+            if (!selected_mat_name.empty() && !mats.contains(selected_mat_name)) {
+                selected_mat_name.clear();
+                material_name_buffer.clear();
+            }
             if (mats.empty()) {
                 ImGui::TextDisabled("No materials defined");
             } else {
                 if (ImGui::BeginCombo("##matlist", selected_mat_name.empty() ? "(select)" : selected_mat_name.c_str())) {
                     for (auto& [name, _] : mats) {
-                        if (ImGui::Selectable(name.c_str(), name == selected_mat_name))
+                        if (ImGui::Selectable(name.c_str(), name == selected_mat_name)) {
                             selected_mat_name = name;
+                            material_name_buffer = name;
+                        }
                     }
                     ImGui::EndCombo();
                 }
             }
 
-            // Track material snapshot for "Update Matching" feature
-            static Material mat_snapshot;
-            static std::string last_selected_name;
-            if (selected_mat_name != last_selected_name) {
-                last_selected_name = selected_mat_name;
-                if (mats.count(selected_mat_name))
-                    mat_snapshot = mats[selected_mat_name];
-            }
-
             // Edit selected material
-            if (!selected_mat_name.empty() && mats.count(selected_mat_name)) {
+            if (!selected_mat_name.empty() && mats.contains(selected_mat_name)) {
                 auto& mat = mats[selected_mat_name];
-                edit_material(mat);
+                if (material_name_buffer.empty())
+                    material_name_buffer = selected_mat_name;
 
-                // Count shapes matching this material's original value
-                int match_count = 0;
-                auto count_mat = [&](const auto& shapes) {
-                    for (auto& s : shapes)
-                        std::visit([&](const auto& shape) { if (shape.material == mat_snapshot) ++match_count; }, s);
-                };
-                count_mat(ed.shot.scene.shapes);
-                for (auto& g : ed.shot.scene.groups) count_mat(g.shapes);
+                std::array<char, 128> rename_buf{};
+                std::snprintf(rename_buf.data(), rename_buf.size(), "%s", material_name_buffer.c_str());
+                if (ImGui::InputText("Rename", rename_buf.data(), rename_buf.size()))
+                    material_name_buffer = rename_buf.data();
 
-                if (match_count > 0) {
-                    ImGui::Text("%d shape(s) use this material", match_count);
-                    ImGui::SameLine();
-                    if (ImGui::Button("Update Matching")) {
-                        ed.undo.push(ed.shot.scene);
-                        auto apply_mat = [&](auto& shapes) {
-                            for (auto& s : shapes)
-                                std::visit([&](auto& shape) {
-                                    if (shape.material == mat_snapshot) shape.material = mat;
-                                }, s);
-                        };
-                        apply_mat(ed.shot.scene.shapes);
-                        for (auto& g : ed.shot.scene.groups) apply_mat(g.shapes);
-                        mat_snapshot = mat;
-                        reload();
-                    }
+                if (!material_name_buffer.empty()
+                    && material_name_buffer != selected_mat_name
+                    && !material_id_available(material_name_buffer, selected_mat_name)) {
+                    ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "Material ID already in use");
+                } else if (material_name_buffer.empty()) {
+                    ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "Material ID must be non-empty");
                 }
 
-                // Apply buttons
-                if (ImGui::Button("Apply to Selection")) {
+                if (ImGui::Button("Rename##mat")
+                    && !material_name_buffer.empty()
+                    && material_id_available(material_name_buffer, selected_mat_name)) {
                     ed.undo.push(ed.shot.scene);
-                    for (auto& id : ed.selection) {
-                        if (id.type == ObjectId::Shape && id.index < (int)ed.shot.scene.shapes.size()) {
-                            std::visit([&](auto& s) { s.material = mat; }, ed.shot.scene.shapes[id.index]);
-                        } else if (id.type == ObjectId::Group && id.index < (int)ed.shot.scene.groups.size()) {
-                            for (auto& s : ed.shot.scene.groups[id.index].shapes)
-                                std::visit([&](auto& shape) { shape.material = mat; }, s);
-                        }
+                    rename_material_binding(selected_mat_name, material_name_buffer);
+                    selected_mat_name = material_name_buffer;
+                    reload();
+                }
+
+                bool mat_changed = edit_material(mat);
+                if (mat_changed) {
+                    if (!material_editing) {
+                        ed.undo.push(ed.shot.scene);
+                        material_editing = true;
                     }
                     reload();
+                }
+
+                int bound_count = material_usage_count(selected_mat_name);
+                ImGui::Text("%d bound shape(s)", bound_count);
+
+                if (ImGui::Button("Apply to Selection")) {
+                    Scene before = ed.shot.scene;
+                    if (apply_material_to_selection(selected_mat_name)) {
+                        ed.undo.push(ed.shot.scene);
+                        reload();
+                    } else {
+                        ed.shot.scene = std::move(before);
+                    }
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Delete##mat")) {
+                if (ImGui::Button("Detach Selection")) {
+                    Scene before = ed.shot.scene;
+                    if (detach_material_from_selection(selected_mat_name)) {
+                        ed.undo.push(ed.shot.scene);
+                        reload();
+                    } else {
+                        ed.shot.scene = std::move(before);
+                    }
+                }
+                ImGui::SameLine();
+                if (bound_count > 0) ImGui::BeginDisabled();
+                if (ImGui::Button("Delete##mat") && bound_count == 0) {
                     ed.undo.push(ed.shot.scene);
+                    detach_clipboard_material_binding(selected_mat_name);
                     mats.erase(selected_mat_name);
                     selected_mat_name.clear();
+                    material_name_buffer.clear();
                     reload();
                 }
+                if (bound_count > 0) ImGui::EndDisabled();
             }
 
             ImGui::Separator();
@@ -1627,7 +1906,9 @@ int App::run(const AppConfig& config) {
                 ed.undo.push(ed.shot.scene);
                 mats[new_name_buf] = Material{};
                 selected_mat_name = new_name_buf;
+                material_name_buffer = new_name_buf;
                 new_name_buf[0] = '\0';
+                reload();
             }
 
             // Presets
@@ -1639,6 +1920,8 @@ int App::run(const AppConfig& config) {
                     ed.undo.push(ed.shot.scene);
                     mats[name] = mat;
                     selected_mat_name = name;
+                    material_name_buffer = name;
+                    reload();
                 }
             };
             preset_btn("Glass", mat_glass(1.5f, 20000.0f));
@@ -1648,6 +1931,9 @@ int App::run(const AppConfig& config) {
             preset_btn("Diffuse", mat_diffuse(0.8f));
             ImGui::SameLine();
             preset_btn("Absorber", mat_absorber());
+
+            if (!ImGui::IsAnyItemActive() && material_editing)
+                material_editing = false;
 
             ImGui::PopID();
         }
@@ -1794,7 +2080,7 @@ int App::run(const AppConfig& config) {
                     } else if (Light* live = resolve_light(ed.shot.scene, sid)) {
                         if (const Light* snap = resolve_light(ed.transform.snapshot, sid))
                             apply_transform_light(*live, *snap, ed.transform, mw, io.KeyShift);
-                    } else if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()
+                    } else if (sid.type == SelectionRef::Group && sid.index < (int)ed.shot.scene.groups.size()
                                && sid.index < (int)ed.transform.snapshot.groups.size()) {
                         apply_transform_group(ed.shot.scene.groups[sid.index],
                             ed.transform.snapshot.groups[sid.index], ed.transform, mw, io.KeyShift);
@@ -1841,30 +2127,30 @@ int App::run(const AppConfig& config) {
                     // Ungroup selected groups
                     bool any_ungrouped = false;
                     for (auto& sid : ed.selection) {
-                        if (sid.type == ObjectId::Group && sid.index < (int)ed.shot.scene.groups.size()) {
+                        if (sid.type == SelectionRef::Group && sid.index < (int)ed.shot.scene.groups.size()) {
                             any_ungrouped = true;
                             break;
                         }
                     }
                     if (any_ungrouped) {
                         ed.undo.push(ed.shot.scene);
-                        std::vector<ObjectId> new_sel;
+                        std::vector<SelectionRef> new_sel;
                         // Collect group indices to remove (reverse order)
                         std::vector<int> to_remove;
                         for (auto& sid : ed.selection) {
-                            if (sid.type != ObjectId::Group) continue;
+                            if (sid.type != SelectionRef::Group) continue;
                             if (sid.index >= (int)ed.shot.scene.groups.size()) continue;
                             auto& group = ed.shot.scene.groups[sid.index];
                             // Bake transform into shapes/lights and add to scene
                             for (auto& s : group.shapes) {
                                 Shape ws = transform_shape(s, group.transform);
                                 ed.shot.scene.shapes.push_back(ws);
-                                new_sel.push_back({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                                new_sel.push_back({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                             }
                             for (auto& l : group.lights) {
                                 Light wl = transform_light(l, group.transform);
                                 ed.shot.scene.lights.push_back(wl);
-                                new_sel.push_back({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                                new_sel.push_back({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                             }
                             to_remove.push_back(sid.index);
                         }
@@ -1882,7 +2168,7 @@ int App::run(const AppConfig& config) {
                     int n_ungrouped = 0;
                     bool has_groups = false;
                     for (auto& sid : ed.selection) {
-                        if (sid.type == ObjectId::Group || sid.group >= 0) has_groups = true;
+                        if (sid.type == SelectionRef::Group || sid.group >= 0) has_groups = true;
                         else n_ungrouped++;
                     }
                     if (n_ungrouped >= 2 && !has_groups) {
@@ -1890,19 +2176,18 @@ int App::run(const AppConfig& config) {
                         // Compute centroid
                         Vec2 centroid = ed.selection_centroid();
                         Group group;
-                        static int group_counter = 0;
-                        group.name = "Group " + std::to_string(group_counter++);
+                        group.id = next_scene_entity_id(ed.shot.scene, "group");
                         group.transform.translate = centroid;
 
                         // Collect shapes/lights, converting to local coords
                         std::vector<int> shape_indices, light_indices;
                         for (auto& sid : ed.selection) {
-                            if (sid.type == ObjectId::Shape && sid.index < (int)ed.shot.scene.shapes.size()) {
+                            if (sid.type == SelectionRef::Shape && sid.index < (int)ed.shot.scene.shapes.size()) {
                                 Shape s = ed.shot.scene.shapes[sid.index];
                                 translate_shape(s, Vec2{0, 0} - centroid);
                                 group.shapes.push_back(s);
                                 shape_indices.push_back(sid.index);
-                            } else if (sid.type == ObjectId::Light && sid.index < (int)ed.shot.scene.lights.size()) {
+                            } else if (sid.type == SelectionRef::Light && sid.index < (int)ed.shot.scene.lights.size()) {
                                 Light l = ed.shot.scene.lights[sid.index];
                                 translate_light(l, Vec2{0, 0} - centroid);
                                 group.lights.push_back(l);
@@ -1920,7 +2205,7 @@ int App::run(const AppConfig& config) {
 
                         ed.shot.scene.groups.push_back(std::move(group));
                         ed.clear_selection();
-                        ed.select({ObjectId::Group, (int)ed.shot.scene.groups.size() - 1});
+                        ed.select({SelectionRef::Group, (int)ed.shot.scene.groups.size() - 1});
                         reload();
                     }
                 }
@@ -1933,21 +2218,22 @@ int App::run(const AppConfig& config) {
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !ed.clipboard.empty()) {
                     ed.undo.push(ed.shot.scene);
                     Vec2 offset = mw - ed.clipboard.centroid;
+                    sanitize_clipboard_material_bindings();
                     ed.clear_selection();
                     for (auto s : ed.clipboard.shapes) {
                         translate_shape(s, offset);
                         ed.shot.scene.shapes.push_back(s);
-                        ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                        ed.select({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     }
                     for (auto l : ed.clipboard.lights) {
                         translate_light(l, offset);
                         ed.shot.scene.lights.push_back(l);
-                        ed.select({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
+                        ed.select({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
                     }
                     for (auto g : ed.clipboard.groups) {
                         translate_group(g, offset);
                         ed.shot.scene.groups.push_back(g);
-                        ed.select({ObjectId::Group, (int)ed.shot.scene.groups.size() - 1});
+                        ed.select({SelectionRef::Group, (int)ed.shot.scene.groups.size() - 1});
                     }
                     reload();
                 }
@@ -1960,24 +2246,24 @@ int App::run(const AppConfig& config) {
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !ed.selection.empty()) {
                     // Duplicate: copy in place with small offset, then enter grab
                     ed.undo.push(ed.shot.scene);
-                    std::vector<ObjectId> new_sel;
+                    std::vector<SelectionRef> new_sel;
                     Vec2 offset{0.05f, 0.05f};
                     for (auto& sid : ed.selection) {
                         if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) {
                             Shape s = *shape;
                             translate_shape(s, offset);
                             ed.shot.scene.shapes.push_back(s);
-                            new_sel.push_back({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                            new_sel.push_back({SelectionRef::Shape, (int)ed.shot.scene.shapes.size() - 1});
                         } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                             Light l = *light;
                             translate_light(l, offset);
                             ed.shot.scene.lights.push_back(l);
-                            new_sel.push_back({ObjectId::Light, (int)ed.shot.scene.lights.size() - 1});
-                        } else if (sid.type == ObjectId::Group) {
+                            new_sel.push_back({SelectionRef::Light, (int)ed.shot.scene.lights.size() - 1});
+                        } else if (sid.type == SelectionRef::Group) {
                             Group g = ed.shot.scene.groups[sid.index];
                             translate_group(g, offset);
                             ed.shot.scene.groups.push_back(g);
-                            new_sel.push_back({ObjectId::Group, (int)ed.shot.scene.groups.size() - 1});
+                            new_sel.push_back({SelectionRef::Group, (int)ed.shot.scene.groups.size() - 1});
                         }
                     }
                     ed.selection = new_sel;
@@ -2034,9 +2320,9 @@ int App::run(const AppConfig& config) {
                         ed.show_all();
                     } else {
                         for (auto& sid : ed.selection) {
-                            if (sid.type == ObjectId::Shape) ed.toggle_shape_visibility(sid.index);
-                            else if (sid.type == ObjectId::Light) ed.toggle_light_visibility(sid.index);
-                            else if (sid.type == ObjectId::Group) ed.toggle_group_visibility(sid.index);
+                            if (sid.type == SelectionRef::Shape) ed.toggle_shape_visibility(sid.index);
+                            else if (sid.type == SelectionRef::Light) ed.toggle_light_visibility(sid.index);
+                            else if (sid.type == SelectionRef::Group) ed.toggle_group_visibility(sid.index);
                         }
                     }
                     reload();

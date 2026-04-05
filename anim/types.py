@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, fields, replace
 from enum import Enum
 from pathlib import Path
 
-SHOT_JSON_VERSION = 4
+SHOT_JSON_VERSION = 5
 
 # --- Materials ---
 
@@ -50,6 +50,12 @@ class Material:
             albedo=d.get("albedo", 1.0),
             emission=d.get("emission", 0.0),
         )
+
+
+def _material_payload(material: Material, material_id: str | None) -> dict:
+    if material_id:
+        return {"material_id": material_id}
+    return {"material": material.to_dict()}
 
 
 def glass(ior: float, cauchy_b: float = 0.0, absorption: float = 0.0) -> Material:
@@ -112,99 +118,123 @@ def clamp_arc_sweep(sweep: float) -> float:
 
 @dataclass
 class Circle:
+    id: str = ""
     center: list[float] = field(default_factory=lambda: [0.0, 0.0])
     radius: float = 0.1
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
+            "id": self.id,
             "type": "circle",
             "center": self.center,
             "radius": self.radius,
-            "material": self.material.to_dict(),
         }
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 @dataclass
 class Segment:
+    id: str = ""
     a: list[float] = field(default_factory=lambda: [0.0, 0.0])
     b: list[float] = field(default_factory=lambda: [1.0, 0.0])
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def to_dict(self) -> dict:
-        return {"type": "segment", "a": self.a, "b": self.b, "material": self.material.to_dict()}
+        d = {"id": self.id, "type": "segment", "a": self.a, "b": self.b}
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 @dataclass
 class Arc:
+    id: str = ""
     center: list[float] = field(default_factory=lambda: [0.0, 0.0])
     radius: float = 0.1
     angle_start: float = 0.0
     sweep: float = math.tau
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def __post_init__(self) -> None:
         self.angle_start = normalize_angle(self.angle_start)
         self.sweep = clamp_arc_sweep(self.sweep)
 
     def to_dict(self) -> dict:
-        return {
+        d = {
+            "id": self.id,
             "type": "arc",
             "center": self.center,
             "radius": self.radius,
             "angle_start": normalize_angle(self.angle_start),
             "sweep": clamp_arc_sweep(self.sweep),
-            "material": self.material.to_dict(),
         }
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 @dataclass
 class Bezier:
+    id: str = ""
     p0: list[float] = field(default_factory=lambda: [0.0, 0.0])
     p1: list[float] = field(default_factory=lambda: [0.5, 0.5])
     p2: list[float] = field(default_factory=lambda: [1.0, 0.0])
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
+            "id": self.id,
             "type": "bezier",
             "p0": self.p0,
             "p1": self.p1,
             "p2": self.p2,
-            "material": self.material.to_dict(),
         }
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 @dataclass
 class Polygon:
+    id: str = ""
     vertices: list[list[float]] = field(default_factory=list)
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
+            "id": self.id,
             "type": "polygon",
             "vertices": self.vertices,
-            "material": self.material.to_dict(),
         }
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 @dataclass
 class Ellipse:
+    id: str = ""
     center: list[float] = field(default_factory=lambda: [0.0, 0.0])
     semi_a: float = 0.2
     semi_b: float = 0.1
     rotation: float = 0.0
     material: Material = field(default_factory=Material)
+    material_id: str | None = None
 
     def to_dict(self) -> dict:
-        return {
+        d = {
+            "id": self.id,
             "type": "ellipse",
             "center": self.center,
             "semi_a": self.semi_a,
             "semi_b": self.semi_b,
             "rotation": self.rotation,
-            "material": self.material.to_dict(),
         }
+        d.update(_material_payload(self.material, self.material_id))
+        return d
 
 
 Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse
@@ -215,6 +245,7 @@ Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse
 
 @dataclass
 class PointLight:
+    id: str = ""
     pos: list[float] = field(default_factory=lambda: [0.0, 0.0])
     intensity: float = 1.0
     wavelength_min: float = 380.0
@@ -222,6 +253,7 @@ class PointLight:
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "type": "point",
             "pos": self.pos,
             "intensity": self.intensity,
@@ -232,6 +264,7 @@ class PointLight:
 
 @dataclass
 class SegmentLight:
+    id: str = ""
     a: list[float] = field(default_factory=lambda: [0.0, 0.0])
     b: list[float] = field(default_factory=lambda: [1.0, 0.0])
     intensity: float = 1.0
@@ -240,6 +273,7 @@ class SegmentLight:
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "type": "segment",
             "a": self.a,
             "b": self.b,
@@ -251,6 +285,7 @@ class SegmentLight:
 
 @dataclass
 class BeamLight:
+    id: str = ""
     origin: list[float] = field(default_factory=lambda: [0.0, 0.0])
     direction: list[float] = field(default_factory=lambda: [1.0, 0.0])
     angular_width: float = 0.1
@@ -260,6 +295,7 @@ class BeamLight:
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "type": "beam",
             "origin": self.origin,
             "direction": self.direction,
@@ -272,6 +308,7 @@ class BeamLight:
 
 @dataclass
 class ParallelBeamLight:
+    id: str = ""
     a: list[float] = field(default_factory=lambda: [0.0, 0.0])
     b: list[float] = field(default_factory=lambda: [0.0, 0.5])
     direction: list[float] = field(default_factory=lambda: [1.0, 0.0])
@@ -282,6 +319,7 @@ class ParallelBeamLight:
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "type": "parallel_beam",
             "a": self.a,
             "b": self.b,
@@ -295,6 +333,7 @@ class ParallelBeamLight:
 
 @dataclass
 class SpotLight:
+    id: str = ""
     pos: list[float] = field(default_factory=lambda: [0.0, 0.0])
     direction: list[float] = field(default_factory=lambda: [1.0, 0.0])
     angular_width: float = 0.5
@@ -305,6 +344,7 @@ class SpotLight:
 
     def to_dict(self) -> dict:
         return {
+            "id": self.id,
             "type": "spot",
             "pos": self.pos,
             "direction": self.direction,
@@ -356,14 +396,14 @@ class Transform2D:
 
 @dataclass
 class Group:
-    name: str = ""
+    id: str = ""
     transform: Transform2D = field(default_factory=Transform2D)
     shapes: list[Shape] = field(default_factory=list)
     lights: list[Light] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
-            "name": self.name,
+            "id": self.id,
             "transform": self.transform.to_dict(),
             "shapes": [s.to_dict() for s in self.shapes],
             "lights": [light.to_dict() for light in self.lights],
@@ -378,105 +418,171 @@ class Group:
 
 # --- Scene (content-only: shapes, lights, groups, materials) ---
 
-_SHAPE_PARSERS = {
-    "circle": lambda d: Circle(
-        center=d["center"], radius=d["radius"], material=Material.from_dict(d.get("material", {}))
-    ),
-    "segment": lambda d: Segment(
-        a=d["a"], b=d["b"], material=Material.from_dict(d.get("material", {}))
-    ),
-    "arc": lambda d: Arc(
-        center=d["center"],
-        radius=d["radius"],
-        angle_start=d.get("angle_start", 0.0),
-        sweep=d.get("sweep", math.tau),
-        material=Material.from_dict(d.get("material", {})),
-    ),
-    "bezier": lambda d: Bezier(
-        p0=d["p0"], p1=d["p1"], p2=d["p2"], material=Material.from_dict(d.get("material", {}))
-    ),
-    "polygon": lambda d: Polygon(
-        vertices=d["vertices"], material=Material.from_dict(d.get("material", {}))
-    ),
-    "ellipse": lambda d: Ellipse(
-        center=d["center"],
-        semi_a=d.get("semi_a", 0.2),
-        semi_b=d.get("semi_b", 0.1),
-        rotation=d.get("rotation", 0.0),
-        material=Material.from_dict(d.get("material", {})),
-    ),
-}
 
-_LIGHT_PARSERS = {
-    "point": lambda d: PointLight(
-        pos=d["pos"],
-        intensity=d.get("intensity", 1.0),
-        wavelength_min=d.get("wavelength_min", 380.0),
-        wavelength_max=d.get("wavelength_max", 780.0),
-    ),
-    "segment": lambda d: SegmentLight(
-        a=d["a"],
-        b=d["b"],
-        intensity=d.get("intensity", 1.0),
-        wavelength_min=d.get("wavelength_min", 380.0),
-        wavelength_max=d.get("wavelength_max", 780.0),
-    ),
-    "beam": lambda d: BeamLight(
-        origin=d["origin"],
-        direction=d["direction"],
-        angular_width=d.get("angular_width", 0.1),
-        intensity=d.get("intensity", 1.0),
-        wavelength_min=d.get("wavelength_min", 380.0),
-        wavelength_max=d.get("wavelength_max", 780.0),
-    ),
-    "parallel_beam": lambda d: ParallelBeamLight(
-        a=d.get("a", [0.0, 0.0]),
-        b=d.get("b", [0.0, 0.5]),
-        direction=d.get("direction", [1.0, 0.0]),
-        angular_width=d.get("angular_width", 0.0),
-        intensity=d.get("intensity", 1.0),
-        wavelength_min=d.get("wavelength_min", 380.0),
-        wavelength_max=d.get("wavelength_max", 780.0),
-    ),
-    "spot": lambda d: SpotLight(
-        pos=d.get("pos", [0.0, 0.0]),
-        direction=d.get("direction", [1.0, 0.0]),
-        angular_width=d.get("angular_width", 0.5),
-        falloff=d.get("falloff", 2.0),
-        intensity=d.get("intensity", 1.0),
-        wavelength_min=d.get("wavelength_min", 380.0),
-        wavelength_max=d.get("wavelength_max", 780.0),
-    ),
-}
+def shape_type_name(shape: Shape) -> str:
+    if isinstance(shape, Circle):
+        return "circle"
+    if isinstance(shape, Segment):
+        return "segment"
+    if isinstance(shape, Arc):
+        return "arc"
+    if isinstance(shape, Bezier):
+        return "bezier"
+    if isinstance(shape, Polygon):
+        return "polygon"
+    return "ellipse"
 
 
-def _resolve_material(d: dict, materials: dict[str, Material]) -> dict:
-    """If d["material"] is a string, resolve from the materials dict."""
-    mat = d.get("material")
-    if isinstance(mat, str) and mat in materials:
-        d = dict(d)  # shallow copy to avoid mutating original
-        d["material"] = materials[mat].to_dict()
-    return d
+def light_type_name(light: Light) -> str:
+    if isinstance(light, PointLight):
+        return "point_light"
+    if isinstance(light, SegmentLight):
+        return "segment_light"
+    if isinstance(light, BeamLight):
+        return "beam_light"
+    if isinstance(light, ParallelBeamLight):
+        return "parallel_beam_light"
+    return "spot_light"
 
 
-def _parse_shapes(arr: list[dict], materials: dict[str, Material] | None = None) -> list[Shape]:
-    shapes = []
-    mats = materials or {}
-    for d in arr:
-        d = _resolve_material(d, mats)
-        parser = _SHAPE_PARSERS.get(d.get("type", ""))
-        if parser:
-            shapes.append(parser(d))
-    return shapes
+def _require_entity_id(d: dict, kind: str) -> str:
+    entity_id = d.get("id")
+    if not isinstance(entity_id, str) or not entity_id:
+        raise ValueError(f"{kind} entries require a non-empty id")
+    return entity_id
+
+
+def _parse_shape_material(d: dict, materials: dict[str, Material]) -> tuple[Material, str | None]:
+    has_inline = "material" in d
+    has_binding = "material_id" in d
+    if has_inline and has_binding:
+        raise ValueError("shape entries cannot declare both material and material_id")
+    if not has_inline and not has_binding:
+        raise ValueError("shape entries must declare exactly one of material and material_id")
+    if has_binding:
+        material_id = d.get("material_id")
+        if not isinstance(material_id, str) or not material_id:
+            raise ValueError("material_id must be a non-empty string")
+        if material_id not in materials:
+            raise ValueError(f"unknown material_id: {material_id}")
+        return Material.from_dict(materials[material_id].to_dict()), material_id
+    return Material.from_dict(d["material"]), None
+
+
+def _parse_shape(d: dict, materials: dict[str, Material]) -> Shape:
+    shape_id = _require_entity_id(d, "shape")
+    material, material_id = _parse_shape_material(d, materials)
+    shape_type = d.get("type", "")
+    if shape_type == "circle":
+        return Circle(
+            id=shape_id,
+            center=d["center"],
+            radius=d["radius"],
+            material=material,
+            material_id=material_id,
+        )
+    if shape_type == "segment":
+        return Segment(id=shape_id, a=d["a"], b=d["b"], material=material, material_id=material_id)
+    if shape_type == "arc":
+        return Arc(
+            id=shape_id,
+            center=d["center"],
+            radius=d["radius"],
+            angle_start=d.get("angle_start", 0.0),
+            sweep=d.get("sweep", math.tau),
+            material=material,
+            material_id=material_id,
+        )
+    if shape_type == "bezier":
+        return Bezier(
+            id=shape_id,
+            p0=d["p0"],
+            p1=d["p1"],
+            p2=d["p2"],
+            material=material,
+            material_id=material_id,
+        )
+    if shape_type == "polygon":
+        return Polygon(
+            id=shape_id,
+            vertices=d["vertices"],
+            material=material,
+            material_id=material_id,
+        )
+    if shape_type == "ellipse":
+        return Ellipse(
+            id=shape_id,
+            center=d["center"],
+            semi_a=d.get("semi_a", 0.2),
+            semi_b=d.get("semi_b", 0.1),
+            rotation=d.get("rotation", 0.0),
+            material=material,
+            material_id=material_id,
+        )
+    raise ValueError(f"unknown shape type: {shape_type}")
+
+
+def _parse_shapes(arr: list[dict], materials: dict[str, Material]) -> list[Shape]:
+    return [_parse_shape(d, materials) for d in arr]
+
+
+def _parse_light(d: dict) -> Light:
+    light_id = _require_entity_id(d, "light")
+    light_type = d.get("type", "")
+    if light_type == "point":
+        return PointLight(
+            id=light_id,
+            pos=d["pos"],
+            intensity=d.get("intensity", 1.0),
+            wavelength_min=d.get("wavelength_min", 380.0),
+            wavelength_max=d.get("wavelength_max", 780.0),
+        )
+    if light_type == "segment":
+        return SegmentLight(
+            id=light_id,
+            a=d["a"],
+            b=d["b"],
+            intensity=d.get("intensity", 1.0),
+            wavelength_min=d.get("wavelength_min", 380.0),
+            wavelength_max=d.get("wavelength_max", 780.0),
+        )
+    if light_type == "beam":
+        return BeamLight(
+            id=light_id,
+            origin=d["origin"],
+            direction=d["direction"],
+            angular_width=d.get("angular_width", 0.1),
+            intensity=d.get("intensity", 1.0),
+            wavelength_min=d.get("wavelength_min", 380.0),
+            wavelength_max=d.get("wavelength_max", 780.0),
+        )
+    if light_type == "parallel_beam":
+        return ParallelBeamLight(
+            id=light_id,
+            a=d.get("a", [0.0, 0.0]),
+            b=d.get("b", [0.0, 0.5]),
+            direction=d.get("direction", [1.0, 0.0]),
+            angular_width=d.get("angular_width", 0.0),
+            intensity=d.get("intensity", 1.0),
+            wavelength_min=d.get("wavelength_min", 380.0),
+            wavelength_max=d.get("wavelength_max", 780.0),
+        )
+    if light_type == "spot":
+        return SpotLight(
+            id=light_id,
+            pos=d.get("pos", [0.0, 0.0]),
+            direction=d.get("direction", [1.0, 0.0]),
+            angular_width=d.get("angular_width", 0.5),
+            falloff=d.get("falloff", 2.0),
+            intensity=d.get("intensity", 1.0),
+            wavelength_min=d.get("wavelength_min", 380.0),
+            wavelength_max=d.get("wavelength_max", 780.0),
+        )
+    raise ValueError(f"unknown light type: {light_type}")
 
 
 def _parse_lights(arr: list[dict]) -> list[Light]:
-    lights = []
-    for d in arr:
-        parser = _LIGHT_PARSERS.get(d.get("type", ""))
-        if parser:
-            lights.append(parser(d))
-    return lights
+    return [_parse_light(d) for d in arr]
 
 
 @dataclass
@@ -488,8 +594,92 @@ class Scene:
     groups: list[Group] = field(default_factory=list)
     materials: dict[str, Material] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        """Scene content as a dict (no version — used inside Shot)."""
+    def _iter_shapes(self):
+        for shape in self.shapes:
+            yield shape
+        for group in self.groups:
+            for shape in group.shapes:
+                yield shape
+
+    def _iter_lights(self):
+        for light in self.lights:
+            yield light
+        for group in self.groups:
+            for light in group.lights:
+                yield light
+
+    def _next_entity_id(self, prefix: str, used: set[str]) -> str:
+        suffix = 0
+        while True:
+            candidate = f"{prefix}_{suffix}"
+            if candidate not in used:
+                return candidate
+            suffix += 1
+
+    def ensure_ids(self) -> Scene:
+        used: set[str] = set()
+        for shape in self._iter_shapes():
+            shape_id = shape.id
+            if not shape_id or shape_id in used:
+                shape.id = self._next_entity_id(shape_type_name(shape), used)
+            used.add(shape.id)
+        for light in self._iter_lights():
+            light_id = light.id
+            if not light_id or light_id in used:
+                light.id = self._next_entity_id(light_type_name(light), used)
+            used.add(light.id)
+        for group in self.groups:
+            group_id = group.id
+            if not group_id or group_id in used:
+                group.id = self._next_entity_id("group", used)
+            used.add(group.id)
+        return self
+
+    def sync_material_bindings(self) -> Scene:
+        for shape in self._iter_shapes():
+            material_id = getattr(shape, "material_id", None)
+            if material_id:
+                if material_id not in self.materials:
+                    raise ValueError(f"unknown material_id: {material_id}")
+                shape.material = Material.from_dict(self.materials[material_id].to_dict())
+        return self
+
+    def validate(self) -> Scene:
+        used: set[str] = set()
+        for material_id in self.materials:
+            if not material_id:
+                raise ValueError("material ids must be non-empty")
+        for shape in self._iter_shapes():
+            if not shape.id:
+                raise ValueError("shape ids must be non-empty")
+            if shape.id in used:
+                raise ValueError(f"duplicate entity id: {shape.id}")
+            used.add(shape.id)
+            if shape.material_id and shape.material_id not in self.materials:
+                raise ValueError(f"unknown material_id: {shape.material_id}")
+        for light in self._iter_lights():
+            if not light.id:
+                raise ValueError("light ids must be non-empty")
+            if light.id in used:
+                raise ValueError(f"duplicate entity id: {light.id}")
+            used.add(light.id)
+        for group in self.groups:
+            if not group.id:
+                raise ValueError("group ids must be non-empty")
+            if group.id in used:
+                raise ValueError(f"duplicate entity id: {group.id}")
+            used.add(group.id)
+        return self
+
+    def _normalized_copy(self, *, sync_material_bindings: bool) -> Scene:
+        scene = self.clone()
+        scene.ensure_ids()
+        if sync_material_bindings:
+            scene.sync_material_bindings()
+        scene.validate()
+        return scene
+
+    def _to_dict_unchecked(self) -> dict:
         d: dict = {}
         if self.materials:
             d["materials"] = {name: mat.to_dict() for name, mat in self.materials.items()}
@@ -499,29 +689,97 @@ class Scene:
             d["groups"] = [g.to_dict() for g in self.groups]
         return d
 
+    def to_dict(self) -> dict:
+        """Scene content as a dict (no version — used inside Shot)."""
+        return self._normalized_copy(sync_material_bindings=True)._to_dict_unchecked()
+
+    def to_wire_dict(self) -> dict:
+        """Scene content for transient renderer wire JSON."""
+        return self._normalized_copy(sync_material_bindings=False)._to_dict_unchecked()
+
     @staticmethod
     def _from_dict(d: dict) -> Scene:
         """Parse scene content from a dict (materials/shapes/lights/groups)."""
         scene = Scene()
         for name, mat_d in d.get("materials", {}).items():
+            if not name:
+                raise ValueError("material ids must be non-empty")
             scene.materials[name] = Material.from_dict(mat_d)
         scene.shapes = _parse_shapes(d.get("shapes", []), scene.materials)
         scene.lights = _parse_lights(d.get("lights", []))
         for gd in d.get("groups", []):
-            group = Group(name=gd.get("name", ""))
+            group = Group(id=_require_entity_id(gd, "group"))
             if "transform" in gd:
                 group.transform = Transform2D.from_dict(gd["transform"])
             group.shapes = _parse_shapes(gd.get("shapes", []), scene.materials)
             group.lights = _parse_lights(gd.get("lights", []))
             scene.groups.append(group)
+        scene.sync_material_bindings().validate()
         return scene
 
-    def find_group(self, name: str) -> Group | None:
-        """Find a group by name, or None if not found."""
+    def find_group(self, entity_id: str) -> Group | None:
         for g in self.groups:
-            if g.name == name:
+            if g.id == entity_id:
                 return g
         return None
+
+    def require_group(self, entity_id: str) -> Group:
+        group = self.find_group(entity_id)
+        if group is None:
+            raise ValueError(f"unknown group id: {entity_id}")
+        return group
+
+    def find_shape(self, entity_id: str) -> Shape | None:
+        for shape in self._iter_shapes():
+            if shape.id == entity_id:
+                return shape
+        return None
+
+    def require_shape(self, entity_id: str) -> Shape:
+        shape = self.find_shape(entity_id)
+        if shape is None:
+            raise ValueError(f"unknown shape id: {entity_id}")
+        return shape
+
+    def find_light(self, entity_id: str) -> Light | None:
+        for light in self._iter_lights():
+            if light.id == entity_id:
+                return light
+        return None
+
+    def require_light(self, entity_id: str) -> Light:
+        light = self.find_light(entity_id)
+        if light is None:
+            raise ValueError(f"unknown light id: {entity_id}")
+        return light
+
+    def bind_material(self, shape_id: str, material_id: str) -> Shape:
+        if material_id not in self.materials:
+            raise ValueError(f"unknown material_id: {material_id}")
+        shape = self.require_shape(shape_id)
+        shape.material_id = material_id
+        shape.material = Material.from_dict(self.materials[material_id].to_dict())
+        return shape
+
+    def detach_material(self, shape_id: str) -> Shape:
+        shape = self.require_shape(shape_id)
+        shape.material_id = None
+        shape.material = Material.from_dict(shape.material.to_dict())
+        return shape
+
+    def rename_material(self, old_id: str, new_id: str) -> None:
+        if old_id not in self.materials:
+            raise ValueError(f"unknown material_id: {old_id}")
+        if not new_id:
+            raise ValueError("material ids must be non-empty")
+        if old_id != new_id and new_id in self.materials:
+            raise ValueError(f"duplicate material_id: {new_id}")
+        material = self.materials.pop(old_id)
+        self.materials[new_id] = material
+        for shape in self._iter_shapes():
+            if shape.material_id == old_id:
+                shape.material_id = new_id
+        self.sync_material_bindings()
 
     def clone(self) -> Scene:
         """Deep copy of the scene. Safe to mutate without affecting the original."""
@@ -720,7 +978,7 @@ class Shot:
     trace: TraceDefaults = field(default_factory=TraceDefaults)
 
     def to_dict(self) -> dict:
-        """Full v4 format dict."""
+        """Full v5 format dict."""
         d: dict = {"version": SHOT_JSON_VERSION, "name": self.name}
         if self.camera is not None:
             cam_d = self.camera.to_dict()
@@ -749,7 +1007,7 @@ class Shot:
 
     @staticmethod
     def from_json(s: str) -> Shot:
-        """Parse shot from a JSON string (v4 format)."""
+        """Parse shot from a JSON string (v5 format)."""
         d = json.loads(s)
         if d.get("version") != SHOT_JSON_VERSION:
             raise ValueError(

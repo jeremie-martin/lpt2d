@@ -101,7 +101,7 @@ def _make_prism_group(index: int, radius: float, spin: float) -> Group:
     angle = spin + index * math.tau / PRISM_COUNT
     scale = 0.94 + 0.08 * math.sin(angle * 1.3)
     return Group(
-        name=f"crown_prism_{index}",
+        id=f"crown_prism_{index}",
         transform=Transform2D.uniform(
             translate=(radius * math.cos(angle), radius * math.sin(angle)),
             rotate=angle + math.pi / 2,
@@ -120,7 +120,7 @@ def _make_prism_group(index: int, radius: float, spin: float) -> Group:
 
 def _make_core_group(scale: float) -> Group:
     return Group(
-        name="core",
+        id="core",
         transform=Transform2D.uniform(scale=scale),
         shapes=[
             *elliptical_lens(center=(0.0, 0.0), semi_a=0.22, semi_b=0.4, material=CORE_GLASS),

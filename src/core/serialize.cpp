@@ -7,7 +7,7 @@
 #include <iostream>
 #include <string>
 
-static constexpr int SHOT_JSON_VERSION = 4;
+static constexpr int SHOT_JSON_VERSION = 5;
 
 // ─── Minimal JSON writer ────────────────────────────────────────────────
 
@@ -57,36 +57,52 @@ static void write_json_string(std::ostream& os, const std::string& s) {
     os << '"';
 }
 
+static void write_shape_material(std::ostream& os, const Material& material,
+                                 std::string_view material_id, int depth) {
+    if (!material_id.empty()) {
+        write_indent(os, depth); os << "\"material_id\": ";
+        write_json_string(os, std::string(material_id));
+        os << "\n";
+    } else {
+        write_material(os, material, depth); os << "\n";
+    }
+}
+
 static void write_shape(std::ostream& f, const Shape& shape, int d) {
     std::visit(overloaded{
         [&](const Circle& c) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, c.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"circle\",\n";
             write_indent(f, d); write_vec2(f, "center", c.center); f << ",\n";
             write_indent(f, d); f << "\"radius\": " << fmt(c.radius) << ",\n";
-            write_material(f, c.material, d); f << "\n";
+            write_shape_material(f, c.material, c.material_id, d);
         },
         [&](const Segment& s) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, s.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"segment\",\n";
             write_indent(f, d); write_vec2(f, "a", s.a); f << ",\n";
             write_indent(f, d); write_vec2(f, "b", s.b); f << ",\n";
-            write_material(f, s.material, d); f << "\n";
+            write_shape_material(f, s.material, s.material_id, d);
         },
         [&](const Arc& a) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, a.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"arc\",\n";
             write_indent(f, d); write_vec2(f, "center", a.center); f << ",\n";
             write_indent(f, d); f << "\"radius\": " << fmt(a.radius) << ",\n";
             write_indent(f, d); f << "\"angle_start\": " << fmt(a.angle_start) << ",\n";
             write_indent(f, d); f << "\"sweep\": " << fmt(a.sweep) << ",\n";
-            write_material(f, a.material, d); f << "\n";
+            write_shape_material(f, a.material, a.material_id, d);
         },
         [&](const Bezier& b) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, b.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"bezier\",\n";
             write_indent(f, d); write_vec2(f, "p0", b.p0); f << ",\n";
             write_indent(f, d); write_vec2(f, "p1", b.p1); f << ",\n";
             write_indent(f, d); write_vec2(f, "p2", b.p2); f << ",\n";
-            write_material(f, b.material, d); f << "\n";
+            write_shape_material(f, b.material, b.material_id, d);
         },
         [&](const Polygon& p) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, p.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"polygon\",\n";
             write_indent(f, d); f << "\"vertices\": [";
             for (int j = 0; j < (int)p.vertices.size(); ++j) {
@@ -94,15 +110,16 @@ static void write_shape(std::ostream& f, const Shape& shape, int d) {
                 f << "[" << fmt(p.vertices[j].x) << ", " << fmt(p.vertices[j].y) << "]";
             }
             f << "],\n";
-            write_material(f, p.material, d); f << "\n";
+            write_shape_material(f, p.material, p.material_id, d);
         },
         [&](const Ellipse& e) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, e.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"ellipse\",\n";
             write_indent(f, d); write_vec2(f, "center", e.center); f << ",\n";
             write_indent(f, d); f << "\"semi_a\": " << fmt(e.semi_a) << ",\n";
             write_indent(f, d); f << "\"semi_b\": " << fmt(e.semi_b) << ",\n";
             write_indent(f, d); f << "\"rotation\": " << fmt(e.rotation) << ",\n";
-            write_material(f, e.material, d); f << "\n";
+            write_shape_material(f, e.material, e.material_id, d);
         },
     }, shape);
 }
@@ -110,6 +127,7 @@ static void write_shape(std::ostream& f, const Shape& shape, int d) {
 static void write_light(std::ostream& f, const Light& light, int d) {
     std::visit(overloaded{
         [&](const PointLight& l) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, l.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"point\",\n";
             write_indent(f, d); write_vec2(f, "pos", l.pos); f << ",\n";
             write_indent(f, d); f << "\"intensity\": " << fmt(l.intensity) << ",\n";
@@ -117,6 +135,7 @@ static void write_light(std::ostream& f, const Light& light, int d) {
             write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
         },
         [&](const SegmentLight& l) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, l.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"segment\",\n";
             write_indent(f, d); write_vec2(f, "a", l.a); f << ",\n";
             write_indent(f, d); write_vec2(f, "b", l.b); f << ",\n";
@@ -125,6 +144,7 @@ static void write_light(std::ostream& f, const Light& light, int d) {
             write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
         },
         [&](const BeamLight& l) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, l.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"beam\",\n";
             write_indent(f, d); write_vec2(f, "origin", l.origin); f << ",\n";
             write_indent(f, d); write_vec2(f, "direction", l.direction); f << ",\n";
@@ -134,6 +154,7 @@ static void write_light(std::ostream& f, const Light& light, int d) {
             write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
         },
         [&](const ParallelBeamLight& l) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, l.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"parallel_beam\",\n";
             write_indent(f, d); write_vec2(f, "a", l.a); f << ",\n";
             write_indent(f, d); write_vec2(f, "b", l.b); f << ",\n";
@@ -144,6 +165,7 @@ static void write_light(std::ostream& f, const Light& light, int d) {
             write_indent(f, d); f << "\"wavelength_max\": " << fmt(l.wavelength_max) << "\n";
         },
         [&](const SpotLight& l) {
+            write_indent(f, d); f << "\"id\": "; write_json_string(f, l.id); f << ",\n";
             write_indent(f, d); f << "\"type\": \"spot\",\n";
             write_indent(f, d); write_vec2(f, "pos", l.pos); f << ",\n";
             write_indent(f, d); write_vec2(f, "direction", l.direction); f << ",\n";
@@ -179,7 +201,7 @@ static const char* normalize_to_string(NormalizeMode nm) {
     return "rays";
 }
 
-// ─── Shot writer (v4) ───────────────────────────────────────────────────
+// ─── Shot writer (v5) ───────────────────────────────────────────────────
 
 static void write_camera(std::ostream& f, const Camera2D& cam) {
     if (cam.empty()) return;
@@ -248,17 +270,25 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
     std::ofstream f(path);
     if (!f) { std::cerr << "Failed to open " << path << " for writing\n"; return false; }
 
-    const auto& scene = shot.scene;
+    Shot normalized = shot;
+    ensure_scene_entity_ids(normalized.scene);
+    sync_material_bindings(normalized.scene);
+    std::string error;
+    if (!validate_scene(normalized.scene, &error)) {
+        std::cerr << "Invalid scene for save: " << error << "\n";
+        return false;
+    }
+    const auto& scene = normalized.scene;
 
     f << "{\n";
     f << "  \"version\": " << SHOT_JSON_VERSION << ",\n";
-    f << "  \"name\": "; write_json_string(f, shot.name); f << ",\n";
+    f << "  \"name\": "; write_json_string(f, normalized.name); f << ",\n";
 
     // Shot-level blocks
-    write_camera(f, shot.camera);
-    write_canvas(f, shot.canvas);
-    write_look(f, shot.look);
-    write_trace(f, shot.trace);
+    write_camera(f, normalized.camera);
+    write_canvas(f, normalized.canvas);
+    write_look(f, normalized.look);
+    write_trace(f, normalized.trace);
 
     // Materials library
     if (!scene.materials.empty()) {
@@ -308,7 +338,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
         for (int g = 0; g < (int)scene.groups.size(); ++g) {
             const auto& group = scene.groups[g];
             f << "    {\n";
-            f << "      \"name\": "; write_json_string(f, group.name); f << ",\n";
+            f << "      \"id\": "; write_json_string(f, group.id); f << ",\n";
             f << "      \"transform\": {\n";
             f << "        "; write_vec2(f, "translate", group.transform.translate); f << ",\n";
             f << "        \"rotate\": " << fmt(group.transform.rotate) << ",\n";
@@ -469,84 +499,137 @@ static Material read_material_obj(const JsonValue* v) {
     return m;
 }
 
-// Resolve a material from JSON: string → lookup in materials dict, object → inline parse
-static Material read_material(const JsonValue* v, const std::map<std::string, Material>& materials) {
-    if (!v) return {};
-    if (v->type == JsonValue::String) {
-        auto it = materials.find(v->str);
-        if (it != materials.end()) return it->second;
-        std::cerr << "Unknown material: " << v->str << "\n";
-        return {};
+static bool read_shape_material(const JsonValue& sv, Material& material, std::string& material_id,
+                                const std::map<std::string, Material>& materials,
+                                std::string* error) {
+    const JsonValue* material_ref = sv.get("material_id");
+    const JsonValue* inline_material = sv.get("material");
+    if (material_ref && inline_material) {
+        if (error) *error = "shape cannot declare both material and material_id";
+        return false;
     }
-    return read_material_obj(v);
+    if (!material_ref && !inline_material) {
+        if (error) *error = "shape must declare exactly one of material and material_id";
+        return false;
+    }
+    if (material_ref) {
+        if (material_ref->type != JsonValue::String) {
+            if (error) *error = "material_id must be a string";
+            return false;
+        }
+        material_id = material_ref->as_string();
+        if (material_id.empty()) {
+            if (error) *error = "material_id must be non-empty";
+            return false;
+        }
+        auto it = materials.find(material_id);
+        if (it == materials.end()) {
+            if (error) *error = "unknown material_id: " + material_id;
+            return false;
+        }
+        material = it->second;
+        return true;
+    }
+    material = read_material_obj(inline_material);
+    material_id.clear();
+    return true;
 }
 
 static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out,
-                         const std::map<std::string, Material>& materials = {}) {
+                         const std::map<std::string, Material>& materials,
+                         std::string* error) {
     if (!shapes_arr) return;
     for (auto& sv : shapes_arr->arr) {
         if (sv.type != JsonValue::Object) continue;
+        auto* id = sv.get("id");
         auto* type = sv.get("type");
-        if (!type) continue;
+        if (!type || !id) {
+            if (error) *error = "shape entries require id and type";
+            return;
+        }
         const auto& t = type->as_string();
+        const auto shape_id = id->as_string();
+        if (shape_id.empty()) {
+            if (error) *error = "shape ids must be non-empty";
+            return;
+        }
 
         if (t == "circle") {
             Circle c;
+            c.id = shape_id;
             c.center = read_vec2(sv.get("center"));
             if (auto* r = sv.get("radius")) c.radius = r->as_float(0.1f);
-            c.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, c.material, c.material_id, materials, error)) return;
             out.push_back(c);
         } else if (t == "segment") {
             Segment s;
+            s.id = shape_id;
             s.a = read_vec2(sv.get("a"));
             s.b = read_vec2(sv.get("b"));
-            s.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, s.material, s.material_id, materials, error)) return;
             out.push_back(s);
         } else if (t == "arc") {
             Arc a;
+            a.id = shape_id;
             a.center = read_vec2(sv.get("center"));
             if (auto* r = sv.get("radius")) a.radius = r->as_float(0.1f);
             if (auto* v = sv.get("angle_start")) a.angle_start = normalize_angle(v->as_float());
             if (auto* v = sv.get("sweep")) a.sweep = clamp_arc_sweep(v->as_float(TWO_PI));
-            a.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, a.material, a.material_id, materials, error)) return;
             out.push_back(a);
         } else if (t == "bezier") {
             Bezier b;
+            b.id = shape_id;
             b.p0 = read_vec2(sv.get("p0"));
             b.p1 = read_vec2(sv.get("p1"));
             b.p2 = read_vec2(sv.get("p2"));
-            b.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, b.material, b.material_id, materials, error)) return;
             out.push_back(b);
         } else if (t == "polygon") {
             Polygon p;
+            p.id = shape_id;
             if (auto* verts = sv.get("vertices")) {
                 for (auto& v : verts->arr)
                     p.vertices.push_back(read_vec2(&v));
             }
-            p.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, p.material, p.material_id, materials, error)) return;
             out.push_back(p);
         } else if (t == "ellipse") {
             Ellipse e;
+            e.id = shape_id;
             e.center = read_vec2(sv.get("center"));
             if (auto* v = sv.get("semi_a")) e.semi_a = v->as_float(0.2f);
             if (auto* v = sv.get("semi_b")) e.semi_b = v->as_float(0.1f);
             if (auto* v = sv.get("rotation")) e.rotation = v->as_float();
-            e.material = read_material(sv.get("material"), materials);
+            if (!read_shape_material(sv, e.material, e.material_id, materials, error)) return;
             out.push_back(e);
+        } else {
+            if (error) *error = "unknown shape type: " + t;
+            return;
         }
     }
 }
 
-static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
+static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out, std::string* error) {
     if (!lights_arr) return;
     for (auto& lv : lights_arr->arr) {
         if (lv.type != JsonValue::Object) continue;
+        auto* id = lv.get("id");
         auto* type = lv.get("type");
-        if (!type) continue;
+        if (!type || !id) {
+            if (error) *error = "light entries require id and type";
+            return;
+        }
         const auto& t = type->as_string();
+        const auto light_id = id->as_string();
+        if (light_id.empty()) {
+            if (error) *error = "light ids must be non-empty";
+            return;
+        }
 
         if (t == "point") {
             PointLight l;
+            l.id = light_id;
             l.pos = read_vec2(lv.get("pos"));
             if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
             if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
@@ -554,6 +637,7 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             out.push_back(l);
         } else if (t == "segment") {
             SegmentLight l;
+            l.id = light_id;
             l.a = read_vec2(lv.get("a"));
             l.b = read_vec2(lv.get("b"));
             if (auto* v = lv.get("intensity")) l.intensity = v->as_float(1.0f);
@@ -562,6 +646,7 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             out.push_back(l);
         } else if (t == "beam") {
             BeamLight l;
+            l.id = light_id;
             l.origin = read_vec2(lv.get("origin"));
             l.direction = read_vec2(lv.get("direction"));
             if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
@@ -573,6 +658,7 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             out.push_back(l);
         } else if (t == "parallel_beam") {
             ParallelBeamLight l;
+            l.id = light_id;
             l.a = read_vec2(lv.get("a"));
             l.b = read_vec2(lv.get("b"));
             l.direction = read_vec2(lv.get("direction"));
@@ -585,6 +671,7 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             out.push_back(l);
         } else if (t == "spot") {
             SpotLight l;
+            l.id = light_id;
             l.pos = read_vec2(lv.get("pos"));
             l.direction = read_vec2(lv.get("direction"));
             if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
@@ -595,6 +682,9 @@ static void read_lights(const JsonValue* lights_arr, std::vector<Light>& out) {
             if (auto* v = lv.get("wavelength_min")) l.wavelength_min = v->as_float(380.0f);
             if (auto* v = lv.get("wavelength_max")) l.wavelength_max = v->as_float(780.0f);
             out.push_back(l);
+        } else {
+            if (error) *error = "unknown light type: " + t;
+            return;
         }
     }
 }
@@ -683,24 +773,42 @@ Shot load_shot_json_string(std::string_view json_content) {
 
     // Scene content
     auto& scene = shot.scene;
+    std::string error;
 
     // Parse named materials library (must come before shapes to resolve references)
     if (auto* mats = root.get("materials")) {
         if (mats->type == JsonValue::Object) {
-            for (int i = 0; i < (int)mats->obj_keys.size(); ++i)
+            for (int i = 0; i < (int)mats->obj_keys.size(); ++i) {
+                if (mats->obj_keys[i].empty()) {
+                    std::cerr << "Material ids must be non-empty\n";
+                    return {};
+                }
                 scene.materials[mats->obj_keys[i]] = read_material_obj(&mats->obj_vals[i]);
+            }
         }
     }
 
-    read_shapes(root.get("shapes"), scene.shapes, scene.materials);
-    read_lights(root.get("lights"), scene.lights);
+    read_shapes(root.get("shapes"), scene.shapes, scene.materials, &error);
+    if (!error.empty()) {
+        std::cerr << "Failed to read shapes: " << error << "\n";
+        return {};
+    }
+    read_lights(root.get("lights"), scene.lights, &error);
+    if (!error.empty()) {
+        std::cerr << "Failed to read lights: " << error << "\n";
+        return {};
+    }
 
     // Groups
     if (auto* groups = root.get("groups")) {
         for (auto& gv : groups->arr) {
             if (gv.type != JsonValue::Object) continue;
             Group group;
-            if (auto* n = gv.get("name")) group.name = n->as_string();
+            if (auto* id = gv.get("id")) group.id = id->as_string();
+            if (group.id.empty()) {
+                std::cerr << "Group entries require non-empty id\n";
+                return {};
+            }
             if (auto* tf = gv.get("transform")) {
                 group.transform.translate = read_vec2(tf->get("translate"));
                 if (auto* r = tf->get("rotate")) group.transform.rotate = r->as_float();
@@ -708,11 +816,24 @@ Shot load_shot_json_string(std::string_view json_content) {
                 if (group.transform.scale.x == 0) group.transform.scale.x = 1;
                 if (group.transform.scale.y == 0) group.transform.scale.y = 1;
             }
-            read_shapes(gv.get("shapes"), group.shapes, scene.materials);
-            read_lights(gv.get("lights"), group.lights);
-            if (!group.shapes.empty() || !group.lights.empty())
-                scene.groups.push_back(std::move(group));
+            read_shapes(gv.get("shapes"), group.shapes, scene.materials, &error);
+            if (!error.empty()) {
+                std::cerr << "Failed to read group shapes: " << error << "\n";
+                return {};
+            }
+            read_lights(gv.get("lights"), group.lights, &error);
+            if (!error.empty()) {
+                std::cerr << "Failed to read group lights: " << error << "\n";
+                return {};
+            }
+            scene.groups.push_back(std::move(group));
         }
+    }
+
+    sync_material_bindings(scene);
+    if (!validate_scene(scene, &error)) {
+        std::cerr << "Invalid scene: " << error << "\n";
+        return {};
     }
 
     return shot;

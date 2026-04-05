@@ -298,9 +298,9 @@ def _build_wire_json(
     shot_camera: Camera2D | None,
     aspect: float,
 ) -> str:
-    """Serialize a Frame into the v4 wire-format JSON that C++ expects."""
-    d = frame.scene.to_dict()
-    d["version"] = 4
+    """Serialize a Frame into the v5 wire-format JSON that C++ expects."""
+    d = frame.scene.to_wire_dict()
+    d["version"] = 5
 
     render_block: dict = {}
 

@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "bench_dispersion_fan",
   "camera": {
     "bounds": [
@@ -33,7 +33,8 @@
         "absorption": 0.2,
         "cauchy_b": 60000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_0"
     },
     {
       "type": "segment",
@@ -53,7 +54,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.1
-      }
+      },
+      "id": "root_shape_segment_1"
     },
     {
       "type": "segment",
@@ -73,7 +75,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_2"
     },
     {
       "type": "segment",
@@ -93,7 +96,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_3"
     }
   ],
   "lights": [
@@ -110,7 +114,8 @@
       "angular_width": 0.01,
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_beam_0"
     }
   ]
 }

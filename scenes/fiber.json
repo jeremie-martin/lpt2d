@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "fiber",
   "camera": {
     "bounds": [
@@ -43,7 +43,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.98
-      }
+      },
+      "id": "root_shape_segment_0"
     },
     {
       "type": "segment",
@@ -63,7 +64,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.98
-      }
+      },
+      "id": "root_shape_segment_1"
     },
     {
       "type": "circle",
@@ -80,7 +82,8 @@
         "absorption": 0.5,
         "cauchy_b": 15000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_2"
     },
     {
       "type": "circle",
@@ -97,7 +100,8 @@
         "absorption": 0.5,
         "cauchy_b": 15000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_3"
     },
     {
       "type": "circle",
@@ -114,7 +118,8 @@
         "absorption": 0.5,
         "cauchy_b": 15000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_4"
     },
     {
       "type": "segment",
@@ -134,7 +139,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_5"
     }
   ],
   "lights": [
@@ -150,7 +156,8 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_segment_0"
     }
   ]
 }

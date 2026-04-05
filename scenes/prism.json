@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "prism",
   "camera": {
     "bounds": [
@@ -43,7 +43,8 @@
         "absorption": 0.3,
         "cauchy_b": 30000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_segment_0"
     },
     {
       "type": "segment",
@@ -63,7 +64,8 @@
         "absorption": 0.3,
         "cauchy_b": 30000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_segment_1"
     },
     {
       "type": "segment",
@@ -83,7 +85,8 @@
         "absorption": 0.3,
         "cauchy_b": 30000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_segment_2"
     },
     {
       "type": "segment",
@@ -103,7 +106,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_segment_3"
     },
     {
       "type": "segment",
@@ -123,7 +127,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_segment_4"
     },
     {
       "type": "segment",
@@ -143,7 +148,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_segment_5"
     },
     {
       "type": "segment",
@@ -163,7 +169,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_segment_6"
     },
     {
       "type": "segment",
@@ -183,7 +190,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_7"
     },
     {
       "type": "segment",
@@ -203,7 +211,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_8"
     }
   ],
   "lights": [
@@ -215,7 +224,8 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_point_0"
     }
   ]
 }

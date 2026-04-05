@@ -23,9 +23,11 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from itertools import count
 from dataclasses import dataclass
 
 CLI = "./build/lpt2d-cli"
+_LIGHT_IDS = count()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,10 +36,11 @@ CLI = "./build/lpt2d-cli"
 
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
-        "version": 4,
+        "version": 5,
         "name": name,
         "shapes": [
             {
+                "id": "lens",
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
@@ -51,6 +54,7 @@ def make_scene(lights: list[dict], name: str = "test") -> dict:
 
 def point_light(x: float, y: float, intensity: float = 1.0) -> dict:
     return {
+        "id": f"point_light_{next(_LIGHT_IDS)}",
         "type": "point",
         "pos": [x, y],
         "intensity": intensity,

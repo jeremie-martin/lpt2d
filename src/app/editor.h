@@ -12,11 +12,11 @@
 
 // ─── Object identification ─────────────────────────────────────────────
 
-struct ObjectId {
+struct SelectionRef {
     enum Type { Shape, Light, Group } type;
     int index;
     int group = -1; // -1 = top-level, >= 0 = member of scene.groups[group]
-    bool operator==(const ObjectId&) const = default;
+    bool operator==(const SelectionRef&) const = default;
 };
 
 // ─── Camera ────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ struct TransformMode {
 
 struct Handle {
     enum Kind { Position, Radius, Angle, Direction } kind;
-    ObjectId obj;
+    SelectionRef obj;
     int param_index; // which parameter (0=first, 1=second, etc.)
     Vec2 world_pos;  // current position in world space
 };
@@ -146,8 +146,8 @@ struct EditorState {
     Camera camera;
 
     // Selection
-    std::vector<ObjectId> selection;
-    ObjectId hovered{ObjectId::Shape, -1};
+    std::vector<SelectionRef> selection;
+    SelectionRef hovered{SelectionRef::Shape, -1};
     int editing_group = -1; // -1 = normal mode, >= 0 = editing inside group[i]
 
     // Tool
@@ -162,7 +162,7 @@ struct EditorState {
 
     // Handle drag state
     bool handle_dragging = false;
-    Handle active_handle{{}, {ObjectId::Shape, -1}, -1, {}};
+    Handle active_handle{{}, {SelectionRef::Shape, -1}, -1, {}};
 
     // Box select
     bool box_selecting = false;
@@ -234,19 +234,19 @@ struct EditorState {
 
     // ── Selection helpers ───────────────────────────────────────────
 
-    bool is_selected(ObjectId id) const {
+    bool is_selected(SelectionRef id) const {
         return std::find(selection.begin(), selection.end(), id) != selection.end();
     }
 
-    void select(ObjectId id) {
+    void select(SelectionRef id) {
         if (!is_selected(id)) selection.push_back(id);
     }
 
-    void deselect(ObjectId id) {
+    void deselect(SelectionRef id) {
         selection.erase(std::remove(selection.begin(), selection.end(), id), selection.end());
     }
 
-    void toggle_select(ObjectId id) {
+    void toggle_select(SelectionRef id) {
         if (is_selected(id)) deselect(id);
         else select(id);
     }
@@ -256,11 +256,11 @@ struct EditorState {
     void select_all() {
         selection.clear();
         for (int i = 0; i < (int)shot.scene.shapes.size(); ++i)
-            selection.push_back({ObjectId::Shape, i});
+            selection.push_back({SelectionRef::Shape, i});
         for (int i = 0; i < (int)shot.scene.lights.size(); ++i)
-            selection.push_back({ObjectId::Light, i});
+            selection.push_back({SelectionRef::Light, i});
         for (int i = 0; i < (int)shot.scene.groups.size(); ++i)
-            selection.push_back({ObjectId::Group, i});
+            selection.push_back({SelectionRef::Group, i});
     }
 
     // Centroid of selected objects (for transform pivot)
@@ -273,18 +273,18 @@ struct EditorState {
     void validate_selection() {
         const auto& sc = shot.scene;
         selection.erase(
-            std::remove_if(selection.begin(), selection.end(), [&](const ObjectId& id) {
+            std::remove_if(selection.begin(), selection.end(), [&](const SelectionRef& id) {
                 if (id.group >= 0) {
                     // Group member: validate group exists and member index is in range
                     if (id.group >= (int)sc.groups.size()) return true;
                     const auto& g = sc.groups[id.group];
-                    if (id.type == ObjectId::Shape) return id.index >= (int)g.shapes.size();
-                    if (id.type == ObjectId::Light) return id.index >= (int)g.lights.size();
+                    if (id.type == SelectionRef::Shape) return id.index >= (int)g.shapes.size();
+                    if (id.type == SelectionRef::Light) return id.index >= (int)g.lights.size();
                     return true;
                 }
-                if (id.type == ObjectId::Shape) return id.index >= (int)sc.shapes.size();
-                if (id.type == ObjectId::Light) return id.index >= (int)sc.lights.size();
-                if (id.type == ObjectId::Group) return id.index >= (int)sc.groups.size();
+                if (id.type == SelectionRef::Shape) return id.index >= (int)sc.shapes.size();
+                if (id.type == SelectionRef::Light) return id.index >= (int)sc.lights.size();
+                if (id.type == SelectionRef::Group) return id.index >= (int)sc.groups.size();
                 return true;
             }),
             selection.end());
@@ -307,19 +307,19 @@ struct EditorState {
 
 // ─── Hit testing ───────────────────────────────────────────────────────
 
-// Returns ObjectId with index=-1 if nothing hit.
-// When editing_group >= 0, only tests members of that group (returns group-scoped ObjectIds).
-ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group = -1);
+// Returns SelectionRef with index=-1 if nothing hit.
+// When editing_group >= 0, only tests members of that group (returns group-scoped SelectionRefs).
+SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group = -1);
 
 // Test if an object's geometry intersects a world-space rectangle
-bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max);
+bool object_in_rect(const Scene& scene, SelectionRef id, Vec2 rect_min, Vec2 rect_max);
 
-// Resolve top-level or group-member objects from an ObjectId.
-Shape* resolve_shape(Scene& scene, ObjectId id);
-const Shape* resolve_shape(const Scene& scene, ObjectId id);
-Light* resolve_light(Scene& scene, ObjectId id);
-const Light* resolve_light(const Scene& scene, ObjectId id);
-std::optional<Bounds> object_bounds(const Scene& scene, ObjectId id);
+// Resolve top-level or group-member objects from an SelectionRef.
+Shape* resolve_shape(Scene& scene, SelectionRef id);
+const Shape* resolve_shape(const Scene& scene, SelectionRef id);
+Light* resolve_light(Scene& scene, SelectionRef id);
+const Light* resolve_light(const Scene& scene, SelectionRef id);
+std::optional<Bounds> object_bounds(const Scene& scene, SelectionRef id);
 
 // ─── Transform application ─────────────────────────────────────────────
 
@@ -332,11 +332,11 @@ void translate_shape(Shape& s, Vec2 delta);
 void translate_light(Light& l, Vec2 delta);
 
 // Compute the centroid of a shape or light
-Vec2 object_centroid(const Scene& scene, ObjectId id);
+Vec2 object_centroid(const Scene& scene, SelectionRef id);
 
 // ─── Handle generation ─────────────────────────────────────────────────
 
-std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>& selection);
+std::vector<Handle> get_handles(const Scene& scene, const std::vector<SelectionRef>& selection);
 int handle_hit_test(const std::vector<Handle>& handles, Vec2 wp, float threshold);
 
 // Apply a handle drag — modifies the specific object parameter

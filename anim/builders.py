@@ -8,6 +8,12 @@ from typing import Literal
 from .types import Arc, Circle, Ellipse, Material, Polygon, Segment, Shape
 
 
+def _shape_id(id_prefix: str | None, suffix: str) -> str:
+    if id_prefix is None:
+        return ""
+    return f"{id_prefix}_{suffix}"
+
+
 def polygon(vertices: list[list[float]], material: Material) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
     return Polygon(vertices=[list(v) for v in vertices], material=material)
@@ -50,13 +56,19 @@ def rectangle(
     )
 
 
-def mirror_box(half_w: float, half_h: float, material: Material) -> list[Segment]:
+def mirror_box(
+    half_w: float,
+    half_h: float,
+    material: Material,
+    *,
+    id_prefix: str | None = None,
+) -> list[Segment]:
     """Axis-aligned rectangular enclosure (4 segments, normals face inward)."""
     return [
-        Segment(a=[-half_w, -half_h], b=[half_w, -half_h], material=material),
-        Segment(a=[half_w, half_h], b=[-half_w, half_h], material=material),
-        Segment(a=[-half_w, half_h], b=[-half_w, -half_h], material=material),
-        Segment(a=[half_w, -half_h], b=[half_w, half_h], material=material),
+        Segment(id=_shape_id(id_prefix, "bottom"), a=[-half_w, -half_h], b=[half_w, -half_h], material=material),
+        Segment(id=_shape_id(id_prefix, "top"), a=[half_w, half_h], b=[-half_w, half_h], material=material),
+        Segment(id=_shape_id(id_prefix, "left"), a=[-half_w, half_h], b=[-half_w, -half_h], material=material),
+        Segment(id=_shape_id(id_prefix, "right"), a=[half_w, -half_h], b=[half_w, half_h], material=material),
     ]
 
 
@@ -67,6 +79,8 @@ def thick_arc(
     angle_start: float,
     sweep: float,
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Arc with physical thickness, approximated as a polygonal annular sector.
 
@@ -99,7 +113,7 @@ def thick_arc(
         ring_point(r_inner, angle_start + sweep * (i / steps))
         for i in range(steps + 1)
     ]
-    return [Polygon(vertices=outer + inner, material=material)]
+    return [Polygon(id=_shape_id(id_prefix, "sector"), vertices=outer + inner, material=material)]
 
 
 def _convex_face(
@@ -163,6 +177,8 @@ def _build_lens(
     left_face: tuple[str, float | None],
     right_face: tuple[str, float | None],
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Closed lens outline from left/right faces plus top/bottom edge segments."""
     eps = 1e-9
@@ -197,16 +213,27 @@ def _build_lens(
 
     left_shape, left_top, left_bottom = make_face(left_face, "left")
     right_shape, right_top, right_bottom = make_face(right_face, "right")
+    left_shape.id = _shape_id(id_prefix, "left_face")
+    right_shape.id = _shape_id(id_prefix, "right_face")
 
     if left_top[0] - right_top[0] > eps or left_bottom[0] - right_bottom[0] > eps:
         raise ValueError("lens aperture closes before the edge; adjust thickness or curvature")
 
     shapes: list[Shape] = [left_shape]
     if abs(left_top[0] - right_top[0]) > eps or abs(left_top[1] - right_top[1]) > eps:
-        shapes.append(Segment(a=left_top, b=right_top, material=material))
+        shapes.append(
+            Segment(id=_shape_id(id_prefix, "top_edge"), a=left_top, b=right_top, material=material)
+        )
     shapes.append(right_shape)
     if abs(right_bottom[0] - left_bottom[0]) > eps or abs(right_bottom[1] - left_bottom[1]) > eps:
-        shapes.append(Segment(a=right_bottom, b=left_bottom, material=material))
+        shapes.append(
+            Segment(
+                id=_shape_id(id_prefix, "bottom_edge"),
+                a=right_bottom,
+                b=left_bottom,
+                material=material,
+            )
+        )
     return shapes
 
 
@@ -217,6 +244,8 @@ def biconvex_lens(
     left_radius: float,
     right_radius: float,
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Biconvex lens from two real convex faces plus edge segments.
 
@@ -230,6 +259,7 @@ def biconvex_lens(
         left_face=("convex", left_radius),
         right_face=("convex", right_radius),
         material=material,
+        id_prefix=id_prefix,
     )
 
 
@@ -240,6 +270,8 @@ def plano_convex_lens(
     radius: float,
     material: Material,
     curved_side: Literal["left", "right"] = "right",
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Plano-convex lens with one plane face and one convex circular face."""
     left_face: tuple[str, float | None] = ("plane", None)
@@ -258,6 +290,7 @@ def plano_convex_lens(
         left_face=left_face,
         right_face=right_face,
         material=material,
+        id_prefix=id_prefix,
     )
 
 
@@ -266,6 +299,8 @@ def hemispherical_lens(
     radius: float,
     material: Material,
     curved_side: Literal["left", "right"] = "right",
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Hemispherical lens: a plano-convex lens whose curved face is a semicircle."""
     return plano_convex_lens(
@@ -275,13 +310,20 @@ def hemispherical_lens(
         radius=radius,
         material=material,
         curved_side=curved_side,
+        id_prefix=id_prefix,
     )
 
 
-def ball_lens(center: tuple[float, float], radius: float, material: Material) -> list[Circle]:
+def ball_lens(
+    center: tuple[float, float],
+    radius: float,
+    material: Material,
+    *,
+    id_prefix: str | None = None,
+) -> list[Circle]:
     """Ball lens represented by its actual circular boundary."""
     cx, cy = center
-    return [Circle(center=[cx, cy], radius=radius, material=material)]
+    return [Circle(id=_shape_id(id_prefix, "body"), center=[cx, cy], radius=radius, material=material)]
 
 
 # ─── Thick shapes ───────────────────────────────────────────────────────
@@ -338,6 +380,7 @@ def mirror_block(
     height: float,
     material: Material,
     *,
+    id_prefix: str | None = None,
     top: Material | None = None,
     right: Material | None = None,
     bottom: Material | None = None,
@@ -361,8 +404,10 @@ def mirror_block(
         right if right is not None else material,
         bottom if bottom is not None else material,
     ]
+    face_ids = ["left", "top", "right", "bottom"]
     return [
         Segment(
+            id=_shape_id(id_prefix, face_ids[i]),
             a=list(verts[i]),
             b=list(verts[(i + 1) % len(verts)]),
             material=face_materials[i],
@@ -377,10 +422,21 @@ def elliptical_lens(
     semi_b: float,
     material: Material,
     rotation: float = 0.0,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Ellipse]:
     """Elliptical lens — single Ellipse shape."""
     cx, cy = center
-    return [Ellipse(center=[cx, cy], semi_a=semi_a, semi_b=semi_b, rotation=rotation, material=material)]
+    return [
+        Ellipse(
+            id=_shape_id(id_prefix, "body"),
+            center=[cx, cy],
+            semi_a=semi_a,
+            semi_b=semi_b,
+            rotation=rotation,
+            material=material,
+        )
+    ]
 
 
 def slit(
@@ -389,6 +445,8 @@ def slit(
     gap: float,
     material: Material,
     thickness: float = 0.0,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Barrier with a centered opening.
 
@@ -398,13 +456,14 @@ def slit(
     cx, cy = center
     hw, hg = width / 2, gap / 2
     if thickness > 0:
-        return [
-            thick_segment((cx - hw, cy), (cx - hg, cy), thickness, material),
-            thick_segment((cx + hg, cy), (cx + hw, cy), thickness, material),
-        ]
+        left = thick_segment((cx - hw, cy), (cx - hg, cy), thickness, material)
+        right = thick_segment((cx + hg, cy), (cx + hw, cy), thickness, material)
+        left.id = _shape_id(id_prefix, "left")
+        right.id = _shape_id(id_prefix, "right")
+        return [left, right]
     return [
-        Segment(a=[cx - hw, cy], b=[cx - hg, cy], material=material),
-        Segment(a=[cx + hg, cy], b=[cx + hw, cy], material=material),
+        Segment(id=_shape_id(id_prefix, "left"), a=[cx - hw, cy], b=[cx - hg, cy], material=material),
+        Segment(id=_shape_id(id_prefix, "right"), a=[cx + hg, cy], b=[cx + hw, cy], material=material),
     ]
 
 
@@ -415,6 +474,8 @@ def double_slit(
     separation: float,
     material: Material,
     thickness: float = 0.0,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Classic double-slit barrier.
 
@@ -428,9 +489,11 @@ def double_slit(
         a_x, b_x = edges[i], edges[i + 1]
         if b_x - a_x > 1e-6:
             if thickness > 0:
-                shapes.append(thick_segment((a_x, cy), (b_x, cy), thickness, material))
+                shape = thick_segment((a_x, cy), (b_x, cy), thickness, material)
             else:
-                shapes.append(Segment(a=[a_x, cy], b=[b_x, cy], material=material))
+                shape = Segment(a=[a_x, cy], b=[b_x, cy], material=material)
+            shape.id = _shape_id(id_prefix, f"barrier_{len(shapes)}")
+            shapes.append(shape)
     return shapes
 
 
@@ -442,6 +505,8 @@ def grating(
     width: float,
     material: Material,
     thickness: float = 0.0,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Shape]:
     """Diffraction grating: *n* evenly-spaced slits."""
     cx, cy = center
@@ -458,9 +523,11 @@ def grating(
         a_x, b_x = edges[i], edges[i + 1]
         if b_x - a_x > 1e-6:
             if thickness > 0:
-                shapes.append(thick_segment((a_x, cy), (b_x, cy), thickness, material))
+                shape = thick_segment((a_x, cy), (b_x, cy), thickness, material)
             else:
-                shapes.append(Segment(a=[a_x, cy], b=[b_x, cy], material=material))
+                shape = Segment(a=[a_x, cy], b=[b_x, cy], material=material)
+            shape.id = _shape_id(id_prefix, f"barrier_{len(shapes)}")
+            shapes.append(shape)
     return shapes
 
 
@@ -468,6 +535,11 @@ def waveguide(
     points: list[tuple[float, float]],
     width: float,
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> list[Polygon]:
     """Chain of thick segments following a path."""
-    return [thick_segment(points[i], points[i + 1], width, material) for i in range(len(points) - 1)]
+    shapes = [thick_segment(points[i], points[i + 1], width, material) for i in range(len(points) - 1)]
+    for i, shape in enumerate(shapes):
+        shape.id = _shape_id(id_prefix, f"segment_{i}")
+    return shapes

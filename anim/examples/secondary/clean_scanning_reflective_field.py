@@ -111,14 +111,14 @@ def make_frame_group() -> Group:
         seg((left, bottom), (right, bottom), FRAME_MATERIAL),
         seg((right, bottom), (right, top), FRAME_MATERIAL),
     ]
-    return Group(name="frame", shapes=shapes)
+    return Group(id="frame", shapes=shapes)
 
 
 def make_top_rail_light() -> Group:
     # Very soft structural fill, inspired by the segment light in the draft.
     dx = 0.001
     return Group(
-        name="top_rail_light",
+        id="top_rail_light",
         lights=[
             SegmentLight(
                 a=[-1.72 + dx, 1.03 - dx],
@@ -175,7 +175,7 @@ def make_reflector_field() -> Group:
         seg((0.10, -0.76), (0.42, -0.78)),
         seg((0.78, -0.74), (1.06, -0.70)),
     ]
-    return Group(name="reflector_field", shapes=shapes)
+    return Group(id="reflector_field", shapes=shapes)
 
 
 def make_scanning_beam(ctx: FrameContext) -> Group:
@@ -185,7 +185,7 @@ def make_scanning_beam(ctx: FrameContext) -> Group:
     beam_angle = angle_of_path - math.pi / 2  # perpendicular, downward side
 
     return Group(
-        name="scanning_beam",
+        id="scanning_beam",
         transform=Transform2D(
             translate=[float(BEAM_X(ctx.time)), float(BEAM_Y(ctx.time))],
             rotate=beam_angle,

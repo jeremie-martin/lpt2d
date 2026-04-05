@@ -6,6 +6,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -123,27 +124,35 @@ struct Transform2D {
 // --- Geometry ---
 
 struct Circle {
+    std::string id;
     Vec2 center;
     float radius;
     Material material;
+    std::string material_id;
 };
 
 struct Segment {
+    std::string id;
     Vec2 a, b;
     Material material;
+    std::string material_id;
 };
 
 struct Arc {
+    std::string id;
     Vec2 center;
     float radius;
     float angle_start = 0.0f; // radians [0, 2π)
     float sweep = TWO_PI;     // radians [0, 2π], CCW from angle_start
     Material material;
+    std::string material_id;
 };
 
 struct Bezier {
+    std::string id;
     Vec2 p0, p1, p2; // p1 is control point
     Material material;
+    std::string material_id;
 };
 
 inline Vec2 bezier_eval(const Bezier& b, float t) {
@@ -152,8 +161,10 @@ inline Vec2 bezier_eval(const Bezier& b, float t) {
 }
 
 struct Polygon {
+    std::string id;
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
     Material material;
+    std::string material_id;
 
     Vec2 centroid() const {
         if (vertices.empty()) return {0, 0};
@@ -179,11 +190,13 @@ inline bool polygon_is_clockwise(const Polygon& p) {
 }
 
 struct Ellipse {
+    std::string id;
     Vec2 center;
     float semi_a;          // semi-axis length along rotated X
     float semi_b;          // semi-axis length along rotated Y
     float rotation = 0.0f; // radians, angle of semi_a axis from +X
     Material material;
+    std::string material_id;
 };
 
 using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse>;
@@ -191,6 +204,7 @@ using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse>;
 // --- Lights ---
 
 struct PointLight {
+    std::string id;
     Vec2 pos;
     float intensity = 1.0f;
     float wavelength_min = 380.0f;
@@ -198,6 +212,7 @@ struct PointLight {
 };
 
 struct SegmentLight {
+    std::string id;
     Vec2 a, b;
     float intensity = 1.0f;
     float wavelength_min = 380.0f;
@@ -205,6 +220,7 @@ struct SegmentLight {
 };
 
 struct BeamLight {
+    std::string id;
     Vec2 origin;
     Vec2 direction{1.0f, 0.0f}; // normalized
     float angular_width = 0.1f;  // full cone angle in radians
@@ -214,6 +230,7 @@ struct BeamLight {
 };
 
 struct ParallelBeamLight {
+    std::string id;
     Vec2 a, b;                      // segment endpoints (emission aperture)
     Vec2 direction{1.0f, 0.0f};     // normalized beam direction
     float angular_width = 0.0f;     // full cone angle in radians (0 = perfectly collimated)
@@ -223,6 +240,7 @@ struct ParallelBeamLight {
 };
 
 struct SpotLight {
+    std::string id;
     Vec2 pos;
     Vec2 direction{1.0f, 0.0f};     // normalized
     float angular_width = 0.5f;     // full cone angle in radians
@@ -237,7 +255,7 @@ using Light = std::variant<PointLight, SegmentLight, BeamLight, ParallelBeamLigh
 // --- Groups ---
 
 struct Group {
-    std::string name;
+    std::string id;
     Transform2D transform;
     std::vector<Shape> shapes;  // in local coordinates
     std::vector<Light> lights;  // in local coordinates
@@ -264,6 +282,19 @@ struct Scene {
     std::vector<Group> groups;
     std::map<std::string, Material> materials; // named material library
 };
+
+std::string shape_type_name(const Shape& shape);
+std::string light_type_name(const Light& light);
+void sync_material_bindings(Scene& scene);
+bool validate_scene(const Scene& scene, std::string* error = nullptr);
+void ensure_scene_entity_ids(Scene& scene);
+std::string next_scene_entity_id(const Scene& scene, std::string_view prefix);
+Shape* find_shape(Scene& scene, std::string_view id);
+const Shape* find_shape(const Scene& scene, std::string_view id);
+Light* find_light(Scene& scene, std::string_view id);
+const Light* find_light(const Scene& scene, std::string_view id);
+Group* find_group(Scene& scene, std::string_view id);
+const Group* find_group(const Scene& scene, std::string_view id);
 
 // Intersection testing
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle);

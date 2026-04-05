@@ -113,7 +113,7 @@ def make_core_group(t: float) -> Group:
     scale = float(CORE_SCALE(t))
     rotation = 0.22 * math.tau * t / DURATION
     return Group(
-        name="core",
+        id="core",
         transform=Transform2D.uniform(rotate=rotation, scale=scale),
         shapes=[
             Circle(center=[0.0, 0.0], radius=0.13, material=CORE_MATERIAL),
@@ -133,7 +133,7 @@ def make_prism_group(index: int, t: float, crown_spin: float) -> Group:
     material = PRISM_MATERIALS[index % len(PRISM_MATERIALS)]
 
     return Group(
-        name=f"prism_{index}",
+        id=f"prism_{index}",
         transform=Transform2D.uniform(
             translate=polar(radius, orbit_angle),
             rotate=twist,
@@ -157,7 +157,7 @@ def make_beam_group(
     wavelength_max: float,
 ) -> Group:
     return Group(
-        name=name,
+        id=name,
         transform=Transform2D.uniform(
             translate=polar(EMITTER_RADIUS, angle),
             rotate=angle + math.pi,

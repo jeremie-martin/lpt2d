@@ -163,7 +163,7 @@ def reveal(progress: float) -> float:
 def make_box_group() -> Group:
     h = BOX_HALF_EXTENT
     return Group(
-        name="mirror_box",
+        id="mirror_box",
         shapes=[
             Segment(a=[-h, -h], b=[h, -h], material=BOX_MATERIAL),
             Segment(a=[h, h], b=[-h, h], material=BOX_MATERIAL),
@@ -180,7 +180,7 @@ def make_box_group() -> Group:
 def make_cluster_group(t: float) -> Group:
     scale = float(CLUSTER_SCALE(t))
     return Group(
-        name="glass_triplet",
+        id="glass_triplet",
         transform=Transform2D.uniform(rotate=float(CLUSTER_ROTATION(t)), scale=scale),
         shapes=[
             Circle(center=[-0.46, 0.08], radius=0.18, material=GLASS_MATERIALS[0]),
@@ -192,7 +192,7 @@ def make_cluster_group(t: float) -> Group:
 
 def make_shutter_group(t: float) -> Group:
     return Group(
-        name="mirror_shutters",
+        id="mirror_shutters",
         transform=Transform2D(rotate=float(SHUTTER_ROTATION(t))),
         shapes=[
             Arc(
@@ -217,7 +217,7 @@ def make_fill_group(t: float) -> Group:
     width = float(FILL_WIDTH(t))
     intensity = 0.22 + 0.06 * math.sin(1.4 * t + 0.4)
     return Group(
-        name="fill_light",
+        id="fill_light",
         transform=Transform2D(
             translate=[0.0, vertical_position(float(FILL_PROGRESS(t)))],
             rotate=0.06 * math.sin(0.8 * t),
@@ -246,7 +246,7 @@ def make_beam_group(
     wavelength_max: float,
 ) -> Group:
     return Group(
-        name=name,
+        id=name,
         transform=Transform2D.uniform(
             translate=polar(radius, angle),
             rotate=angle + math.pi,

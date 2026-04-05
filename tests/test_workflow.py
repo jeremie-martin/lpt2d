@@ -56,8 +56,8 @@ def _install_capturing_renderer(monkeypatch):
 
 
 def test_scene_find_group():
-    g1 = Group(name="prism")
-    g2 = Group(name="mirror")
+    g1 = Group(id="prism")
+    g2 = Group(id="mirror")
     scene = Scene(groups=[g1, g2])
     assert scene.find_group("prism") is g1
     assert scene.find_group("mirror") is g2
@@ -80,7 +80,7 @@ def test_scene_clone():
 
 
 def test_group_clone():
-    g = Group(name="test", shapes=[Circle(center=[0, 0], radius=0.5, material=Material())])
+    g = Group(id="test", shapes=[Circle(center=[0, 0], radius=0.5, material=Material())])
     cloned = g.clone()
     cloned.shapes[0].center = [2, 2]
     assert g.shapes[0].center == [0, 0]

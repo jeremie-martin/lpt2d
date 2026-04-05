@@ -32,12 +32,11 @@ def _normalize(x: float, y: float) -> list[float]:
         return [1.0, 0.0]
     return [x / length, y / length]
 
-
-def _find_primary_beam(scene) -> BeamLight:
-    for light in scene.lights:
-        if isinstance(light, BeamLight):
-            return light
-    raise ValueError("expected a top-level beam light in twin_prisms.json")
+def _require_primary_beam(scene) -> BeamLight:
+    light = scene.require_light("root_light_beam_0")
+    if not isinstance(light, BeamLight):
+        raise ValueError("root_light_beam_0 must be a beam light")
+    return light
 
 
 def make_settings(mode: str = "preview") -> Shot:
@@ -62,10 +61,8 @@ def frame(ctx: FrameContext) -> Frame:
     swing = math.sin(math.tau * ctx.progress)
     scene = _base_shot().scene.clone()
 
-    left = scene.find_group("prism_left")
-    right = scene.find_group("prism_right")
-    if left is None or right is None:
-        raise ValueError("expected prism_left and prism_right groups in twin_prisms.json")
+    left = scene.require_group("prism_left")
+    right = scene.require_group("prism_right")
 
     left.transform.translate[1] += 0.16 * swing
     right.transform.translate[1] -= 0.18 * swing
@@ -73,7 +70,7 @@ def frame(ctx: FrameContext) -> Frame:
     right.transform.rotate += 0.22 * swing
     right.transform.scale = [0.8 + 0.05 * swing, 0.8 + 0.05 * swing]
 
-    beam = _find_primary_beam(scene)
+    beam = _require_primary_beam(scene)
     beam.origin[1] = 0.1 * swing
     beam.direction = _normalize(1.0, 0.12 * math.cos(math.tau * ctx.progress))
 

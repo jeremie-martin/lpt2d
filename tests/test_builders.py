@@ -5,7 +5,7 @@ import math
 import pytest
 
 from anim import mirror_block
-from anim.builders import thick_arc
+from anim.builders import biconvex_lens, double_slit, mirror_box, thick_arc, waveguide
 from anim.types import Material, Polygon, Segment
 
 
@@ -72,6 +72,59 @@ def test_mirror_block_applies_per_face_material_overrides():
     )
 
     assert [shape.material for shape in shapes] == [left, top, right, bottom]
+
+
+def test_multi_shape_builders_accept_id_prefix():
+    material = Material(transmission=1.0, ior=1.5)
+
+    box = mirror_box(half_w=1.0, half_h=0.5, material=material, id_prefix="room")
+    assert [shape.id for shape in box] == [
+        "room_bottom",
+        "room_top",
+        "room_left",
+        "room_right",
+    ]
+
+    lens = biconvex_lens(
+        center=(0.0, 0.0),
+        aperture=0.4,
+        center_thickness=0.1,
+        left_radius=0.8,
+        right_radius=0.8,
+        material=material,
+        id_prefix="lens",
+    )
+    assert [shape.id for shape in lens] == [
+        "lens_left_face",
+        "lens_top_edge",
+        "lens_right_face",
+        "lens_bottom_edge",
+    ]
+
+    slits = double_slit(
+        center=(0.0, 0.0),
+        width=4.0,
+        gap=0.3,
+        separation=1.0,
+        material=Material(albedo=0.0),
+        id_prefix="barrier",
+    )
+    assert [shape.id for shape in slits] == [
+        "barrier_barrier_0",
+        "barrier_barrier_1",
+        "barrier_barrier_2",
+    ]
+
+    guide = waveguide(
+        points=[(-1.0, 0.0), (0.0, 0.5), (1.0, 0.0)],
+        width=0.2,
+        material=material,
+        id_prefix="guide",
+    )
+    assert [shape.id for shape in guide] == [
+        "guide_segment_0",
+        "guide_segment_1",
+    ]
 
 
 @pytest.mark.parametrize(

@@ -81,7 +81,7 @@ EXPOSURE = Track(
 def make_box() -> Group:
     h = BOX_HALF
     return Group(
-        name="mirror_box",
+        id="mirror_box",
         shapes=[
             Segment(a=[-h, -h], b=[h, -h], material=WALL),
             Segment(a=[h, h], b=[-h, h], material=WALL),
@@ -93,7 +93,7 @@ def make_box() -> Group:
 
 def make_spheres() -> Group:
     return Group(
-        name="glass_spheres",
+        id="glass_spheres",
         shapes=[Circle(center=[x, 0], radius=0.2, material=SPHERE_GLASS) for x in (-0.5, 0.0, 0.5)],
     )
 
@@ -102,7 +102,7 @@ def make_fill_light() -> Group:
     w = BOX_HALF * 0.8
     y = BOX_HALF - 0.24 * (BOX_HALF * 2)
     return Group(
-        name="fill_light",
+        id="fill_light",
         lights=[SegmentLight(a=[-w, y], b=[w, y], intensity=1.5)],
     )
 
@@ -110,7 +110,7 @@ def make_fill_light() -> Group:
 def make_beam(t: float) -> Group:
     angle = float(ORBIT_ANGLE(t))
     return Group(
-        name="beam",
+        id="beam",
         transform=Transform2D(
             translate=[math.cos(angle) * ORBIT_RADIUS, math.sin(angle) * ORBIT_RADIUS],
             rotate=angle + math.pi,

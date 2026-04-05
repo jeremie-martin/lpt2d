@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "bench_arc_focus",
   "camera": {
     "bounds": [
@@ -35,7 +35,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_arc_0"
     },
     {
       "type": "arc",
@@ -54,7 +55,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.95
-      }
+      },
+      "id": "root_shape_arc_1"
     },
     {
       "type": "circle",
@@ -71,7 +73,8 @@
         "absorption": 0.4,
         "cauchy_b": 25000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_2"
     },
     {
       "type": "segment",
@@ -91,7 +94,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_3"
     },
     {
       "type": "segment",
@@ -111,7 +115,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_4"
     },
     {
       "type": "segment",
@@ -131,7 +136,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_5"
     },
     {
       "type": "segment",
@@ -151,7 +157,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0
-      }
+      },
+      "id": "root_shape_segment_6"
     }
   ],
   "lights": [
@@ -163,7 +170,8 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_point_0"
     }
   ]
 }

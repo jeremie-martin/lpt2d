@@ -3,6 +3,236 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <set>
+
+namespace {
+
+template <typename Fn>
+void for_each_shape(Scene& scene, Fn&& fn) {
+    for (auto& shape : scene.shapes) fn(shape);
+    for (auto& group : scene.groups)
+        for (auto& shape : group.shapes)
+            fn(shape);
+}
+
+template <typename Fn>
+void for_each_shape(const Scene& scene, Fn&& fn) {
+    for (const auto& shape : scene.shapes) fn(shape);
+    for (const auto& group : scene.groups)
+        for (const auto& shape : group.shapes)
+            fn(shape);
+}
+
+template <typename Fn>
+void for_each_light(Scene& scene, Fn&& fn) {
+    for (auto& light : scene.lights) fn(light);
+    for (auto& group : scene.groups)
+        for (auto& light : group.lights)
+            fn(light);
+}
+
+template <typename Fn>
+void for_each_light(const Scene& scene, Fn&& fn) {
+    for (const auto& light : scene.lights) fn(light);
+    for (const auto& group : scene.groups)
+        for (const auto& light : group.lights)
+            fn(light);
+}
+
+template <typename Variant>
+bool entity_has_id(const Variant& entity, std::string_view id) {
+    return std::visit([&](const auto& value) {
+        return value.id == id;
+    }, entity);
+}
+
+std::set<std::string> collect_entity_ids(const Scene& scene) {
+    std::set<std::string> ids;
+    for_each_shape(scene, [&](const Shape& shape) {
+        std::visit([&](const auto& value) {
+            if (!value.id.empty()) ids.insert(value.id);
+        }, shape);
+    });
+    for_each_light(scene, [&](const Light& light) {
+        std::visit([&](const auto& value) {
+            if (!value.id.empty()) ids.insert(value.id);
+        }, light);
+    });
+    for (const auto& group : scene.groups)
+        if (!group.id.empty())
+            ids.insert(group.id);
+    return ids;
+}
+
+template <typename T>
+void ensure_entity_id(T& entity, std::string_view prefix, std::set<std::string>& used_ids) {
+    if (!entity.id.empty() && !used_ids.contains(entity.id)) {
+        used_ids.insert(entity.id);
+        return;
+    }
+
+    std::string base = prefix.empty() ? "entity" : std::string(prefix);
+    int suffix = 0;
+    while (true) {
+        std::string candidate = base + "_" + std::to_string(suffix++);
+        if (!used_ids.contains(candidate)) {
+            entity.id = std::move(candidate);
+            used_ids.insert(entity.id);
+            return;
+        }
+    }
+}
+
+} // namespace
+
+std::string shape_type_name(const Shape& shape) {
+    return std::visit(overloaded{
+        [](const Circle&) { return std::string{"circle"}; },
+        [](const Segment&) { return std::string{"segment"}; },
+        [](const Arc&) { return std::string{"arc"}; },
+        [](const Bezier&) { return std::string{"bezier"}; },
+        [](const Polygon&) { return std::string{"polygon"}; },
+        [](const Ellipse&) { return std::string{"ellipse"}; },
+    }, shape);
+}
+
+std::string light_type_name(const Light& light) {
+    return std::visit(overloaded{
+        [](const PointLight&) { return std::string{"point_light"}; },
+        [](const SegmentLight&) { return std::string{"segment_light"}; },
+        [](const BeamLight&) { return std::string{"beam_light"}; },
+        [](const ParallelBeamLight&) { return std::string{"parallel_beam_light"}; },
+        [](const SpotLight&) { return std::string{"spot_light"}; },
+    }, light);
+}
+
+std::string next_scene_entity_id(const Scene& scene, std::string_view prefix) {
+    std::set<std::string> used_ids = collect_entity_ids(scene);
+    std::string base = prefix.empty() ? "entity" : std::string(prefix);
+    int suffix = 0;
+    while (true) {
+        std::string candidate = base + "_" + std::to_string(suffix++);
+        if (!used_ids.contains(candidate))
+            return candidate;
+    }
+}
+
+void sync_material_bindings(Scene& scene) {
+    for_each_shape(scene, [&](Shape& shape) {
+        std::visit([&](auto& value) {
+            if (value.material_id.empty()) return;
+            if (auto it = scene.materials.find(value.material_id); it != scene.materials.end())
+                value.material = it->second;
+        }, shape);
+    });
+}
+
+bool validate_scene(const Scene& scene, std::string* error) {
+    std::set<std::string> used_ids;
+    auto fail = [&](std::string message) {
+        if (error) *error = std::move(message);
+        return false;
+    };
+
+    for (const auto& [material_id, _] : scene.materials)
+        if (material_id.empty())
+            return fail("material ids must be non-empty");
+
+    for_each_shape(scene, [&](const Shape& shape) {
+        std::visit([&](const auto& value) {
+            if (error && !error->empty()) return;
+            if (value.id.empty()) {
+                if (error) *error = "shape ids must be non-empty";
+                return;
+            }
+            if (!used_ids.insert(value.id).second) {
+                if (error) *error = "duplicate entity id: " + value.id;
+                return;
+            }
+            if (!value.material_id.empty() && !scene.materials.contains(value.material_id))
+                if (error) *error = "unknown material_id: " + value.material_id;
+        }, shape);
+    });
+    if (error && !error->empty()) return false;
+
+    for_each_light(scene, [&](const Light& light) {
+        std::visit([&](const auto& value) {
+            if (error && !error->empty()) return;
+            if (value.id.empty()) {
+                if (error) *error = "light ids must be non-empty";
+                return;
+            }
+            if (!used_ids.insert(value.id).second)
+                if (error) *error = "duplicate entity id: " + value.id;
+        }, light);
+    });
+    if (error && !error->empty()) return false;
+
+    for (const auto& group : scene.groups) {
+        if (group.id.empty())
+            return fail("group ids must be non-empty");
+        if (!used_ids.insert(group.id).second)
+            return fail("duplicate entity id: " + group.id);
+    }
+
+    return true;
+}
+
+void ensure_scene_entity_ids(Scene& scene) {
+    std::set<std::string> used_ids;
+    for_each_shape(scene, [&](Shape& shape) {
+        std::visit([&](auto& value) {
+            ensure_entity_id(value, shape_type_name(shape), used_ids);
+        }, shape);
+    });
+    for_each_light(scene, [&](Light& light) {
+        std::visit([&](auto& value) {
+            ensure_entity_id(value, light_type_name(light), used_ids);
+        }, light);
+    });
+    for (auto& group : scene.groups)
+        ensure_entity_id(group, "group", used_ids);
+}
+
+Shape* find_shape(Scene& scene, std::string_view id) {
+    if (id.empty()) return nullptr;
+    Shape* result = nullptr;
+    for_each_shape(scene, [&](Shape& shape) {
+        if (!result && entity_has_id(shape, id))
+            result = &shape;
+    });
+    return result;
+}
+
+const Shape* find_shape(const Scene& scene, std::string_view id) {
+    return find_shape(const_cast<Scene&>(scene), id);
+}
+
+Light* find_light(Scene& scene, std::string_view id) {
+    if (id.empty()) return nullptr;
+    Light* result = nullptr;
+    for_each_light(scene, [&](Light& light) {
+        if (!result && entity_has_id(light, id))
+            result = &light;
+    });
+    return result;
+}
+
+const Light* find_light(const Scene& scene, std::string_view id) {
+    return find_light(const_cast<Scene&>(scene), id);
+}
+
+Group* find_group(Scene& scene, std::string_view id) {
+    if (id.empty()) return nullptr;
+    for (auto& group : scene.groups)
+        if (group.id == id)
+            return &group;
+    return nullptr;
+}
+
+const Group* find_group(const Scene& scene, std::string_view id) {
+    return find_group(const_cast<Scene&>(scene), id);
+}
 
 float normalize_angle(float angle) {
     angle = std::fmod(angle, TWO_PI);
@@ -334,7 +564,10 @@ std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
     for (int i = 0; i < n; ++i) {
         Vec2 a = poly.vertices[i];
         Vec2 b = poly.vertices[(i + 1) % n];
-        Segment edge{clockwise ? a : b, clockwise ? b : a, poly.material};
+        Segment edge;
+        edge.a = clockwise ? a : b;
+        edge.b = clockwise ? b : a;
+        edge.material = poly.material;
         auto hit = intersect(ray, edge);
         if (hit && (!best || hit->t < best->t)) {
             best = hit;
@@ -552,10 +785,29 @@ Light transform_light(const Light& l, const Transform2D& t) {
 
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat) {
     // CW winding so perp() normals point inward
-    scene.shapes.push_back(Segment{{-half_w, -half_h}, {half_w, -half_h}, mat});  // bottom → normal up
-    scene.shapes.push_back(Segment{{half_w, half_h}, {-half_w, half_h}, mat});    // top → normal down
-    scene.shapes.push_back(Segment{{-half_w, half_h}, {-half_w, -half_h}, mat});  // left → normal right
-    scene.shapes.push_back(Segment{{half_w, -half_h}, {half_w, half_h}, mat});    // right → normal left
+    Segment bottom;
+    bottom.a = {-half_w, -half_h};
+    bottom.b = {half_w, -half_h};
+    bottom.material = mat;
+    scene.shapes.push_back(bottom);
+
+    Segment top;
+    top.a = {half_w, half_h};
+    top.b = {-half_w, half_h};
+    top.material = mat;
+    scene.shapes.push_back(top);
+
+    Segment left;
+    left.a = {-half_w, half_h};
+    left.b = {-half_w, -half_h};
+    left.material = mat;
+    scene.shapes.push_back(left);
+
+    Segment right;
+    right.a = {half_w, -half_h};
+    right.b = {half_w, half_h};
+    right.material = mat;
+    scene.shapes.push_back(right);
 }
 
 float shape_perimeter(const Shape& s) {
@@ -619,14 +871,21 @@ std::vector<Light> emission_light(const Shape& s) {
             for (int i = 0; i < N; ++i) {
                 float angle = TWO_PI * i / N;
                 Vec2 pos = c.center + Vec2{c.radius * std::cos(angle), c.radius * std::sin(angle)};
-                lights.push_back(PointLight{pos, per_point});
+                PointLight light;
+                light.pos = pos;
+                light.intensity = per_point;
+                lights.push_back(light);
             }
         },
         [&](const Segment& seg) {
             // SegmentLight is an isotropic line source, so a glowing segment
             // emits from its full length without depending on endpoint order.
             float total = mat.emission * perimeter;
-            lights.push_back(SegmentLight{seg.a, seg.b, total});
+            SegmentLight light;
+            light.a = seg.a;
+            light.b = seg.b;
+            light.intensity = total;
+            lights.push_back(light);
         },
         [&](const Arc& a) {
             // Approximate arc as a chain of short isotropic SegmentLights.
@@ -638,7 +897,11 @@ std::vector<Light> emission_light(const Shape& s) {
                 float t = (float)i / (N - 1);
                 float angle = a.angle_start + sweep * t;
                 Vec2 cur = arc_point(a, angle);
-                lights.push_back(SegmentLight{prev, cur, seg_intensity});
+                SegmentLight light;
+                light.a = prev;
+                light.b = cur;
+                light.intensity = seg_intensity;
+                lights.push_back(light);
                 prev = cur;
             }
         },
@@ -650,7 +913,11 @@ std::vector<Light> emission_light(const Shape& s) {
             for (int i = 1; i < N; ++i) {
                 float t = (float)i / (N - 1);
                 Vec2 cur = bezier_eval(b, t);
-                lights.push_back(SegmentLight{prev, cur, seg_intensity});
+                SegmentLight light;
+                light.a = prev;
+                light.b = cur;
+                light.intensity = seg_intensity;
+                lights.push_back(light);
                 prev = cur;
             }
         },
@@ -661,7 +928,11 @@ std::vector<Light> emission_light(const Shape& s) {
             for (int i = 0; i < n; ++i) {
                 Vec2 a = p.vertices[i], b = p.vertices[(i + 1) % n];
                 float edge_len = (b - a).length();
-                lights.push_back(SegmentLight{a, b, mat.emission * edge_len});
+                SegmentLight light;
+                light.a = a;
+                light.b = b;
+                light.intensity = mat.emission * edge_len;
+                lights.push_back(light);
             }
         },
         [&](const Ellipse& e) {
@@ -673,7 +944,10 @@ std::vector<Light> emission_light(const Shape& s) {
                 float lx = e.semi_a * std::cos(angle);
                 float ly = e.semi_b * std::sin(angle);
                 Vec2 pos = e.center + Vec2{lx * cr - ly * sr, lx * sr + ly * cr};
-                lights.push_back(PointLight{pos, per_point});
+                PointLight light;
+                light.pos = pos;
+                light.intensity = per_point;
+                lights.push_back(light);
             }
         },
     }, s);

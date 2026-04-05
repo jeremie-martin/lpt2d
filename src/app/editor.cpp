@@ -18,8 +18,8 @@ void expand_bounds(Bounds& combined, bool& initialized, const Bounds& b) {
 
 } // namespace
 
-Shape* resolve_shape(Scene& scene, ObjectId id) {
-    if (id.type != ObjectId::Shape) return nullptr;
+Shape* resolve_shape(Scene& scene, SelectionRef id) {
+    if (id.type != SelectionRef::Shape) return nullptr;
     if (id.group >= 0) {
         if (id.group >= (int)scene.groups.size()) return nullptr;
         auto& group = scene.groups[id.group];
@@ -30,12 +30,12 @@ Shape* resolve_shape(Scene& scene, ObjectId id) {
     return &scene.shapes[id.index];
 }
 
-const Shape* resolve_shape(const Scene& scene, ObjectId id) {
+const Shape* resolve_shape(const Scene& scene, SelectionRef id) {
     return resolve_shape(const_cast<Scene&>(scene), id);
 }
 
-Light* resolve_light(Scene& scene, ObjectId id) {
-    if (id.type != ObjectId::Light) return nullptr;
+Light* resolve_light(Scene& scene, SelectionRef id) {
+    if (id.type != SelectionRef::Light) return nullptr;
     if (id.group >= 0) {
         if (id.group >= (int)scene.groups.size()) return nullptr;
         auto& group = scene.groups[id.group];
@@ -46,13 +46,13 @@ Light* resolve_light(Scene& scene, ObjectId id) {
     return &scene.lights[id.index];
 }
 
-const Light* resolve_light(const Scene& scene, ObjectId id) {
+const Light* resolve_light(const Scene& scene, SelectionRef id) {
     return resolve_light(const_cast<Scene&>(scene), id);
 }
 
 // ─── Object centroid ───────────────────────────────────────────────────
 
-Vec2 object_centroid(const Scene& scene, ObjectId id) {
+Vec2 object_centroid(const Scene& scene, SelectionRef id) {
     if (const Shape* shape = resolve_shape(scene, id)) {
         return std::visit(overloaded{
             [](const Circle& c) -> Vec2 { return c.center; },
@@ -72,7 +72,7 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
             [](const SpotLight& l) -> Vec2 { return l.pos; },
         }, *light);
     }
-    if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+    if (id.type == SelectionRef::Group && id.index < (int)scene.groups.size()) {
         return scene.groups[id.index].transform.translate;
     }
     return {0, 0};
@@ -85,12 +85,12 @@ Vec2 EditorState::selection_centroid() const {
     return sum * (1.0f / selection.size());
 }
 
-std::optional<Bounds> object_bounds(const Scene& scene, ObjectId id) {
+std::optional<Bounds> object_bounds(const Scene& scene, SelectionRef id) {
     if (const Shape* shape = resolve_shape(scene, id))
         return shape_bounds(*shape);
     if (const Light* light = resolve_light(scene, id))
         return light_bounds(*light);
-    if (id.type == ObjectId::Group && id.index >= 0 && id.index < (int)scene.groups.size()) {
+    if (id.type == SelectionRef::Group && id.index >= 0 && id.index < (int)scene.groups.size()) {
         const auto& group = scene.groups[id.index];
         bool initialized = false;
         Bounds combined{};
@@ -172,8 +172,8 @@ static float light_distance(Vec2 wp, const Light& light) {
     }, light);
 }
 
-ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group) {
-    ObjectId result{ObjectId::Shape, -1};
+SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group) {
+    SelectionRef result{SelectionRef::Shape, -1};
     float best = threshold;
 
     if (editing_group >= 0 && editing_group < (int)scene.groups.size()) {
@@ -182,12 +182,12 @@ ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_grou
         for (int i = 0; i < (int)group.shapes.size(); ++i) {
             Shape ws = transform_shape(group.shapes[i], group.transform);
             float d = shape_distance(wp, ws);
-            if (d < best) { best = d; result = {ObjectId::Shape, i, editing_group}; }
+            if (d < best) { best = d; result = {SelectionRef::Shape, i, editing_group}; }
         }
         for (int i = 0; i < (int)group.lights.size(); ++i) {
             Light wl = transform_light(group.lights[i], group.transform);
             float d = light_distance(wp, wl);
-            if (d < best) { best = d; result = {ObjectId::Light, i, editing_group}; }
+            if (d < best) { best = d; result = {SelectionRef::Light, i, editing_group}; }
         }
         return result;
     }
@@ -195,11 +195,11 @@ ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_grou
     // Normal mode: hit-test top-level objects
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
         float d = shape_distance(wp, scene.shapes[i]);
-        if (d < best) { best = d; result = {ObjectId::Shape, i}; }
+        if (d < best) { best = d; result = {SelectionRef::Shape, i}; }
     }
     for (int i = 0; i < (int)scene.lights.size(); ++i) {
         float d = light_distance(wp, scene.lights[i]);
-        if (d < best) { best = d; result = {ObjectId::Light, i}; }
+        if (d < best) { best = d; result = {SelectionRef::Light, i}; }
     }
     // Test group members (in world space) — return group, not individual member
     for (int g = 0; g < (int)scene.groups.size(); ++g) {
@@ -207,12 +207,12 @@ ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_grou
         for (const auto& shape : group.shapes) {
             Shape ws = transform_shape(shape, group.transform);
             float d = shape_distance(wp, ws);
-            if (d < best) { best = d; result = {ObjectId::Group, g}; }
+            if (d < best) { best = d; result = {SelectionRef::Group, g}; }
         }
         for (const auto& light : group.lights) {
             Light wl = transform_light(light, group.transform);
             float d = light_distance(wp, wl);
-            if (d < best) { best = d; result = {ObjectId::Group, g}; }
+            if (d < best) { best = d; result = {SelectionRef::Group, g}; }
         }
     }
     return result;
@@ -237,18 +237,18 @@ int hit_test_groups(Vec2 wp, const Scene& scene, float threshold) {
     return result;
 }
 
-bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max) {
+bool object_in_rect(const Scene& scene, SelectionRef id, Vec2 rect_min, Vec2 rect_max) {
     auto overlaps = [&](const Bounds& b) {
         return b.max.x >= rect_min.x && b.min.x <= rect_max.x &&
                b.max.y >= rect_min.y && b.min.y <= rect_max.y;
     };
-    if (id.type == ObjectId::Shape && id.index < (int)scene.shapes.size()) {
+    if (id.type == SelectionRef::Shape && id.index < (int)scene.shapes.size()) {
         return overlaps(shape_bounds(scene.shapes[id.index]));
     }
-    if (id.type == ObjectId::Light && id.index < (int)scene.lights.size()) {
+    if (id.type == SelectionRef::Light && id.index < (int)scene.lights.size()) {
         return overlaps(light_bounds(scene.lights[id.index]));
     }
-    if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+    if (id.type == SelectionRef::Group && id.index < (int)scene.groups.size()) {
         const auto& group = scene.groups[id.index];
         for (const auto& shape : group.shapes) {
             Shape ws = transform_shape(shape, group.transform);
@@ -505,7 +505,7 @@ void apply_transform_light(Light& dst, const Light& src, const TransformMode& tm
 
 // ─── Handle generation ─────────────────────────────────────────────────
 
-std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>& selection) {
+std::vector<Handle> get_handles(const Scene& scene, const std::vector<SelectionRef>& selection) {
     std::vector<Handle> handles;
 
     for (auto& id : selection) {
@@ -567,7 +567,7 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                 },
             }, *light);
         }
-        if (id.type == ObjectId::Group && id.index < (int)scene.groups.size()) {
+        if (id.type == SelectionRef::Group && id.index < (int)scene.groups.size()) {
             const auto& group = scene.groups[id.index];
             handles.push_back({Handle::Position, id, 0, group.transform.translate});
         }
@@ -685,7 +685,7 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
         }, *light);
     }
 
-    if (obj.type == ObjectId::Group && obj.index < (int)scene.groups.size()) {
+    if (obj.type == SelectionRef::Group && obj.index < (int)scene.groups.size()) {
         auto& group = scene.groups[obj.index];
         if (handle.kind == Handle::Position) {
             group.transform.translate = wp;

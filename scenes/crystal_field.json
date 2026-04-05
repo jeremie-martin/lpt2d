@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "crystal_field",
   "camera": {
     "bounds": [
@@ -40,7 +40,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_0"
     },
     {
       "type": "circle",
@@ -57,7 +58,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_1"
     },
     {
       "type": "circle",
@@ -74,7 +76,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_2"
     },
     {
       "type": "circle",
@@ -91,7 +94,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_3"
     },
     {
       "type": "circle",
@@ -108,7 +112,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_4"
     },
     {
       "type": "circle",
@@ -125,7 +130,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_5"
     },
     {
       "type": "circle",
@@ -142,7 +148,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_6"
     },
     {
       "type": "circle",
@@ -159,7 +166,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_7"
     },
     {
       "type": "circle",
@@ -176,7 +184,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_8"
     },
     {
       "type": "circle",
@@ -193,7 +202,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_9"
     },
     {
       "type": "circle",
@@ -210,7 +220,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_10"
     },
     {
       "type": "circle",
@@ -227,7 +238,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_11"
     },
     {
       "type": "circle",
@@ -244,7 +256,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_12"
     },
     {
       "type": "circle",
@@ -261,7 +274,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_13"
     },
     {
       "type": "circle",
@@ -278,7 +292,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_14"
     },
     {
       "type": "circle",
@@ -295,7 +310,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_15"
     },
     {
       "type": "circle",
@@ -312,7 +328,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_16"
     },
     {
       "type": "circle",
@@ -329,7 +346,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_17"
     },
     {
       "type": "circle",
@@ -346,7 +364,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_18"
     },
     {
       "type": "circle",
@@ -363,7 +382,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_19"
     },
     {
       "type": "circle",
@@ -380,7 +400,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_20"
     },
     {
       "type": "circle",
@@ -397,7 +418,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_21"
     },
     {
       "type": "circle",
@@ -414,7 +436,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_22"
     },
     {
       "type": "circle",
@@ -431,7 +454,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_23"
     },
     {
       "type": "circle",
@@ -448,7 +472,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_24"
     },
     {
       "type": "circle",
@@ -465,7 +490,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_25"
     },
     {
       "type": "circle",
@@ -482,7 +508,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_26"
     },
     {
       "type": "circle",
@@ -499,7 +526,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_27"
     },
     {
       "type": "circle",
@@ -516,7 +544,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_28"
     },
     {
       "type": "circle",
@@ -533,7 +562,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_29"
     },
     {
       "type": "circle",
@@ -550,7 +580,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_30"
     },
     {
       "type": "circle",
@@ -567,7 +598,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_31"
     },
     {
       "type": "circle",
@@ -584,7 +616,8 @@
         "absorption": 0.3,
         "cauchy_b": 20000,
         "albedo": 1
-      }
+      },
+      "id": "root_shape_circle_32"
     },
     {
       "type": "segment",
@@ -604,7 +637,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.9
-      }
+      },
+      "id": "root_shape_segment_33"
     },
     {
       "type": "segment",
@@ -624,7 +658,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.9
-      }
+      },
+      "id": "root_shape_segment_34"
     },
     {
       "type": "segment",
@@ -644,7 +679,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.9
-      }
+      },
+      "id": "root_shape_segment_35"
     },
     {
       "type": "segment",
@@ -664,7 +700,8 @@
         "absorption": 0,
         "cauchy_b": 0,
         "albedo": 0.9
-      }
+      },
+      "id": "root_shape_segment_36"
     }
   ],
   "lights": [
@@ -676,7 +713,8 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_point_0"
     },
     {
       "type": "point",
@@ -686,7 +724,8 @@
       ],
       "intensity": 0.7,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_point_1"
     }
   ]
 }

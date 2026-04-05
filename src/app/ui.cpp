@@ -201,7 +201,7 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
     // Draw guide lines for Bezier control points
     ImU32 guide_col = IM_COL32(120, 120, 140, 80);
     for (auto& h : handles) {
-        if (h.obj.type == ObjectId::Shape && h.kind == Handle::Position && h.param_index == 1) {
+        if (h.obj.type == SelectionRef::Shape && h.kind == Handle::Position && h.param_index == 1) {
             // This is a Bezier control point — draw dashed lines to P0 and P2
             auto& shape = scene.shapes[h.obj.index];
             if (auto* b = std::get_if<Bezier>(&shape)) {
@@ -217,7 +217,7 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
         ImU32 col = (i == hovered_handle) ? COL_HANDLE_HOV : COL_HANDLE;
 
         if (handles[i].kind == Handle::Position && handles[i].param_index == 1 &&
-            handles[i].obj.type == ObjectId::Shape) {
+            handles[i].obj.type == SelectionRef::Shape) {
             // Bezier control point: diamond shape
             dl->AddQuadFilled(ImVec2(sp.x, sp.y - r), ImVec2(sp.x + r, sp.y),
                               ImVec2(sp.x, sp.y + r), ImVec2(sp.x - r, sp.y), col);

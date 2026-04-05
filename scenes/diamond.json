@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "diamond",
   "camera": {
     "bounds": [
@@ -49,7 +49,8 @@
         0
       ],
       "radius": 0.35,
-      "material": "diamond"
+      "id": "root_shape_circle_0",
+      "material_id": "diamond"
     },
     {
       "type": "segment",
@@ -61,7 +62,8 @@
         1.0,
         -0.5625
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_1",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -73,7 +75,8 @@
         -1.0,
         0.5625
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_2",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -85,7 +88,8 @@
         -1.0,
         -0.5625
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_3",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -97,7 +101,8 @@
         1.0,
         0.5625
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_4",
+      "material_id": "mirror_wall"
     }
   ],
   "lights": [
@@ -107,7 +112,8 @@
         -0.7,
         0.4
       ],
-      "intensity": 1
+      "intensity": 1,
+      "id": "root_light_point_0"
     },
     {
       "type": "point",
@@ -115,7 +121,8 @@
         0.7,
         0.4
       ],
-      "intensity": 1
+      "intensity": 1,
+      "id": "root_light_point_1"
     },
     {
       "type": "point",
@@ -123,7 +130,8 @@
         0,
         -0.5
       ],
-      "intensity": 0.5
+      "intensity": 0.5,
+      "id": "root_light_point_2"
     }
   ]
 }

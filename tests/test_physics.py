@@ -12,10 +12,13 @@ import json
 import math
 import subprocess
 import sys
+from itertools import count
 
 import numpy as np
 
 CLI = "./build/lpt2d-cli"
+_SHAPE_IDS = count()
+_LIGHT_IDS = count()
 
 # ---------------------------------------------------------------------------
 # Rendering helpers
@@ -100,6 +103,7 @@ MIRROR_98 = {"metallic": 1.0, "albedo": 0.98, "transmission": 0.0}
 
 def beam_light(origin, direction, angular_width=0.005, intensity=1.0, wl_min=380.0, wl_max=780.0):
     return {
+        "id": f"beam_light_{next(_LIGHT_IDS)}",
         "type": "beam",
         "origin": origin,
         "direction": direction,
@@ -111,23 +115,36 @@ def beam_light(origin, direction, angular_width=0.005, intensity=1.0, wl_min=380
 
 
 def point_light(pos, intensity=1.0):
-    return {"type": "point", "pos": pos, "intensity": intensity}
+    return {"id": f"point_light_{next(_LIGHT_IDS)}", "type": "point", "pos": pos, "intensity": intensity}
+
+
+def segment_light(a, b, intensity=1.0, wl_min=380.0, wl_max=780.0):
+    return {
+        "id": f"segment_light_{next(_LIGHT_IDS)}",
+        "type": "segment",
+        "a": a,
+        "b": b,
+        "intensity": intensity,
+        "wavelength_min": wl_min,
+        "wavelength_max": wl_max,
+    }
 
 
 def polygon_shape(vertices, material):
-    return {"type": "polygon", "vertices": vertices, "material": material}
+    return {"id": f"polygon_{next(_SHAPE_IDS)}", "type": "polygon", "vertices": vertices, "material": material}
 
 
 def segment_shape(a, b, material):
-    return {"type": "segment", "a": a, "b": b, "material": material}
+    return {"id": f"segment_{next(_SHAPE_IDS)}", "type": "segment", "a": a, "b": b, "material": material}
 
 
 def circle_shape(center, radius, material):
-    return {"type": "circle", "center": center, "radius": radius, "material": material}
+    return {"id": f"circle_{next(_SHAPE_IDS)}", "type": "circle", "center": center, "radius": radius, "material": material}
 
 
 def ellipse_shape(center, semi_a, semi_b, rotation, material):
     return {
+        "id": f"ellipse_{next(_SHAPE_IDS)}",
         "type": "ellipse",
         "center": center,
         "semi_a": semi_a,
@@ -139,6 +156,7 @@ def ellipse_shape(center, semi_a, semi_b, rotation, material):
 
 def arc_shape(center, radius, angle_start, sweep, material):
     return {
+        "id": f"arc_{next(_SHAPE_IDS)}",
         "type": "arc",
         "center": center,
         "radius": radius,
@@ -150,6 +168,7 @@ def arc_shape(center, radius, angle_start, sweep, material):
 
 def parallel_beam_light(a, b, direction, angular_width=0.0, intensity=1.0):
     return {
+        "id": f"parallel_beam_light_{next(_LIGHT_IDS)}",
         "type": "parallel_beam",
         "a": a,
         "b": b,
@@ -170,7 +189,7 @@ def mirror_box_walls(half=0.9):
 
 def make_scene(shapes, lights, bounds):
     return {
-        "version": 4,
+        "version": 5,
         "name": "test",
         "camera": {"bounds": bounds},
         "shapes": shapes,
@@ -415,7 +434,7 @@ def test_segment_light_emits_both_sides():
         segment_shape([-0.9, 0.7], [0.9, 0.7], ABSORBER),
         segment_shape([0.9, -0.7], [-0.9, -0.7], ABSORBER),
     ]
-    light = {"type": "segment", "a": [-0.4, 0.0], "b": [0.4, 0.0], "intensity": 2.0}
+    light = segment_light([-0.4, 0.0], [0.4, 0.0], intensity=2.0)
     scene = make_scene(collectors, [light], [-1.0, -1.0, 1.0, 1.0])
 
     pixels, _ = render_pixels(scene, width=220, height=220, rays=5_000_000, exposure=-4.0)
@@ -825,14 +844,14 @@ def test_grouped_ellipse_matches_direct_ellipse():
     material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1}
 
     grouped_scene = {
-        "version": 4,
+        "version": 5,
         "name": "grouped-ellipse",
         "camera": {"bounds": bounds},
         "shapes": collectors,
         "lights": [light],
         "groups": [
             {
-                "name": "ellipse",
+                "id": "ellipse",
                 "transform": group_transform,
                 "shapes": [ellipse_shape(local["center"], local["semi_a"], local["semi_b"], local["rotation"], material)],
                 "lights": [],

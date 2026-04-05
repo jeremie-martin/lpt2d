@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "twin_prisms",
   "camera": {
     "bounds": [
@@ -52,7 +52,8 @@
         1.2,
         -0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_0",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -64,7 +65,8 @@
         -1.2,
         0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_1",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -76,7 +78,8 @@
         -1.2,
         -0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_2",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -88,7 +91,8 @@
         1.2,
         0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_3",
+      "material_id": "mirror_wall"
     }
   ],
   "lights": [
@@ -105,12 +109,12 @@
       "angular_width": 0.02,
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780
+      "wavelength_max": 780,
+      "id": "root_light_beam_0"
     }
   ],
   "groups": [
     {
-      "name": "prism_left",
       "transform": {
         "translate": [
           -0.3,
@@ -133,7 +137,8 @@
             -0.2,
             0.15
           ],
-          "material": "prism_glass"
+          "id": "prism_left_shape_segment_0",
+          "material_id": "prism_glass"
         },
         {
           "type": "segment",
@@ -145,7 +150,8 @@
             0.2,
             0.15
           ],
-          "material": "prism_glass"
+          "id": "prism_left_shape_segment_1",
+          "material_id": "prism_glass"
         },
         {
           "type": "segment",
@@ -157,13 +163,14 @@
             0.0,
             -0.2
           ],
-          "material": "prism_glass"
+          "id": "prism_left_shape_segment_2",
+          "material_id": "prism_glass"
         }
       ],
-      "lights": []
+      "lights": [],
+      "id": "prism_left"
     },
     {
-      "name": "prism_right",
       "transform": {
         "translate": [
           0.5,
@@ -186,7 +193,8 @@
             -0.2,
             0.15
           ],
-          "material": "prism_glass"
+          "id": "prism_right_shape_segment_0",
+          "material_id": "prism_glass"
         },
         {
           "type": "segment",
@@ -198,7 +206,8 @@
             0.2,
             0.15
           ],
-          "material": "prism_glass"
+          "id": "prism_right_shape_segment_1",
+          "material_id": "prism_glass"
         },
         {
           "type": "segment",
@@ -210,10 +219,12 @@
             0.0,
             -0.2
           ],
-          "material": "prism_glass"
+          "id": "prism_right_shape_segment_2",
+          "material_id": "prism_glass"
         }
       ],
-      "lights": []
+      "lights": [],
+      "id": "prism_right"
     }
   ]
 }

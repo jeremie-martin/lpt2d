@@ -73,14 +73,14 @@ The same data flows through five layers. **All layers must stay consistent.**
 | **C++ scene.h** | 8 fields on `Material` struct | `Shot` (Scene + Camera2D + Canvas + Look + TraceDefaults) | `Scene::materials` (map) |
 | **GPU structs** (renderer.cpp) | Same 8 fields in std430 layout | `PostProcess` + `TraceConfig` (runtime) | Flattened at upload |
 | **GLSL shader** (trace.comp) | Same 8 fields in `Hit` struct | Uniforms | N/A |
-| **JSON** (serialize.cpp) | All 8 read/written | v4 format: camera/canvas/look/trace blocks | `"materials"` dict |
+| **JSON** (serialize.cpp) | All 8 read/written | v5 format: authored ids + camera/canvas/look/trace blocks | `"materials"` dict + `material_id` bindings |
 | **Python** (anim/types.py) | Same 8 fields on `Material` dataclass | `Shot` (Scene + Camera2D + Canvas + Look + TraceDefaults) | `Scene.materials` dict |
 
 ### Material system
 
 Materials have 8 properties: `ior`, `roughness`, `metallic`, `transmission`, `absorption`, `cauchy_b`, `albedo`, `emission`.
 
-**Named materials**: Scenes can define a `materials` dictionary mapping names to material definitions. Shapes can reference materials by name (`"material": "glass"`) or inline (`"material": {...}`). Named references are resolved at parse time — shapes always have resolved inline materials at runtime.
+**Named materials**: Scenes can define a `materials` dictionary mapping authored material ids to shared material assets. Shapes reference shared assets with `"material_id": "glass"` or carry an inline custom `"material": {...}` block, but never both. Runtime shape structs still keep a resolved material value alongside the authored `material_id` binding.
 
 **Convenience constructors** (C++ `mat_*`, Python functions):
 - `glass(ior, cauchy_b, absorption)` — transparent dielectric
@@ -116,7 +116,7 @@ anim/                       — Python animation library (pip install -e .)
   easing.py                 — 11 built-in easing functions
   stats.py                  — Frame statistics (luminance, clipping, percentiles)
   examples/secondary/       — exploratory or superseded Python examples
-scenes/                     — JSON shot files (v4 format, built-in runtime and benchmark scene set)
+scenes/                     — JSON shot files (v5 authored format, built-in runtime and benchmark scene set)
 src/
   core/                     — lpt2d-core static library (no GUI/windowing deps)
     scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, Shot, Camera2D, Canvas, Look, TraceDefaults, intersection, bounds
@@ -124,7 +124,7 @@ src/
     renderer.h/cpp          — GPU pipeline: framebuffers, compute dispatch, instanced draw, post-processing
     spectrum.h/cpp          — CIE 1931 wavelength→RGB (Gaussian fit), uploaded as 1D texture LUT
     export.h/cpp            — PNG export via stb_image_write
-    serialize.h/cpp         — JSON shot save/load (v4 format, file and string APIs)
+    serialize.h/cpp         — JSON shot save/load (v5 format, file and string APIs)
   shaders/                  — standalone GLSL files (embedded at build time → build/generated/shaders.h)
     trace.comp              — main ray tracing compute kernel
     line.vert/frag          — instanced anti-aliased line rasterization
@@ -152,7 +152,7 @@ src/
 - **Selection**: Click to select shapes/lights/groups. Shift-click for multi-select. Box select.
 - **Transforms**: G=grab, R=rotate, S=scale. Axis lock with X/Y. Numeric input. Shift=snap.
 - **Enter-group editing**: Double-click a group member to enter the group. Properties panel shows individual member materials. Escape exits.
-- **Material Library**: Named materials with create/edit/delete/apply-to-selection. Preset buttons for common materials.
+- **Material Library**: Shared materials with create/rename/delete/apply-to-selection. Editing a bound object or library entry updates the shared asset through `material_id`.
 - **Undo/Redo**: Ctrl+Z/Ctrl+Shift+Z, 200-level history (tracks Scene only, not Look/TraceDefaults).
 - **Save/Load**: Ctrl+S/Ctrl+O saves/loads the Shot (scene content + camera + look + trace + canvas), except GUI trace batch size, which is session-only and always resets to `20_000`.
 
@@ -164,11 +164,11 @@ src/
 - **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed.
 - **String-to-enum parsing**: Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` — do not duplicate the string-matching logic.
 
-### JSON shot format (version 4)
+### JSON shot format (version 5)
 
 ```json
 {
-  "version": 4,
+  "version": 5,
   "name": "scene_name",
   "camera": { "bounds": [-1.2, -0.675, 1.2, 0.675] },
   "canvas": { "width": 1920, "height": 1080 },
@@ -179,18 +179,18 @@ src/
     "mirror": {"metallic": 1, "roughness": 0.1, "albedo": 0.95, "transmission": 1}
   },
   "shapes": [
-    {"type": "circle", "center": [0, 0], "radius": 0.2, "material": "glass"},
-    {"type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": {"albedo": 0}},
-    {"type": "ellipse", "center": [0, 0], "semi_a": 0.3, "semi_b": 0.15, "rotation": 0.5, "material": "glass"}
+    {"id": "lens", "type": "circle", "center": [0, 0], "radius": 0.2, "material_id": "glass"},
+    {"id": "floor", "type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": {"albedo": 0}},
+    {"id": "collector", "type": "ellipse", "center": [0, 0], "semi_a": 0.3, "semi_b": 0.15, "rotation": 0.5, "material_id": "glass"}
   ],
   "lights": [
-    {"type": "point", "pos": [0, 0.5], "intensity": 1},
-    {"type": "parallel_beam", "a": [-0.5, 0.8], "b": [0.5, 0.8], "direction": [0, -1], "angular_width": 0, "intensity": 1},
-    {"type": "spot", "pos": [0, 1], "direction": [0, -1], "angular_width": 0.5, "falloff": 2, "intensity": 1}
+    {"id": "spark", "type": "point", "pos": [0, 0.5], "intensity": 1},
+    {"id": "wash", "type": "parallel_beam", "a": [-0.5, 0.8], "b": [0.5, 0.8], "direction": [0, -1], "angular_width": 0, "intensity": 1},
+    {"id": "spot", "type": "spot", "pos": [0, 1], "direction": [0, -1], "angular_width": 0.5, "falloff": 2, "intensity": 1}
   ],
   "groups": [
     {
-      "name": "prism",
+      "id": "prism",
       "transform": {"translate": [0, 0], "rotate": 0, "scale": [1, 1]},
       "shapes": [...],
       "lights": [...]
@@ -199,7 +199,7 @@ src/
 }
 ```
 
-Camera, canvas, look, and trace blocks are at the root level alongside scene content. Shapes can reference materials by name (string) or inline (object). Named references are resolved from the `materials` dict at load time.
+Camera, canvas, look, and trace blocks are at the root level alongside scene content. Persisted shapes, lights, and groups all carry authored `id` values that are globally unique within a scene. Shapes either reference a shared material asset through `material_id` or carry an inline `material` object.
 
 **Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
 

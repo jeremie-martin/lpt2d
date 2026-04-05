@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "name": "three_spheres",
   "camera": {
     "bounds": [
@@ -49,7 +49,8 @@
         0
       ],
       "radius": 0.2,
-      "material": "glass"
+      "id": "root_shape_circle_0",
+      "material_id": "glass"
     },
     {
       "type": "circle",
@@ -58,7 +59,8 @@
         0
       ],
       "radius": 0.2,
-      "material": "glass"
+      "id": "root_shape_circle_1",
+      "material_id": "glass"
     },
     {
       "type": "circle",
@@ -67,7 +69,8 @@
         0
       ],
       "radius": 0.2,
-      "material": "glass"
+      "id": "root_shape_circle_2",
+      "material_id": "glass"
     },
     {
       "type": "segment",
@@ -79,7 +82,8 @@
         1.2,
         -0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_3",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -91,7 +95,8 @@
         -1.2,
         0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_4",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -103,7 +108,8 @@
         -1.2,
         -0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_5",
+      "material_id": "mirror_wall"
     },
     {
       "type": "segment",
@@ -115,7 +121,8 @@
         1.2,
         0.675
       ],
-      "material": "mirror_wall"
+      "id": "root_shape_segment_6",
+      "material_id": "mirror_wall"
     }
   ],
   "lights": [
@@ -125,7 +132,8 @@
         -0.8,
         0.5
       ],
-      "intensity": 1
+      "intensity": 1,
+      "id": "root_light_point_0"
     },
     {
       "type": "point",
@@ -133,7 +141,8 @@
         0.8,
         -0.5
       ],
-      "intensity": 1
+      "intensity": 1,
+      "id": "root_light_point_1"
     }
   ]
 }
