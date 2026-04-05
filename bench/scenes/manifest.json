@@ -5,10 +5,11 @@
     "rays": 10000000,
     "batch": 50000,
     "depth": 12,
-    "exposure": 2.0,
+    "exposure": -5.0,
     "contrast": 1.0,
-    "gamma": 2.2,
-    "tonemap": "aces"
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5
   },
   "scenes": [
     {"name": "bench_glass_sphere"},

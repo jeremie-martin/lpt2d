@@ -3,20 +3,24 @@
 #include "scene.h"
 
 #include <GL/glew.h>
+#include <array>
 #include <cstdint>
 #include <vector>
 
-struct TraceConfig {
-    int batch_size = 200000;
-    int max_depth = 12;
-    float intensity = 1.0f;
+struct FrameMetrics {
+    float mean_lum;    // mean BT.709 luminance (0-255 scale)
+    float pct_black;   // fraction of pixels with luminance < 1
+    float pct_clipped; // fraction of pixels with any channel == 255
+    float p50;         // median luminance
+    float p95;         // 95th percentile luminance
+    std::array<int, 256> histogram{}; // BT.709 luminance histogram (256 bins)
 };
 
 class Renderer {
 public:
     ~Renderer();
 
-    bool init(int width, int height);
+    bool init(int width, int height, bool half_float = false);
     void resize(int width, int height);
     void shutdown();
     void clear();
@@ -42,13 +46,23 @@ public:
     float last_max() const { return last_max_; }
     int width() const { return width_; }
     int height() const { return height_; }
+    int num_lights() const { return num_lights_; }
+    int64_t total_rays() const { return total_rays_; }
+
+    // Compute current max luminance from the float accumulation buffer (CPU readback).
+    float compute_current_max();
+
+    // Compute per-frame stats from the post-processed RGBA8 buffer.
+    // Must be called after read_pixels() (which populates rgba_buffer_).
+    FrameMetrics compute_frame_metrics() const;
 
 private:
     int width_ = 0, height_ = 0;
+    bool half_precision_ = false; // RGBA16F instead of RGBA32F (fast preview mode)
 
     // Float accumulation FBO
     GLuint fbo_ = 0;
-    GLuint float_texture_ = 0; // GL_RGBA32F
+    GLuint float_texture_ = 0; // GL_RGBA32F or GL_RGBA16F
 
     // Display FBO (8-bit for ImGui / export)
     GLuint display_fbo_ = 0;
@@ -64,10 +78,12 @@ private:
     GLuint bezier_ssbo_ = 0;
     GLuint light_ssbo_ = 0;
     GLuint light_weights_ssbo_ = 0;
+    GLuint ellipse_ssbo_ = 0;
     int num_circles_ = 0;
     int num_segments_ = 0;
     int num_arcs_ = 0;
     int num_beziers_ = 0;
+    int num_ellipses_ = 0;
     int num_lights_ = 0;
 
     // Wavelength LUT texture
@@ -83,6 +99,7 @@ private:
     GLint trace_loc_num_segments_ = -1;
     GLint trace_loc_num_arcs_ = -1;
     GLint trace_loc_num_beziers_ = -1;
+    GLint trace_loc_num_ellipses_ = -1;
     GLint trace_loc_num_lights_ = -1;
     GLint trace_loc_max_depth_ = -1;
     GLint trace_loc_seed_ = -1;
@@ -94,6 +111,7 @@ private:
     GLint trace_loc_wavelength_lut_ = -1;
 
     uint32_t batch_counter_ = 0;
+    int64_t total_rays_ = 0;
 
     // --- Instanced line drawing ---
     GLuint line_program_ = 0;
@@ -123,6 +141,9 @@ private:
     GLint loc_tone_map_ = -1;
     GLint loc_white_point_ = -1;
     GLint loc_float_tex_ = -1;
+    GLint loc_ambient_ = -1;
+    GLint loc_background_ = -1;
+    GLint loc_opacity_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();
@@ -131,5 +152,5 @@ private:
     bool create_pp_shader();
     bool create_compute_shader();
     void create_wavelength_lut();
-    float compute_max_gpu();
+    float compute_max_gpu(float percentile = 1.0f);
 };

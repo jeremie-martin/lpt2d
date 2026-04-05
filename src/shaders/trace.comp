@@ -6,7 +6,8 @@ struct GPUCircle {
     float radius;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad0, _pad1; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
+    float emission;
+    float _pad; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
 };
 
 struct GPUSeg {
@@ -14,18 +15,19 @@ struct GPUSeg {
     vec2 b;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 
 struct GPULight {
-    uint type;
+    uint type;       // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
     float intensity;
     vec2 pos_a;
     vec2 pos_b;
+    vec2 dir;        // direction for parallel_beam and spot
     float angular_width;
+    float falloff;   // spot cosine-power exponent
     float wavelength_min;
     float wavelength_max;
-    float _pad;
 };
 
 struct LineSeg {
@@ -50,11 +52,11 @@ struct GPUArc {
     vec2 center;
     float radius;
     float angle_start;
-    float angle_end;
+    float sweep;
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad1;
+    float emission;
 };
 
 struct GPUBezier {
@@ -63,11 +65,22 @@ struct GPUBezier {
     vec2 p2;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 
 layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
 layout(std430, binding = 7) readonly buffer BezierBuf { GPUBezier beziers[]; };
+
+struct GPUEllipse {
+    vec2 center;
+    float semi_a, semi_b;
+    float rotation;
+    float _pad;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo, emission;
+};
+
+layout(std430, binding = 8) readonly buffer EllipseBuf { GPUEllipse ellipses[]; };
 
 uniform sampler1D uWavelengthLUT;
 
@@ -75,6 +88,7 @@ uniform uint uNumCircles;
 uniform uint uNumSegments;
 uniform uint uNumArcs;
 uniform uint uNumBeziers;
+uniform uint uNumEllipses;
 uniform uint uNumLights;
 uniform uint uMaxDepth;
 uniform uint uSeed;
@@ -138,9 +152,10 @@ struct Hit {
     float absorption;
     float cauchy_b;
     float albedo;
+    float emission;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -157,7 +172,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo);
+    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -172,14 +187,16 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission);
 }
 
-bool in_arc(float angle, float start, float end) {
-    if (start <= end)
-        return angle >= start && angle <= end;
-    else
-        return angle >= start || angle <= end;
+bool in_arc(float angle, float start, float sweep) {
+    float arc_sweep = clamp(sweep, 0.0, 2.0 * PI);
+    if (arc_sweep >= 2.0 * PI - INTERSECT_EPS)
+        return true;
+    float delta = mod(angle - start, 2.0 * PI);
+    if (delta < 0.0) delta += 2.0 * PI;
+    return delta <= arc_sweep + INTERSECT_EPS;
 }
 
 Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
@@ -201,9 +218,9 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         float angle = atan(p.y - a.center.y, p.x - a.center.x);
         if (angle < 0.0) angle += 2.0 * PI;
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
-        if (in_arc(angle, a.angle_start, a.angle_end)) {
+        if (in_arc(angle, a.angle_start, a.sweep)) {
             return Hit(t, p, normalize(p - a.center),
-                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo);
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission);
         }
     }
     return NO_HIT;
@@ -248,9 +265,42 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission);
     }
     return best;
+}
+
+Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
+    // cos/sin computed once; inverse rotation uses (cr, -sr)
+    float cr = cos(e.rotation), sr = sin(e.rotation);
+    vec2 oc = ro - e.center;
+    vec2 lo = vec2(oc.x*cr + oc.y*sr, -oc.x*sr + oc.y*cr);
+    vec2 ld = vec2(rd.x*cr + rd.y*sr, -rd.x*sr + rd.y*cr);
+
+    float a2 = e.semi_a * e.semi_a;
+    float b2 = e.semi_b * e.semi_b;
+
+    float A = ld.x*ld.x/a2 + ld.y*ld.y/b2;
+    float B = 2.0*(lo.x*ld.x/a2 + lo.y*ld.y/b2);
+    float C = lo.x*lo.x/a2 + lo.y*lo.y/b2 - 1.0;
+    float disc = B*B - 4.0*A*C;
+    if (disc < 0.0) return NO_HIT;
+
+    float sq = sqrt(disc);
+    float t1 = (-B - sq) / (2.0*A);
+    float t2 = (-B + sq) / (2.0*A);
+    float t = (t1 > INTERSECT_EPS) ? t1 : t2;
+    if (t < INTERSECT_EPS) return NO_HIT;
+
+    // Hit point in local coords
+    vec2 lp = lo + ld * t;
+    // Normal: gradient of ellipse equation
+    vec2 ln = normalize(vec2(2.0*lp.x/a2, 2.0*lp.y/b2));
+    // Rotate normal back to world coords (forward rotation: cr, sr)
+    vec2 n = vec2(ln.x*cr - ln.y*sr, ln.x*sr + ln.y*cr);
+
+    vec2 p = ro + rd * t;
+    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission);
 }
 
 Hit hit_scene(vec2 ro, vec2 rd) {
@@ -271,6 +321,10 @@ Hit hit_scene(vec2 ro, vec2 rd) {
         Hit h = hit_bezier(ro, rd, beziers[i]);
         if (h.t < best.t) best = h;
     }
+    for (uint i = 0u; i < uNumEllipses; i++) {
+        Hit h = hit_ellipse(ro, rd, ellipses[i]);
+        if (h.t < best.t) best = h;
+    }
     return best;
 }
 
@@ -283,17 +337,22 @@ void emit(vec2 p0, vec2 p1, vec4 color) {
 }
 
 void main() {
+    if (uNumLights == 0u) return;
+
     uint gid = gl_GlobalInvocationID.x;
     rng_state = gid * 1099087573u + uSeed;
     pcg_next(); pcg_next();
 
-    // Choose light (weighted)
+    // Choose light (weighted, binary search over cumulative weights)
     float total_w = light_cum_weights[uNumLights - 1u];
     float r = rand01() * total_w;
-    uint li = 0u;
-    for (uint i = 0u; i < uNumLights; i++) {
-        if (r <= light_cum_weights[i]) { li = i; break; }
+    uint lo = 0u, hi = uNumLights - 1u;
+    while (lo < hi) {
+        uint mid = (lo + hi) / 2u;
+        if (light_cum_weights[mid] < r) lo = mid + 1u;
+        else hi = mid;
     }
+    uint li = lo;
     GPULight lt = lights[li];
 
     // Generate ray
@@ -304,26 +363,43 @@ void main() {
         ro = lt.pos_a;
         rd = vec2(cos(a), sin(a));
     } else if (lt.type == 1u) {
-        // Segment light: random point, hemisphere
+        // Segment light: random point, full 360° emission
         float t = rand01();
         ro = mix(lt.pos_a, lt.pos_b, t);
-        vec2 seg_d = lt.pos_b - lt.pos_a;
-        vec2 normal = normalize(vec2(-seg_d.y, seg_d.x));
-        vec2 tangent = normalize(seg_d);
-        float a = (rand01() - 0.5) * PI;
-        rd = normal * cos(a) + tangent * sin(a);
-    } else {
+        float a = rand01() * 2.0 * PI;
+        rd = vec2(cos(a), sin(a));
+    } else if (lt.type == 2u) {
         // Beam light: origin + direction ± angular half-width
         ro = lt.pos_a;
-        float base_angle = atan(lt.pos_b.y, lt.pos_b.x);
-        float a = base_angle + (rand01() - 0.5) * 2.0 * lt.angular_width;
-        rd = vec2(cos(a), sin(a));
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.pos_b, spread);
+    } else if (lt.type == 3u) {
+        // Parallel segment beam: random point on segment, directed
+        float t = rand01();
+        ro = mix(lt.pos_a, lt.pos_b, t);
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.dir, spread);
+    } else {
+        // Spot light: point source with cosine-power angular falloff
+        ro = lt.pos_a;
+        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
+        rd = rotate_2d(lt.dir, spread);
     }
 
     // Random wavelength → color (per-light spectral range)
     float wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
     vec3 rgb = wavelength_rgb(wavelength);
-    vec4 color = vec4(rgb * uIntensity, uIntensity);
+    // Importance sampling correction: each sample carries energy proportional to
+    // total_w (sum of all light intensities).  This is the standard unbiased IS
+    // estimator f(x)/p(x) where f = w_i * base and p = w_i / W, giving W * base.
+    // Adding a light source ADDS energy — existing lights keep their brightness.
+    vec4 color = vec4(rgb * uIntensity * total_w, uIntensity * total_w);
+
+    // Spot light angular falloff (cosine-power attenuation)
+    if (lt.type == 4u && lt.falloff > 0.0) {
+        // dot(rd, lt.dir) = cos(spread) since both are unit vectors
+        color *= pow(max(dot(rd, lt.dir), 0.0), lt.falloff);
+    }
 
     // Trace
     float current_absorption = 0.0;
@@ -339,6 +415,12 @@ void main() {
         color *= exp(-current_absorption * h.t);
 
         emit(ro, h.point, color);
+
+        // Emissive surface: adds energy at the current wavelength
+        if (h.emission > 0.0) {
+            color += vec4(rgb * h.emission * uIntensity * total_w,
+                          h.emission * uIntensity * total_w);
+        }
 
         // ── Unified Principled BSDF ──
         {

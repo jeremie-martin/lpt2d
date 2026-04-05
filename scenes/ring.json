@@ -1,10 +1,36 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "ring",
+  "camera": {
+    "bounds": [
+      -1.0666666667,
+      -0.6,
+      1.0666666667,
+      0.6
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -5,
+    "gamma": 2,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays"
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "shapes": [
     {
       "type": "circle",
-      "center": [0.5, 0],
+      "center": [
+        0.5,
+        0
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -18,7 +44,10 @@
     },
     {
       "type": "circle",
-      "center": [0.35355338, 0.35355338],
+      "center": [
+        0.35355338,
+        0.35355338
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -32,7 +61,10 @@
     },
     {
       "type": "circle",
-      "center": [0, 0.5],
+      "center": [
+        0,
+        0.5
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -46,7 +78,10 @@
     },
     {
       "type": "circle",
-      "center": [-0.35355338, 0.35355338],
+      "center": [
+        -0.35355338,
+        0.35355338
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -60,7 +95,10 @@
     },
     {
       "type": "circle",
-      "center": [-0.5, 0],
+      "center": [
+        -0.5,
+        0
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -74,7 +112,10 @@
     },
     {
       "type": "circle",
-      "center": [-0.35355332, -0.35355344],
+      "center": [
+        -0.35355332,
+        -0.35355344
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -88,7 +129,10 @@
     },
     {
       "type": "circle",
-      "center": [0, -0.5],
+      "center": [
+        0,
+        -0.5
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -102,7 +146,10 @@
     },
     {
       "type": "circle",
-      "center": [0.3535535, -0.35355327],
+      "center": [
+        0.3535535,
+        -0.35355327
+      ],
       "radius": 0.1,
       "material": {
         "ior": 1.5,
@@ -116,11 +163,17 @@
     },
     {
       "type": "segment",
-      "a": [-1, -1],
-      "b": [1, -1],
+      "a": [
+        -1.0666666667,
+        -0.6
+      ],
+      "b": [
+        1.0666666667,
+        -0.6
+      ],
       "material": {
         "ior": 1,
-        "roughness": 0,
+        "roughness": 0.1,
         "metallic": 1,
         "transmission": 1,
         "absorption": 0,
@@ -130,11 +183,17 @@
     },
     {
       "type": "segment",
-      "a": [1, 1],
-      "b": [-1, 1],
+      "a": [
+        1.0666666667,
+        0.6
+      ],
+      "b": [
+        -1.0666666667,
+        0.6
+      ],
       "material": {
         "ior": 1,
-        "roughness": 0,
+        "roughness": 0.1,
         "metallic": 1,
         "transmission": 1,
         "absorption": 0,
@@ -144,11 +203,17 @@
     },
     {
       "type": "segment",
-      "a": [-1, 1],
-      "b": [-1, -1],
+      "a": [
+        -1.0666666667,
+        0.6
+      ],
+      "b": [
+        -1.0666666667,
+        -0.6
+      ],
       "material": {
         "ior": 1,
-        "roughness": 0,
+        "roughness": 0.1,
         "metallic": 1,
         "transmission": 1,
         "absorption": 0,
@@ -158,11 +223,17 @@
     },
     {
       "type": "segment",
-      "a": [1, -1],
-      "b": [1, 1],
+      "a": [
+        1.0666666667,
+        -0.6
+      ],
+      "b": [
+        1.0666666667,
+        0.6
+      ],
       "material": {
         "ior": 1,
-        "roughness": 0,
+        "roughness": 0.1,
         "metallic": 1,
         "transmission": 1,
         "absorption": 0,
@@ -174,7 +245,10 @@
   "lights": [
     {
       "type": "point",
-      "pos": [0, 0],
+      "pos": [
+        0,
+        0
+      ],
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780

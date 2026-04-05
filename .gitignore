@@ -4,6 +4,12 @@
 
 # Local caches
 /.cache/
+.venv/
+.egg-info/
+*.egg-info/
+.pytest_cache/
+.pyright/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 
@@ -13,6 +19,12 @@ __pycache__/
 *.mp4
 *.mkv
 *.webm
+/middle_frame.json
+/twin_prisms.json
+/renders/archive/
+/renders/clean_room/**/frame_*.json
+/renders/clean_room/**/tuning.json
+/renders/clean_room/library_audit_*.json
 
 # Local benchmark outputs
 /bench/baseline/

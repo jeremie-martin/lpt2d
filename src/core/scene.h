@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cmath>
+#include <cstdint>
+#include <map>
 #include <optional>
 #include <span>
 #include <string>
@@ -66,19 +68,57 @@ struct Material {
     float absorption = 0.0f;   // Beer-Lambert coefficient inside medium (per unit distance)
     float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
     float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
+    float emission = 0.0f;     // Emissive intensity (adds energy at hit wavelength)
+
+    bool operator==(const Material&) const = default;
 };
 
 // Convenience constructors
 inline Material mat_absorber() { return {.albedo = 0.0f}; }
 inline Material mat_diffuse(float reflectance) { return {.albedo = reflectance}; }
 inline Material mat_mirror(float reflectance, float roughness = 0.0f) {
-    // Beam splitter: reflects (reflectance), transmits the rest (ior=1 = no bending).
-    // metallic=1 makes reflectance flat (angle-independent).
+    // Beam splitter behavior: reflects (reflectance), transmits the rest.
+    // metallic=1 makes reflectance flat (angle-independent), ior=1 = no bending.
     return {.roughness = roughness, .metallic = 1.0f, .transmission = 1.0f, .albedo = reflectance};
+}
+inline Material mat_opaque_mirror(float reflectance, float roughness = 0.0f) {
+    // Opaque mirror: reflects (reflectance), absorbs the rest (no transmission).
+    return {.roughness = roughness, .metallic = 1.0f, .transmission = 0.0f, .albedo = reflectance};
 }
 inline Material mat_glass(float ior, float cauchy_b = 0.0f, float absorption = 0.0f) {
     return {.ior = ior, .transmission = 1.0f, .absorption = absorption, .cauchy_b = cauchy_b};
 }
+inline Material mat_emissive(float emission, Material base = {}) {
+    base.emission = emission;
+    return base;
+}
+
+// --- Transform ---
+
+struct Transform2D {
+    Vec2 translate{0, 0};
+    float rotate = 0;      // radians
+    Vec2 scale{1, 1};
+
+    // Apply transform to a point: scale → rotate → translate
+    Vec2 apply(Vec2 p) const {
+        p = {p.x * scale.x, p.y * scale.y};
+        float c = std::cos(rotate), s = std::sin(rotate);
+        p = {p.x * c - p.y * s, p.x * s + p.y * c};
+        return p + translate;
+    }
+
+    // Apply to a direction vector (no translate)
+    Vec2 apply_direction(Vec2 d) const {
+        d = {d.x * scale.x, d.y * scale.y};
+        float c = std::cos(rotate), s = std::sin(rotate);
+        return {d.x * c - d.y * s, d.x * s + d.y * c};
+    }
+
+    bool is_identity() const {
+        return translate.x == 0 && translate.y == 0 && rotate == 0 && scale.x == 1 && scale.y == 1;
+    }
+};
 
 // --- Geometry ---
 
@@ -96,8 +136,8 @@ struct Segment {
 struct Arc {
     Vec2 center;
     float radius;
-    float angle_start = 0.0f;                   // radians [0, 2π]
-    float angle_end = TWO_PI;  // radians [0, 2π]
+    float angle_start = 0.0f; // radians [0, 2π)
+    float sweep = TWO_PI;     // radians [0, 2π], CCW from angle_start
     Material material;
 };
 
@@ -106,7 +146,47 @@ struct Bezier {
     Material material;
 };
 
-using Shape = std::variant<Circle, Segment, Arc, Bezier>;
+inline Vec2 bezier_eval(const Bezier& b, float t) {
+    float u = 1.0f - t;
+    return b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
+}
+
+struct Polygon {
+    std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
+    Material material;
+
+    Vec2 centroid() const {
+        if (vertices.empty()) return {0, 0};
+        Vec2 c{0, 0};
+        for (auto& v : vertices) c = c + v;
+        return c * (1.0f / vertices.size());
+    }
+};
+
+inline float polygon_signed_area2(const Polygon& p) {
+    float area2 = 0.0f;
+    int n = (int)p.vertices.size();
+    for (int i = 0; i < n; ++i) {
+        const Vec2& a = p.vertices[i];
+        const Vec2& b = p.vertices[(i + 1) % n];
+        area2 += a.x * b.y - b.x * a.y;
+    }
+    return area2;
+}
+
+inline bool polygon_is_clockwise(const Polygon& p) {
+    return polygon_signed_area2(p) <= 0.0f;
+}
+
+struct Ellipse {
+    Vec2 center;
+    float semi_a;          // semi-axis length along rotated X
+    float semi_b;          // semi-axis length along rotated Y
+    float rotation = 0.0f; // radians, angle of semi_a axis from +X
+    Material material;
+};
+
+using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse>;
 
 // --- Lights ---
 
@@ -133,7 +213,35 @@ struct BeamLight {
     float wavelength_max = 780.0f;
 };
 
-using Light = std::variant<PointLight, SegmentLight, BeamLight>;
+struct ParallelBeamLight {
+    Vec2 a, b;                      // segment endpoints (emission aperture)
+    Vec2 direction{1.0f, 0.0f};     // normalized beam direction
+    float angular_width = 0.0f;     // full cone angle in radians (0 = perfectly collimated)
+    float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+};
+
+struct SpotLight {
+    Vec2 pos;
+    Vec2 direction{1.0f, 0.0f};     // normalized
+    float angular_width = 0.5f;     // full cone angle in radians
+    float falloff = 2.0f;           // cosine-power exponent (0=uniform, higher=sharper)
+    float intensity = 1.0f;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+};
+
+using Light = std::variant<PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight>;
+
+// --- Groups ---
+
+struct Group {
+    std::string name;
+    Transform2D transform;
+    std::vector<Shape> shapes;  // in local coordinates
+    std::vector<Light> lights;  // in local coordinates
+};
 
 // --- Ray tracing ---
 
@@ -151,9 +259,10 @@ struct Hit {
 // --- Scene ---
 
 struct Scene {
-    std::vector<Shape> shapes;
-    std::vector<Light> lights;
-    std::string name;
+    std::vector<Shape> shapes;   // ungrouped shapes (world coords)
+    std::vector<Light> lights;   // ungrouped lights (world coords)
+    std::vector<Group> groups;
+    std::map<std::string, Material> materials; // named material library
 };
 
 // Intersection testing
@@ -161,6 +270,8 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle);
 std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
 std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
+std::optional<Hit> intersect(const Ray& ray, const Polygon& poly);
+std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // Scene bounds (AABB with padding)
@@ -168,6 +279,23 @@ struct Bounds {
     Vec2 min, max;
 };
 Bounds compute_bounds(const Scene& scene, float padding = 0.05f);
+
+// Arc geometry helpers
+float normalize_angle(float angle);
+float clamp_arc_sweep(float sweep);
+float arc_end_angle(const Arc& arc);
+float arc_mid_angle(const Arc& arc);
+Vec2 arc_point(const Arc& arc, float angle);
+Vec2 arc_start_point(const Arc& arc);
+Vec2 arc_end_point(const Arc& arc);
+Vec2 arc_mid_point(const Arc& arc);
+bool angle_in_arc(float angle, const Arc& arc);
+Bounds arc_bounds(const Arc& arc);
+float point_arc_distance(Vec2 p, const Arc& arc);
+
+// Primitive bounds helpers
+Bounds shape_bounds(const Shape& s);
+Bounds light_bounds(const Light& l);
 
 // --- Rendering types ---
 
@@ -179,12 +307,88 @@ struct LineSegment {
 
 enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 
+inline std::optional<ToneMap> parse_tonemap(const std::string& s) {
+    if (s == "none") return ToneMap::None;
+    if (s == "reinhard") return ToneMap::Reinhard;
+    if (s == "reinhardx" || s == "reinhard_ext" || s == "reinhard_extended")
+        return ToneMap::ReinhardExtended;
+    if (s == "aces") return ToneMap::ACES;
+    if (s == "log") return ToneMap::Logarithmic;
+    return std::nullopt;
+}
+
+enum class NormalizeMode : int {
+    Max = 0,   // per-frame max pixel (or percentile)
+    Rays = 1,  // total accumulated rays — stable across ray counts (default)
+    Fixed = 2, // user-specified divisor (normalize_ref)
+    Off = 3,   // no normalization (divisor = 1.0)
+};
+
+inline std::optional<NormalizeMode> parse_normalize_mode(const std::string& s) {
+    if (s == "max") return NormalizeMode::Max;
+    if (s == "rays") return NormalizeMode::Rays;
+    if (s == "fixed") return NormalizeMode::Fixed;
+    if (s == "off") return NormalizeMode::Off;
+    return std::nullopt;
+}
+
+struct TraceConfig {
+    int batch_size = 200000;
+    int max_depth = 12;
+    float intensity = 1.0f;
+};
+
 struct PostProcess {
-    float exposure = 2.0f;   // stops (brighter default)
-    float contrast = 1.0f;   // centered at 0.5
-    float gamma = 2.2f;      // sRGB
-    ToneMap tone_map = ToneMap::ACES;
-    float white_point = 1.0f;
+    float exposure = -5.0f;
+    float contrast = 1.0f;
+    float gamma = 2.0f;
+    ToneMap tone_map = ToneMap::ReinhardExtended;
+    float white_point = 0.5f;
+    NormalizeMode normalize = NormalizeMode::Rays;
+    float normalize_ref = 0.0f; // divisor for Fixed mode
+    float normalize_pct = 1.0f; // percentile for Max mode (1.0=max, 0.99=P99)
+    float ambient = 0.0f;       // constant fill light (added after exposure, before tonemap)
+    float background[3] = {0, 0, 0}; // background color (linear RGB, applied to unlit pixels)
+    float opacity = 1.0f;       // global opacity (applied after tonemap, for fade-to-black)
+};
+
+// --- Shot: the authored document ---
+
+struct Camera2D {
+    std::optional<Bounds> bounds;   // explicit [xmin, ymin, xmax, ymax]
+    std::optional<Vec2> center;     // center point (requires width)
+    std::optional<float> width;     // world width (height derived from aspect)
+
+    // Resolve to concrete bounds. Uses fallback (e.g. scene bounds) if unset.
+    Bounds resolve(float aspect, const Bounds& fallback) const;
+    bool empty() const { return !bounds && !center && !width; }
+};
+
+struct Canvas {
+    int width = 1920;
+    int height = 1080;
+    float aspect() const { return (float)width / height; }
+};
+
+// Look is the authored name for post-process settings. Same type — no conversion needed.
+using Look = PostProcess;
+
+struct TraceDefaults {
+    int64_t rays = 10'000'000;
+    int batch = 200'000;
+    int depth = 12;
+    float intensity = 1.0f;
+
+    TraceConfig to_trace_config() const;
+};
+
+struct Shot {
+    Scene scene;
+    Camera2D camera;
+    Canvas canvas;
+    Look look;
+    TraceDefaults trace;
+    std::string name;
 };
 
 // --- Utilities ---
@@ -200,3 +404,15 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
 
 // Add four axis-aligned walls forming a box
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);
+
+// Transform a shape/light from local to world coordinates using a Transform2D
+Shape transform_shape(const Shape& s, const Transform2D& t);
+Light transform_light(const Light& l, const Transform2D& t);
+
+// Perimeter (arc length) of a shape — used for emission light intensity scaling
+float shape_perimeter(const Shape& s);
+
+// Generate lights that approximate emission from an emissive shape.
+// Returns empty vector if the shape's material has no emission.
+// Distributes point lights along the shape's surface for physically correct surface glow.
+std::vector<Light> emission_light(const Shape& s);

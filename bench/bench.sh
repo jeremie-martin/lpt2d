@@ -77,9 +77,9 @@ print('SCENE_COUNT=' + str(len(names)))
 
 # Build per-scene config arrays (with overrides)
 declare -A SCENE_WIDTH SCENE_HEIGHT SCENE_RAYS SCENE_BATCH SCENE_DEPTH
-declare -A SCENE_EXPOSURE SCENE_CONTRAST SCENE_GAMMA SCENE_TONEMAP
+declare -A SCENE_EXPOSURE SCENE_CONTRAST SCENE_GAMMA SCENE_TONEMAP SCENE_WHITE_POINT
 
-while IFS=$'\t' read -r name width height rays batch depth exposure contrast gamma tonemap; do
+while IFS=$'\t' read -r name width height rays batch depth exposure contrast gamma tonemap white_point; do
     SCENE_WIDTH[$name]=$width
     SCENE_HEIGHT[$name]=$height
     SCENE_RAYS[$name]=$rays
@@ -89,6 +89,7 @@ while IFS=$'\t' read -r name width height rays batch depth exposure contrast gam
     SCENE_CONTRAST[$name]=$contrast
     SCENE_GAMMA[$name]=$gamma
     SCENE_TONEMAP[$name]=$tonemap
+    SCENE_WHITE_POINT[$name]=$white_point
 done < <(python3 -c "
 import json
 m = json.load(open('$MANIFEST'))
@@ -96,7 +97,8 @@ d = m['defaults']
 for s in m['scenes']:
     mg = {**d, **s}
     print(mg['name'], mg['width'], mg['height'], mg['rays'], mg['batch'],
-          mg['depth'], mg['exposure'], mg['contrast'], mg['gamma'], mg['tonemap'],
+          mg['depth'], mg['exposure'], mg['contrast'], mg['gamma'],
+          mg['tonemap'], mg.get('white_point', 0.5),
           sep='\t')
 " 2>/dev/null)
 
@@ -115,6 +117,7 @@ render_scene() {
         --contrast "${SCENE_CONTRAST[$name]}" \
         --gamma "${SCENE_GAMMA[$name]}" \
         --tonemap "${SCENE_TONEMAP[$name]}" \
+        --white-point "${SCENE_WHITE_POINT[$name]}" \
         --output "$output" \
         2>/dev/null
 }

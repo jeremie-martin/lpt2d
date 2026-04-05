@@ -1,56 +1,156 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "bench_mixed_materials",
+  "camera": {
+    "bounds": [
+      -1.0,
+      -0.6,
+      1.0,
+      0.6
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "shapes": [
     {
       "type": "circle",
-      "center": [-0.4, 0.1],
+      "center": [
+        -0.4,
+        0.1
+      ],
       "radius": 0.2,
-      "material": {"ior": 1.5, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.3, "cauchy_b": 20000, "albedo": 1}
+      "material": {
+        "ior": 1.5,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.3,
+        "cauchy_b": 20000,
+        "albedo": 1
+      }
     },
     {
       "type": "circle",
-      "center": [0.15, 0.15],
+      "center": [
+        0.15,
+        0.15
+      ],
       "radius": 0.18,
-      "material": {"ior": 1, "roughness": 0.5, "metallic": 1, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0.7}
+      "material": {
+        "ior": 1,
+        "roughness": 0.5,
+        "metallic": 1,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.7
+      }
     },
     {
       "type": "circle",
-      "center": [0.5, -0.2],
+      "center": [
+        0.5,
+        -0.2
+      ],
       "radius": 0.15,
-      "material": {"ior": 1, "roughness": 1.0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0.6}
+      "material": {
+        "ior": 1,
+        "roughness": 1.0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.6
+      }
     },
     {
       "type": "segment",
-      "a": [-0.9, -0.5],
-      "b": [0.9, -0.5],
-      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.9}
+      "a": [
+        -0.9,
+        -0.5
+      ],
+      "b": [
+        0.9,
+        -0.5
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.9
+      }
     },
     {
       "type": "segment",
-      "a": [-0.9, -0.5],
-      "b": [-0.9, 0.5],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        -0.9,
+        -0.5
+      ],
+      "b": [
+        -0.9,
+        0.5
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [0.9, 0.5],
-      "b": [0.9, -0.5],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        0.9,
+        0.5
+      ],
+      "b": [
+        0.9,
+        -0.5
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     }
   ],
   "lights": [
     {
       "type": "point",
-      "pos": [-0.6, 0.4],
+      "pos": [
+        -0.6,
+        0.4
+      ],
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780
     },
     {
       "type": "segment",
-      "a": [-0.3, 0.5],
-      "b": [0.3, 0.5],
+      "a": [
+        -0.3,
+        0.5
+      ],
+      "b": [
+        0.3,
+        0.5
+      ],
       "intensity": 0.7,
       "wavelength_min": 380,
       "wavelength_max": 780

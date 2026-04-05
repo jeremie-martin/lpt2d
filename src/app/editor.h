@@ -6,14 +6,16 @@
 
 #include <algorithm>
 #include <deque>
+#include <set>
 #include <string>
 #include <vector>
 
 // ─── Object identification ─────────────────────────────────────────────
 
 struct ObjectId {
-    enum Type { Shape, Light } type;
+    enum Type { Shape, Light, Group } type;
     int index;
+    int group = -1; // -1 = top-level, >= 0 = member of scene.groups[group]
     bool operator==(const ObjectId&) const = default;
 };
 
@@ -119,27 +121,34 @@ struct Handle {
 struct Clipboard {
     std::vector<Shape> shapes;
     std::vector<Light> lights;
+    std::vector<Group> groups;
     Vec2 centroid{};
-    bool empty() const { return shapes.empty() && lights.empty(); }
+    bool empty() const { return shapes.empty() && lights.empty() && groups.empty(); }
 };
 
 // ─── Editor tools ──────────────────────────────────────────────────────
 
-enum class EditTool { Select, Circle, Segment, Arc, Bezier, PointLight, SegmentLight, BeamLight, Erase };
+enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, Ellipse, PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight, Erase, Measure };
+
+// Camera handle identifiers for interactive frame editing
+enum class CameraHandle : int {
+    None, TopLeft, Top, TopRight, Right, BottomRight, Bottom, BottomLeft, Left, Move
+};
 
 // ─── Editor state ──────────────────────────────────────────────────────
 
 struct EditorState {
-    // Scene
-    Scene scene;
-    Bounds scene_bounds{{-1, -1}, {1, 1}};
+    // Authored document
+    Shot shot;
+    Bounds scene_bounds{{-1, -1}, {1, 1}}; // cached, updated on reload
 
-    // Camera
+    // Camera (editor viewport, not authored camera)
     Camera camera;
 
     // Selection
     std::vector<ObjectId> selection;
     ObjectId hovered{ObjectId::Shape, -1};
+    int editing_group = -1; // -1 = normal mode, >= 0 = editing inside group[i]
 
     // Tool
     EditTool tool = EditTool::Select;
@@ -171,9 +180,57 @@ struct EditorState {
     // Property editing state (for undo grouping)
     bool prop_editing = false;
 
+    // Camera frame overlay
+    CameraHandle cam_handle_hovered = CameraHandle::None;
+    CameraHandle cam_handle_dragging = CameraHandle::None;
+    Bounds cam_drag_start_bounds{};
+    bool show_camera_frame = true;
+    bool dim_outside_camera = true;
+
     // Dirty flag (unsaved changes)
     bool dirty = false;
     std::string save_path;
+
+    // Visibility (editor-only, not serialized, not undo-tracked)
+    std::set<int> hidden_shapes;
+    std::set<int> hidden_lights;
+    std::set<int> hidden_groups;
+    int solo_light = -1; // -1 = off, >= 0 = only this top-level light rendered
+    int solo_light_group = -1; // -1 = not soloing a group light; >= 0 = group index
+    int solo_light_index = -1; // light index within the group (-1 = off)
+
+    // Grid
+    bool show_grid = false;
+    bool snap_to_grid = false;
+
+    // Measurement tool
+    bool measure_active = false;
+    Vec2 measure_start{};
+
+    // ── Visibility helpers ─────────────────────────────────────────
+
+    bool is_shape_visible(int i) const { return hidden_shapes.find(i) == hidden_shapes.end(); }
+    bool is_light_visible(int i) const { return hidden_lights.find(i) == hidden_lights.end(); }
+    bool is_group_visible(int i) const { return hidden_groups.find(i) == hidden_groups.end(); }
+
+    void toggle_shape_visibility(int i) {
+        if (hidden_shapes.count(i)) hidden_shapes.erase(i); else hidden_shapes.insert(i);
+    }
+    void toggle_light_visibility(int i) {
+        if (hidden_lights.count(i)) hidden_lights.erase(i); else hidden_lights.insert(i);
+    }
+    void toggle_group_visibility(int i) {
+        if (hidden_groups.count(i)) hidden_groups.erase(i); else hidden_groups.insert(i);
+    }
+    void clear_solo() {
+        solo_light = -1;
+        solo_light_group = -1;
+        solo_light_index = -1;
+    }
+    void show_all() {
+        hidden_shapes.clear(); hidden_lights.clear(); hidden_groups.clear();
+        clear_solo();
+    }
 
     // ── Selection helpers ───────────────────────────────────────────
 
@@ -198,10 +255,12 @@ struct EditorState {
 
     void select_all() {
         selection.clear();
-        for (int i = 0; i < (int)scene.shapes.size(); ++i)
+        for (int i = 0; i < (int)shot.scene.shapes.size(); ++i)
             selection.push_back({ObjectId::Shape, i});
-        for (int i = 0; i < (int)scene.lights.size(); ++i)
+        for (int i = 0; i < (int)shot.scene.lights.size(); ++i)
             selection.push_back({ObjectId::Light, i});
+        for (int i = 0; i < (int)shot.scene.groups.size(); ++i)
+            selection.push_back({ObjectId::Group, i});
     }
 
     // Centroid of selected objects (for transform pivot)
@@ -212,22 +271,55 @@ struct EditorState {
 
     // Validate selection indices after scene changes
     void validate_selection() {
+        const auto& sc = shot.scene;
         selection.erase(
             std::remove_if(selection.begin(), selection.end(), [&](const ObjectId& id) {
-                if (id.type == ObjectId::Shape) return id.index >= (int)scene.shapes.size();
-                return id.index >= (int)scene.lights.size();
+                if (id.group >= 0) {
+                    // Group member: validate group exists and member index is in range
+                    if (id.group >= (int)sc.groups.size()) return true;
+                    const auto& g = sc.groups[id.group];
+                    if (id.type == ObjectId::Shape) return id.index >= (int)g.shapes.size();
+                    if (id.type == ObjectId::Light) return id.index >= (int)g.lights.size();
+                    return true;
+                }
+                if (id.type == ObjectId::Shape) return id.index >= (int)sc.shapes.size();
+                if (id.type == ObjectId::Light) return id.index >= (int)sc.lights.size();
+                if (id.type == ObjectId::Group) return id.index >= (int)sc.groups.size();
+                return true;
             }),
             selection.end());
+        // Validate editing_group
+        if (editing_group >= (int)sc.groups.size()) {
+            editing_group = -1;
+        }
+        // Prune stale visibility indices
+        std::erase_if(hidden_shapes, [&](int i) { return i >= (int)sc.shapes.size(); });
+        std::erase_if(hidden_lights, [&](int i) { return i >= (int)sc.lights.size(); });
+        std::erase_if(hidden_groups, [&](int i) { return i >= (int)sc.groups.size(); });
+        if (solo_light >= (int)sc.lights.size()) solo_light = -1;
+        if (solo_light_group >= (int)sc.groups.size() ||
+            (solo_light_group >= 0 && solo_light_index >= (int)sc.groups[solo_light_group].lights.size())) {
+            solo_light_group = -1;
+            solo_light_index = -1;
+        }
     }
 };
 
 // ─── Hit testing ───────────────────────────────────────────────────────
 
-// Returns ObjectId with index=-1 if nothing hit
-ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold);
+// Returns ObjectId with index=-1 if nothing hit.
+// When editing_group >= 0, only tests members of that group (returns group-scoped ObjectIds).
+ObjectId hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group = -1);
 
 // Test if an object's geometry intersects a world-space rectangle
 bool object_in_rect(const Scene& scene, ObjectId id, Vec2 rect_min, Vec2 rect_max);
+
+// Resolve top-level or group-member objects from an ObjectId.
+Shape* resolve_shape(Scene& scene, ObjectId id);
+const Shape* resolve_shape(const Scene& scene, ObjectId id);
+Light* resolve_light(Scene& scene, ObjectId id);
+const Light* resolve_light(const Scene& scene, ObjectId id);
+std::optional<Bounds> object_bounds(const Scene& scene, ObjectId id);
 
 // ─── Transform application ─────────────────────────────────────────────
 
@@ -249,3 +341,13 @@ int handle_hit_test(const std::vector<Handle>& handles, Vec2 wp, float threshold
 
 // Apply a handle drag — modifies the specific object parameter
 void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 new_world_pos);
+
+// Apply grab/rotate/scale to a group's transform (from snapshot → live scene)
+void apply_transform_group(Group& dst, const Group& src, const TransformMode& tm, Vec2 mouse_world, bool shift_held = false);
+
+// Translate a group by a delta (modifies transform.translate)
+void translate_group(Group& g, Vec2 delta);
+
+// Find which group (if any) contains the given world-space point
+// Returns group index or -1
+int hit_test_groups(Vec2 wp, const Scene& scene, float threshold);

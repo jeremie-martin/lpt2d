@@ -27,11 +27,11 @@ const std::vector<BuiltinScene>& get_builtin_scenes() {
     return list;
 }
 
-Scene load_builtin_scene(const BuiltinScene& entry) {
-    return load_scene_json(entry.path);
+Shot load_builtin_scene(const BuiltinScene& entry) {
+    return load_shot_json(entry.path);
 }
 
-std::optional<Scene> find_builtin_scene(const std::string& name) {
+std::optional<Shot> find_builtin_scene(const std::string& name) {
     for (auto& entry : get_builtin_scenes()) {
         if (entry.name == name)
             return load_builtin_scene(entry);

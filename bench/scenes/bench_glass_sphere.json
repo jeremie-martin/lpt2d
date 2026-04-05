@@ -1,10 +1,29 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "bench_glass_sphere",
+  "camera": {
+    "bounds": [
+      -1.3,
+      -0.9,
+      1.3,
+      0.9
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "shapes": [
     {
       "type": "circle",
-      "center": [0.1, 0],
+      "center": [
+        0.1,
+        0
+      ],
       "radius": 0.25,
       "material": {
         "ior": 1.5,
@@ -18,33 +37,92 @@
     },
     {
       "type": "segment",
-      "a": [-1.2, -0.8],
-      "b": [1.2, -0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        -1.2,
+        -0.8
+      ],
+      "b": [
+        1.2,
+        -0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [1.2, 0.8],
-      "b": [-1.2, 0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        1.2,
+        0.8
+      ],
+      "b": [
+        -1.2,
+        0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [-1.2, 0.8],
-      "b": [-1.2, -0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        -1.2,
+        0.8
+      ],
+      "b": [
+        -1.2,
+        -0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [1.2, -0.8],
-      "b": [1.2, 0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        1.2,
+        -0.8
+      ],
+      "b": [
+        1.2,
+        0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     }
   ],
   "lights": [
     {
       "type": "point",
-      "pos": [-0.7, 0.3],
+      "pos": [
+        -0.7,
+        0.3
+      ],
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780

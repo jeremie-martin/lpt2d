@@ -73,7 +73,8 @@ struct GPUCircle {
     float radius;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad[2]; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+    float emission;
+    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
 };
 static_assert(sizeof(GPUCircle) == 48);
 
@@ -82,31 +83,32 @@ struct GPUSegment {
     float b[2];
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 static_assert(sizeof(GPUSegment) == 48);
 
 struct GPULight {
-    uint32_t type; // 0=point, 1=segment, 2=beam
+    uint32_t type; // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
     float intensity;
     float pos_a[2];
     float pos_b[2];
-    float angular_width;  // beam only (half-angle radians), 0 for others
+    float dir[2];         // direction for parallel_beam (3) and spot (4)
+    float angular_width;  // half-angle radians (converted at upload), 0 for point/segment
+    float falloff;        // spot cosine-power exponent, 0 for non-spot types
     float wavelength_min; // nm, default 380
     float wavelength_max; // nm, default 780
-    float _pad;
 };
-static_assert(sizeof(GPULight) == 40);
+static_assert(sizeof(GPULight) == 48);
 
 struct GPUArc {
     float center[2];
     float radius;
     float angle_start;
-    float angle_end;
+    float sweep;
     float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad1;
+    float emission;
 };
 static_assert(sizeof(GPUArc) == 56);
 
@@ -116,17 +118,28 @@ struct GPUBezier {
     float p2[2];
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
-    float _pad;
+    float emission;
 };
 static_assert(sizeof(GPUBezier) == 56);
+
+struct GPUEllipse {
+    float center[2];
+    float semi_a, semi_b;
+    float rotation;
+    float _pad;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo, emission;
+};
+static_assert(sizeof(GPUEllipse) == 56);
 
 // ─── Renderer implementation ─────────────────────────────────────────
 
 Renderer::~Renderer() { shutdown(); }
 
-bool Renderer::init(int width, int height) {
+bool Renderer::init(int width, int height, bool half_float) {
     width_ = width;
     height_ = height;
+    half_precision_ = half_float;
 
     glewExperimental = GL_TRUE;
     if (glewContextInit() != GLEW_OK) {
@@ -196,6 +209,7 @@ void Renderer::shutdown() {
     del_buf(segment_ssbo_);
     del_buf(arc_ssbo_);
     del_buf(bezier_ssbo_);
+    del_buf(ellipse_ssbo_);
     del_buf(light_ssbo_);
     del_buf(light_weights_ssbo_);
     del_buf(output_ssbo_);
@@ -218,7 +232,8 @@ bool Renderer::create_framebuffers() {
     // Float accumulation texture
     glGenTextures(1, &float_texture_);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, half_precision_ ? GL_RGBA16F : GL_RGBA32F,
+                 width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -272,6 +287,7 @@ bool Renderer::create_trace_shader() {
     trace_loc_num_segments_ = glGetUniformLocation(trace_program_, "uNumSegments");
     trace_loc_num_arcs_ = glGetUniformLocation(trace_program_, "uNumArcs");
     trace_loc_num_beziers_ = glGetUniformLocation(trace_program_, "uNumBeziers");
+    trace_loc_num_ellipses_ = glGetUniformLocation(trace_program_, "uNumEllipses");
     trace_loc_num_lights_ = glGetUniformLocation(trace_program_, "uNumLights");
     trace_loc_max_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
@@ -308,6 +324,9 @@ bool Renderer::create_pp_shader() {
     loc_tone_map_ = glGetUniformLocation(pp_program_, "uToneMapOp");
     loc_white_point_ = glGetUniformLocation(pp_program_, "uWhitePoint");
     loc_float_tex_ = glGetUniformLocation(pp_program_, "uFloatTexture");
+    loc_ambient_ = glGetUniformLocation(pp_program_, "uAmbient");
+    loc_background_ = glGetUniformLocation(pp_program_, "uBackground");
+    loc_opacity_ = glGetUniformLocation(pp_program_, "uOpacity");
     return true;
 }
 
@@ -346,7 +365,7 @@ void Renderer::create_wavelength_lut() {
     glBindTexture(GL_TEXTURE_1D, 0);
 }
 
-float Renderer::compute_max_gpu() {
+float Renderer::compute_max_gpu(float percentile) {
     // CPU readback via glReadPixels — the only reliable path on NVIDIA EGL.
     // texelFetch and glGetTexImage return stale/zero data after many
     // additive-blend draw operations (documented NVIDIA driver quirk).
@@ -356,13 +375,34 @@ float Renderer::compute_max_gpu() {
     glReadPixels(0, 0, width_, height_, GL_RGBA, GL_FLOAT, buf.data());
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    // Always compute the true max (for last_max_ / metadata).
     float max_val = 0.0f;
     for (size_t i = 0; i < buf.size(); i += 4) {
         max_val = std::max(max_val, buf[i]);
         max_val = std::max(max_val, buf[i + 1]);
         max_val = std::max(max_val, buf[i + 2]);
     }
-    return max_val;
+    last_max_ = max_val;
+
+    if (percentile >= 1.0f)
+        return max_val;
+
+    // Percentile path: collect per-pixel RGB max (non-zero only),
+    // use nth_element (O(n) average).
+    std::vector<float> lum;
+    lum.reserve(width_ * height_);
+    for (size_t i = 0; i < buf.size(); i += 4) {
+        float v = std::max({buf[i], buf[i + 1], buf[i + 2]});
+        if (v > 0.0f) lum.push_back(v);
+    }
+    if (lum.empty()) return 0.0f;
+    size_t idx = std::min((size_t)(percentile * (double)(lum.size() - 1)), lum.size() - 1);
+    std::nth_element(lum.begin(), lum.begin() + (ptrdiff_t)idx, lum.end());
+    return lum[idx];
+}
+
+float Renderer::compute_current_max() {
+    return compute_max_gpu(1.0f);
 }
 
 void Renderer::clear() {
@@ -371,6 +411,7 @@ void Renderer::clear() {
     glClear(GL_COLOR_BUFFER_BIT);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     batch_counter_ = 0;
+    total_rays_ = 0;
 }
 
 // ─── Scene upload ────────────────────────────────────────────────────
@@ -381,6 +422,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<GPUSegment> segs;
     std::vector<GPUArc> gpu_arcs;
     std::vector<GPUBezier> gpu_beziers;
+    std::vector<GPUEllipse> gpu_ellipses;
 
     auto fill_material = [](auto& gpu, const Material& mat) {
         gpu.ior = mat.ior;
@@ -390,9 +432,16 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         gpu.absorption = mat.absorption;
         gpu.cauchy_b = mat.cauchy_b;
         gpu.albedo = mat.albedo;
+        gpu.emission = mat.emission;
     };
 
-    for (const auto& shape : scene.shapes) {
+    // Collect all world-space shapes (ungrouped + transformed group shapes)
+    std::vector<Shape> all_shapes(scene.shapes.begin(), scene.shapes.end());
+    for (const auto& group : scene.groups)
+        for (const auto& shape : group.shapes)
+            all_shapes.push_back(transform_shape(shape, group.transform));
+
+    for (const auto& shape : all_shapes) {
         std::visit(overloaded{
             [&](const Circle& c) {
                 GPUCircle gc{};
@@ -414,7 +463,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.center[0] = a.center.x; ga.center[1] = a.center.y;
                 ga.radius = a.radius;
                 ga.angle_start = a.angle_start;
-                ga.angle_end = a.angle_end;
+                ga.sweep = a.sweep;
                 fill_material(ga, a.material);
                 gpu_arcs.push_back(ga);
             },
@@ -426,15 +475,50 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 fill_material(gb, b.material);
                 gpu_beziers.push_back(gb);
             },
+            [&](const Polygon& p) {
+                int n = (int)p.vertices.size();
+                if (n < 2) return;
+                bool clockwise = polygon_is_clockwise(p);
+                for (int i = 0; i < n; ++i) {
+                    Vec2 a = p.vertices[i];
+                    Vec2 b = p.vertices[(i + 1) % n];
+                    GPUSegment gs{};
+                    Vec2 edge_a = clockwise ? a : b;
+                    Vec2 edge_b = clockwise ? b : a;
+                    gs.a[0] = edge_a.x; gs.a[1] = edge_a.y;
+                    gs.b[0] = edge_b.x; gs.b[1] = edge_b.y;
+                    fill_material(gs, p.material);
+                    segs.push_back(gs);
+                }
+            },
+            [&](const Ellipse& e) {
+                GPUEllipse ge{};
+                ge.center[0] = e.center.x; ge.center[1] = e.center.y;
+                ge.semi_a = e.semi_a;
+                ge.semi_b = e.semi_b;
+                ge.rotation = e.rotation;
+                fill_material(ge, e.material);
+                gpu_ellipses.push_back(ge);
+            },
         }, shape);
     }
 
-    // Flatten lights
+    // Collect all world-space lights (ungrouped + transformed group lights)
+    std::vector<Light> all_lights(scene.lights.begin(), scene.lights.end());
+    for (const auto& group : scene.groups)
+        for (const auto& light : group.lights)
+            all_lights.push_back(transform_light(light, group.transform));
+
+    for (const auto& shape : all_shapes) {
+        auto el = emission_light(shape);
+        all_lights.insert(all_lights.end(), el.begin(), el.end());
+    }
+
     std::vector<GPULight> gpu_lights;
     std::vector<float> cum_weights;
     float total = 0.0f;
 
-    for (const auto& light : scene.lights) {
+    for (const auto& light : all_lights) {
         GPULight gl{};
         std::visit(overloaded{
             [&](const PointLight& l) {
@@ -462,6 +546,28 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
             },
+            [&](const ParallelBeamLight& l) {
+                gl.type = 3;
+                gl.intensity = l.intensity;
+                gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
+                gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
+                Vec2 d = l.direction.normalized();
+                gl.dir[0] = d.x; gl.dir[1] = d.y;
+                gl.angular_width = l.angular_width * 0.5f; // store half-angle
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
+            },
+            [&](const SpotLight& l) {
+                gl.type = 4;
+                gl.intensity = l.intensity;
+                gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
+                Vec2 d = l.direction.normalized();
+                gl.dir[0] = d.x; gl.dir[1] = d.y;
+                gl.angular_width = l.angular_width * 0.5f; // store half-angle
+                gl.falloff = l.falloff;
+                gl.wavelength_min = l.wavelength_min;
+                gl.wavelength_max = l.wavelength_max;
+            },
         }, light);
         total += gl.intensity;
         cum_weights.push_back(total);
@@ -472,6 +578,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     num_segments_ = (int)segs.size();
     num_arcs_ = (int)gpu_arcs.size();
     num_beziers_ = (int)gpu_beziers.size();
+    num_ellipses_ = (int)gpu_ellipses.size();
     num_lights_ = (int)gpu_lights.size();
 
     // Upload SSBOs
@@ -486,6 +593,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     upload(segment_ssbo_, segs.data(), segs.size() * sizeof(GPUSegment));
     upload(arc_ssbo_, gpu_arcs.data(), gpu_arcs.size() * sizeof(GPUArc));
     upload(bezier_ssbo_, gpu_beziers.data(), gpu_beziers.size() * sizeof(GPUBezier));
+    upload(ellipse_ssbo_, gpu_ellipses.data(), gpu_ellipses.size() * sizeof(GPUEllipse));
     upload(light_ssbo_, gpu_lights.data(), gpu_lights.size() * sizeof(GPULight));
     upload(light_weights_ssbo_, cum_weights.data(), cum_weights.size() * sizeof(float));
 
@@ -496,6 +604,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     glUniform1ui(trace_loc_num_segments_, num_segments_);
     glUniform1ui(trace_loc_num_arcs_, num_arcs_);
     glUniform1ui(trace_loc_num_beziers_, num_beziers_);
+    glUniform1ui(trace_loc_num_ellipses_, num_ellipses_);
     glUniform1ui(trace_loc_num_lights_, num_lights_);
 }
 
@@ -570,6 +679,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, light_weights_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, arc_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ellipse_ssbo_);
 
     GLuint groups = (cfg.batch_size + 63) / 64;
 
@@ -580,6 +690,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
         batch_counter_++;
     }
+    total_rays_ += (int64_t)cfg.batch_size * num_dispatches;
 
     // Final barrier before draw (need command barrier for indirect draw)
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
@@ -606,10 +717,39 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
 void Renderer::update_display(const PostProcess& pp) {
-    float divisor = compute_max_gpu();
-    if (divisor < 1e-6f)
-        divisor = 1.0f;
-    last_max_ = divisor;
+    // Only do the expensive glReadPixels + CPU scan when Max normalization
+    // actually needs it.  Other modes compute their divisor without GPU readback.
+    // compute_current_max() is still available on demand (e.g. GUI "Capture Ref").
+    // Resolution-independence correction
+    //
+    // Line segments are rasterized with a fixed pixel-space width (1.5 px).
+    // This means per-pixel accumulated energy scales as  N / viewport_scale
+    // (more pixels → each pixel captures a narrower world-space cross-section
+    // of the light field).  Modes that use an external divisor (Rays, Fixed,
+    // Off) must compensate by dividing the divisor by viewport_scale so that
+    // the displayed brightness is independent of canvas resolution and camera
+    // zoom.  Max mode is already self-normalizing (both numerator and
+    // denominator carry the same 1/scale factor, which cancels).
+    float scale = (viewport_scale_ > 0.0f) ? viewport_scale_ : 1.0f;
+
+    float divisor;
+    switch (pp.normalize) {
+    case NormalizeMode::Max: {
+        float pct_val = compute_max_gpu(pp.normalize_pct);
+        divisor = (pct_val < 1e-6f) ? 1.0f : pct_val;
+        break;
+    }
+    case NormalizeMode::Rays:
+        divisor = (total_rays_ > 0) ? (float)total_rays_ / scale : 1.0f;
+        break;
+    case NormalizeMode::Fixed:
+        divisor = (pp.normalize_ref > 0.0f) ? pp.normalize_ref / scale : 1.0f;
+        break;
+    case NormalizeMode::Off:
+    default:
+        divisor = 1.0f / scale;
+        break;
+    }
 
     float exposure_mult = std::pow(2.0f, pp.exposure);
     float inv_gamma = 1.0f / pp.gamma;
@@ -625,6 +765,9 @@ void Renderer::update_display(const PostProcess& pp) {
     glUniform1f(loc_inv_gamma_, inv_gamma);
     glUniform1i(loc_tone_map_, (int)pp.tone_map);
     glUniform1f(loc_white_point_, pp.white_point);
+    glUniform1f(loc_ambient_, pp.ambient);
+    glUniform3f(loc_background_, pp.background[0], pp.background[1], pp.background[2]);
+    glUniform1f(loc_opacity_, pp.opacity);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
@@ -640,13 +783,73 @@ void Renderer::update_display(const PostProcess& pp) {
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp) {
     update_display(pp);
 
-    glBindTexture(GL_TEXTURE_2D, display_texture_);
-    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
+    // Use glReadPixels via the display FBO — glGetTexImage returns stale data
+    // on NVIDIA EGL after many additive-blend draw operations.
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
+    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     out_rgb.resize(width_ * height_ * 3);
-    for (int i = 0; i < width_ * height_; ++i) {
-        out_rgb[i * 3 + 0] = rgba_buffer_[i * 4 + 0];
-        out_rgb[i * 3 + 1] = rgba_buffer_[i * 4 + 1];
-        out_rgb[i * 3 + 2] = rgba_buffer_[i * 4 + 2];
+    // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
+    // match the world-space orientation seen in the interactive viewport.
+    for (int y = 0; y < height_; ++y) {
+        int src_y = height_ - 1 - y;
+        const uint8_t* src = rgba_buffer_.data() + (size_t)src_y * width_ * 4;
+        uint8_t* dst = out_rgb.data() + (size_t)y * width_ * 3;
+        for (int x = 0; x < width_; ++x) {
+            dst[x * 3 + 0] = src[x * 4 + 0];
+            dst[x * 3 + 1] = src[x * 4 + 1];
+            dst[x * 3 + 2] = src[x * 4 + 2];
+        }
     }
+}
+
+FrameMetrics Renderer::compute_frame_metrics() const {
+    // Single pass over rgba_buffer_ (already populated by read_pixels).
+    // BT.709 luminance weights matching Python frame_stats(): 218/732/74 >> 10
+    const size_t n_pixels = (size_t)width_ * height_;
+    if (n_pixels == 0) return {0, 1, 0, 0, 0};
+
+    int histogram[256] = {};
+    size_t clipped = 0;
+
+    for (size_t i = 0; i < n_pixels; ++i) {
+        size_t off = i * 4; // RGBA8
+        uint8_t r = rgba_buffer_[off];
+        uint8_t g = rgba_buffer_[off + 1];
+        uint8_t b = rgba_buffer_[off + 2];
+
+        uint32_t lum = (218u * r + 732u * g + 74u * b) >> 10;
+        if (lum > 255) lum = 255;
+        histogram[lum]++;
+
+        if (r == 255 || g == 255 || b == 255) ++clipped;
+    }
+
+    // Mean luminance
+    double sum = 0;
+    for (int i = 0; i < 256; ++i) sum += (double)i * histogram[i];
+    float mean = (float)(sum / n_pixels);
+
+    // pct_black: fraction with luminance < 1 (i.e., bin 0)
+    float pct_black = (float)histogram[0] / n_pixels;
+
+    // pct_clipped: any channel == 255
+    float pct_clip = (float)clipped / n_pixels;
+
+    // Percentiles from cumulative histogram (single pass for both p50 and p95)
+    size_t target_50 = (size_t)(0.5f * n_pixels);
+    size_t target_95 = (size_t)(0.95f * n_pixels);
+    float p50 = 255.0f, p95 = 255.0f;
+    size_t cumul = 0;
+    for (int i = 0; i < 256; ++i) {
+        cumul += histogram[i];
+        if (p50 == 255.0f && cumul >= target_50) p50 = (float)i;
+        if (cumul >= target_95) { p95 = (float)i; break; }
+    }
+
+    FrameMetrics m{mean, pct_black, pct_clip, p50, p95, {}};
+    std::copy(std::begin(histogram), std::end(histogram), m.histogram.begin());
+    return m;
 }

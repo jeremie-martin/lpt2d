@@ -1,58 +1,166 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "bench_arc_focus",
+  "camera": {
+    "bounds": [
+      -1.3,
+      -0.9,
+      1.3,
+      0.9
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "shapes": [
     {
       "type": "arc",
-      "center": [0.9, 0],
+      "center": [
+        0.9,
+        0
+      ],
       "radius": 0.7,
       "angle_start": 2.4,
-      "angle_end": 3.88,
-      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+      "sweep": 1.48,
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
     },
     {
       "type": "arc",
-      "center": [-0.9, 0],
+      "center": [
+        -0.9,
+        0
+      ],
       "radius": 0.7,
       "angle_start": 5.54,
-      "angle_end": 0.74,
-      "material": {"ior": 1, "roughness": 0, "metallic": 1, "transmission": 1, "absorption": 0, "cauchy_b": 0, "albedo": 0.95}
+      "sweep": 1.4831853,
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 1,
+        "transmission": 1,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0.95
+      }
     },
     {
       "type": "circle",
-      "center": [0, 0],
+      "center": [
+        0,
+        0
+      ],
       "radius": 0.12,
-      "material": {"ior": 1.7, "roughness": 0, "metallic": 0, "transmission": 1, "absorption": 0.4, "cauchy_b": 25000, "albedo": 1}
+      "material": {
+        "ior": 1.7,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 1,
+        "absorption": 0.4,
+        "cauchy_b": 25000,
+        "albedo": 1
+      }
     },
     {
       "type": "segment",
-      "a": [-1.2, -0.8],
-      "b": [1.2, -0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        -1.2,
+        -0.8
+      ],
+      "b": [
+        1.2,
+        -0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [1.2, 0.8],
-      "b": [-1.2, 0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        1.2,
+        0.8
+      ],
+      "b": [
+        -1.2,
+        0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [-1.2, 0.8],
-      "b": [-1.2, -0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        -1.2,
+        0.8
+      ],
+      "b": [
+        -1.2,
+        -0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     },
     {
       "type": "segment",
-      "a": [1.2, -0.8],
-      "b": [1.2, 0.8],
-      "material": {"ior": 1, "roughness": 0, "metallic": 0, "transmission": 0, "absorption": 0, "cauchy_b": 0, "albedo": 0}
+      "a": [
+        1.2,
+        -0.8
+      ],
+      "b": [
+        1.2,
+        0.8
+      ],
+      "material": {
+        "ior": 1,
+        "roughness": 0,
+        "metallic": 0,
+        "transmission": 0,
+        "absorption": 0,
+        "cauchy_b": 0,
+        "albedo": 0
+      }
     }
   ],
   "lights": [
     {
       "type": "point",
-      "pos": [-0.5, 0.2],
+      "pos": [
+        -0.5,
+        0.2
+      ],
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780

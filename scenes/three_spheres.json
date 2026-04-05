@@ -1,120 +1,139 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "three_spheres",
+  "camera": {
+    "bounds": [
+      -1.2,
+      -0.675,
+      1.2,
+      0.675
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -5,
+    "gamma": 2,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays"
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
+  "materials": {
+    "glass": {
+      "ior": 1.5,
+      "transmission": 1,
+      "absorption": 0.5,
+      "cauchy_b": 20000
+    },
+    "mirror_wall": {
+      "metallic": 1,
+      "transmission": 1,
+      "albedo": 0.95,
+      "ior": 1,
+      "roughness": 0.1,
+      "absorption": 0,
+      "cauchy_b": 0
+    }
+  },
   "shapes": [
     {
       "type": "circle",
-      "center": [-0.5, 0],
+      "center": [
+        -0.5,
+        0
+      ],
       "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
+      "material": "glass"
     },
     {
       "type": "circle",
-      "center": [0, 0],
+      "center": [
+        0,
+        0
+      ],
       "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
+      "material": "glass"
     },
     {
       "type": "circle",
-      "center": [0.5, 0],
+      "center": [
+        0.5,
+        0
+      ],
       "radius": 0.2,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 20000,
-        "albedo": 1
-      }
+      "material": "glass"
     },
     {
       "type": "segment",
-      "a": [-1.2, -0.8],
-      "b": [1.2, -0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+      "a": [
+        -1.2,
+        -0.675
+      ],
+      "b": [
+        1.2,
+        -0.675
+      ],
+      "material": "mirror_wall"
     },
     {
       "type": "segment",
-      "a": [1.2, 0.8],
-      "b": [-1.2, 0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+      "a": [
+        1.2,
+        0.675
+      ],
+      "b": [
+        -1.2,
+        0.675
+      ],
+      "material": "mirror_wall"
     },
     {
       "type": "segment",
-      "a": [-1.2, 0.8],
-      "b": [-1.2, -0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+      "a": [
+        -1.2,
+        0.675
+      ],
+      "b": [
+        -1.2,
+        -0.675
+      ],
+      "material": "mirror_wall"
     },
     {
       "type": "segment",
-      "a": [1.2, -0.8],
-      "b": [1.2, 0.8],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      }
+      "a": [
+        1.2,
+        -0.675
+      ],
+      "b": [
+        1.2,
+        0.675
+      ],
+      "material": "mirror_wall"
     }
   ],
   "lights": [
     {
       "type": "point",
-      "pos": [-0.8, 0.5],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "pos": [
+        -0.8,
+        0.5
+      ],
+      "intensity": 1
     },
     {
       "type": "point",
-      "pos": [0.8, -0.5],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "pos": [
+        0.8,
+        -0.5
+      ],
+      "intensity": 1
     }
   ]
 }

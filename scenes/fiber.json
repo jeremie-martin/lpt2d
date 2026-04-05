@@ -1,11 +1,40 @@
 {
-  "version": 1,
+  "version": 4,
   "name": "fiber",
+  "camera": {
+    "bounds": [
+      -1.65,
+      -0.27,
+      1.65,
+      0.27
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -5,
+    "gamma": 2,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays"
+  },
+  "trace": {
+    "rays": 10000000,
+    "depth": 12
+  },
   "shapes": [
     {
       "type": "segment",
-      "a": [-1.5, -0.12],
-      "b": [1.5, -0.12],
+      "a": [
+        -1.5,
+        -0.12
+      ],
+      "b": [
+        1.5,
+        -0.12
+      ],
       "material": {
         "ior": 1,
         "roughness": 0,
@@ -18,8 +47,14 @@
     },
     {
       "type": "segment",
-      "a": [-1.5, 0.12],
-      "b": [1.5, 0.12],
+      "a": [
+        -1.5,
+        0.12
+      ],
+      "b": [
+        1.5,
+        0.12
+      ],
       "material": {
         "ior": 1,
         "roughness": 0,
@@ -32,7 +67,10 @@
     },
     {
       "type": "circle",
-      "center": [0, 0],
+      "center": [
+        0,
+        0
+      ],
       "radius": 0.06,
       "material": {
         "ior": 1.5,
@@ -46,7 +84,10 @@
     },
     {
       "type": "circle",
-      "center": [0.5, 0],
+      "center": [
+        0.5,
+        0
+      ],
       "radius": 0.06,
       "material": {
         "ior": 1.5,
@@ -60,7 +101,10 @@
     },
     {
       "type": "circle",
-      "center": [-0.5, 0],
+      "center": [
+        -0.5,
+        0
+      ],
       "radius": 0.06,
       "material": {
         "ior": 1.5,
@@ -74,8 +118,14 @@
     },
     {
       "type": "segment",
-      "a": [1.5, -0.12],
-      "b": [1.5, 0.12],
+      "a": [
+        1.5,
+        -0.12
+      ],
+      "b": [
+        1.5,
+        0.12
+      ],
       "material": {
         "ior": 1,
         "roughness": 0,
@@ -90,8 +140,14 @@
   "lights": [
     {
       "type": "segment",
-      "a": [-1.5, 0.12],
-      "b": [-1.5, -0.12],
+      "a": [
+        -1.5,
+        0.12
+      ],
+      "b": [
+        -1.5,
+        -0.12
+      ],
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780
