@@ -44,15 +44,16 @@ System dependencies include OpenGL, GLEW, GLFW3, and EGL.
 # Headless render from a saved scene
 ./build/lpt2d-cli --scene scenes/prism.json --output render.png
 
-# Python animation example
-python anim/examples/orbiting_beam.py
+# Canonical Python animation example
+python examples/python/beam_chamber_starter.py
 ```
 
 ## Repository Layout
 
+- `examples/` — canonical public example pack
 - `src/` — C++ core, shaders, GUI app, and CLI
 - `anim/` — Python authoring and animation library
-- `scenes/` — saved JSON shots
+- `scenes/` — built-in JSON shots for runtime and benchmarks
 - `tests/` — physics, workflow, and regression tests
 - `bench/` — benchmark harness and benchmark scenes
 - `docs/` — documentation that is not specific to one subsystem
@@ -64,6 +65,8 @@ python anim/examples/orbiting_beam.py
   Strategic project direction.
 - [docs/README.md](/home/holo/prog/lpt2d/docs/README.md)
   Documentation index.
+- [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
+  Canonical example pack and how to run it.
 - [docs/ROADMAP_GUIDELINES.md](/home/holo/prog/lpt2d/docs/ROADMAP_GUIDELINES.md)
   What a good roadmap should be for this project.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)
@@ -77,12 +80,14 @@ python anim/examples/orbiting_beam.py
 
 The repo currently has:
 
+- the canonical example pack in [`examples/`](/home/holo/prog/lpt2d/examples)
 - built-in JSON scenes in [`scenes/`](/home/holo/prog/lpt2d/scenes)
-- Python animation examples in [`anim/examples/`](/home/holo/prog/lpt2d/anim/examples)
+- secondary exploratory scripts in
+  [`anim/examples/secondary/`](/home/holo/prog/lpt2d/anim/examples/secondary)
 
-Those examples and scenes are important, but they should not be mistaken for a
-massive canonical content library. The roadmap intentionally favors a compact,
-high-signal example set that pressure-tests the tool honestly.
+The canonical pack is intentionally compact and workflow-first. The built-in
+scene set remains important because it still drives runtime discovery and the
+general `benchmark.sh` performance workflow.
 
 ## Design Priorities
 

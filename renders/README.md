@@ -8,10 +8,12 @@ There is currently **no large canonical render library** in this repo. The old
 `clean_room` story has been retired, and the project is intentionally not
 pretending that a giant example/render catalog is the current source of truth.
 
-For now, the authoritative sources are:
+For now, the main reference surfaces are:
 
+- the canonical example pack in [`examples/`](/home/holo/prog/lpt2d/examples)
 - saved scene files in [`scenes/`](/home/holo/prog/lpt2d/scenes)
-- Python animation examples in [`anim/examples/`](/home/holo/prog/lpt2d/anim/examples)
+- secondary exploratory scripts in
+  [`anim/examples/secondary/`](/home/holo/prog/lpt2d/anim/examples/secondary)
 - the roadmap direction in [ROADMAP.md](/home/holo/prog/lpt2d/ROADMAP.md)
 
 ## What Belongs Here
@@ -27,6 +29,7 @@ It should not quietly become a second source of truth for scene definitions.
 
 ## Policy
 
-- Scene structure belongs in JSON scenes and Python example code, not in render outputs.
+- Scene structure belongs in JSON scenes and canonical example code, not in render outputs.
 - Saved renders should be intentional and curated, not generated in bulk without purpose.
-- If a compact canonical example pack is established later, this directory can evolve to support it, but that should happen explicitly rather than by drift.
+- If the canonical example pack later grows a curated render surface, that
+  should happen explicitly rather than by drift.

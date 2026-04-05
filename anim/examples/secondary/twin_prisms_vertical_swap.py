@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import math
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 from anim import (
@@ -25,7 +26,7 @@ from anim import (
 NAME = "twin_prisms_vertical_swap"
 DURATION = 14.0
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_PATH = REPO_ROOT / "scenes" / "twin_prisms.json"
 BINARY = REPO_ROOT / "build" / "lpt2d-cli"
 
@@ -37,7 +38,10 @@ FRAME_LOOK = Look(
     normalize="rays",
 )
 
-BASE_SHOT = Shot.load(SCENE_PATH)
+
+@cache
+def _base_shot() -> Shot:
+    return Shot.load(SCENE_PATH)
 
 
 @dataclass(frozen=True)
@@ -149,7 +153,7 @@ def infer_layout(scene: Scene, aspect: float) -> Layout:
 
 def make_animate(layout: Layout):
     def animate(ctx: FrameContext) -> Frame:
-        scene = BASE_SHOT.scene.clone()
+        scene = _base_shot().scene.clone()
         p = ease_in_out_sine(ctx.progress)
         left_x = lerp(layout.start_left[0], layout.end_left[0], p)
         left_y = lerp(layout.start_left[1], layout.end_left[1], p)
@@ -200,7 +204,7 @@ def main() -> None:
 
     for mode in modes:
         shot, fps, crf = shot_for(mode)
-        layout = infer_layout(BASE_SHOT.scene, shot.canvas.aspect)
+        layout = infer_layout(_base_shot().scene, shot.canvas.aspect)
         output = REPO_ROOT / f"{NAME}_{mode}.mp4"
         render(
             make_animate(layout),

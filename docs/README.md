@@ -15,6 +15,8 @@ and should not be buried inside implementation-specific files.
 
 - [README.md](/home/holo/prog/lpt2d/README.md)
   Project overview, build/run entry points, and key links.
+- [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
+  Canonical example pack and workflow-oriented entry points.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)
   Technical guide for coding agents and contributors working directly in the
   codebase.

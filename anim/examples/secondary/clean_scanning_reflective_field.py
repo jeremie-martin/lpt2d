@@ -115,7 +115,7 @@ def make_frame_group() -> Group:
 
 
 def make_top_rail_light() -> Group:
-    # Very soft structural fill, inspired by your segment light in the draft.
+    # Very soft structural fill, inspired by the segment light in the draft.
     dx = 0.001
     return Group(
         name="top_rail_light",

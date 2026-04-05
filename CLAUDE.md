@@ -23,8 +23,8 @@ Produces three targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (head
 # CLI flags override shot defaults
 ./build/lpt2d-cli --scene scenes/prism.json --exposure 3 --rays 50000000
 
-# Python animation
-python anim/examples/orbiting_beam.py
+# Canonical Python animation
+python examples/python/beam_chamber_starter.py
 ```
 
 Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--gamma`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--white-point`, `--ambient`, `--background`, `--opacity`, `--intensity`. All flags override the shot file's saved values.
@@ -106,6 +106,8 @@ Applied per-pixel in `postprocess.frag`:
 
 ```
 CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lpt2d-cli (headless)
+examples/                   — canonical public example pack
+  python/                   — workflow-first canonical Python animations
 anim/                       — Python animation library (pip install -e .)
   types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
   renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet
@@ -113,8 +115,8 @@ anim/                       — Python animation library (pip install -e .)
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
   stats.py                  — Frame statistics (luminance, clipping, percentiles)
-  examples/                 — Working animation examples
-scenes/                     — JSON shot files (v4 format, the single source of truth)
+  examples/secondary/       — exploratory or superseded Python examples
+scenes/                     — JSON shot files (v4 format, built-in runtime and benchmark scene set)
 src/
   core/                     — lpt2d-core static library (no GUI/windowing deps)
     scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, Shot, Camera2D, Canvas, Look, TraceDefaults, intersection, bounds

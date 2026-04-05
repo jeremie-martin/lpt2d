@@ -1,6 +1,6 @@
 """Beam light orbiting three dispersive spheres in a mirror box.
 
-Canonical example demonstrating the animation API:
+Secondary exploratory example demonstrating the animation API:
 - Group-based composition (actors: box, spheres, fill light, beam)
 - Track for declarative motion and exposure control
 - Camera2D for stable framing
