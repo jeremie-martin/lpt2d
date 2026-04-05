@@ -35,6 +35,7 @@ from .types import Bezier as Bezier
 from .types import Camera2D as Camera2D
 from .types import Canvas as Canvas
 from .types import Circle as Circle
+from .types import Ellipse as Ellipse
 from .types import Frame as Frame
 from .types import FrameContext as FrameContext
 from .types import FrameReport as FrameReport
@@ -70,6 +71,7 @@ __all__ = [
     "Camera2D",
     "Canvas",
     "Circle",
+    "Ellipse",
     "EASINGS",
     "FFmpegOutput",
     "Frame",

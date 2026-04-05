@@ -128,7 +128,7 @@ struct Clipboard {
 
 // ─── Editor tools ──────────────────────────────────────────────────────
 
-enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight, Erase, Measure };
+enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, Ellipse, PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight, Erase, Measure };
 
 // Camera handle identifiers for interactive frame editing
 enum class CameraHandle : int {

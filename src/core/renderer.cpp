@@ -122,6 +122,16 @@ struct GPUBezier {
 };
 static_assert(sizeof(GPUBezier) == 56);
 
+struct GPUEllipse {
+    float center[2];
+    float semi_a, semi_b;
+    float rotation;
+    float _pad;
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo, emission;
+};
+static_assert(sizeof(GPUEllipse) == 56);
+
 // ─── Renderer implementation ─────────────────────────────────────────
 
 Renderer::~Renderer() { shutdown(); }
@@ -199,6 +209,7 @@ void Renderer::shutdown() {
     del_buf(segment_ssbo_);
     del_buf(arc_ssbo_);
     del_buf(bezier_ssbo_);
+    del_buf(ellipse_ssbo_);
     del_buf(light_ssbo_);
     del_buf(light_weights_ssbo_);
     del_buf(output_ssbo_);
@@ -276,6 +287,7 @@ bool Renderer::create_trace_shader() {
     trace_loc_num_segments_ = glGetUniformLocation(trace_program_, "uNumSegments");
     trace_loc_num_arcs_ = glGetUniformLocation(trace_program_, "uNumArcs");
     trace_loc_num_beziers_ = glGetUniformLocation(trace_program_, "uNumBeziers");
+    trace_loc_num_ellipses_ = glGetUniformLocation(trace_program_, "uNumEllipses");
     trace_loc_num_lights_ = glGetUniformLocation(trace_program_, "uNumLights");
     trace_loc_max_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
@@ -410,6 +422,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<GPUSegment> segs;
     std::vector<GPUArc> gpu_arcs;
     std::vector<GPUBezier> gpu_beziers;
+    std::vector<GPUEllipse> gpu_ellipses;
 
     auto fill_material = [](auto& gpu, const Material& mat) {
         gpu.ior = mat.ior;
@@ -472,6 +485,15 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                     fill_material(gs, p.material);
                     segs.push_back(gs);
                 }
+            },
+            [&](const Ellipse& e) {
+                GPUEllipse ge{};
+                ge.center[0] = e.center.x; ge.center[1] = e.center.y;
+                ge.semi_a = e.semi_a;
+                ge.semi_b = e.semi_b;
+                ge.rotation = e.rotation;
+                fill_material(ge, e.material);
+                gpu_ellipses.push_back(ge);
             },
         }, shape);
     }
@@ -551,6 +573,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     num_segments_ = (int)segs.size();
     num_arcs_ = (int)gpu_arcs.size();
     num_beziers_ = (int)gpu_beziers.size();
+    num_ellipses_ = (int)gpu_ellipses.size();
     num_lights_ = (int)gpu_lights.size();
 
     // Upload SSBOs
@@ -565,6 +588,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     upload(segment_ssbo_, segs.data(), segs.size() * sizeof(GPUSegment));
     upload(arc_ssbo_, gpu_arcs.data(), gpu_arcs.size() * sizeof(GPUArc));
     upload(bezier_ssbo_, gpu_beziers.data(), gpu_beziers.size() * sizeof(GPUBezier));
+    upload(ellipse_ssbo_, gpu_ellipses.data(), gpu_ellipses.size() * sizeof(GPUEllipse));
     upload(light_ssbo_, gpu_lights.data(), gpu_lights.size() * sizeof(GPULight));
     upload(light_weights_ssbo_, cum_weights.data(), cum_weights.size() * sizeof(float));
 
@@ -575,6 +599,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     glUniform1ui(trace_loc_num_segments_, num_segments_);
     glUniform1ui(trace_loc_num_arcs_, num_arcs_);
     glUniform1ui(trace_loc_num_beziers_, num_beziers_);
+    glUniform1ui(trace_loc_num_ellipses_, num_ellipses_);
     glUniform1ui(trace_loc_num_lights_, num_lights_);
 }
 
@@ -649,6 +674,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, light_weights_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, arc_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ellipse_ssbo_);
 
     GLuint groups = (cfg.batch_size + 63) / 64;
 

@@ -163,7 +163,15 @@ struct Polygon {
     }
 };
 
-using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon>;
+struct Ellipse {
+    Vec2 center;
+    float semi_a;          // semi-axis length along rotated X
+    float semi_b;          // semi-axis length along rotated Y
+    float rotation = 0.0f; // radians, angle of semi_a axis from +X
+    Material material;
+};
+
+using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse>;
 
 // --- Lights ---
 
@@ -248,6 +256,7 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
 std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly);
+std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // Scene bounds (AABB with padding)

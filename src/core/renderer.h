@@ -76,10 +76,12 @@ private:
     GLuint bezier_ssbo_ = 0;
     GLuint light_ssbo_ = 0;
     GLuint light_weights_ssbo_ = 0;
+    GLuint ellipse_ssbo_ = 0;
     int num_circles_ = 0;
     int num_segments_ = 0;
     int num_arcs_ = 0;
     int num_beziers_ = 0;
+    int num_ellipses_ = 0;
     int num_lights_ = 0;
 
     // Wavelength LUT texture
@@ -95,6 +97,7 @@ private:
     GLint trace_loc_num_segments_ = -1;
     GLint trace_loc_num_arcs_ = -1;
     GLint trace_loc_num_beziers_ = -1;
+    GLint trace_loc_num_ellipses_ = -1;
     GLint trace_loc_num_lights_ = -1;
     GLint trace_loc_max_depth_ = -1;
     GLint trace_loc_seed_ = -1;

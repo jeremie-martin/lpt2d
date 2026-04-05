@@ -139,6 +139,18 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
             for (int i = 0; i < n; ++i)
                 dl->AddLine(cv.to_screen(p.vertices[i]), cv.to_screen(p.vertices[(i + 1) % n]), col, th);
         },
+        [&](const Ellipse& e) {
+            constexpr int N = 64;
+            float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
+            for (int j = 0; j < N; ++j) {
+                float t0 = TWO_PI * j / N, t1 = TWO_PI * (j + 1) / N;
+                float lx0 = e.semi_a * std::cos(t0), ly0 = e.semi_b * std::sin(t0);
+                float lx1 = e.semi_a * std::cos(t1), ly1 = e.semi_b * std::sin(t1);
+                Vec2 p0 = e.center + Vec2{lx0 * cr - ly0 * sr, lx0 * sr + ly0 * cr};
+                Vec2 p1 = e.center + Vec2{lx1 * cr - ly1 * sr, lx1 * sr + ly1 * cr};
+                dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
+            }
+        },
     }, shape);
 }
 

@@ -121,6 +121,12 @@ Bounds shape_bounds(const Shape& s) {
                               }
                               return Bounds{lo, hi};
                           },
+                          [](const Ellipse& e) {
+                              float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
+                              float hx = std::sqrt(e.semi_a * e.semi_a * cr * cr + e.semi_b * e.semi_b * sr * sr);
+                              float hy = std::sqrt(e.semi_a * e.semi_a * sr * sr + e.semi_b * e.semi_b * cr * cr);
+                              return Bounds{e.center - Vec2{hx, hy}, e.center + Vec2{hx, hy}};
+                          },
                       },
                       s);
 }
@@ -290,6 +296,47 @@ std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
     return best;
 }
 
+std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse) {
+    // cos/sin computed once; inverse rotation uses (cr, -sr)
+    float cr = std::cos(ellipse.rotation), sr = std::sin(ellipse.rotation);
+    Vec2 oc = ray.origin - ellipse.center;
+    Vec2 lo{oc.x * cr + oc.y * sr, -oc.x * sr + oc.y * cr};
+    Vec2 ld{ray.dir.x * cr + ray.dir.y * sr, -ray.dir.x * sr + ray.dir.y * cr};
+
+    float a2 = ellipse.semi_a * ellipse.semi_a;
+    float b2 = ellipse.semi_b * ellipse.semi_b;
+
+    float A = ld.x * ld.x / a2 + ld.y * ld.y / b2;
+    float B = 2.0f * (lo.x * ld.x / a2 + lo.y * ld.y / b2);
+    float C = lo.x * lo.x / a2 + lo.y * lo.y / b2 - 1.0f;
+    float disc = B * B - 4.0f * A * C;
+
+    if (disc < 0)
+        return std::nullopt;
+
+    float sqrt_disc = std::sqrt(disc);
+    float t1 = (-B - sqrt_disc) / (2.0f * A);
+    float t2 = (-B + sqrt_disc) / (2.0f * A);
+
+    float t = (t1 > INTERSECT_EPS) ? t1 : ((t2 > INTERSECT_EPS) ? t2 : -1.0f);
+    if (t < 0)
+        return std::nullopt;
+
+    // Hit point in local coords
+    Vec2 lp = lo + ld * t;
+
+    // Normal: gradient of ellipse equation in local coords
+    Vec2 ln{2.0f * lp.x / a2, 2.0f * lp.y / b2};
+    float len = ln.length();
+    if (len > 0) ln = ln / len;
+
+    // Rotate normal back to world coords (forward rotation: cr, sr)
+    Vec2 normal{ln.x * cr - ln.y * sr, ln.x * sr + ln.y * cr};
+
+    Vec2 point = ray.origin + ray.dir * t;
+    return Hit{t, point, normal, &ellipse.material};
+}
+
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
     std::optional<Hit> closest;
 
@@ -300,6 +347,7 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
                                   [&](const Arc& a) { return intersect(ray, a); },
                                   [&](const Bezier& b) { return intersect(ray, b); },
                                   [&](const Polygon& p) { return intersect(ray, p); },
+                                  [&](const Ellipse& e) { return intersect(ray, e); },
                               },
                               shape);
 
@@ -406,6 +454,14 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
             for (auto& v : r.vertices) v = t.apply(v);
             return r;
         },
+        [&](const Ellipse& e) -> Shape {
+            Ellipse r = e;
+            r.center = t.apply(e.center);
+            r.rotation = e.rotation + t.rotate;
+            r.semi_a = std::max(e.semi_a * uniform_scale, 0.01f);
+            r.semi_b = std::max(e.semi_b * uniform_scale, 0.01f);
+            return r;
+        },
     }, s);
 }
 
@@ -481,6 +537,12 @@ float shape_perimeter(const Shape& s) {
                 sum += (p.vertices[(i + 1) % n] - p.vertices[i]).length();
             return sum;
         },
+        [](const Ellipse& e) {
+            // Ramanujan approximation
+            float a = e.semi_a, b = e.semi_b;
+            float h = (a - b) * (a - b) / ((a + b) * (a + b));
+            return PI * (a + b) * (1.0f + 3.0f * h / (10.0f + std::sqrt(4.0f - 3.0f * h)));
+        },
     }, s);
 }
 
@@ -552,6 +614,16 @@ std::vector<Light> emission_light(const Shape& s) {
                     float t = (edge_pts == 1) ? 0.5f : (float)j / (edge_pts - 1);
                     lights.push_back(PointLight{a + (b - a) * t, edge_intensity});
                 }
+            }
+        },
+        [&](const Ellipse& e) {
+            float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
+            for (int i = 0; i < N; ++i) {
+                float angle = TWO_PI * i / N;
+                float lx = e.semi_a * std::cos(angle);
+                float ly = e.semi_b * std::sin(angle);
+                Vec2 pos = e.center + Vec2{lx * cr - ly * sr, lx * sr + ly * cr};
+                lights.push_back(PointLight{pos, per_point});
             }
         },
     }, s);

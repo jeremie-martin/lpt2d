@@ -188,7 +188,26 @@ class Polygon:
         }
 
 
-Shape = Circle | Segment | Arc | Bezier | Polygon
+@dataclass
+class Ellipse:
+    center: list[float] = field(default_factory=lambda: [0.0, 0.0])
+    semi_a: float = 0.2
+    semi_b: float = 0.1
+    rotation: float = 0.0
+    material: Material = field(default_factory=Material)
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "ellipse",
+            "center": self.center,
+            "semi_a": self.semi_a,
+            "semi_b": self.semi_b,
+            "rotation": self.rotation,
+            "material": self.material.to_dict(),
+        }
+
+
+Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse
 
 
 # --- Lights ---
@@ -378,6 +397,13 @@ _SHAPE_PARSERS = {
     ),
     "polygon": lambda d: Polygon(
         vertices=d["vertices"], material=Material.from_dict(d.get("material", {}))
+    ),
+    "ellipse": lambda d: Ellipse(
+        center=d["center"],
+        semi_a=d.get("semi_a", 0.2),
+        semi_b=d.get("semi_b", 0.1),
+        rotation=d.get("rotation", 0.0),
+        material=Material.from_dict(d.get("material", {})),
     ),
 }
 

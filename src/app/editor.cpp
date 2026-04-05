@@ -44,6 +44,7 @@ Vec2 object_centroid(const Scene& scene, ObjectId id) {
             [](const Arc& a) -> Vec2 { return a.center; },
             [](const Bezier& b) -> Vec2 { return (b.p0 + b.p1 + b.p2) * (1.0f / 3.0f); },
             [](const Polygon& p) -> Vec2 { return p.centroid(); },
+            [](const Ellipse& e) -> Vec2 { return e.center; },
         }, *shape);
     }
     if (const Light* light = resolve_light(scene, id)) {
@@ -139,6 +140,16 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
             for (int i = 0; i < n; ++i)
                 best = std::min(best, point_seg_dist(wp, p.vertices[i], p.vertices[(i + 1) % n]));
             return best;
+        },
+        [&](const Ellipse& e) -> float {
+            // Transform point to local coords
+            float cr = std::cos(-e.rotation), sr = std::sin(-e.rotation);
+            Vec2 d = wp - e.center;
+            Vec2 local{d.x * cr - d.y * sr, d.x * sr + d.y * cr};
+            // Find nearest point on ellipse via parametric angle
+            float angle = std::atan2(local.y / e.semi_b, local.x / e.semi_a);
+            Vec2 closest{e.semi_a * std::cos(angle), e.semi_b * std::sin(angle)};
+            return (local - closest).length();
         },
     }, shape);
 }
@@ -305,6 +316,7 @@ void translate_shape(Shape& s, Vec2 delta) {
         [&](Arc& a) { a.center = a.center + delta; },
         [&](Bezier& b) { b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta; },
         [&](Polygon& p) { for (auto& v : p.vertices) v = v + delta; },
+        [&](Ellipse& e) { e.center = e.center + delta; },
     }, s);
 }
 
@@ -333,6 +345,10 @@ static void rotate_shape(Shape& s, Vec2 pivot, float angle) {
             b.p2 = rotate_around(b.p2, pivot, angle);
         },
         [&](Polygon& p) { for (auto& v : p.vertices) v = rotate_around(v, pivot, angle); },
+        [&](Ellipse& e) {
+            e.center = rotate_around(e.center, pivot, angle);
+            e.rotation += angle;
+        },
     }, s);
 }
 
@@ -383,6 +399,11 @@ static void scale_shape(Shape& s, Vec2 pivot, float fx, float fy) {
             b.p2 = scale_around(b.p2, pivot, fx, fy);
         },
         [&](Polygon& p) { for (auto& v : p.vertices) v = scale_around(v, pivot, fx, fy); },
+        [&](Ellipse& e) {
+            e.center = scale_around(e.center, pivot, fx, fy);
+            e.semi_a = std::max(e.semi_a * uniform, 0.01f);
+            e.semi_b = std::max(e.semi_b * uniform, 0.01f);
+        },
     }, s);
 }
 
@@ -505,6 +526,12 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<ObjectId>&
                     for (int i = 0; i < (int)p.vertices.size(); ++i)
                         handles.push_back({Handle::Position, id, i, p.vertices[i]});
                 },
+                [&](const Ellipse& e) {
+                    handles.push_back({Handle::Position, id, 0, e.center});
+                    float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
+                    handles.push_back({Handle::Radius, id, 0, e.center + Vec2{e.semi_a * cr, e.semi_a * sr}});
+                    handles.push_back({Handle::Radius, id, 1, e.center + Vec2{-e.semi_b * sr, e.semi_b * cr}});
+                },
             }, *shape);
         }
         if (const Light* light = resolve_light(scene, id)) {
@@ -596,6 +623,18 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
             [&](Polygon& p) {
                 if (handle.param_index >= 0 && handle.param_index < (int)p.vertices.size())
                     p.vertices[handle.param_index] = wp;
+            },
+            [&](Ellipse& e) {
+                if (handle.kind == Handle::Position) {
+                    e.center = wp;
+                } else if (handle.kind == Handle::Radius) {
+                    Vec2 d = wp - e.center;
+                    float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
+                    if (handle.param_index == 0)
+                        e.semi_a = std::max(d.x * cr + d.y * sr, 0.01f);
+                    else
+                        e.semi_b = std::max(-d.x * sr + d.y * cr, 0.01f);
+                }
             },
         }, *shape);
     }

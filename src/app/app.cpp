@@ -394,6 +394,12 @@ int App::run(const AppConfig& config) {
                     ImVec2 b = io.MousePos;
                     dl->AddRect(ImVec2(std::min(a.x,b.x), std::min(a.y,b.y)),
                                 ImVec2(std::max(a.x,b.x), std::max(a.y,b.y)), COL_PREVIEW, 0.0f, 0, 1.5f * dpi_scale);
+                } else if (ed.tool == EditTool::Ellipse) {
+                    ImVec2 a = cv.to_screen(ed.create_start);
+                    ImVec2 b = io.MousePos;
+                    // Preview as rectangle (same as polygon creation)
+                    dl->AddRect(ImVec2(std::min(a.x,b.x), std::min(a.y,b.y)),
+                                ImVec2(std::max(a.x,b.x), std::max(a.y,b.y)), COL_PREVIEW, 0.0f, 0, 1.5f * dpi_scale);
                 } else if (ed.tool == EditTool::Segment || ed.tool == EditTool::SegmentLight || ed.tool == EditTool::Bezier || ed.tool == EditTool::ParallelBeamLight) {
                     dl->AddLine(cv.to_screen(ed.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
@@ -686,6 +692,7 @@ int App::run(const AppConfig& config) {
                                         [&](const Arc& a) { ed.drag_offsets.push_back({a.center - mw_raw, {}}); },
                                         [&](const Bezier& b) { ed.drag_offsets.push_back({b.p0 - mw_raw, b.p2 - mw_raw}); },
                                         [&](const Polygon& p) { ed.drag_offsets.push_back({p.centroid() - mw_raw, {}}); },
+                                        [&](const Ellipse& e) { ed.drag_offsets.push_back({e.center - mw_raw, {}}); },
                                     }, *shape);
                                 } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                                     std::visit(overloaded{
@@ -772,6 +779,7 @@ int App::run(const AppConfig& config) {
                             Vec2 delta = (mw + off.a) - p.centroid();
                             for (auto& v : p.vertices) v = v + delta;
                         },
+                        [&](Ellipse& e) { e.center = mw + off.a; },
                     }, *shape);
                 } else if (Light* light = resolve_light(ed.shot.scene, sid)) {
                     std::visit(overloaded{
@@ -825,6 +833,14 @@ int App::run(const AppConfig& config) {
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
                     p.material = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(p);
+                    ed.clear_selection();
+                    ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
+                    created = true;
+                } else if (ed.tool == EditTool::Ellipse && dist > 0.01f) {
+                    Vec2 center = (ed.create_start + end) * 0.5f;
+                    float sa = std::max(std::abs(end.x - ed.create_start.x) * 0.5f, 0.02f);
+                    float sb = std::max(std::abs(end.y - ed.create_start.y) * 0.5f, 0.02f);
+                    ed.shot.scene.shapes.push_back(Ellipse{center, sa, sb, 0.0f, mat_glass(1.5f, 20000.0f, 0.3f)});
                     ed.clear_selection();
                     ed.select({ObjectId::Shape, (int)ed.shot.scene.shapes.size() - 1});
                     created = true;
@@ -958,7 +974,8 @@ int App::run(const AppConfig& config) {
             tbtn("Segment", EditTool::Segment);
             tbtn("Arc", EditTool::Arc); ImGui::SameLine();
             tbtn("Bezier", EditTool::Bezier); ImGui::SameLine();
-            tbtn("Polygon", EditTool::Polygon); ImGui::SameLine();
+            tbtn("Polygon", EditTool::Polygon);
+            tbtn("Ellipse", EditTool::Ellipse); ImGui::SameLine();
             tbtn("Erase", EditTool::Erase);
             tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
             tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
@@ -1061,6 +1078,9 @@ int App::run(const AppConfig& config) {
                     [&](const Polygon& p) {
                         std::snprintf(lbl, sizeof(lbl), "Polygon %d [%dv] (%s)", i, (int)p.vertices.size(), material_name(p.material));
                     },
+                    [&](const Ellipse& e) {
+                        std::snprintf(lbl, sizeof(lbl), "Ellipse %d (%s)", i, material_name(e.material));
+                    },
                 }, ed.shot.scene.shapes[i]);
                 // Visibility toggle
                 ImGui::PushID(i + 10000);
@@ -1161,6 +1181,7 @@ int App::run(const AppConfig& config) {
                             [&](const Arc&) { std::snprintf(mlbl, sizeof(mlbl), "  Arc %d", j); },
                             [&](const Bezier&) { std::snprintf(mlbl, sizeof(mlbl), "  Bezier %d", j); },
                             [&](const Polygon&) { std::snprintf(mlbl, sizeof(mlbl), "  Polygon %d", j); },
+                            [&](const Ellipse&) { std::snprintf(mlbl, sizeof(mlbl), "  Ellipse %d", j); },
                         }, group.shapes[j]);
                         if (ImGui::Selectable(mlbl, mid_sel)) {
                             ed.clear_selection();
@@ -1270,6 +1291,14 @@ int App::run(const AppConfig& config) {
                         }
                         changed |= edit_material(p.material);
                         show_material_match(p.material);
+                    },
+                    [&](Ellipse& e) {
+                        changed |= ImGui::DragFloat2("Center", &e.center.x, 0.01f);
+                        changed |= ImGui::DragFloat("Semi-A", &e.semi_a, 0.005f, 0.01f, 5.0f);
+                        changed |= ImGui::DragFloat("Semi-B", &e.semi_b, 0.005f, 0.01f, 5.0f);
+                        changed |= ImGui::SliderAngle("Rotation", &e.rotation, -180.0f, 180.0f);
+                        changed |= edit_material(e.material);
+                        show_material_match(e.material);
                     },
                 }, shape);
             }
@@ -1847,6 +1876,7 @@ int App::run(const AppConfig& config) {
                     if (ImGui::IsKeyPressed(ImGuiKey_L)) switch_tool(EditTool::Segment);
                     if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) switch_tool(EditTool::Arc);
                     if (ImGui::IsKeyPressed(ImGuiKey_B)) switch_tool(EditTool::Bezier);
+                    if (ImGui::IsKeyPressed(ImGuiKey_E)) switch_tool(EditTool::Ellipse);
                     if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.transform.active()) switch_tool(EditTool::Erase);
                     if (ImGui::IsKeyPressed(ImGuiKey_P)) switch_tool(EditTool::PointLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);

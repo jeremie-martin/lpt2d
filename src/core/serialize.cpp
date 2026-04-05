@@ -96,6 +96,14 @@ static void write_shape(std::ostream& f, const Shape& shape, int d) {
             f << "],\n";
             write_material(f, p.material, d); f << "\n";
         },
+        [&](const Ellipse& e) {
+            write_indent(f, d); f << "\"type\": \"ellipse\",\n";
+            write_indent(f, d); write_vec2(f, "center", e.center); f << ",\n";
+            write_indent(f, d); f << "\"semi_a\": " << fmt(e.semi_a) << ",\n";
+            write_indent(f, d); f << "\"semi_b\": " << fmt(e.semi_b) << ",\n";
+            write_indent(f, d); f << "\"rotation\": " << fmt(e.rotation) << ",\n";
+            write_material(f, e.material, d); f << "\n";
+        },
     }, shape);
 }
 
@@ -510,6 +518,14 @@ static void read_shapes(const JsonValue* shapes_arr, std::vector<Shape>& out,
             }
             p.material = read_material(sv.get("material"), materials);
             out.push_back(p);
+        } else if (t == "ellipse") {
+            Ellipse e;
+            e.center = read_vec2(sv.get("center"));
+            if (auto* v = sv.get("semi_a")) e.semi_a = v->as_float(0.2f);
+            if (auto* v = sv.get("semi_b")) e.semi_b = v->as_float(0.1f);
+            if (auto* v = sv.get("rotation")) e.rotation = v->as_float();
+            e.material = read_material(sv.get("material"), materials);
+            out.push_back(e);
         }
     }
 }
