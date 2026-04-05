@@ -128,9 +128,13 @@ int App::run(const AppConfig& config) {
         for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i)
             if (ed.is_shape_visible(i))
                 filtered.shapes.push_back(ed.shot.scene.shapes[i]);
+        bool any_solo = (ed.solo_light >= 0 || ed.solo_light_group >= 0);
         if (ed.solo_light >= 0) {
+            // Top-level solo: only include the soloed top-level light
             if (ed.solo_light < (int)ed.shot.scene.lights.size())
                 filtered.lights.push_back(ed.shot.scene.lights[ed.solo_light]);
+        } else if (ed.solo_light_group >= 0) {
+            // Group solo: strip all top-level lights
         } else {
             for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i)
                 if (ed.is_light_visible(i))
@@ -138,10 +142,17 @@ int App::run(const AppConfig& config) {
         }
         for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
             if (!ed.is_group_visible(i)) continue;
-            if (ed.solo_light >= 0) {
-                // Solo mode: copy group shapes but strip lights (solo only applies to top-level lights)
+            if (any_solo) {
                 Group g = ed.shot.scene.groups[i];
-                g.lights.clear();
+                if (ed.solo_light_group == i &&
+                    ed.solo_light_index >= 0 &&
+                    ed.solo_light_index < (int)g.lights.size()) {
+                    Light soloed = g.lights[ed.solo_light_index];
+                    g.lights.clear();
+                    g.lights.push_back(std::move(soloed));
+                } else {
+                    g.lights.clear();
+                }
                 filtered.groups.push_back(std::move(g));
             } else {
                 filtered.groups.push_back(ed.shot.scene.groups[i]);
@@ -227,7 +238,8 @@ int App::run(const AppConfig& config) {
         ed.hidden_shapes.clear();
         ed.hidden_lights.clear();
         ed.hidden_groups.clear();
-        if (ed.solo_light >= (int)ed.shot.scene.lights.size()) ed.solo_light = -1;
+        // Deletion shifts indices — clear solo to avoid stale references.
+        ed.clear_solo();
         reload();
         return true;
     };
@@ -852,6 +864,17 @@ int App::run(const AppConfig& config) {
                     Vec2 a = ed.create_start, b = end;
                     Polygon p;
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
+                    // Ensure CW winding for correct outward normals.
+                    // perp(b-a) = (-dy, dx) is the LEFT perpendicular; for CW
+                    // polygons the left perp points outward (away from interior).
+                    float area2 = 0;
+                    for (int i = 0; i < (int)p.vertices.size(); ++i) {
+                        Vec2 va = p.vertices[i];
+                        Vec2 vb = p.vertices[(i + 1) % (int)p.vertices.size()];
+                        area2 += va.x * vb.y - vb.x * va.y;
+                    }
+                    if (area2 > 0)
+                        std::reverse(p.vertices.begin(), p.vertices.end());
                     p.material = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(p);
                     ed.clear_selection();
@@ -1079,6 +1102,13 @@ int App::run(const AppConfig& config) {
             if (ed.solo_light >= 0) {
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: Light %d", ed.solo_light);
+            } else if (ed.solo_light_group >= 0) {
+                ImGui::SameLine();
+                const auto& gname = ed.shot.scene.groups[ed.solo_light_group].name;
+                if (gname.empty())
+                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: Group %d Light %d", ed.solo_light_group, ed.solo_light_index);
+                else
+                    ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f), "Solo: %s Light %d", gname.c_str(), ed.solo_light_index);
             }
             int n_items = (int)(ed.shot.scene.shapes.size() + ed.shot.scene.lights.size() + ed.shot.scene.groups.size());
             float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
@@ -1162,7 +1192,10 @@ int App::run(const AppConfig& config) {
                 ImGui::PushID(i + 30000);
                 bool is_solo = (ed.solo_light == i);
                 if (ImGui::SmallButton(is_solo ? "S" : "s")) {
-                    ed.solo_light = is_solo ? -1 : i; reload();
+                    ed.solo_light = is_solo ? -1 : i;
+                    ed.solo_light_group = -1;
+                    ed.solo_light_index = -1;
+                    reload();
                 }
                 ImGui::PopID();
                 ImGui::SameLine();
@@ -1218,6 +1251,22 @@ int App::run(const AppConfig& config) {
                     for (int j = 0; j < (int)group.lights.size(); ++j) {
                         ObjectId mid{ObjectId::Light, j, i};
                         bool mid_sel = ed.is_selected(mid);
+                        // Solo toggle for group light
+                        ImGui::PushID(i * 1000 + j + 50000);
+                        bool is_gsolo = (ed.solo_light_group == i && ed.solo_light_index == j);
+                        if (ImGui::SmallButton(is_gsolo ? "S" : "s")) {
+                            if (is_gsolo) {
+                                ed.solo_light_group = -1;
+                                ed.solo_light_index = -1;
+                            } else {
+                                ed.solo_light_group = i;
+                                ed.solo_light_index = j;
+                                ed.solo_light = -1;
+                            }
+                            reload();
+                        }
+                        ImGui::PopID();
+                        ImGui::SameLine();
                         char mlbl[64];
                         std::snprintf(mlbl, sizeof(mlbl), "  Light %d", j);
                         if (ImGui::Selectable(mlbl, mid_sel)) {

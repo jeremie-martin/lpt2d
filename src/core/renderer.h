@@ -3,6 +3,7 @@
 #include "scene.h"
 
 #include <GL/glew.h>
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -12,6 +13,7 @@ struct FrameMetrics {
     float pct_clipped; // fraction of pixels with any channel == 255
     float p50;         // median luminance
     float p95;         // 95th percentile luminance
+    std::array<int, 256> histogram{}; // BT.709 luminance histogram (256 bins)
 };
 
 class Renderer {

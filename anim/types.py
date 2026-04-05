@@ -901,3 +901,4 @@ class FrameReport:
     pct_clipped: float | None = None
     p50: float | None = None
     p95: float | None = None
+    histogram: list[int] | None = None  # 256-bin luminance histogram (with --histogram)

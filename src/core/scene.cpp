@@ -566,14 +566,13 @@ std::vector<Light> emission_light(const Shape& s) {
 
     float perimeter = shape_perimeter(s);
     if (perimeter <= 0.0f) return {};
-    int N = emission_point_count(perimeter);
-    float per_point = mat.emission * perimeter / N;
 
     std::vector<Light> lights;
-    lights.reserve(N);
 
     std::visit(overloaded{
         [&](const Circle& c) {
+            int N = emission_point_count(perimeter);
+            float per_point = mat.emission * perimeter / N;
             for (int i = 0; i < N; ++i) {
                 float angle = TWO_PI * i / N;
                 Vec2 pos = c.center + Vec2{c.radius * std::cos(angle), c.radius * std::sin(angle)};
@@ -581,42 +580,55 @@ std::vector<Light> emission_light(const Shape& s) {
             }
         },
         [&](const Segment& seg) {
-            for (int i = 0; i < N; ++i) {
-                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
-                Vec2 pos = seg.a + (seg.b - seg.a) * t;
-                lights.push_back(PointLight{pos, per_point});
-            }
+            // SegmentLight emits in a hemisphere perpendicular to the segment,
+            // giving correct "neon tube" emission from the surface.
+            float total = mat.emission * perimeter;
+            lights.push_back(SegmentLight{seg.a, seg.b, total});
         },
         [&](const Arc& a) {
+            // Approximate arc as chain of short SegmentLights so each
+            // sub-segment emits perpendicular to the local tangent.
+            // Sweep is always positive (CCW), so tangent (cur-prev) has
+            // its left perp pointing inward.  Reverse the endpoints so
+            // the left perp points radially outward, matching the arc's
+            // surface normal (hit_point - center).
             float sweep = clamp_arc_sweep(a.sweep);
-            for (int i = 0; i < N; ++i) {
-                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
+            int N = emission_point_count(perimeter);
+            float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
+            Vec2 prev = arc_point(a, a.angle_start);
+            for (int i = 1; i < N; ++i) {
+                float t = (float)i / (N - 1);
                 float angle = a.angle_start + sweep * t;
-                lights.push_back(PointLight{arc_point(a, angle), per_point});
+                Vec2 cur = arc_point(a, angle);
+                lights.push_back(SegmentLight{cur, prev, seg_intensity});
+                prev = cur;
             }
         },
         [&](const Bezier& b) {
-            for (int i = 0; i < N; ++i) {
-                float t = (N == 1) ? 0.5f : (float)i / (N - 1);
-                lights.push_back(PointLight{bezier_eval(b, t), per_point});
+            // Approximate bezier as chain of short SegmentLights.
+            int N = emission_point_count(perimeter);
+            float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
+            Vec2 prev = bezier_eval(b, 0.0f);
+            for (int i = 1; i < N; ++i) {
+                float t = (float)i / (N - 1);
+                Vec2 cur = bezier_eval(b, t);
+                lights.push_back(SegmentLight{prev, cur, seg_intensity});
+                prev = cur;
             }
         },
         [&](const Polygon& p) {
-            // Distribute points along edges proportional to edge length
+            // One SegmentLight per edge — emits perpendicular to each face.
             int n = (int)p.vertices.size();
             if (n < 2) return;
             for (int i = 0; i < n; ++i) {
                 Vec2 a = p.vertices[i], b = p.vertices[(i + 1) % n];
                 float edge_len = (b - a).length();
-                int edge_pts = std::max(1, (int)std::round(N * edge_len / perimeter));
-                float edge_intensity = per_point * N * edge_len / (perimeter * edge_pts);
-                for (int j = 0; j < edge_pts; ++j) {
-                    float t = (edge_pts == 1) ? 0.5f : (float)j / (edge_pts - 1);
-                    lights.push_back(PointLight{a + (b - a) * t, edge_intensity});
-                }
+                lights.push_back(SegmentLight{a, b, mat.emission * edge_len});
             }
         },
         [&](const Ellipse& e) {
+            int N = emission_point_count(perimeter);
+            float per_point = mat.emission * perimeter / N;
             float cr = std::cos(e.rotation), sr = std::sin(e.rotation);
             for (int i = 0; i < N; ++i) {
                 float angle = TWO_PI * i / N;

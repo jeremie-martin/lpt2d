@@ -844,5 +844,7 @@ FrameMetrics Renderer::compute_frame_metrics() const {
         if (cumul >= target_95) { p95 = (float)i; break; }
     }
 
-    return {mean, pct_black, pct_clip, p50, p95};
+    FrameMetrics m{mean, pct_black, pct_clip, p50, p95, {}};
+    std::copy(std::begin(histogram), std::end(histogram), m.histogram.begin());
+    return m;
 }

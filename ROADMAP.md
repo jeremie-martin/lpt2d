@@ -14,9 +14,9 @@ Keep: `orbiting_beam.py` (canonical example), `anim/` library code, `scenes/*.js
 
 ---
 
-## Phase 1 — Foundations
+## Phase 1 — Foundations ✓
 
-The engine works, but the abstractions have gaps. Fix them before adding more surface area.
+The engine works, but the abstractions have gaps. Fix them before adding more surface area. **Complete.**
 
 ### 1.1 Fix emission model
 
@@ -81,9 +81,9 @@ Common optical elements should be one-liners, not 10 lines of vertex math. This 
 
 ---
 
-## Phase 3 — Workflow
+## Phase 3 — Workflow ✓
 
-Make the authoring and iteration loop faster.
+Make the authoring and iteration loop faster. **Complete.**
 
 ### 3.1 Stats pipeline
 

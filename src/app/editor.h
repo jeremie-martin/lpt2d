@@ -195,7 +195,9 @@ struct EditorState {
     std::set<int> hidden_shapes;
     std::set<int> hidden_lights;
     std::set<int> hidden_groups;
-    int solo_light = -1; // -1 = off, >= 0 = only this light rendered
+    int solo_light = -1; // -1 = off, >= 0 = only this top-level light rendered
+    int solo_light_group = -1; // -1 = not soloing a group light; >= 0 = group index
+    int solo_light_index = -1; // light index within the group (-1 = off)
 
     // Grid
     bool show_grid = false;
@@ -220,9 +222,14 @@ struct EditorState {
     void toggle_group_visibility(int i) {
         if (hidden_groups.count(i)) hidden_groups.erase(i); else hidden_groups.insert(i);
     }
+    void clear_solo() {
+        solo_light = -1;
+        solo_light_group = -1;
+        solo_light_index = -1;
+    }
     void show_all() {
         hidden_shapes.clear(); hidden_lights.clear(); hidden_groups.clear();
-        solo_light = -1;
+        clear_solo();
     }
 
     // ── Selection helpers ───────────────────────────────────────────
@@ -290,6 +297,11 @@ struct EditorState {
         std::erase_if(hidden_lights, [&](int i) { return i >= (int)sc.lights.size(); });
         std::erase_if(hidden_groups, [&](int i) { return i >= (int)sc.groups.size(); });
         if (solo_light >= (int)sc.lights.size()) solo_light = -1;
+        if (solo_light_group >= (int)sc.groups.size() ||
+            (solo_light_group >= 0 && solo_light_index >= (int)sc.groups[solo_light_group].lights.size())) {
+            solo_light_group = -1;
+            solo_light_index = -1;
+        }
     }
 };
 

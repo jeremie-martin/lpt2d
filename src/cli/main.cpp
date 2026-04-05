@@ -34,6 +34,7 @@ static void print_usage() {
               << "  --opacity <float>        Global opacity 0-1 (overrides shot look)\n"
               << "  --intensity <float>      Trace intensity multiplier (overrides shot trace)\n"
               << "  --fast                   Half-precision FBO (RGBA16F) — ~3x faster, slight precision loss\n"
+              << "  --histogram              Include 256-bin luminance histogram in stderr JSON\n"
               << "  --stream                 Streaming mode: read JSON shots from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -92,7 +93,7 @@ static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
     }
 }
 
-static int run_stream(const Shot& session, int64_t default_rays, bool fast) {
+static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool histogram = false) {
     HeadlessGL gl;
     if (!gl.init()) return 1;
 
@@ -187,11 +188,20 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast) {
         std::snprintf(mbuf, sizeof(mbuf),
             ", \"mean\": %.1f, \"pct_black\": %.4f, \"pct_clipped\": %.4f, \"p50\": %.0f, \"p95\": %.0f",
             metrics.mean_lum, metrics.pct_black, metrics.pct_clipped, metrics.p50, metrics.p95);
+        std::string hbuf;
+        if (histogram) {
+            hbuf = ", \"histogram\": [";
+            for (int i = 0; i < 256; ++i) {
+                if (i > 0) hbuf += ',';
+                hbuf += std::to_string(metrics.histogram[i]);
+            }
+            hbuf += ']';
+        }
         std::cerr << "frame " << frame << ": {\"rays\": " << rays
                   << ", \"time_ms\": " << ms
                   << ", \"max_hdr\": " << renderer.last_max()
                   << ", \"total_rays\": " << renderer.total_rays()
-                  << mbuf << "}\n";
+                  << mbuf << hbuf << "}\n";
         ++frame;
     }
 
@@ -204,6 +214,7 @@ int main(int argc, char** argv) {
     std::string output = "output.png";
     bool stream_mode = false;
     bool fast_mode = false;
+    bool emit_histogram = false;
     CLIOverrides overrides;
 
     for (int i = 1; i < argc; ++i) {
@@ -252,6 +263,8 @@ int main(int argc, char** argv) {
             overrides.intensity = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--fast") == 0) {
             fast_mode = true;
+        } else if (std::strcmp(argv[i], "--histogram") == 0) {
+            emit_histogram = true;
         } else if (std::strcmp(argv[i], "--stream") == 0) {
             stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
@@ -268,8 +281,9 @@ int main(int argc, char** argv) {
         // Stream mode: use default shot (no scene file needed), apply CLI overrides
         Shot session;
         apply_overrides(session, overrides);
-        return run_stream(session, session.trace.rays, fast_mode);
+        return run_stream(session, session.trace.rays, fast_mode, emit_histogram);
     }
+    (void)emit_histogram; // only used in stream mode
 
     // Load shot (scene file provides defaults for everything)
     Shot shot = resolve_shot(scene_name);

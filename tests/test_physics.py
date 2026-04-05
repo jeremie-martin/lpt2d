@@ -2,7 +2,8 @@
 """Physics verification tests for the 2D light path tracer.
 
 Tests: Snell's law, energy linear scaling, energy depth convergence,
-chromatic dispersion, total internal reflection.
+chromatic dispersion, total internal reflection, energy conservation,
+lens focusing.
 """
 
 from __future__ import annotations
@@ -37,18 +38,32 @@ def render_pixels(
     """Render and return (H, W, 3) uint8 array + metadata dict."""
     scene_json = json.dumps(scene_dict, separators=(",", ":"))
     cmd = [
-        CLI, "--stream",
-        "--width", str(width), "--height", str(height),
-        "--rays", str(rays),
-        "--normalize", normalize,
-        "--exposure", str(exposure),
-        "--tonemap", tonemap,
-        "--depth", str(depth),
-        "--intensity", str(intensity),
-        "--gamma", str(gamma),
+        CLI,
+        "--stream",
+        "--width",
+        str(width),
+        "--height",
+        str(height),
+        "--rays",
+        str(rays),
+        "--normalize",
+        normalize,
+        "--exposure",
+        str(exposure),
+        "--tonemap",
+        tonemap,
+        "--depth",
+        str(depth),
+        "--intensity",
+        str(intensity),
+        "--gamma",
+        str(gamma),
     ]
     proc = subprocess.Popen(
-        cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     assert proc.stdin and proc.stdout and proc.stderr
     proc.stdin.write((scene_json + "\n").encode())
@@ -67,7 +82,7 @@ def render_pixels(
         if "max_hdr" in line:
             idx = line.find(": {")
             if idx >= 0:
-                meta = json.loads(line[idx + 2:])
+                meta = json.loads(line[idx + 2 :])
 
     pixels = np.frombuffer(pixel_data, dtype=np.uint8).reshape(height, width, 3)
     return pixels, meta
@@ -85,9 +100,13 @@ MIRROR_98 = {"metallic": 1.0, "albedo": 0.98, "transmission": 0.0}
 
 def beam_light(origin, direction, angular_width=0.005, intensity=1.0, wl_min=380.0, wl_max=780.0):
     return {
-        "type": "beam", "origin": origin, "direction": direction,
-        "angular_width": angular_width, "intensity": intensity,
-        "wavelength_min": wl_min, "wavelength_max": wl_max,
+        "type": "beam",
+        "origin": origin,
+        "direction": direction,
+        "angular_width": angular_width,
+        "intensity": intensity,
+        "wavelength_min": wl_min,
+        "wavelength_max": wl_max,
     }
 
 
@@ -103,6 +122,21 @@ def segment_shape(a, b, material):
     return {"type": "segment", "a": a, "b": b, "material": material}
 
 
+def circle_shape(center, radius, material):
+    return {"type": "circle", "center": center, "radius": radius, "material": material}
+
+
+def parallel_beam_light(a, b, direction, angular_width=0.0, intensity=1.0):
+    return {
+        "type": "parallel_beam",
+        "a": a,
+        "b": b,
+        "direction": direction,
+        "angular_width": angular_width,
+        "intensity": intensity,
+    }
+
+
 def mirror_box_walls(half=0.9):
     return [
         segment_shape([-half, -half], [half, -half], MIRROR_98),
@@ -114,9 +148,12 @@ def mirror_box_walls(half=0.9):
 
 def make_scene(shapes, lights, bounds):
     return {
-        "version": 4, "name": "test",
+        "version": 4,
+        "name": "test",
         "camera": {"bounds": bounds},
-        "shapes": shapes, "lights": lights, "groups": [],
+        "shapes": shapes,
+        "lights": lights,
+        "groups": [],
     }
 
 
@@ -125,8 +162,9 @@ def make_scene(shapes, lights, bounds):
 # ---------------------------------------------------------------------------
 
 
-def region_brightness(pixels: np.ndarray, row_start: int, row_end: int,
-                      col_start: int, col_end: int) -> float:
+def region_brightness(
+    pixels: np.ndarray, row_start: int, row_end: int, col_start: int, col_end: int
+) -> float:
     """Mean pixel value in a rectangular region."""
     region = pixels[row_start:row_end, col_start:col_end]
     return float(np.mean(region))
@@ -145,27 +183,9 @@ def column_centroid(pixels: np.ndarray, row_start: int, row_end: int) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Test tracking
-# ---------------------------------------------------------------------------
-
-passed = 0
-failed = 0
-
-
-def check(name: str, condition: bool, detail: str):
-    global passed, failed
-    if condition:
-        passed += 1
-        print(f"  PASS  {name}")
-    else:
-        failed += 1
-        print(f"  FAIL  {name}")
-    print(f"        {detail}")
-
-
-# ---------------------------------------------------------------------------
 # Test 1: Snell's law — beam through glass slab
 # ---------------------------------------------------------------------------
+
 
 def test_snell_law():
     print("\n=== Test 1: Snell's law ===\n")
@@ -214,16 +234,17 @@ def test_snell_law():
 
     error_px = abs(centroid_px - x_expected_px)
 
-    check(
-        "Snell's law lateral displacement",
-        error_px < 25,
-        f"expected x={x_expected_px:.1f}px, measured={centroid_px:.1f}px, error={error_px:.1f}px",
+    detail = (
+        f"expected x={x_expected_px:.1f}px, measured={centroid_px:.1f}px, error={error_px:.1f}px"
     )
+    print(f"        {detail}")
+    assert error_px < 25, f"Snell's law lateral displacement: {detail}"
 
 
 # ---------------------------------------------------------------------------
 # Test 2: Energy linear scaling
 # ---------------------------------------------------------------------------
+
 
 def test_energy_linear():
     print("\n=== Test 2: Energy linear scaling ===\n")
@@ -235,25 +256,28 @@ def test_energy_linear():
 
     # Use exposure that puts values in a measurable range without clipping
     # Gamma=1.0 ensures linear output
-    px1, _ = render_pixels(scene, rays=2_000_000, normalize="rays", tonemap="none", exposure=-8.0, gamma=1.0)
+    px1, _ = render_pixels(
+        scene, rays=2_000_000, normalize="rays", tonemap="none", exposure=-8.0, gamma=1.0
+    )
     mean1 = float(np.mean(px1))
 
     # Double intensity
     scene2 = make_scene(walls, [point_light([0.0, 0.0], intensity=2.0)], bounds)
-    px2, _ = render_pixels(scene2, rays=2_000_000, normalize="rays", tonemap="none", exposure=-8.0, gamma=1.0)
+    px2, _ = render_pixels(
+        scene2, rays=2_000_000, normalize="rays", tonemap="none", exposure=-8.0, gamma=1.0
+    )
     mean2 = float(np.mean(px2))
 
     ratio = mean2 / mean1 if mean1 > 5 else 0
-    check(
-        "intensity 2x → brightness 2x",
-        abs(ratio - 2.0) < 0.20,
-        f"mean1={mean1:.2f}, mean2={mean2:.2f}, ratio={ratio:.3f} (expected ~2.0)",
-    )
+    detail = f"mean1={mean1:.2f}, mean2={mean2:.2f}, ratio={ratio:.3f} (expected ~2.0)"
+    print(f"        {detail}")
+    assert abs(ratio - 2.0) < 0.20, f"intensity 2x → brightness 2x: {detail}"
 
 
 # ---------------------------------------------------------------------------
 # Test 3: Energy depth convergence
 # ---------------------------------------------------------------------------
+
 
 def test_energy_depth_convergence():
     print("\n=== Test 3: Energy depth convergence ===\n")
@@ -270,28 +294,33 @@ def test_energy_depth_convergence():
 
     means = {}
     for d in [4, 16, 20]:
-        px, _ = render_pixels(scene, rays=3_000_000, depth=d, normalize="rays", tonemap="none", exposure=-8.0, gamma=1.0)
+        px, _ = render_pixels(
+            scene,
+            rays=3_000_000,
+            depth=d,
+            normalize="rays",
+            tonemap="none",
+            exposure=-8.0,
+            gamma=1.0,
+        )
         means[d] = float(np.mean(px))
         print(f"  depth={d:2d}  mean_brightness={means[d]:.2f}")
 
-    check(
-        "more bounces → more energy",
-        means[20] > means[4],
-        f"depth=20: {means[20]:.2f} > depth=4: {means[4]:.2f}",
-    )
+    detail = f"depth=20: {means[20]:.2f} > depth=4: {means[4]:.2f}"
+    print(f"        {detail}")
+    assert means[20] > means[4], f"more bounces → more energy: {detail}"
 
     if means[16] > 0:
         convergence = means[20] / means[16]
-        check(
-            "depth=20 ≈ depth=16 (converging)",
-            convergence < 1.25,
-            f"ratio depth20/depth16 = {convergence:.4f} (should be < 1.25)",
-        )
+        detail = f"ratio depth20/depth16 = {convergence:.4f} (should be < 1.25)"
+        print(f"        {detail}")
+        assert convergence < 1.25, f"depth=20 ≈ depth=16 (converging): {detail}"
 
 
 # ---------------------------------------------------------------------------
 # Test 4: Chromatic dispersion
 # ---------------------------------------------------------------------------
+
 
 def test_dispersion():
     print("\n=== Test 4: Chromatic dispersion ===\n")
@@ -316,7 +345,7 @@ def test_dispersion():
 
     # Dispersed light exits to the right through the right face.
     # Measure R vs B row centroid in the right portion of the image.
-    right = pixels[:, W * 2 // 3:, :]
+    right = pixels[:, W * 2 // 3 :, :]
 
     r_rows = right[:, :, 0].astype(np.float64).sum(axis=1)
     b_rows = right[:, :, 2].astype(np.float64).sum(axis=1)
@@ -327,22 +356,19 @@ def test_dispersion():
         b_centroid = np.dot(b_rows, rows) / b_total
         separation = abs(r_centroid - b_centroid)
 
-        check(
-            "red and blue peaks are separated",
-            separation > 1.0,
-            f"R centroid row={r_centroid:.1f}, B centroid row={b_centroid:.1f}, separation={separation:.1f}px",
-        )
+        detail = f"R centroid row={r_centroid:.1f}, B centroid row={b_centroid:.1f}, separation={separation:.1f}px"
+        print(f"        {detail}")
+        assert separation > 1.0, f"red and blue peaks are separated: {detail}"
     else:
-        check(
-            "dispersion detectable",
-            r_total > 100 and b_total > 100,
-            f"R total={r_total:.0f}, B total={b_total:.0f} (need > 100 each)",
-        )
+        detail = f"R total={r_total:.0f}, B total={b_total:.0f} (need > 100 each)"
+        print(f"        {detail}")
+        assert r_total > 100 and b_total > 100, f"dispersion detectable: {detail}"
 
 
 # ---------------------------------------------------------------------------
 # Test 5: Total internal reflection (TIR)
 # ---------------------------------------------------------------------------
+
 
 def test_tir():
     print("\n=== Test 5: Total internal reflection ===\n")
@@ -377,10 +403,10 @@ def test_tir():
     px_b, _ = render_pixels(scene_b, width=W, height=H, rays=3_000_000, exposure=-3.0, gamma=1.0)
 
     # Measure the LEFT side (where TIR-reflected light exits the left face)
-    left_region = px_a[:, :W // 4, :]
+    left_region = px_a[:, : W // 4, :]
     bright_a_left = float(np.mean(left_region))
 
-    left_region_b = px_b[:, :W // 4, :]
+    left_region_b = px_b[:, : W // 4, :]
     bright_b_left = float(np.mean(left_region_b))
 
     print(f"  High IOR (TIR expected):    left brightness = {bright_a_left:.2f}")
@@ -388,11 +414,114 @@ def test_tir():
 
     # With TIR (ior=1.5), more light reflects to the left face
     # Without TIR (ior=1.2), light transmits through hypotenuse → less goes left
-    check(
-        "TIR: high-IOR reflects more light to left side",
-        bright_a_left > bright_b_left * 2.0,
-        f"high_ior_left={bright_a_left:.2f}, low_ior_left={bright_b_left:.2f}, ratio={bright_a_left / max(bright_b_left, 0.01):.2f}x",
+    detail = f"high_ior_left={bright_a_left:.2f}, low_ior_left={bright_b_left:.2f}, ratio={bright_a_left / max(bright_b_left, 0.01):.2f}x"
+    print(f"        {detail}")
+    assert bright_a_left > bright_b_left * 2.0, (
+        f"TIR: high-IOR reflects more light to left side: {detail}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 6: Energy conservation — mirror box geometric series
+# ---------------------------------------------------------------------------
+
+
+def test_energy_conservation():
+    print("\n=== Test 6: Energy conservation ===\n")
+
+    # Mirror box with 98% reflective walls and a point light.
+    # At depth D, the captured energy fraction is sum(0.98^k, k=0..D-1).
+    # Ratio of depth20/depth4 should match the theoretical ratio.
+    walls = mirror_box_walls()
+    light = point_light([0.0, 0.0])
+    bounds = [-1.0, -1.0, 1.0, 1.0]
+    scene = make_scene(walls, [light], bounds)
+
+    depths = [4, 12, 20]
+    means = {}
+    for d in depths:
+        px, _ = render_pixels(
+            scene,
+            rays=3_000_000,
+            depth=d,
+            normalize="rays",
+            tonemap="none",
+            exposure=-8.0,
+            gamma=1.0,
+        )
+        means[d] = float(np.mean(px))
+        print(f"  depth={d:2d}  mean_brightness={means[d]:.2f}")
+
+    # Theoretical geometric series: S(D) = sum(r^k, k=0..D-1) = (1 - r^D) / (1 - r)
+    r = 0.98
+    s4 = (1 - r**4) / (1 - r)
+    s12 = (1 - r**12) / (1 - r)
+    s20 = (1 - r**20) / (1 - r)
+
+    # Verify ratios match theory within tolerance
+    if means[4] > 2:
+        ratio_12_4 = means[12] / means[4]
+        expected_12_4 = s12 / s4
+        error_12_4 = abs(ratio_12_4 - expected_12_4) / expected_12_4
+        detail = f"ratio d12/d4: measured={ratio_12_4:.3f}, expected={expected_12_4:.3f}, error={error_12_4:.1%}"
+        print(f"        {detail}")
+        assert error_12_4 < 0.20, f"energy depth ratio d12/d4: {detail}"
+
+        ratio_20_4 = means[20] / means[4]
+        expected_20_4 = s20 / s4
+        error_20_4 = abs(ratio_20_4 - expected_20_4) / expected_20_4
+        detail = f"ratio d20/d4: measured={ratio_20_4:.3f}, expected={expected_20_4:.3f}, error={error_20_4:.1%}"
+        print(f"        {detail}")
+        assert error_20_4 < 0.20, f"energy depth ratio d20/d4: {detail}"
+    else:
+        raise AssertionError(f"scene too dark to measure: mean_d4={means[4]:.2f}")
+
+
+# ---------------------------------------------------------------------------
+# Test 7: Lens focusing — parallel beam through glass circle
+# ---------------------------------------------------------------------------
+
+
+def test_lens_focus():
+    print("\n=== Test 7: Lens focusing ===\n")
+
+    # Glass circle acts as a ball lens. A parallel beam from above should
+    # converge to a focal region below the lens.
+    lens = circle_shape([0.0, 0.0], 0.25, GLASS)
+
+    # Wide parallel beam from above, covering the lens diameter
+    light = parallel_beam_light([-0.3, 0.7], [0.3, 0.7], [0.0, -1.0])
+
+    bounds = [-1.0, -1.0, 1.0, 1.0]
+    W, H = 200, 200
+    scene = make_scene([lens], [light], bounds)
+
+    pixels, _ = render_pixels(scene, width=W, height=H, rays=5_000_000, exposure=-3.0, gamma=1.0)
+
+    # Measure brightness in horizontal strips below the lens.
+    # The focal region should have concentrated brightness in a narrow
+    # column range compared to the full beam width.
+    # Look at a strip well below the lens (y around -0.4 to -0.6)
+    focal_row_start = int((bounds[3] - (-0.3)) / (bounds[3] - bounds[1]) * H)
+    focal_row_end = int((bounds[3] - (-0.7)) / (bounds[3] - bounds[1]) * H)
+
+    strip = pixels[focal_row_start:focal_row_end].astype(np.float64)
+    col_brightness = strip.mean(axis=2).sum(axis=0)  # brightness per column
+    total = col_brightness.sum()
+
+    if total < 100:
+        raise AssertionError(f"too dark below lens to measure focus: total={total:.1f}")
+
+    # Compute the fraction of brightness in the central 20% of columns
+    center_start = int(W * 0.4)
+    center_end = int(W * 0.6)
+    center_fraction = col_brightness[center_start:center_end].sum() / total
+
+    # Without a lens, a beam this wide would spread 60% of width = 30% of image width
+    # With a lens, most light should concentrate in the center
+    detail = f"center 20% of columns contains {center_fraction:.1%} of light (expect > 50%)"
+    print(f"        {detail}")
+    assert center_fraction > 0.50, f"lens focus concentration: {detail}"
 
 
 # ---------------------------------------------------------------------------
@@ -400,12 +529,25 @@ def test_tir():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    test_snell_law()
-    test_energy_linear()
-    test_energy_depth_convergence()
-    test_dispersion()
-    test_tir()
-
+    tests = [
+        test_snell_law,
+        test_energy_linear,
+        test_energy_depth_convergence,
+        test_dispersion,
+        test_tir,
+        test_energy_conservation,
+        test_lens_focus,
+    ]
+    passed = 0
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            passed += 1
+            print(f"  PASS  {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"  FAIL  {t.__name__}: {e}")
     print(f"\n{'=' * 70}")
     print(f"Results: {passed} passed, {failed} failed")
     print(f"{'=' * 70}")

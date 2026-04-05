@@ -136,6 +136,7 @@ class Renderer:
                         pct_clipped=meta.get("pct_clipped"),
                         p50=meta.get("p50"),
                         p95=meta.get("p95"),
+                        histogram=meta.get("histogram"),
                     )
                 except (json.JSONDecodeError, ValueError):
                     pass
@@ -544,8 +545,8 @@ def auto_look(
     canvas: Canvas | None = None,
     target_mean: float = 0.35,
     max_clipping: float = 0.02,
-    tonemap: str = "reinhardx",
-    normalize: str = "rays",
+    tonemap: str | None = None,
+    normalize: str | None = None,
     binary: str = DEFAULT_BINARY,
     frame: int = 0,
 ) -> Look:
@@ -553,7 +554,10 @@ def auto_look(
 
     Works with a static Scene or an (animate, timeline) pair. Renders a
     low-quality test frame, measures brightness, and computes exposure to
-    hit *target_mean* (0–1 scale) without exceeding *max_clipping*.
+    hit *target_mean* (0-1 scale) without exceeding *max_clipping*.
+
+    If *tonemap* or *normalize* are None, they are inferred from the
+    scene's light distribution.
     """
     # Build animate callback from static Scene
     if isinstance(scene_or_animate, Scene):
@@ -566,12 +570,16 @@ def auto_look(
             raise ValueError("timeline is required when passing an animate callback")
         timeline = timeline_or_none
 
+    # Use neutral defaults for the draft render so we can measure the raw distribution
+    draft_tonemap = tonemap or "reinhardx"
+    draft_normalize = normalize or "rays"
+
     # Render a fast draft with the target tonemap and gamma so the measured
     # brightness matches what the user will see in the final render.
     draft_canvas = canvas or Canvas(width=480, height=480)
     draft_shot = Shot(
         canvas=draft_canvas,
-        look=Look(exposure=-5.0, tonemap=tonemap, normalize=normalize),
+        look=Look(exposure=-5.0, tonemap=draft_tonemap, normalize=draft_normalize),
         trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
     )
 
@@ -585,9 +593,41 @@ def auto_look(
         fast=True,
     )
     if not stats_results:
-        return Look(tonemap=tonemap, normalize=normalize)
+        return Look(tonemap=draft_tonemap, normalize=draft_normalize)
 
     _, _, stats = stats_results[0]
+
+    # Infer tonemap from scene characteristics if not explicitly set
+    if tonemap is None:
+        if stats.pct_black > 0.7:
+            # Very sparse scene (mostly dark) — log compresses bright spots
+            chosen_tonemap = "log"
+        elif stats.p95 > 0 and stats.mean > 0 and stats.p95 / max(stats.mean, 0.01) > 10:
+            # High dynamic range — ACES handles strong highlights gracefully
+            chosen_tonemap = "aces"
+        else:
+            # Moderate range — ReinhardX gives good contrast
+            chosen_tonemap = "reinhardx"
+    else:
+        chosen_tonemap = tonemap
+
+    # Infer normalize mode if not explicitly set
+    chosen_normalize = normalize or "rays"
+
+    # If the inferred tonemap differs from the draft, re-render with the
+    # correct tonemap so that the measured brightness matches the final output.
+    if chosen_tonemap != draft_tonemap:
+        draft_shot_recal = Shot(
+            canvas=draft_canvas,
+            look=Look(exposure=-5.0, tonemap=chosen_tonemap, normalize=draft_normalize),
+            trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
+        )
+        recal_results = render_stats(
+            animate, timeline, frames=frame,
+            settings=draft_shot_recal, camera=camera, binary=binary, fast=True,
+        )
+        if recal_results:
+            _, _, stats = recal_results[0]
 
     # Compute exposure adjustment to hit target brightness
     measured_mean = stats.mean / 255.0
@@ -603,10 +643,10 @@ def auto_look(
     if stats.pct_clipped > max_clipping:
         exposure = exposure - 1.0
 
-    result = Look(exposure=round(exposure, 2), tonemap=tonemap, normalize=normalize)
+    result = Look(exposure=round(exposure, 2), tonemap=chosen_tonemap, normalize=chosen_normalize)
 
     # For fixed normalization, calibrate the reference value
-    if normalize == "fixed":
+    if chosen_normalize == "fixed":
         ref = calibrate_normalize_ref(
             animate, timeline, settings=draft_shot, camera=camera, binary=binary, frame=frame
         )

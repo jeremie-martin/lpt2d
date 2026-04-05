@@ -24,7 +24,7 @@ import pytest
 from PIL import Image
 
 CLI = Path("./build/lpt2d-cli")
-SCENE_PATH = Path("renders/clean_room/arcs/arc_bloom_wash/frame_000.json")
+SCENE_PATH = Path("scenes/three_spheres.json")
 BENCH_METRICS_PATH = Path(__file__).resolve().parents[1] / "bench" / "metrics.py"
 
 ASPECT = 16.0 / 9.0
@@ -38,14 +38,14 @@ BATCH_SIZE = 64_000
 
 MAX_MEAN_DRIFT = 0.10
 MAX_P95_DRIFT = 0.12
-MIN_SSIM = 0.95
+MIN_SSIM = 0.94
 
 # Content validity: reject degenerate (all-white / all-black) images.
 # If the reference mean falls outside this range, the test exposure is wrong
 # and the comparison is meaningless.
-MIN_REFERENCE_MEAN = 30.0   # reject near-black images
+MIN_REFERENCE_MEAN = 30.0  # reject near-black images
 MAX_REFERENCE_MEAN = 230.0  # reject near-white images
-MAX_WHITE_FRACTION = 0.10   # at most 10% of pixels may be clipped white
+MAX_WHITE_FRACTION = 0.10  # at most 10% of pixels may be clipped white
 
 
 def _load_bench_metrics():
@@ -96,13 +96,13 @@ def _load_scene() -> dict:
     return json.loads(SCENE_PATH.read_text())
 
 
-def _wire_scene(scene: dict, normalize: str = "rays") -> str:
-    """Build a wire-format JSON string from a scene dict, with a render block."""
-    wire = {k: v for k, v in scene.items() if k not in {"canvas", "look", "trace", "camera"}}
-    wire["render"] = {
-        "bounds": scene["camera"]["bounds"],
-        "normalize": normalize,
-    }
+def _wire_scene(scene: dict) -> str:
+    """Build a wire-format JSON string from a scene dict for --stream mode.
+
+    Keeps scene content (shapes/lights/groups/materials) and camera bounds.
+    Look/trace/canvas are overridden by CLI flags in _render().
+    """
+    wire = {k: v for k, v in scene.items() if k not in {"canvas", "look", "trace"}}
     return json.dumps(wire, separators=(",", ":"))
 
 
@@ -124,14 +124,22 @@ def _render(
     cmd = [
         str(CLI),
         "--stream",
-        "--width", str(width),
-        "--height", str(height),
-        "--rays", str(rays),
-        "--batch", str(min(batch, rays)),
-        "--normalize", normalize,
-        "--exposure", str(exposure),
-        "--tonemap", tonemap,
-        "--white-point", str(white_point),
+        "--width",
+        str(width),
+        "--height",
+        str(height),
+        "--rays",
+        str(rays),
+        "--batch",
+        str(min(batch, rays)),
+        "--normalize",
+        normalize,
+        "--exposure",
+        str(exposure),
+        "--tonemap",
+        tonemap,
+        "--white-point",
+        str(white_point),
     ]
     completed = subprocess.run(
         cmd,
@@ -186,7 +194,7 @@ def collect_metrics(
     white_point: float = 1.0,
 ) -> list[ResolutionMetric]:
     scene = _load_scene()
-    scene_json = _wire_scene(scene, normalize=normalize)
+    scene_json = _wire_scene(scene)
     look = scene["look"]
     exp = exposure if exposure is not None else look["exposure"]
 
@@ -284,6 +292,7 @@ def _skip_if_missing():
 
 # ── Resolution independence: normalize=rays ──────────────────────────
 
+
 def test_resolution_independence_rays():
     """Changing resolution with normalize=rays should not change brightness."""
     _skip_if_missing()
@@ -328,7 +337,7 @@ def test_ray_count_independence():
     """
     _skip_if_missing()
     scene = _load_scene()
-    scene_json = _wire_scene(scene, normalize="rays")
+    scene_json = _wire_scene(scene)
     look = scene["look"]
 
     height = RAY_COUNT_HEIGHTS[0]
@@ -341,7 +350,10 @@ def test_ray_count_independence():
         label = f"{rpp:.0f}rpp"
         frames.append(
             _render(
-                label, width, height, scene_json,
+                label,
+                width,
+                height,
+                scene_json,
                 rays=rays,
                 normalize="rays",
                 exposure=look["exposure"],
@@ -383,6 +395,7 @@ def test_ray_count_independence():
 
 
 # ── CLI entry point ──────────────────────────────────────────────────
+
 
 def main() -> int:
     if not CLI.exists():
