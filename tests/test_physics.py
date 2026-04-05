@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Physics verification tests for the 2D light path tracer.
+"""Physics and geometry verification tests for the 2D light path tracer.
 
 Tests: Snell's law, energy linear scaling, energy depth convergence,
 chromatic dispersion, total internal reflection, energy conservation,
-lens focusing.
+lens focusing, and exact ellipse group transforms.
 """
 
 from __future__ import annotations
@@ -126,6 +126,17 @@ def circle_shape(center, radius, material):
     return {"type": "circle", "center": center, "radius": radius, "material": material}
 
 
+def ellipse_shape(center, semi_a, semi_b, rotation, material):
+    return {
+        "type": "ellipse",
+        "center": center,
+        "semi_a": semi_a,
+        "semi_b": semi_b,
+        "rotation": rotation,
+        "material": material,
+    }
+
+
 def parallel_beam_light(a, b, direction, angular_width=0.0, intensity=1.0):
     return {
         "type": "parallel_beam",
@@ -188,6 +199,31 @@ def polygon_area2(vertices) -> float:
         b = vertices[(i + 1) % len(vertices)]
         area2 += a[0] * b[1] - b[0] * a[1]
     return area2
+
+
+def normalize2(v):
+    x, y = float(v[0]), float(v[1])
+    length = math.hypot(x, y)
+    if length < 1e-12:
+        raise ValueError("zero-length vector")
+    return [x / length, y / length]
+
+
+def refract_exit(direction, outward_normal, n_inside: float, n_outside: float = 1.0):
+    d = normalize2(direction)
+    n = normalize2(outward_normal)
+    cos_i = d[0] * n[0] + d[1] * n[1]
+    eta = n_inside / n_outside
+    sin_t_sq = eta * eta * max(0.0, 1.0 - cos_i * cos_i)
+    if sin_t_sq >= 1.0:
+        return None
+    cos_t = math.sqrt(max(0.0, 1.0 - sin_t_sq))
+    return normalize2(
+        [
+            eta * d[0] + (cos_t - eta * cos_i) * n[0],
+            eta * d[1] + (cos_t - eta * cos_i) * n[1],
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -406,51 +442,92 @@ def test_energy_depth_convergence():
 
 
 # ---------------------------------------------------------------------------
-# Test 4: Chromatic dispersion
+# Test 4: Chromatic dispersion vs Cauchy prediction
 # ---------------------------------------------------------------------------
 
 
 def test_dispersion():
     print("\n=== Test 4: Chromatic dispersion ===\n")
 
-    # Equilateral prism with strong Cauchy dispersion.
-    # Beam enters left face, exits right face, dispersing into a spectrum.
-    # Wide view with long path from prism to screen so separation is measurable.
-    # Prism geometry matching prism.json convention (CW winding, outward normals).
+    cauchy_b = 60_000.0
     prism = polygon_shape(
-        [[-0.1, -0.208], [0.3, 0.139], [-0.5, 0.139]],
-        {"ior": 1.5, "transmission": 1.0, "cauchy_b": 80000.0, "absorption": 0.3},
+        [[-0.4, -0.25], [0.25, -0.1], [0.35, 0.1], [-0.4, 0.25]],
+        {"ior": 1.5, "transmission": 1.0, "cauchy_b": cauchy_b, "absorption": 0.0},
     )
+    screen = segment_shape([0.9, -0.35], [0.9, 0.75], ABSORBER)
+    bounds = [-1.1, -0.6, 1.1, 0.9]
+    exit_point = [0.3, 0.0]
+    exit_normal = normalize2([0.2, -0.1])
+    screen_x = 0.9
+    width, height = 420, 300
 
-    # Beam aimed directly at the left face for maximum throughput
-    light = beam_light([-0.8, -0.05], [0.7, 0.15], angular_width=0.01)
+    def measure_row(wavelength_nm):
+        scene = make_scene(
+            [prism, screen],
+            [
+                beam_light(
+                    [-0.8, 0.0],
+                    [1.0, 0.0],
+                    angular_width=0.002,
+                    wl_min=wavelength_nm,
+                    wl_max=wavelength_nm,
+                )
+            ],
+            bounds,
+        )
+        pixels, _ = render_pixels(
+            scene,
+            width=width,
+            height=height,
+            rays=9_000_000,
+            normalize="rays",
+            tonemap="none",
+            exposure=-3.5,
+            gamma=1.0,
+        )
+        screen_col = int((screen_x - bounds[0]) / (bounds[2] - bounds[0]) * width)
+        col_lo = max(0, screen_col - 16)
+        col_hi = min(width, screen_col + 16)
+        strip = pixels[:, col_lo:col_hi].astype(np.float64)
+        row_energy = strip.mean(axis=2).sum(axis=1)
+        total = row_energy.sum()
+        if total < 100.0:
+            raise AssertionError(f"screen too dark to measure at {wavelength_nm:.0f} nm: total={total:.1f}")
+        rows = np.arange(height, dtype=np.float64)
+        return float(np.dot(row_energy, rows) / total)
 
-    bounds = [-1.3, -0.9, 1.3, 0.9]
-    scene = make_scene([prism], [light], bounds)
+    measured_rows = {}
+    expected_rows = {}
+    for wavelength in [450.0, 650.0]:
+        ior = 1.5 + cauchy_b / (wavelength * wavelength)
+        out_dir = refract_exit([1.0, 0.0], exit_normal, ior)
+        assert out_dir is not None
+        y_screen = exit_point[1] + out_dir[1] / out_dir[0] * (screen_x - exit_point[0])
+        expected_rows[wavelength] = (bounds[3] - y_screen) / (bounds[3] - bounds[1]) * height
+        measured_rows[wavelength] = measure_row(wavelength)
 
-    W, H = 400, 300
-    pixels, _ = render_pixels(scene, width=W, height=H, rays=15_000_000, exposure=-1.0, gamma=1.0)
-
-    # Dispersed light exits to the right through the right face.
-    # Measure R vs B row centroid in the right portion of the image.
-    right = pixels[:, W * 2 // 3 :, :]
-
-    r_rows = right[:, :, 0].astype(np.float64).sum(axis=1)
-    b_rows = right[:, :, 2].astype(np.float64).sum(axis=1)
-    r_total, b_total = r_rows.sum(), b_rows.sum()
-    if r_total > 100 and b_total > 100:
-        rows = np.arange(H, dtype=np.float64)
-        r_centroid = np.dot(r_rows, rows) / r_total
-        b_centroid = np.dot(b_rows, rows) / b_total
-        separation = abs(r_centroid - b_centroid)
-
-        detail = f"R centroid row={r_centroid:.1f}, B centroid row={b_centroid:.1f}, separation={separation:.1f}px"
+    offsets = {}
+    for wavelength in [450.0, 650.0]:
+        offsets[wavelength] = measured_rows[wavelength] - expected_rows[wavelength]
+        detail = (
+            f"{wavelength:.0f} nm: expected row={expected_rows[wavelength]:.1f}, "
+            f"measured={measured_rows[wavelength]:.1f}, offset={offsets[wavelength]:.1f}px"
+        )
         print(f"        {detail}")
-        assert separation > 1.0, f"red and blue peaks are separated: {detail}"
-    else:
-        detail = f"R total={r_total:.0f}, B total={b_total:.0f} (need > 100 each)"
-        print(f"        {detail}")
-        assert r_total > 100 and b_total > 100, f"dispersion detectable: {detail}"
+
+    measured_separation = abs(measured_rows[450.0] - measured_rows[650.0])
+    expected_separation = abs(expected_rows[450.0] - expected_rows[650.0])
+    separation_error = abs(measured_separation - expected_separation)
+    detail = (
+        f"separation expected={expected_separation:.1f}px, "
+        f"measured={measured_separation:.1f}px, error={separation_error:.1f}px"
+    )
+    print(f"        {detail}")
+    assert separation_error < 8.0, f"dispersion separation mismatch: {detail}"
+    assert abs(offsets[450.0] - offsets[650.0]) < 5.0, (
+        "red and blue should share the same screen-measurement bias"
+    )
+    assert measured_rows[450.0] < measured_rows[650.0], "shorter wavelengths should deflect more strongly"
 
 
 # ---------------------------------------------------------------------------
@@ -613,18 +690,104 @@ def test_lens_focus():
 
 
 # ---------------------------------------------------------------------------
+# Test 8: Ellipse group transforms stay exact under non-uniform scale
+# ---------------------------------------------------------------------------
+
+
+def test_grouped_ellipse_matches_direct_ellipse():
+    print("\n=== Test 8: Grouped ellipse transform exactness ===\n")
+
+    local = dict(center=[0.06, -0.04], semi_a=0.18, semi_b=0.09, rotation=0.0)
+    group_transform = dict(translate=[0.08, -0.03], rotate=0.55, scale=[1.8, 0.65])
+    sx, sy = group_transform["scale"]
+    tc = math.cos(group_transform["rotate"])
+    ts = math.sin(group_transform["rotate"])
+    scaled_center = [local["center"][0] * sx, local["center"][1] * sy]
+    direct = {
+        "center": [
+            scaled_center[0] * tc - scaled_center[1] * ts + group_transform["translate"][0],
+            scaled_center[0] * ts + scaled_center[1] * tc + group_transform["translate"][1],
+        ],
+        "semi_a": local["semi_a"] * sx,
+        "semi_b": local["semi_b"] * sy,
+        "rotation": group_transform["rotate"],
+    }
+
+    collectors = [
+        segment_shape([-1.0, 0.88], [1.0, 0.88], ABSORBER),
+        segment_shape([1.0, -0.88], [-1.0, -0.88], ABSORBER),
+    ]
+    light = parallel_beam_light([-0.55, 0.72], [0.55, 0.72], [0.0, -1.0], intensity=1.2)
+    bounds = [-1.0, -1.0, 1.0, 1.0]
+    material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1}
+
+    grouped_scene = {
+        "version": 4,
+        "name": "grouped-ellipse",
+        "camera": {"bounds": bounds},
+        "shapes": collectors,
+        "lights": [light],
+        "groups": [
+            {
+                "name": "ellipse",
+                "transform": group_transform,
+                "shapes": [ellipse_shape(local["center"], local["semi_a"], local["semi_b"], local["rotation"], material)],
+                "lights": [],
+            }
+        ],
+    }
+    direct_scene = make_scene(
+        collectors + [ellipse_shape(direct["center"], direct["semi_a"], direct["semi_b"], direct["rotation"], material)],
+        [light],
+        bounds,
+    )
+
+    grouped_pixels, _ = render_pixels(
+        grouped_scene,
+        width=260,
+        height=260,
+        rays=5_000_000,
+        normalize="rays",
+        tonemap="none",
+        exposure=-3.5,
+        gamma=1.0,
+    )
+    direct_pixels, _ = render_pixels(
+        direct_scene,
+        width=260,
+        height=260,
+        rays=5_000_000,
+        normalize="rays",
+        tonemap="none",
+        exposure=-3.5,
+        gamma=1.0,
+    )
+
+    diff = np.abs(grouped_pixels.astype(np.int16) - direct_pixels.astype(np.int16))
+    mean_diff = float(diff.mean())
+    max_diff = int(diff.max())
+    detail = f"mean abs diff={mean_diff:.3f}, max diff={max_diff}"
+    print(f"        {detail}")
+    assert mean_diff < 1.0 and max_diff < 24, f"grouped ellipse diverged from direct ellipse: {detail}"
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
         test_snell_law,
+        test_polygon_winding_is_physics_invariant,
         test_energy_linear,
+        test_segment_light_emits_both_sides,
+        test_emissive_segment_is_endpoint_order_invariant,
         test_energy_depth_convergence,
         test_dispersion,
         test_tir,
         test_energy_conservation,
         test_lens_focus,
+        test_grouped_ellipse_matches_direct_ellipse,
     ]
     passed = 0
     failed = 0

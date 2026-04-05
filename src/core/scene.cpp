@@ -87,6 +87,51 @@ float point_arc_distance(Vec2 p, const Arc& arc) {
                     (p - arc_end_point(arc)).length());
 }
 
+static Ellipse transform_ellipse_affine(const Ellipse& ellipse, const Transform2D& t) {
+    Ellipse out = ellipse;
+    out.center = t.apply(ellipse.center);
+
+    const float cr = std::cos(ellipse.rotation);
+    const float sr = std::sin(ellipse.rotation);
+    const float tc = std::cos(t.rotate);
+    const float ts = std::sin(t.rotate);
+
+    // Basis mapping the unit circle to this ellipse, then through the group's
+    // scale->rotate linear transform. Any affine image of an ellipse is still
+    // an ellipse, so we recover its axes from the transformed covariance.
+    const float sx = t.scale.x;
+    const float sy = t.scale.y;
+    const float a = ellipse.semi_a;
+    const float b = ellipse.semi_b;
+    const float b00 = a * (tc * sx * cr - ts * sy * sr);
+    const float b01 = -b * (tc * sx * sr + ts * sy * cr);
+    const float b10 = a * (ts * sx * cr + tc * sy * sr);
+    const float b11 = b * (-ts * sx * sr + tc * sy * cr);
+
+    const float c00 = b00 * b00 + b01 * b01;
+    const float c01 = b00 * b10 + b01 * b11;
+    const float c11 = b10 * b10 + b11 * b11;
+    const float trace = c00 + c11;
+    const float det = c00 * c11 - c01 * c01;
+    const float disc = std::sqrt(std::max(0.0f, trace * trace * 0.25f - det));
+    const float lambda_major = std::max(0.0f, trace * 0.5f + disc);
+    const float lambda_minor = std::max(0.0f, trace * 0.5f - disc);
+
+    out.semi_a = std::max(std::sqrt(lambda_major), 0.01f);
+    out.semi_b = std::max(std::sqrt(lambda_minor), 0.01f);
+
+    Vec2 major_axis{1.0f, 0.0f};
+    if (std::abs(c01) > 1e-6f || std::abs(lambda_major - c00) > 1e-6f) {
+        major_axis = Vec2{c01, lambda_major - c00};
+        if (major_axis.length_sq() < 1e-12f)
+            major_axis = Vec2{lambda_major - c11, c01};
+        if (major_axis.length_sq() > 1e-12f)
+            major_axis = major_axis.normalized();
+    }
+    out.rotation = normalize_angle(std::atan2(major_axis.y, major_axis.x));
+    return out;
+}
+
 Bounds shape_bounds(const Shape& s) {
     return std::visit(overloaded{
                           [](const Circle& c) {
@@ -458,12 +503,7 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
             return r;
         },
         [&](const Ellipse& e) -> Shape {
-            Ellipse r = e;
-            r.center = t.apply(e.center);
-            r.rotation = e.rotation + t.rotate;
-            r.semi_a = std::max(e.semi_a * uniform_scale, 0.01f);
-            r.semi_b = std::max(e.semi_b * uniform_scale, 0.01f);
-            return r;
+            return transform_ellipse_affine(e, t);
         },
     }, s);
 }

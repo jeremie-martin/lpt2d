@@ -1,6 +1,6 @@
 # Roadmap
 
-*Revised 2026-04-04. Replaces the original feature-checklist roadmap (now fully shipped).*
+*Revised 2026-04-05. Replaces the original feature-checklist roadmap (now fully shipped).*
 
 **Project identity:** A physically accurate 2D spectral light path tracer built to make it effortless to produce large quantities of beautiful animations procedurally in Python. Physical accuracy is non-negotiable — it serves aesthetics, not education.
 
@@ -41,7 +41,9 @@ End-to-end integration tests that render known optical setups and verify physica
 - **Snell's law**: Beam at known angle through glass slab → exit angle must match `arcsin(sin(θ)/n)`
 - **Energy conservation**: Total light energy out ≈ total energy in (reflected + transmitted + absorbed)
 - **Dispersion accuracy**: White beam through prism → spectral separation must match Cauchy equation
-- **Known optical setups**: Lens focusing distance, total internal reflection critical angle, Brewster angle
+- **Known optical setups**: Lens focusing distance, total internal reflection critical angle
+
+True Brewster-zero reflectance is polarization-specific. This renderer is currently unpolarized, so Brewster-angle validation is deferred until polarization is modeled rather than approximated with a misleading non-polarized test.
 
 These tests serve as a safety net: if a shader change or refraction fix breaks the physics, we know immediately and we know exactly which property is wrong.
 

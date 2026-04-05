@@ -137,6 +137,7 @@ class Renderer:
                         frame=frame_idx,
                         rays=meta.get("rays", 0),
                         time_ms=meta.get("time_ms", 0),
+                        time_ms_exact=meta.get("time_ms_exact"),
                         max_hdr=meta.get("max_hdr", 0.0),
                         total_rays=meta.get("total_rays", 0),
                         mean=meta.get("mean"),
@@ -144,6 +145,7 @@ class Renderer:
                         pct_clipped=meta.get("pct_clipped"),
                         p50=meta.get("p50"),
                         p95=meta.get("p95"),
+                        stats_ms=meta.get("stats_ms"),
                         histogram=meta.get("histogram"),
                     )
                 except (json.JSONDecodeError, ValueError):

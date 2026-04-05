@@ -181,13 +181,17 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         std::fwrite(pixels.data(), 1, frame_bytes, stdout);
         std::fflush(stdout);
 
+        auto stats_t0 = std::chrono::steady_clock::now();
         auto metrics = renderer.compute_frame_metrics();
+        auto stats_t1 = std::chrono::steady_clock::now();
         auto t1 = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        char mbuf[256];
+        double ms_exact = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
+        double stats_ms = std::chrono::duration_cast<std::chrono::microseconds>(stats_t1 - stats_t0).count() / 1000.0;
+        char mbuf[352];
         std::snprintf(mbuf, sizeof(mbuf),
-            ", \"mean\": %.1f, \"pct_black\": %.4f, \"pct_clipped\": %.4f, \"p50\": %.0f, \"p95\": %.0f",
-            metrics.mean_lum, metrics.pct_black, metrics.pct_clipped, metrics.p50, metrics.p95);
+            ", \"time_ms_exact\": %.3f, \"mean\": %.1f, \"pct_black\": %.4f, \"pct_clipped\": %.4f, \"p50\": %.0f, \"p95\": %.0f, \"stats_ms\": %.3f",
+            ms_exact, metrics.mean_lum, metrics.pct_black, metrics.pct_clipped, metrics.p50, metrics.p95, stats_ms);
         std::string hbuf;
         if (histogram) {
             hbuf = ", \"histogram\": [";

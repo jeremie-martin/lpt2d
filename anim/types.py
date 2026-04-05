@@ -326,9 +326,9 @@ Light = PointLight | SegmentLight | BeamLight | ParallelBeamLight | SpotLight
 class Transform2D:
     """2D transform applied as scale -> rotate -> translate.
 
-    Note on non-uniform scale: circle and arc radii use the geometric mean of
-    (sx, sy), so they remain circular.  Non-uniform scale works exactly for
-    segments, beziers, and lights.
+    Note on non-uniform scale: circles and arcs use the geometric mean of
+    (sx, sy), so they remain circular. Ellipses, polygons, segments, beziers,
+    and lights transform exactly.
     """
 
     translate: list[float] = field(default_factory=lambda: [0.0, 0.0])
@@ -896,9 +896,11 @@ class FrameReport:
     max_hdr: float
     total_rays: int
     # Live metrics from C++ stats pipeline (None if unavailable / old binary)
+    time_ms_exact: float | None = None
     mean: float | None = None
     pct_black: float | None = None
     pct_clipped: float | None = None
     p50: float | None = None
     p95: float | None = None
+    stats_ms: float | None = None
     histogram: list[int] | None = None  # 256-bin luminance histogram (with --histogram)
