@@ -176,76 +176,159 @@ This phase should feel successful when trying, comparing, and understanding alte
 
 ## Phase 3 — Structural Cleanup Before Deeper Semantics
 
-After visual iteration, the next risk is not only physical-model limits. It is
-also the growing amount of structural complexity inside the tool itself:
-duplicated authored-model semantics across layers, blurry boundaries between
-saved shots and transient render requests, and GUI/editor code that is becoming
-harder to reason about as more capability accumulates.
+After visual iteration, the next risk is not a missing-physics problem alone.
+It is the amount of duplicated meaning and mixed responsibility now
+accumulating inside the tool.
 
-This phase is intentionally more technical and a bit more concrete about
-structural problems than the surrounding roadmap phases, because the goal here
-is to make the project easier to evolve coherently before it takes on harder
-physical semantics. It should still stay problem-led rather than prematurely
-locking in one exact refactor plan.
+The project is no longer mainly suffering from absent fundamentals. The more
+immediate structural risk is that the same authored ideas now have to move
+through Python scene types, JSON and stream formats, CLI and GUI override
+paths, C++ runtime structures, diagnostics, and render helpers. The codebase’s
+structural problem is less class proliferation than fragmented ownership and a
+few oversized coordination surfaces that silently span several conceptual
+layers. The GUI app is one visible concentration of that problem, but it is
+not the whole of it.
 
-### 3.1 Reduce duplicated authored-model semantics
+This phase exists to keep the tool coherent before deeper physical semantics
+add more state and more meaning. It should stay problem-led. The point is not
+to freeze one refactor plan, but to make explicit where the current structure
+is becoming harder to evolve safely.
 
-**Problem:** the same authored concepts increasingly risk being defined,
-validated, normalized, or diagnosed in multiple places across the C++ core, the
-CLI/streaming surface, the GUI, and the Python authoring layer. That creates
-drift risk and makes simple model changes feel more global and fragile than
-they should.
+### 3.1 Give the scene language clearer ownership
 
-**What we want:** the project should have a clearer sense of ownership for
-authored-scene meaning. Scene identity, material binding behavior, format
-semantics, validation rules, and related diagnostics should not need to evolve
-as loosely synchronized parallel stories across multiple layers of the tool.
+**Problem:** shapes, lights, materials, ids, transforms, bounds, validation
+rules, selection-facing behavior, and diagnostic meaning are increasingly being
+taught to multiple parts of the system separately. The same authored concepts
+are being re-expressed across Python model code, the C++ core, serializers,
+editor behavior, render helpers, and GPU-preparation paths. Local scene-model
+changes therefore risk becoming repo-wide synchronization work.
 
-### 3.2 Untangle authored documents from transient render protocol concerns
+This is not only a parsing issue. It includes the repeated per-kind handling
+that now shows up around transforms, bounds, emission behavior, selection
+semantics, diagnostics, and related authored rules. That repetition is
+especially visible in editor-facing code, but it is not confined there.
 
-**Problem:** the boundary between “saved authored shot,” “session defaults,”
-and “per-frame transient override” is becoming too conceptually muddy. When the
-same structures try to serve all of those roles at once, the code becomes more
-indirect and the meaning of changes becomes harder to see.
+**What we want:** the project should have a much clearer sense of where
+scene-language meaning lives. Evolving a shape kind, a material rule, or an
+identity rule should not feel like updating a stack of parallel
+interpretations and hoping they still agree.
 
-**What we want:** the project should present cleaner conceptual boundaries
-between authored data, temporary render/session directives, and internal
-runtime structures. A saved shot should feel like one thing, a transient render
-request should feel like another, and the path between them should be easier to
-follow.
+### 3.2 Clarify the boundary between authored shots, transient render directives, and runtime state
 
-This matters because future physical-model work will likely add more state and
-more meaning, not less.
+**Problem:** saved authored shots, session defaults, editor-only filters,
+comparison snapshots, resolved runtime settings, CLI overrides, streaming
+directives, and per-frame render controls are now close enough in shape to
+look like one concept while still doing materially different jobs. Some
+authored-facing types are starting to carry extra protocol meaning just to
+support transient override behavior, and some render paths now hide more
+normalization, override, and serialization work than their public shape
+suggests.
 
-### 3.3 Make GUI/editor structure easier to extend without incidental coupling
+That makes the project harder to explain and easier to couple in the wrong
+places. It also makes future semantics work riskier, because more physical
+meaning will have to travel through these same blurred boundaries.
 
-**Problem:** the GUI is already strategically valuable, but its implementation
-shape can become the next source of drag if too much behavior remains
-concentrated in large, tightly coupled control surfaces with broad shared
-mutable state and fragile editor-side identity assumptions.
+**What we want:** authored documents, temporary render/session directives,
+editor-only transient state, and internal runtime state should feel clearly
+distinct in the project’s mental model. The path between them should be easier
+to reason about, and transient render or editor behavior should not quietly
+muddy the meaning of authored concepts.
 
-**What we want:** the GUI/editor layer should become more legible
-architecturally. Rendering concerns, editor state transitions, authored-scene
-operations, diagnostics, and presentation should have clearer boundaries, so
-future work does not require navigating one oversized control surface just to
-change one concept safely.
+### 3.3 Reduce dependence on oversized mixed-role modules
 
-### 3.4 Consolidate diagnostic and analysis ownership
+**Problem:** several important parts of the codebase now combine too many jobs
+at once. Data modeling, normalization, serialization, transport/wire concerns,
+diagnostics, render orchestration, workflow helpers, and UI control flow can
+become concentrated in a few large surfaces or single entrypoints instead of
+being expressed as clearer subsystems. The structural problem is less “too
+many layers” than “too much hidden layering inside a small number of broad
+modules.”
 
-**Problem:** visual diagnostics and contribution-analysis logic are now
-important enough that they can become their own coherence problem if their
-rules, assumptions, or meaning drift across Python, GUI, and core code.
+That makes the code harder to read, harder to test in isolation, and easier to
+disturb accidentally with collateral edits. It also makes the real dependency
+structure harder to see, because large control surfaces can look simple from
+the outside while quietly coordinating many unrelated responsibilities.
 
-**What we want:** diagnostic semantics should have clearer ownership. When the
-tool explains why a scene is cluttered, where energy is coming from, or what a
-structure is contributing, those explanations should come from a coherent
-project-wide story rather than from parallel heuristics that merely happen to
-look similar.
+**What we want:** the codebase should rely less on broad coordination surfaces
+that silently own several conceptual layers at once. Authored-scene
+operations, protocol concerns, diagnostics, render orchestration, and
+higher-level workflow logic should be easier to locate and easier to evolve
+without cross-cutting incidental churn.
 
-This phase should feel complete when adding or evolving an authored concept no
-longer first requires untangling where its meaning currently lives, and when
-the next phase can deepen the physical model without compounding internal
-ambiguity.
+### 3.4 Keep the Python authored surface concrete rather than mechanically overloaded
+
+**Problem:** the Python API is the primary authored surface, but it is now
+carrying a growing mix of scene model objects, sparse override behavior,
+report types, render wrappers, and analysis helpers. Even when each piece is
+individually justified, together they risk making the Python layer feel more
+abstract and indirect than the actual authored concepts it is supposed to
+expose.
+
+This is especially risky because Python is supposed to be the clearest place
+to understand the tool. If authored concepts, transient override semantics,
+and analysis plumbing stop feeling separable there, the main user-facing
+surface starts to inherit the most accidental complexity.
+
+**What we want:** the Python layer should remain the most conceptually direct
+part of the project. Its types and helpers should continue to map cleanly to
+real authored structures and real workflow needs, rather than accumulating
+machinery that obscures where authored meaning ends and transient control
+behavior begins.
+
+### 3.5 Make GUI/editor evolution less dependent on one broad mutable control surface
+
+**Problem:** the GUI is strategically important, but its implementation can
+become the next source of drag if scene operations, selection mechanics,
+transforms, filtering, diagnostics, export logic, comparison workflows,
+undoable editing, and presentation remain too tightly coupled through broad
+shared mutable state. Index-based selection and repeated per-kind editor logic
+also make local changes more fragile than they should be, because small UI
+adjustments can end up depending on unstable addressing rules and several
+parallel interpretations of the same scene concepts. When those responsibilities
+blur together, even the meaning of an authored edit versus a transient session
+or view change becomes harder to reason about.
+
+This matters because the GUI is no longer a side tool. It now participates
+directly in the authored workflow and in the project’s understanding of
+scenes, looks, and structure.
+
+**What we want:** the GUI/editor layer should be easier to extend without
+routing every change through one oversized control surface. Rendering
+concerns, editor state transitions, authored-scene operations, selection
+addressing, transient view/filter state, diagnostics, and presentation should
+feel more legible as distinct responsibilities. The GUI should remain an
+important part of the authored workflow without becoming the place where
+structural fragility accumulates fastest.
+
+### 3.6 Keep diagnostic and analysis meaning coherent across the tool
+
+**Problem:** clutter diagnostics, source-contribution analysis, structure
+contribution, and related interpretive features are now important enough that
+they can become their own coherence problem. If Python, GUI, and core code
+each grow adjacent but not identical diagnostic stories, the tool will start
+explaining the same scene in multiple subtly different ways.
+
+This is especially dangerous because those features are not just technical
+aides anymore; they influence author judgment. Parallel heuristics that only
+resemble one another are not good enough for a tool that is trying to become
+more trustworthy.
+
+**What we want:** when the project explains where energy is coming from, why a
+shot is muddy, which sources dominate, or what a structure is contributing,
+those explanations should come from one coherent project story rather than
+from several nearby interpretations.
+
+This phase should feel complete when:
+- scene-language meaning has clearer ownership and less semantic drift across
+  Python, core, serializers, editor behavior, and diagnostics
+- authored shots, transient render directives, and runtime state are easier to
+  distinguish and easier to explain, including in GUI-facing workflows
+- the main Python and GUI surfaces are easier to extend without pushing more
+  unrelated work through broad mixed-role control points
+- diagnostics and analysis feel coherent across the whole tool rather than
+  duplicated in adjacent forms
+- deeper physical semantics can land without first requiring another round of
+  structural untangling
 
 ---
 
