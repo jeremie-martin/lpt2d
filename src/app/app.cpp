@@ -36,7 +36,6 @@ void apply_gui_shot_defaults(Shot& shot) {
 }
 
 struct AlignmentGuide {
-    bool vertical = true;
     float axis = 0.0f;
     float span_min = 0.0f;
     float span_max = 0.0f;
@@ -419,41 +418,6 @@ int App::run(const AppConfig& config) {
 
             // Alignment guides while dragging top-level objects
             if (ed.dragging && ed.editing_group < 0 && !ed.selection.empty()) {
-                auto object_bounds = [&](const ObjectId& id) -> std::optional<Bounds> {
-                    if (id.type == ObjectId::Shape &&
-                        id.index >= 0 && id.index < (int)ed.shot.scene.shapes.size()) {
-                        return shape_bounds(ed.shot.scene.shapes[id.index]);
-                    }
-                    if (id.type == ObjectId::Light &&
-                        id.index >= 0 && id.index < (int)ed.shot.scene.lights.size()) {
-                        return light_bounds(ed.shot.scene.lights[id.index]);
-                    }
-                    if (id.type == ObjectId::Group &&
-                        id.index >= 0 && id.index < (int)ed.shot.scene.groups.size()) {
-                        const auto& group = ed.shot.scene.groups[id.index];
-                        bool initialized = false;
-                        Bounds combined{};
-                        auto expand = [&](const Bounds& b) {
-                            if (!initialized) {
-                                combined = b;
-                                initialized = true;
-                            } else {
-                                combined.min.x = std::min(combined.min.x, b.min.x);
-                                combined.min.y = std::min(combined.min.y, b.min.y);
-                                combined.max.x = std::max(combined.max.x, b.max.x);
-                                combined.max.y = std::max(combined.max.y, b.max.y);
-                            }
-                        };
-                        for (const auto& shape : group.shapes)
-                            expand(shape_bounds(transform_shape(shape, group.transform)));
-                        for (const auto& light : group.lights)
-                            expand(light_bounds(transform_light(light, group.transform)));
-                        if (initialized)
-                            return combined;
-                    }
-                    return std::nullopt;
-                };
-
                 Bounds sel = ed.selection_bounds();
                 float sel_xs[3] = {sel.min.x, (sel.min.x + sel.max.x) * 0.5f, sel.max.x};
                 float sel_ys[3] = {sel.min.y, (sel.min.y + sel.max.y) * 0.5f, sel.max.y};
@@ -471,7 +435,7 @@ int App::run(const AppConfig& config) {
                     if (diff <= guide_thresh && diff < best_v.diff) {
                         best_v.found = true;
                         best_v.diff = diff;
-                        best_v.guide = AlignmentGuide{true, cx, y0, y1};
+                        best_v.guide = AlignmentGuide{cx, y0, y1};
                     }
                 };
                 auto consider_horizontal = [&](float sy, float cy, float x0, float x1) {
@@ -479,7 +443,7 @@ int App::run(const AppConfig& config) {
                     if (diff <= guide_thresh && diff < best_h.diff) {
                         best_h.found = true;
                         best_h.diff = diff;
-                        best_h.guide = AlignmentGuide{false, cy, x0, x1};
+                        best_h.guide = AlignmentGuide{cy, x0, x1};
                     }
                 };
                 auto compare_against = [&](const Bounds& b) {
@@ -498,17 +462,17 @@ int App::run(const AppConfig& config) {
                 for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
                     ObjectId id{ObjectId::Shape, i};
                     if (ed.is_selected(id) || !ed.is_shape_visible(i)) continue;
-                    if (auto b = object_bounds(id)) compare_against(*b);
+                    if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
                     ObjectId id{ObjectId::Light, i};
                     if (ed.is_selected(id) || !ed.is_light_visible(i)) continue;
-                    if (auto b = object_bounds(id)) compare_against(*b);
+                    if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
                 for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
                     ObjectId id{ObjectId::Group, i};
                     if (ed.is_selected(id) || !ed.is_group_visible(i)) continue;
-                    if (auto b = object_bounds(id)) compare_against(*b);
+                    if (auto b = object_bounds(ed.shot.scene, id)) compare_against(*b);
                 }
 
                 if (best_v.found) {
@@ -977,16 +941,7 @@ int App::run(const AppConfig& config) {
                     Vec2 a = ed.create_start, b = end;
                     Polygon p;
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
-                    // Ensure CW winding for correct outward normals.
-                    // perp(b-a) = (-dy, dx) is the LEFT perpendicular; for CW
-                    // polygons the left perp points outward (away from interior).
-                    float area2 = 0;
-                    for (int i = 0; i < (int)p.vertices.size(); ++i) {
-                        Vec2 va = p.vertices[i];
-                        Vec2 vb = p.vertices[(i + 1) % (int)p.vertices.size()];
-                        area2 += va.x * vb.y - vb.x * va.y;
-                    }
-                    if (area2 > 0)
+                    if (!polygon_is_clockwise(p))
                         std::reverse(p.vertices.begin(), p.vertices.end());
                     p.material = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(p);

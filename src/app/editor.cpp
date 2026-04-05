@@ -2,6 +2,22 @@
 
 #include <cmath>
 
+namespace {
+
+void expand_bounds(Bounds& combined, bool& initialized, const Bounds& b) {
+    if (!initialized) {
+        combined = b;
+        initialized = true;
+        return;
+    }
+    combined.min.x = std::min(combined.min.x, b.min.x);
+    combined.min.y = std::min(combined.min.y, b.min.y);
+    combined.max.x = std::max(combined.max.x, b.max.x);
+    combined.max.y = std::max(combined.max.y, b.max.y);
+}
+
+} // namespace
+
 Shape* resolve_shape(Scene& scene, ObjectId id) {
     if (id.type != ObjectId::Shape) return nullptr;
     if (id.group >= 0) {
@@ -69,41 +85,33 @@ Vec2 EditorState::selection_centroid() const {
     return sum * (1.0f / selection.size());
 }
 
+std::optional<Bounds> object_bounds(const Scene& scene, ObjectId id) {
+    if (const Shape* shape = resolve_shape(scene, id))
+        return shape_bounds(*shape);
+    if (const Light* light = resolve_light(scene, id))
+        return light_bounds(*light);
+    if (id.type == ObjectId::Group && id.index >= 0 && id.index < (int)scene.groups.size()) {
+        const auto& group = scene.groups[id.index];
+        bool initialized = false;
+        Bounds combined{};
+        for (const auto& shape : group.shapes)
+            expand_bounds(combined, initialized, shape_bounds(transform_shape(shape, group.transform)));
+        for (const auto& light : group.lights)
+            expand_bounds(combined, initialized, light_bounds(transform_light(light, group.transform)));
+        if (initialized) return combined;
+    }
+    return std::nullopt;
+}
+
 Bounds EditorState::selection_bounds() const {
     if (selection.empty()) return {{0, 0}, {0, 0}};
-    Vec2 lo{1e30f, 1e30f}, hi{-1e30f, -1e30f};
-    auto expand = [&](Vec2 p) {
-        lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y);
-        hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y);
-    };
+    bool initialized = false;
+    Bounds combined{};
     for (auto& id : selection) {
-        if (const Shape* shape = resolve_shape(shot.scene, id)) {
-            Bounds b = shape_bounds(*shape);
-            expand(b.min);
-            expand(b.max);
-        }
-        if (const Light* light = resolve_light(shot.scene, id)) {
-            Bounds b = light_bounds(*light);
-            expand(b.min);
-            expand(b.max);
-        }
-        if (id.type == ObjectId::Group && id.index < (int)shot.scene.groups.size()) {
-            const auto& group = shot.scene.groups[id.index];
-            for (const auto& shape : group.shapes) {
-                Shape ws = transform_shape(shape, group.transform);
-                Bounds b = shape_bounds(ws);
-                expand(b.min);
-                expand(b.max);
-            }
-            for (const auto& light : group.lights) {
-                Light wl = transform_light(light, group.transform);
-                Bounds b = light_bounds(wl);
-                expand(b.min);
-                expand(b.max);
-            }
-        }
+        if (auto b = object_bounds(shot.scene, id))
+            expand_bounds(combined, initialized, *b);
     }
-    return {lo, hi};
+    return initialized ? combined : Bounds{{0, 0}, {0, 0}};
 }
 
 // ─── Hit testing ───────────────────────────────────────────────────────

@@ -319,6 +319,7 @@ Shape* resolve_shape(Scene& scene, ObjectId id);
 const Shape* resolve_shape(const Scene& scene, ObjectId id);
 Light* resolve_light(Scene& scene, ObjectId id);
 const Light* resolve_light(const Scene& scene, ObjectId id);
+std::optional<Bounds> object_bounds(const Scene& scene, ObjectId id);
 
 // ─── Transform application ─────────────────────────────────────────────
 
