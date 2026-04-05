@@ -1,47 +1,32 @@
 # Renders
 
-This directory is split into two layers:
+This directory is for render artifacts and notes about how to treat them.
 
-- `clean_room/`
-  Canonical outputs from the current clean-room registry in `anim/examples/`.
-- `archive/`
-  Preserved legacy or validation outputs that are no longer the canonical source of truth.
+## Current Status
 
-## Clean Room Contract
+There is currently **no large canonical render library** in this repo. The old
+`clean_room` story has been retired, and the project is intentionally not
+pretending that a giant example/render catalog is the current source of truth.
 
-The canonical clean-room tree is now family-based:
+For now, the authoritative sources are:
 
-- `clean_room/<family>/<scene>/`
-  Per-scene current outputs.
-- `clean_room/manifest.json`
-  Current library inventory.
-- `clean_room/library_audit*.json`
-  Non-visual analysis reports used to tune and police the library.
+- saved scene files in [`scenes/`](/home/holo/prog/lpt2d/scenes)
+- Python animation examples in [`anim/examples/`](/home/holo/prog/lpt2d/anim/examples)
+- the roadmap direction in [ROADMAP.md](/home/holo/prog/lpt2d/ROADMAP.md)
 
-Each current scene folder under `clean_room/<family>/` is expected to contain:
+## What Belongs Here
 
-- `frame_000.json`
-  Representative scene snapshot exported from the current script.
-- Optional `sheet.png`
-  Contact sheet for scenes that have been promoted to media-rendered status.
-- Optional `tuning.json`
-  Exposure tuning report for scenes that were explicitly tuned and rendered.
-- Optional `preview.mp4` or `hq.mp4`
-  Intentionally rendered videos for scenes that have been promoted beyond the baseline JSON/audit pass.
+This directory may contain:
 
-Current library policy:
+- curated preview or HQ renders worth keeping
+- contact sheets or representative stills
+- temporary artifacts that are useful for discussion or validation
+- notes about render organization and retention policy
 
-- The full registry should have canonical `frame_000.json` exports and a current `manifest.json`.
-- The manifest should reflect the full current registry after any promoted-render pass; if a curated subset is rendered separately, rerun the full no-render export afterward to refresh inventory.
-- Full-library quality control is primarily driven by `library_audit.json` and targeted follow-up audit reports.
-- Image/video renders are curated and staged, not blindly generated for every scene in a large library wave.
-- Preview renders are intentionally a little cleaner than before (`640x360` by current default), while HQ renders remain opt-in promotions.
+It should not quietly become a second source of truth for scene definitions.
 
-## Archive Policy
+## Policy
 
-Archived outputs are kept when one of these is true:
-
-- they came from an older layout or naming scheme
-- they were generated from an older version of a scene script
-- they were validation or smoke-test renders rather than canonical assets
-- they belonged to the pre-family flat layout that was replaced by the current family-aware tree
+- Scene structure belongs in JSON scenes and Python example code, not in render outputs.
+- Saved renders should be intentional and curated, not generated in bulk without purpose.
+- If a compact canonical example pack is established later, this directory can evolve to support it, but that should happen explicitly rather than by drift.

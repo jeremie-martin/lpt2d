@@ -32,9 +32,21 @@ Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--wi
 ## Benchmarking
 
 ```bash
-RAYS=100000000 bash benchmark.sh                          # run all 10 scenes
-bash benchmark-compare.sh benchmarks/dir_a benchmarks/dir_b  # HTML side-by-side
+# General benchmark/gallery snapshot
+RAYS=100000000 bash benchmark.sh
+bash benchmark-compare.sh benchmarks/dir_a benchmarks/dir_b
+
+# Focused optimization harness
+bench/bench.sh
+bench/bench.sh --quick
 ```
+
+`benchmark.sh` is the best general benchmark snapshot over the built-in scene
+set, especially for answering "where are we on performance now, and how does it
+compare with before?"
+
+`bench/bench.sh` is a focused optimization harness for particular benchmark
+work and should not be treated as the general benchmark entry point.
 
 ## Architecture
 
