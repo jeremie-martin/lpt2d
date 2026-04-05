@@ -2,13 +2,20 @@
 
 from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
+from .builders import double_slit as double_slit
+from .builders import elliptical_lens as elliptical_lens
+from .builders import grating as grating
 from .builders import hemispherical_lens as hemispherical_lens
 from .builders import mirror_box as mirror_box
 from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
+from .builders import prism as prism
 from .builders import rectangle as rectangle
 from .builders import regular_polygon as regular_polygon
+from .builders import slit as slit
 from .builders import thick_arc as thick_arc
+from .builders import thick_segment as thick_segment
+from .builders import waveguide as waveguide
 from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
 from .renderer import FFmpegOutput as FFmpegOutput
@@ -123,5 +130,12 @@ __all__ = [
     "render_stats",
     "render_still",
     "smoothstep",
+    "double_slit",
+    "elliptical_lens",
+    "grating",
+    "prism",
+    "slit",
     "thick_arc",
+    "thick_segment",
+    "waveguide",
 ]

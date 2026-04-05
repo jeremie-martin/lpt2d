@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from .types import Arc, Circle, Material, Polygon, Segment, Shape
+from .types import Arc, Circle, Ellipse, Material, Polygon, Segment, Shape
 
 
 def polygon(vertices: list[list[float]], material: Material) -> Polygon:
@@ -280,3 +280,153 @@ def ball_lens(center: tuple[float, float], radius: float, material: Material) ->
     """Ball lens represented by its actual circular boundary."""
     cx, cy = center
     return [Circle(center=[cx, cy], radius=radius, material=material)]
+
+
+# ─── Thick shapes ───────────────────────────────────────────────────────
+
+
+def thick_segment(
+    a: tuple[float, float],
+    b: tuple[float, float],
+    thickness: float,
+    material: Material,
+) -> Polygon:
+    """Segment with physical width — creates a rectangle Polygon.
+
+    The rectangle is centered on the line from *a* to *b*, with total width
+    *thickness* perpendicular to the segment direction.
+    """
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    length = math.hypot(dx, dy)
+    if length < 1e-10:
+        raise ValueError("thick_segment endpoints must be distinct")
+    nx, ny = -dy / length * thickness / 2, dx / length * thickness / 2
+    return Polygon(
+        vertices=[
+            [ax + nx, ay + ny],
+            [bx + nx, by + ny],
+            [bx - nx, by - ny],
+            [ax - nx, ay - ny],
+        ],
+        material=material,
+    )
+
+
+# ─── Enhanced builders ──────────────────────────────────────────────────
+
+
+def prism(
+    center: tuple[float, float],
+    size: float,
+    material: Material,
+    rotation: float = math.pi / 2,
+) -> Polygon:
+    """Equilateral triangular prism (2D cross-section).
+
+    Convenience wrapper around :func:`regular_polygon` with *n=3*.
+    """
+    return regular_polygon(center, size, 3, material, rotation=rotation)
+
+
+def elliptical_lens(
+    center: tuple[float, float],
+    semi_a: float,
+    semi_b: float,
+    material: Material,
+    rotation: float = 0.0,
+) -> list[Ellipse]:
+    """Elliptical lens — single Ellipse shape."""
+    cx, cy = center
+    return [Ellipse(center=[cx, cy], semi_a=semi_a, semi_b=semi_b, rotation=rotation, material=material)]
+
+
+def slit(
+    center: tuple[float, float],
+    width: float,
+    gap: float,
+    material: Material,
+    thickness: float = 0.0,
+) -> list[Shape]:
+    """Barrier with a centered opening.
+
+    *width* is the total barrier extent, *gap* is the opening width.
+    If *thickness* > 0, uses :func:`thick_segment` (Polygons); otherwise bare Segments.
+    """
+    cx, cy = center
+    hw, hg = width / 2, gap / 2
+    if thickness > 0:
+        return [
+            thick_segment((cx - hw, cy), (cx - hg, cy), thickness, material),
+            thick_segment((cx + hg, cy), (cx + hw, cy), thickness, material),
+        ]
+    return [
+        Segment(a=[cx - hw, cy], b=[cx - hg, cy], material=material),
+        Segment(a=[cx + hg, cy], b=[cx + hw, cy], material=material),
+    ]
+
+
+def double_slit(
+    center: tuple[float, float],
+    width: float,
+    gap: float,
+    separation: float,
+    material: Material,
+    thickness: float = 0.0,
+) -> list[Shape]:
+    """Classic double-slit barrier.
+
+    Two gaps of *gap* width, separated by *separation* (center-to-center).
+    """
+    cx, cy = center
+    hw, hg, hs = width / 2, gap / 2, separation / 2
+    edges = [cx - hw, cx - hs - hg, cx - hs + hg, cx + hs - hg, cx + hs + hg, cx + hw]
+    shapes: list[Shape] = []
+    for i in range(0, len(edges), 2):
+        a_x, b_x = edges[i], edges[i + 1]
+        if b_x - a_x > 1e-6:
+            if thickness > 0:
+                shapes.append(thick_segment((a_x, cy), (b_x, cy), thickness, material))
+            else:
+                shapes.append(Segment(a=[a_x, cy], b=[b_x, cy], material=material))
+    return shapes
+
+
+def grating(
+    center: tuple[float, float],
+    n: int,
+    spacing: float,
+    gap: float,
+    width: float,
+    material: Material,
+    thickness: float = 0.0,
+) -> list[Shape]:
+    """Diffraction grating: *n* evenly-spaced slits."""
+    cx, cy = center
+    slit_centers = [cx + (i - (n - 1) / 2) * spacing for i in range(n)]
+    hg = gap / 2
+    hw = width / 2
+    edges: list[float] = [cx - hw]
+    for sc in slit_centers:
+        edges.append(sc - hg)
+        edges.append(sc + hg)
+    edges.append(cx + hw)
+    shapes: list[Shape] = []
+    for i in range(0, len(edges), 2):
+        a_x, b_x = edges[i], edges[i + 1]
+        if b_x - a_x > 1e-6:
+            if thickness > 0:
+                shapes.append(thick_segment((a_x, cy), (b_x, cy), thickness, material))
+            else:
+                shapes.append(Segment(a=[a_x, cy], b=[b_x, cy], material=material))
+    return shapes
+
+
+def waveguide(
+    points: list[tuple[float, float]],
+    width: float,
+    material: Material,
+) -> list[Polygon]:
+    """Chain of thick segments following a path."""
+    return [thick_segment(points[i], points[i + 1], width, material) for i in range(len(points) - 1)]
