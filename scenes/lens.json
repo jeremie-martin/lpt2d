@@ -13,28 +13,8 @@
     "width": 1920,
     "height": 1080
   },
-  "look": {
-    "exposure": -5,
-    "gamma": 2,
-    "tonemap": "reinhardx",
-    "white_point": 0.5,
-    "normalize": "rays"
-  },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
-  },
   "materials": {
-    "glass": {
-      "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1
-    },
-    "mirror_wall": {
+    "wall_mirror": {
       "ior": 1,
       "roughness": 0.1,
       "metallic": 1,
@@ -42,10 +22,20 @@
       "absorption": 0,
       "cauchy_b": 0,
       "albedo": 0.95
+    },
+    "lens_glass": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
     }
   },
   "shapes": [
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.55,
@@ -55,10 +45,10 @@
         1.55,
         -0.871875
       ],
-      "id": "root_shape_segment_0",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.55,
@@ -68,10 +58,10 @@
         -1.55,
         0.871875
       ],
-      "id": "root_shape_segment_1",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.55,
@@ -81,10 +71,10 @@
         -1.55,
         -0.871875
       ],
-      "id": "root_shape_segment_2",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.55,
@@ -94,12 +84,12 @@
         1.55,
         0.871875
       ],
-      "id": "root_shape_segment_3",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     }
   ],
   "lights": [
     {
+      "id": "beam_top",
       "type": "beam",
       "origin": [
         -1.35,
@@ -112,10 +102,10 @@
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_beam_0"
+      "wavelength_max": 780
     },
     {
+      "id": "beam_upper_mid",
       "type": "beam",
       "origin": [
         -1.35,
@@ -128,10 +118,10 @@
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_beam_1"
+      "wavelength_max": 780
     },
     {
+      "id": "beam_lower_mid",
       "type": "beam",
       "origin": [
         -1.35,
@@ -144,10 +134,10 @@
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_beam_2"
+      "wavelength_max": 780
     },
     {
+      "id": "beam_bottom",
       "type": "beam",
       "origin": [
         -1.35,
@@ -160,12 +150,12 @@
       "angular_width": 0.045,
       "intensity": 0.85,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_beam_3"
+      "wavelength_max": 780
     }
   ],
   "groups": [
     {
+      "id": "biconvex",
       "transform": {
         "translate": [
           0,
@@ -179,6 +169,7 @@
       },
       "shapes": [
         {
+          "id": "biconvex_front_arc",
           "type": "arc",
           "center": [
             0.28,
@@ -187,10 +178,10 @@
           "radius": 0.34,
           "angle_start": 2.6179939,
           "sweep": 1.0471976,
-          "id": "biconvex_shape_arc_0",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "biconvex_top_cap",
           "type": "segment",
           "a": [
             -0.0144486,
@@ -200,10 +191,10 @@
             0.002486,
             0.17
           ],
-          "id": "biconvex_shape_segment_1",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "biconvex_back_arc",
           "type": "arc",
           "center": [
             -0.22,
@@ -212,10 +203,10 @@
           "radius": 0.28,
           "angle_start": 5.6307254,
           "sweep": 1.3049198,
-          "id": "biconvex_shape_arc_2",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "biconvex_bottom_cap",
           "type": "segment",
           "a": [
             0.002486,
@@ -225,14 +216,13 @@
             -0.0144486,
             -0.17
           ],
-          "id": "biconvex_shape_segment_3",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         }
       ],
-      "lights": [],
-      "id": "biconvex"
+      "lights": []
     },
     {
+      "id": "plano_convex",
       "transform": {
         "translate": [
           0,
@@ -246,6 +236,7 @@
       },
       "shapes": [
         {
+          "id": "plano_flat_side",
           "type": "segment",
           "a": [
             -0.06,
@@ -255,10 +246,10 @@
             -0.06,
             0.17
           ],
-          "id": "plano_convex_shape_segment_0",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "plano_top_cap",
           "type": "segment",
           "a": [
             -0.06,
@@ -268,10 +259,10 @@
             0.002486,
             0.17
           ],
-          "id": "plano_convex_shape_segment_1",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "plano_convex_arc",
           "type": "arc",
           "center": [
             -0.22,
@@ -280,10 +271,10 @@
           "radius": 0.28,
           "angle_start": 5.6307254,
           "sweep": 1.3049198,
-          "id": "plano_convex_shape_arc_2",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "plano_bottom_cap",
           "type": "segment",
           "a": [
             0.002486,
@@ -293,14 +284,13 @@
             -0.06,
             -0.17
           ],
-          "id": "plano_convex_shape_segment_3",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         }
       ],
-      "lights": [],
-      "id": "plano_convex"
+      "lights": []
     },
     {
+      "id": "hemispherical",
       "transform": {
         "translate": [
           0,
@@ -314,6 +304,7 @@
       },
       "shapes": [
         {
+          "id": "hemisphere_flat_side",
           "type": "segment",
           "a": [
             -0.085,
@@ -323,10 +314,10 @@
             -0.085,
             0.17
           ],
-          "id": "hemispherical_shape_segment_0",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         },
         {
+          "id": "hemisphere_arc",
           "type": "arc",
           "center": [
             -0.085,
@@ -335,14 +326,13 @@
           "radius": 0.17,
           "angle_start": 4.712389,
           "sweep": 3.1415927,
-          "id": "hemispherical_shape_arc_1",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         }
       ],
-      "lights": [],
-      "id": "hemispherical"
+      "lights": []
     },
     {
+      "id": "ball",
       "transform": {
         "translate": [
           0,
@@ -356,18 +346,17 @@
       },
       "shapes": [
         {
+          "id": "ball_body",
           "type": "circle",
           "center": [
             0,
             0
           ],
           "radius": 0.17,
-          "id": "ball_shape_circle_0",
-          "material_id": "glass"
+          "material_id": "lens_glass"
         }
       ],
-      "lights": [],
-      "id": "ball"
+      "lights": []
     }
   ]
 }

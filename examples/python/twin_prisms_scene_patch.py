@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from functools import cache
 
-from anim import BeamLight, Canvas, Frame, FrameContext, Look, Shot
+from anim import BeamLight, Canvas, Frame, FrameContext, Look, Scene, Shot
 from anim.examples_support import REPO_ROOT, run_example
 
 NAME = "twin_prisms_scene_patch"
@@ -32,10 +32,10 @@ def _normalize(x: float, y: float) -> list[float]:
         return [1.0, 0.0]
     return [x / length, y / length]
 
-def _require_primary_beam(scene) -> BeamLight:
-    light = scene.require_light("root_light_beam_0")
+def _require_primary_beam(scene: Scene) -> BeamLight:
+    light = scene.require_light("beam_main")
     if not isinstance(light, BeamLight):
-        raise ValueError("root_light_beam_0 must be a beam light")
+        raise ValueError("beam_main must be a beam light")
     return light
 
 

@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import json
 import subprocess
-from itertools import count
 from dataclasses import dataclass
+from itertools import count
 
 CLI = "./build/lpt2d-cli"
 RAYS = 5_000_000

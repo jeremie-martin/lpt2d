@@ -13,48 +13,58 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "diamond_glass": {
+      "ior": 2.42,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.2,
+      "cauchy_b": 30000,
+      "albedo": 1
+    },
+    "trap_glass": {
+      "ior": 2.0,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.25,
+      "cauchy_b": 25000,
+      "albedo": 1
+    },
+    "room_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "diamond_left",
       "type": "circle",
       "center": [
         -0.2,
         0
       ],
       "radius": 0.35,
-      "material": {
-        "ior": 2.42,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.2,
-        "cauchy_b": 30000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_0"
+      "material_id": "diamond_glass"
     },
     {
+      "id": "glass_right",
       "type": "circle",
       "center": [
         0.25,
         0
       ],
       "radius": 0.3,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.25,
-        "cauchy_b": 25000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_1"
+      "material_id": "trap_glass"
     },
     {
+      "id": "floor_absorber",
       "type": "segment",
       "a": [
         -1.2,
@@ -64,18 +74,10 @@
         1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "room_absorber"
     },
     {
+      "id": "ceiling_absorber",
       "type": "segment",
       "a": [
         1.2,
@@ -85,18 +87,10 @@
         -1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -106,18 +100,10 @@
         -1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -127,20 +113,12 @@
         1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "room_absorber"
     }
   ],
   "lights": [
     {
+      "id": "source_core",
       "type": "point",
       "pos": [
         -0.15,
@@ -148,8 +126,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     }
   ]
 }

@@ -24,6 +24,8 @@ from anim import (
     glass,
     mirror,
     render,
+    sample_scalar,
+    sample_vec2,
     smoothstep,
 )
 
@@ -178,10 +180,10 @@ def make_box_group() -> Group:
 
 
 def make_cluster_group(t: float) -> Group:
-    scale = float(CLUSTER_SCALE(t))
+    scale = sample_scalar(CLUSTER_SCALE, t)
     return Group(
         id="glass_triplet",
-        transform=Transform2D.uniform(rotate=float(CLUSTER_ROTATION(t)), scale=scale),
+        transform=Transform2D.uniform(rotate=sample_scalar(CLUSTER_ROTATION, t), scale=scale),
         shapes=[
             Circle(center=[-0.46, 0.08], radius=0.18, material=GLASS_MATERIALS[0]),
             Circle(center=[0.0, -0.02], radius=0.2, material=GLASS_MATERIALS[1]),
@@ -193,7 +195,7 @@ def make_cluster_group(t: float) -> Group:
 def make_shutter_group(t: float) -> Group:
     return Group(
         id="mirror_shutters",
-        transform=Transform2D(rotate=float(SHUTTER_ROTATION(t))),
+        transform=Transform2D(rotate=sample_scalar(SHUTTER_ROTATION, t)),
         shapes=[
             Arc(
                 center=[0.0, 0.0],
@@ -214,12 +216,12 @@ def make_shutter_group(t: float) -> Group:
 
 
 def make_fill_group(t: float) -> Group:
-    width = float(FILL_WIDTH(t))
+    width = sample_scalar(FILL_WIDTH, t)
     intensity = 0.22 + 0.06 * math.sin(1.4 * t + 0.4)
     return Group(
         id="fill_light",
         transform=Transform2D(
-            translate=[0.0, vertical_position(float(FILL_PROGRESS(t)))],
+            translate=[0.0, vertical_position(sample_scalar(FILL_PROGRESS, t))],
             rotate=0.06 * math.sin(0.8 * t),
             scale=[width, 1.0],
         ),
@@ -267,8 +269,8 @@ def make_beam_group(
 
 def animate(ctx: FrameContext) -> Frame:
     fade = reveal(ctx.progress)
-    radius = float(BEAM_RADIUS(ctx.time))
-    exposure = 1.0 + (float(EXPOSURE(ctx.time)) - 1.0) * fade
+    radius = sample_scalar(BEAM_RADIUS, ctx.time)
+    exposure = 1.0 + (sample_scalar(EXPOSURE, ctx.time) - 1.0) * fade
     groups = [
         make_box_group(),
         make_cluster_group(ctx.time),
@@ -279,7 +281,7 @@ def animate(ctx: FrameContext) -> Frame:
     groups.append(
         make_beam_group(
             name="primary_beam",
-            angle=float(PRIMARY_ORBIT(ctx.time)),
+            angle=sample_scalar(PRIMARY_ORBIT, ctx.time),
             radius=radius,
             scale=0.9 + 0.18 * (0.5 + 0.5 * math.sin(1.5 * ctx.time)),
             intensity=1.05 + 0.12 * math.sin(1.2 * ctx.time),
@@ -291,7 +293,7 @@ def animate(ctx: FrameContext) -> Frame:
     groups.append(
         make_beam_group(
             name="accent_beam",
-            angle=float(ACCENT_ORBIT(ctx.time)),
+            angle=sample_scalar(ACCENT_ORBIT, ctx.time),
             radius=radius * 0.92,
             scale=0.74 + 0.12 * (0.5 + 0.5 * math.sin(1.1 * ctx.time + 0.8)),
             intensity=0.62 + 0.08 * math.sin(1.7 * ctx.time + 1.1),
@@ -301,8 +303,8 @@ def animate(ctx: FrameContext) -> Frame:
         )
     )
 
-    center_x, center_y = CAMERA_CENTER(ctx.time)
-    camera = Camera2D(center=[center_x, center_y], width=float(CAMERA_WIDTH(ctx.time)))
+    center_x, center_y = sample_vec2(CAMERA_CENTER, ctx.time)
+    camera = Camera2D(center=[center_x, center_y], width=sample_scalar(CAMERA_WIDTH, ctx.time))
 
     return Frame(
         scene=Scene(groups=groups),

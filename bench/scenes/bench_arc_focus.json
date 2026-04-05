@@ -13,12 +13,38 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "collector_mirror": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.95
+    },
+    "focus_glass": {
+      "ior": 1.7,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.4,
+      "cauchy_b": 25000,
+      "albedo": 1
+    },
+    "room_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "collector_right",
       "type": "arc",
       "center": [
         0.9,
@@ -27,18 +53,10 @@
       "radius": 0.7,
       "angle_start": 2.4,
       "sweep": 1.48,
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_arc_0"
+      "material_id": "collector_mirror"
     },
     {
+      "id": "collector_left",
       "type": "arc",
       "center": [
         -0.9,
@@ -47,36 +65,20 @@
       "radius": 0.7,
       "angle_start": 5.54,
       "sweep": 1.4831853,
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_arc_1"
+      "material_id": "collector_mirror"
     },
     {
+      "id": "focus_core",
       "type": "circle",
       "center": [
         0,
         0
       ],
       "radius": 0.12,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.4,
-        "cauchy_b": 25000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_2"
+      "material_id": "focus_glass"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.2,
@@ -86,18 +88,10 @@
         1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.2,
@@ -107,18 +101,10 @@
         -1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -128,18 +114,10 @@
         -1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -149,20 +127,12 @@
         1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_6"
+      "material_id": "room_absorber"
     }
   ],
   "lights": [
     {
+      "id": "source_left",
       "type": "point",
       "pos": [
         -0.5,
@@ -170,8 +140,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     }
   ]
 }

@@ -16,6 +16,7 @@ from anim import (
     Group,
     Key,
     Look,
+    Material,
     ParallelBeamLight,
     Scene,
     Shot,
@@ -90,6 +91,11 @@ EXPOSURE = Track(
 )
 
 
+def _bind_material_id(shape, material_id: str):
+    shape.material_id = material_id
+    return shape
+
+
 def _normalize(x: float, y: float) -> list[float]:
     length = math.hypot(x, y)
     if length <= 1e-9:
@@ -100,6 +106,7 @@ def _normalize(x: float, y: float) -> list[float]:
 def _make_prism_group(index: int, radius: float, spin: float) -> Group:
     angle = spin + index * math.tau / PRISM_COUNT
     scale = 0.94 + 0.08 * math.sin(angle * 1.3)
+    material_id = f"prism_glass_{index % len(PRISM_MATERIALS)}"
     return Group(
         id=f"crown_prism_{index}",
         transform=Transform2D.uniform(
@@ -108,11 +115,15 @@ def _make_prism_group(index: int, radius: float, spin: float) -> Group:
             scale=scale,
         ),
         shapes=[
-            prism(
-                center=(0.0, 0.0),
-                size=0.18,
-                material=PRISM_MATERIALS[index % len(PRISM_MATERIALS)],
-                rotation=math.pi / 2,
+            _bind_material_id(
+                prism(
+                    center=(0.0, 0.0),
+                    size=0.18,
+                    material=PRISM_MATERIALS[index % len(PRISM_MATERIALS)],
+                    rotation=math.pi / 2,
+                    id_prefix=f"body_{index}",
+                ),
+                material_id,
             )
         ],
     )
@@ -123,8 +134,26 @@ def _make_core_group(scale: float) -> Group:
         id="core",
         transform=Transform2D.uniform(scale=scale),
         shapes=[
-            *elliptical_lens(center=(0.0, 0.0), semi_a=0.22, semi_b=0.4, material=CORE_GLASS),
-            thick_segment((-0.34, 0.0), (0.34, 0.0), 0.04, GUIDE),
+            *[
+                _bind_material_id(shape, "core_glass")
+                for shape in elliptical_lens(
+                    center=(0.0, 0.0),
+                    semi_a=0.22,
+                    semi_b=0.4,
+                    material=CORE_GLASS,
+                    id_prefix="lens",
+                )
+            ],
+            _bind_material_id(
+                thick_segment(
+                    (-0.34, 0.0),
+                    (0.34, 0.0),
+                    0.04,
+                    GUIDE,
+                    id_prefix="guide",
+                ),
+                "guide_splitter",
+            ),
         ],
     )
 
@@ -149,10 +178,25 @@ def make_settings(mode: str = "preview") -> Shot:
 def frame(ctx: FrameContext) -> Frame:
     radius = CROWN_RADIUS(ctx.time)
     spin = CROWN_SPIN(ctx.time)
+    materials: dict[str, Material] = {
+        "wall_mirror": WALL,
+        "guide_splitter": GUIDE,
+        "core_glass": CORE_GLASS,
+        "prism_glass_0": PRISM_MATERIALS[0],
+        "prism_glass_1": PRISM_MATERIALS[1],
+        "prism_glass_2": PRISM_MATERIALS[2],
+    }
     scene = Scene(
-        shapes=[*mirror_box(1.35, 0.82, WALL)],
+        materials=materials,
+        shapes=[
+            *[
+                _bind_material_id(shape, "wall_mirror")
+                for shape in mirror_box(1.35, 0.82, materials["wall_mirror"], id_prefix="wall")
+            ]
+        ],
         lights=[
             ParallelBeamLight(
+                id="beam_main",
                 a=[-0.45, 0.72],
                 b=[0.45, 0.72],
                 direction=_normalize(BEAM_SWEEP(ctx.time), -1.0),

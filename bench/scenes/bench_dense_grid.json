@@ -13,552 +13,374 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "grid_glass_130": {
+      "ior": 1.3,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "grid_glass_150": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "grid_glass_170": {
+      "ior": 1.7,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "grid_glass_190": {
+      "ior": 1.9,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "grid_glass_200": {
+      "ior": 2.0,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "grid_glass_140": {
+      "ior": 1.4,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "wall_mirror": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.9
+    }
   },
   "shapes": [
     {
+      "id": "cell_r0_c0",
       "type": "circle",
       "center": [
         -0.72,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.3,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_0"
+      "material_id": "grid_glass_130"
     },
     {
+      "id": "cell_r0_c1",
       "type": "circle",
       "center": [
         -0.432,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_1"
+      "material_id": "grid_glass_150"
     },
     {
+      "id": "cell_r0_c2",
       "type": "circle",
       "center": [
         -0.144,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_2"
+      "material_id": "grid_glass_170"
     },
     {
+      "id": "cell_r0_c3",
       "type": "circle",
       "center": [
         0.144,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.9,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_3"
+      "material_id": "grid_glass_190"
     },
     {
+      "id": "cell_r0_c4",
       "type": "circle",
       "center": [
         0.432,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_4"
+      "material_id": "grid_glass_200"
     },
     {
+      "id": "cell_r0_c5",
       "type": "circle",
       "center": [
         0.72,
         -0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.4,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_5"
+      "material_id": "grid_glass_140"
     },
     {
+      "id": "cell_r1_c0",
       "type": "circle",
       "center": [
         -0.72,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_6"
+      "material_id": "grid_glass_150"
     },
     {
+      "id": "cell_r1_c1",
       "type": "circle",
       "center": [
         -0.432,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_7"
+      "material_id": "grid_glass_170"
     },
     {
+      "id": "cell_r1_c2",
       "type": "circle",
       "center": [
         -0.144,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.9,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_8"
+      "material_id": "grid_glass_190"
     },
     {
+      "id": "cell_r1_c3",
       "type": "circle",
       "center": [
         0.144,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_9"
+      "material_id": "grid_glass_200"
     },
     {
+      "id": "cell_r1_c4",
       "type": "circle",
       "center": [
         0.432,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.4,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_10"
+      "material_id": "grid_glass_140"
     },
     {
+      "id": "cell_r1_c5",
       "type": "circle",
       "center": [
         0.72,
         -0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.3,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_11"
+      "material_id": "grid_glass_130"
     },
     {
+      "id": "cell_r2_c0",
       "type": "circle",
       "center": [
         -0.72,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_12"
+      "material_id": "grid_glass_170"
     },
     {
+      "id": "cell_r2_c1",
       "type": "circle",
       "center": [
         -0.432,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.9,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_13"
+      "material_id": "grid_glass_190"
     },
     {
+      "id": "cell_r2_c2",
       "type": "circle",
       "center": [
         -0.144,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_14"
+      "material_id": "grid_glass_200"
     },
     {
+      "id": "cell_r2_c3",
       "type": "circle",
       "center": [
         0.144,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.4,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_15"
+      "material_id": "grid_glass_140"
     },
     {
+      "id": "cell_r2_c4",
       "type": "circle",
       "center": [
         0.432,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.3,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_16"
+      "material_id": "grid_glass_130"
     },
     {
+      "id": "cell_r2_c5",
       "type": "circle",
       "center": [
         0.72,
         0.0
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_17"
+      "material_id": "grid_glass_150"
     },
     {
+      "id": "cell_r3_c0",
       "type": "circle",
       "center": [
         -0.72,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.9,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_18"
+      "material_id": "grid_glass_190"
     },
     {
+      "id": "cell_r3_c1",
       "type": "circle",
       "center": [
         -0.432,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_19"
+      "material_id": "grid_glass_200"
     },
     {
+      "id": "cell_r3_c2",
       "type": "circle",
       "center": [
         -0.144,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.4,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_20"
+      "material_id": "grid_glass_140"
     },
     {
+      "id": "cell_r3_c3",
       "type": "circle",
       "center": [
         0.144,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.3,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_21"
+      "material_id": "grid_glass_130"
     },
     {
+      "id": "cell_r3_c4",
       "type": "circle",
       "center": [
         0.432,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_22"
+      "material_id": "grid_glass_150"
     },
     {
+      "id": "cell_r3_c5",
       "type": "circle",
       "center": [
         0.72,
         0.21
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_23"
+      "material_id": "grid_glass_170"
     },
     {
+      "id": "cell_r4_c0",
       "type": "circle",
       "center": [
         -0.72,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 2.0,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_24"
+      "material_id": "grid_glass_200"
     },
     {
+      "id": "cell_r4_c1",
       "type": "circle",
       "center": [
         -0.432,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.4,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_25"
+      "material_id": "grid_glass_140"
     },
     {
+      "id": "cell_r4_c2",
       "type": "circle",
       "center": [
         -0.144,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.3,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_26"
+      "material_id": "grid_glass_130"
     },
     {
+      "id": "cell_r4_c3",
       "type": "circle",
       "center": [
         0.144,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_27"
+      "material_id": "grid_glass_150"
     },
     {
+      "id": "cell_r4_c4",
       "type": "circle",
       "center": [
         0.432,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.7,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_28"
+      "material_id": "grid_glass_170"
     },
     {
+      "id": "cell_r4_c5",
       "type": "circle",
       "center": [
         0.72,
         0.42
       ],
       "radius": 0.065,
-      "material": {
-        "ior": 1.9,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_29"
+      "material_id": "grid_glass_190"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.2,
@@ -568,18 +390,10 @@
         1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_30"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.2,
@@ -589,18 +403,10 @@
         -1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_31"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -610,18 +416,10 @@
         -1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_32"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -631,20 +429,12 @@
         1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_33"
+      "material_id": "wall_mirror"
     }
   ],
   "lights": [
     {
+      "id": "source_left",
       "type": "point",
       "pos": [
         -1.0,
@@ -652,10 +442,10 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     },
     {
+      "id": "source_right",
       "type": "point",
       "pos": [
         0.8,
@@ -663,8 +453,7 @@
       ],
       "intensity": 0.7,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_1"
+      "wavelength_max": 780
     }
   ]
 }

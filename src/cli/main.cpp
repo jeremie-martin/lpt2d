@@ -17,6 +17,7 @@ static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
+              << "  --save-shot <path>       Save the resolved v5 shot JSON via the C++ serializer and exit\n"
               << "  --width <int>            Width (overrides shot canvas)\n"
               << "  --height <int>           Height (overrides shot canvas)\n"
               << "  --rays <int>             Total rays (overrides shot trace)\n"
@@ -236,6 +237,7 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
+    std::string save_shot_path;
     bool stream_mode = false;
     bool fast_mode = false;
     bool emit_histogram = false;
@@ -246,6 +248,8 @@ int main(int argc, char** argv) {
             scene_name = argv[++i];
         else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc)
             output = argv[++i];
+        else if (std::strcmp(argv[i], "--save-shot") == 0 && i + 1 < argc)
+            save_shot_path = argv[++i];
         else if (std::strcmp(argv[i], "--width") == 0 && i + 1 < argc)
             overrides.width = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
@@ -312,6 +316,15 @@ int main(int argc, char** argv) {
     // Load shot (scene file provides defaults for everything)
     Shot shot = resolve_shot(scene_name);
     apply_overrides(shot, overrides);
+
+    if (!save_shot_path.empty()) {
+        if (!save_shot_json(shot, save_shot_path)) {
+            std::cerr << "Failed to save shot: " << save_shot_path << "\n";
+            return 1;
+        }
+        std::cerr << "Saved shot: " << save_shot_path << "\n";
+        return 0;
+    }
 
     HeadlessGL gl;
     if (!gl.init())

@@ -138,7 +138,7 @@ def frame_stats_from_report(report: FrameReport, width: int, height: int) -> Fra
     variance = float(np.dot(hist, bins * bins) / total) - mean * mean
     std = variance**0.5 if variance > 0 else 0.0
 
-    nonzero = np.nonzero(histogram)[0]
+    nonzero = np.nonzero(hist)[0]
     lum_min = int(nonzero[0])
     lum_max = int(nonzero[-1])
 

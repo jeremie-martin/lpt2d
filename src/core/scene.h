@@ -295,6 +295,13 @@ Light* find_light(Scene& scene, std::string_view id);
 const Light* find_light(const Scene& scene, std::string_view id);
 Group* find_group(Scene& scene, std::string_view id);
 const Group* find_group(const Scene& scene, std::string_view id);
+Material* find_material(Scene& scene, std::string_view id);
+const Material* find_material(const Scene& scene, std::string_view id);
+bool bind_material(Shape& shape, const Scene& scene, std::string_view material_id, std::string* error = nullptr);
+void detach_material(Shape& shape);
+int material_usage_count(const Scene& scene, std::string_view material_id);
+bool rename_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error = nullptr);
+bool delete_material(Scene& scene, std::string_view material_id, std::string* error = nullptr);
 
 // Intersection testing
 std::optional<Hit> intersect(const Ray& ray, const Circle& circle);

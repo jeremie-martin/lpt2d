@@ -7,7 +7,6 @@ from typing import Callable
 from .renderer import render, render_still
 from .types import Frame, FrameContext, Scene, Shot, Timeline
 
-
 AnimateFn = Callable[[FrameContext], Scene | Frame]
 SettingsFn = Callable[[str], Shot]
 

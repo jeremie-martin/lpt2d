@@ -5,6 +5,8 @@ and should not be buried inside implementation-specific files.
 
 ## Core Documents
 
+- [AUTHORED_V5.md](/home/holo/prog/lpt2d/docs/AUTHORED_V5.md)
+  The strict authored-scene v5 policy and committed scene conventions.
 - [ROADMAP.md](/home/holo/prog/lpt2d/ROADMAP.md)
   The current strategic roadmap for the project.
 - [ROADMAP_GUIDELINES.md](/home/holo/prog/lpt2d/docs/ROADMAP_GUIDELINES.md)

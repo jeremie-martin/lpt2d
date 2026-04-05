@@ -13,12 +13,29 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "plate_glass": {
+      "ior": 1.1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.1,
+      "cauchy_b": 10000,
+      "albedo": 1
+    },
+    "room_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "plate_upper_outer",
       "type": "segment",
       "a": [
         -0.3,
@@ -28,18 +45,10 @@
         0.5,
         0.32
       ],
-      "material": {
-        "ior": 1.1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.1,
-        "cauchy_b": 10000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_0"
+      "material_id": "plate_glass"
     },
     {
+      "id": "plate_upper_inner",
       "type": "segment",
       "a": [
         -0.3,
@@ -49,18 +58,10 @@
         0.5,
         0.28
       ],
-      "material": {
-        "ior": 1.1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.1,
-        "cauchy_b": 10000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "plate_glass"
     },
     {
+      "id": "plate_lower_outer",
       "type": "segment",
       "a": [
         -0.4,
@@ -70,18 +71,10 @@
         0.4,
         -0.05
       ],
-      "material": {
-        "ior": 1.1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.1,
-        "cauchy_b": 10000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "plate_glass"
     },
     {
+      "id": "plate_lower_inner",
       "type": "segment",
       "a": [
         -0.4,
@@ -91,18 +84,10 @@
         0.4,
         -0.09
       ],
-      "material": {
-        "ior": 1.1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.1,
-        "cauchy_b": 10000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "plate_glass"
     },
     {
+      "id": "floor_absorber",
       "type": "segment",
       "a": [
         -1.2,
@@ -112,18 +97,10 @@
         1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "room_absorber"
     },
     {
+      "id": "ceiling_absorber",
       "type": "segment",
       "a": [
         1.2,
@@ -133,18 +110,10 @@
         -1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -154,18 +123,10 @@
         -1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_6"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -175,20 +136,12 @@
         1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_7"
+      "material_id": "room_absorber"
     }
   ],
   "lights": [
     {
+      "id": "beam_main",
       "type": "beam",
       "origin": [
         -1.1,
@@ -201,8 +154,7 @@
       "angular_width": 0.03,
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_beam_0"
+      "wavelength_max": 780
     }
   ]
 }

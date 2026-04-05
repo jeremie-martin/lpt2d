@@ -13,12 +13,20 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "hall_mirror": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.95
+    }
   },
   "shapes": [
     {
+      "id": "hall_floor",
       "type": "segment",
       "a": [
         -0.8,
@@ -28,18 +36,10 @@
         0.8,
         -0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_0"
+      "material_id": "hall_mirror"
     },
     {
+      "id": "hall_ceiling",
       "type": "segment",
       "a": [
         0.8,
@@ -49,18 +49,10 @@
         -0.8,
         0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "hall_mirror"
     },
     {
+      "id": "hall_left_upper",
       "type": "segment",
       "a": [
         -0.8,
@@ -70,18 +62,10 @@
         -1.0,
         0
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "hall_mirror"
     },
     {
+      "id": "hall_left_lower",
       "type": "segment",
       "a": [
         -1.0,
@@ -91,18 +75,10 @@
         -0.8,
         -0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "hall_mirror"
     },
     {
+      "id": "hall_right_lower",
       "type": "segment",
       "a": [
         0.8,
@@ -112,18 +88,10 @@
         1.0,
         0
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "hall_mirror"
     },
     {
+      "id": "hall_right_upper",
       "type": "segment",
       "a": [
         1.0,
@@ -133,20 +101,12 @@
         0.8,
         0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "hall_mirror"
     }
   ],
   "lights": [
     {
+      "id": "source_center",
       "type": "point",
       "pos": [
         0.1,
@@ -154,8 +114,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     }
   ]
 }

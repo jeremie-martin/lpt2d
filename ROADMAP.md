@@ -12,7 +12,9 @@ This roadmap is about defining **what the project should become next** and **why
 
 The first roadmap mostly made the engine capable. The next roadmap should make the tool **coherent**, **pleasant to author with**, and **trustworthy enough to support more ambitious optics** without becoming confusing or fragile.
 
-The ordering below reflects that priority, and Phase 1 is intentionally the roadmap’s detailed next phase and current center of gravity:
+The ordering below reflects that priority. Phase 1 has now shipped as the
+strict authored-v5 baseline, and Phase 2 is intentionally the roadmap’s
+detailed next phase and current center of gravity:
 
 1. first, make authored scenes easier to identify, address, reuse, mutate, and understand
 2. then, make visual iteration much stronger, since look development and clutter remain major friction
@@ -68,9 +70,18 @@ snapshot workflow, while focused optimization work continues to use
 
 ## Phase 1 — Authoring Coherence
 
-This should be the next detailed phase. The engine is now strong enough that the main weakness is no longer “missing core rendering features.” The main weakness is now authored-scene coherence.
+Status: shipped on 2026-04-05. This phase is now the authored-scene baseline
+for the repo.
 
-Phase 1 should feel complete when authored scenes can move cleanly between GUI, JSON, and Python without collapsing back into positional surgery, value matching, or other fragile reconstruction of intent.
+The engine is now strong enough that the main weakness is no longer “missing
+core rendering features.” The main weakness that this phase closed was
+authored-scene coherence.
+
+**What we now have:** built-in scenes, benchmark scenes, canonical examples,
+the GUI save path, the CLI, the C++ core, and the Python API all operate on one
+normalized authored model: stable ids, named materials, and strict v5 shot
+JSON. The repo no longer carries committed pre-v5 assets, legacy `root_*`
+entity ids, or fallback authored-format stories.
 
 ### 1.1 Stable authored identity across Python, JSON, and GUI
 
@@ -111,7 +122,15 @@ This phase is the one that should make the project feel meaningfully more mature
 
 **Problem:** once authored identity, shared materials, and richer scene relationships become more explicit, casual format evolution becomes more dangerous. Round-trip and migration confidence are not background maintenance here; they are part of making the authored model trustworthy.
 
-**What we want:** authored-scene evolution should preserve meaning across save/load/edit cycles and across pragmatic format changes. When the scene model changes, the project should have enough round-trip and migration confidence that authors can keep working without wondering whether identity, shared-material meaning, or intent were silently lost.
+**Decision:** the project is now strict v5-only for authored shot JSON. Older
+authored versions are rejected by the loaders. The repo does not keep fallback
+readers, fallback writers, or compatibility branches for pre-v5 shots.
+
+**What we now have:** authored-scene evolution is treated as an explicit
+repo-wide migration problem rather than an indefinite backward-compatibility
+story. When the scene model changes again, the expectation is to migrate the
+repo assets, tests, and docs together so meaning stays intact across
+save/load/edit cycles without dragging old authored formats forward forever.
 
 ---
 
@@ -236,7 +255,10 @@ Timeline- and keyframe-oriented editing belongs here, after the earlier phases m
 
 ## Ongoing Tracks
 
-These are important, but they should remain cross-cutting rather than becoming roadmap phases unless one of them clearly becomes the dominant bottleneck. Round-trip confidence should also remain active after Phase 1 as the authored model continues to evolve.
+These are important, but they should remain cross-cutting rather than becoming
+roadmap phases unless one of them clearly becomes the dominant bottleneck.
+Strict migration discipline should also remain active after Phase 1 as the
+authored model continues to evolve.
 
 ### Performance discipline
 

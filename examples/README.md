@@ -6,6 +6,10 @@ The Phase 0 baseline defines a compact, workflow-first pack instead of treating
 every historical script as an equal-status exemplar. The goal is to show how
 the project is meant to be used now.
 
+The canonical examples follow the same authored conventions as the committed
+JSON scene corpus: stable ids, named material libraries, and strict v5-only
+scene semantics.
+
 ## Canonical Pack
 
 - [beam_chamber_starter.py](/home/holo/prog/lpt2d/examples/python/beam_chamber_starter.py)

@@ -149,3 +149,19 @@ class Track:
 
     def __repr__(self) -> str:
         return f"Track({len(self._times)} keys, dim={self._dim}, wrap={self._wrap.value})"
+
+
+def sample_scalar(track: Track, t: float) -> float:
+    """Evaluate a scalar track with a runtime shape check."""
+    value = track(t)
+    if not isinstance(value, (int, float)):
+        raise TypeError("expected a scalar track")
+    return float(value)
+
+
+def sample_vec2(track: Track, t: float) -> tuple[float, float]:
+    """Evaluate a 2D track with a runtime shape check."""
+    value = track(t)
+    if not isinstance(value, tuple) or len(value) != 2:
+        raise TypeError("expected a 2D track")
+    return (float(value[0]), float(value[1]))

@@ -35,8 +35,10 @@ from anim import (
     Wrap,
     mirror,
     render,
+    sample_scalar,
+    sample_vec2,
 )
-from anim.types import Material
+from anim.types import Material, Shape
 
 NAME = "clean_scanning_reflective_field"
 DURATION = 12.0
@@ -105,7 +107,7 @@ def make_frame_group() -> Group:
     top = 1.03
     bottom = -0.88
 
-    shapes = [
+    shapes: list[Shape] = [
         seg((left, top), (right, top), FRAME_MATERIAL),
         seg((left, top), (left, bottom), FRAME_MATERIAL),
         seg((left, bottom), (right, bottom), FRAME_MATERIAL),
@@ -133,7 +135,7 @@ def make_top_rail_light() -> Group:
 
 def make_reflector_field() -> Group:
     # Rebuilt as ordered loose columns: cleaner spacing, stronger rhythm.
-    shapes = [
+    shapes: list[Shape] = [
         # Column 1
         seg((-1.46, 0.18), (-1.20, 0.08)),
         seg((-1.42, -0.02), (-1.10, -0.14)),
@@ -187,7 +189,10 @@ def make_scanning_beam(ctx: FrameContext) -> Group:
     return Group(
         id="scanning_beam",
         transform=Transform2D(
-            translate=[float(BEAM_X(ctx.time)), float(BEAM_Y(ctx.time))],
+            translate=[
+                sample_scalar(BEAM_X, ctx.time),
+                sample_scalar(BEAM_Y, ctx.time),
+            ],
             rotate=beam_angle,
         ),
         lights=[
@@ -209,8 +214,8 @@ FIELD_GROUP = make_reflector_field()
 
 
 def animate(ctx: FrameContext) -> Frame:
-    cx, cy = CAMERA_CENTER(ctx.time)
-    camera = Camera2D(center=[cx, cy], width=float(CAMERA_WIDTH(ctx.time)))
+    cx, cy = sample_vec2(CAMERA_CENTER, ctx.time)
+    camera = Camera2D(center=[cx, cy], width=sample_scalar(CAMERA_WIDTH, ctx.time))
 
     return Frame(
         scene=Scene(
@@ -223,7 +228,7 @@ def animate(ctx: FrameContext) -> Frame:
         ),
         camera=camera,
         look=Look(
-            exposure=float(EXPOSURE(ctx.time)),
+            exposure=sample_scalar(EXPOSURE, ctx.time),
             contrast=1.0,
             tonemap="reinhardx",
             white_point=0.5,

@@ -23,6 +23,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from anim.types import Look
+
 CLI = Path("./build/lpt2d-cli")
 SCENE_PATH = Path("scenes/three_spheres.json")
 BENCH_METRICS_PATH = Path(__file__).resolve().parents[1] / "bench" / "metrics.py"
@@ -195,8 +197,8 @@ def collect_metrics(
 ) -> list[ResolutionMetric]:
     scene = _load_scene()
     scene_json = _wire_scene(scene)
-    look = scene["look"]
-    exp = exposure if exposure is not None else look["exposure"]
+    look = _effective_look(scene)
+    exp = exposure if exposure is not None else look.exposure
 
     frames = [
         _render(
@@ -290,6 +292,10 @@ def _skip_if_missing():
         pytest.skip(f"Scene not found: {SCENE_PATH}")
 
 
+def _effective_look(scene: dict) -> Look:
+    return Look.from_dict(scene.get("look", {}))
+
+
 # ── Resolution independence: normalize=rays ──────────────────────────
 
 
@@ -297,11 +303,12 @@ def test_resolution_independence_rays():
     """Changing resolution with normalize=rays should not change brightness."""
     _skip_if_missing()
     scene = _load_scene()
+    look = _effective_look(scene)
     metrics = collect_metrics(
         normalize="rays",
-        exposure=scene["look"]["exposure"],
-        tonemap=scene["look"]["tonemap"],
-        white_point=scene["look"]["white_point"],
+        exposure=look.exposure,
+        tonemap=look.tonemap,
+        white_point=look.white_point,
     )
     failures = [m for m in metrics if m.height != REFERENCE_HEIGHT and not m.passes]
     assert not failures, _format_metrics(metrics)
@@ -338,7 +345,7 @@ def test_ray_count_independence():
     _skip_if_missing()
     scene = _load_scene()
     scene_json = _wire_scene(scene)
-    look = scene["look"]
+    look = _effective_look(scene)
 
     height = RAY_COUNT_HEIGHTS[0]
     width = round(height * ASPECT)
@@ -356,9 +363,9 @@ def test_ray_count_independence():
                 scene_json,
                 rays=rays,
                 normalize="rays",
-                exposure=look["exposure"],
-                tonemap=look["tonemap"],
-                white_point=look["white_point"],
+                exposure=look.exposure,
+                tonemap=look.tonemap,
+                white_point=look.white_point,
             )
         )
 

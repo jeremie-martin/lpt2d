@@ -642,7 +642,11 @@ def auto_look(
     # Build animate callback from static Scene
     if isinstance(scene_or_animate, Scene):
         scene = scene_or_animate
-        animate: AnimateFn = lambda ctx: Frame(scene=scene)
+
+        def animate_from_scene(ctx: FrameContext) -> Frame:
+            return Frame(scene=scene)
+
+        animate: AnimateFn = animate_from_scene
         timeline: Timeline | float = 1.0
     else:
         animate = scene_or_animate

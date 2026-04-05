@@ -21,6 +21,8 @@ from anim import (
     Wrap,
     glass,
     render,
+    sample_scalar,
+    sample_vec2,
     smoothstep,
 )
 
@@ -110,7 +112,7 @@ def reveal(progress: float) -> float:
 
 
 def make_core_group(t: float) -> Group:
-    scale = float(CORE_SCALE(t))
+    scale = sample_scalar(CORE_SCALE, t)
     rotation = 0.22 * math.tau * t / DURATION
     return Group(
         id="core",
@@ -127,7 +129,7 @@ def make_core_group(t: float) -> Group:
 def make_prism_group(index: int, t: float, crown_spin: float) -> Group:
     phase = index / PRISM_COUNT
     orbit_angle = crown_spin + phase * math.tau
-    radius = float(CROWN_RADIUS(t))
+    radius = sample_scalar(CROWN_RADIUS, t)
     twist = orbit_angle + math.pi + 0.2 * math.sin(1.45 * t + phase * math.tau)
     scale = 0.96 + 0.08 * math.sin(1.3 * t + phase * math.tau)
     material = PRISM_MATERIALS[index % len(PRISM_MATERIALS)]
@@ -189,7 +191,7 @@ def animate(ctx: FrameContext) -> Frame:
     groups.append(
         make_beam_group(
             name="primary_beam",
-            angle=float(PRIMARY_BEAM_ORBIT(ctx.time)),
+            angle=sample_scalar(PRIMARY_BEAM_ORBIT, ctx.time),
             scale=primary_scale,
             intensity=0.085 * fade,
             angular_width=0.04,
@@ -200,7 +202,7 @@ def animate(ctx: FrameContext) -> Frame:
     groups.append(
         make_beam_group(
             name="accent_beam",
-            angle=float(ACCENT_BEAM_ORBIT(ctx.time)),
+            angle=sample_scalar(ACCENT_BEAM_ORBIT, ctx.time),
             scale=accent_scale,
             intensity=0.038 * fade,
             angular_width=0.026,
@@ -209,14 +211,14 @@ def animate(ctx: FrameContext) -> Frame:
         )
     )
 
-    center_x, center_y = CAMERA_CENTER(ctx.time)
-    camera = Camera2D(center=[center_x, center_y], width=float(CAMERA_WIDTH(ctx.time)))
+    center_x, center_y = sample_vec2(CAMERA_CENTER, ctx.time)
+    camera = Camera2D(center=[center_x, center_y], width=sample_scalar(CAMERA_WIDTH, ctx.time))
 
     return Frame(
         scene=Scene(groups=groups),
         camera=camera,
         look=Look(
-            exposure=float(EXPOSURE(ctx.time)),
+            exposure=sample_scalar(EXPOSURE, ctx.time),
             contrast=1.02,
             tonemap="aces",
             white_point=1.0,

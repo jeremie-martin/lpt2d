@@ -13,30 +13,39 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "bounce_glass": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.15,
+      "cauchy_b": 15000,
+      "albedo": 1
+    },
+    "wall_mirror": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.95
+    }
   },
   "shapes": [
     {
+      "id": "bounce_core",
       "type": "circle",
       "center": [
         0,
         0
       ],
       "radius": 0.3,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.15,
-        "cauchy_b": 15000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_0"
+      "material_id": "bounce_glass"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -0.6,
@@ -46,18 +55,10 @@
         0.6,
         -0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         0.6,
@@ -67,18 +68,10 @@
         -0.6,
         0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -0.6,
@@ -88,18 +81,10 @@
         -0.6,
         -0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         0.6,
@@ -109,20 +94,12 @@
         0.6,
         0.5
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "wall_mirror"
     }
   ],
   "lights": [
     {
+      "id": "source_left",
       "type": "point",
       "pos": [
         -0.4,
@@ -130,8 +107,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     }
   ]
 }

@@ -30,6 +30,7 @@ from anim import (
     glass,
     mirror,
     render,
+    sample_scalar,
     smoothstep,
 )
 
@@ -108,7 +109,7 @@ def make_fill_light() -> Group:
 
 
 def make_beam(t: float) -> Group:
-    angle = float(ORBIT_ANGLE(t))
+    angle = sample_scalar(ORBIT_ANGLE, t)
     return Group(
         id="beam",
         transform=Transform2D(
@@ -119,7 +120,7 @@ def make_beam(t: float) -> Group:
             BeamLight(
                 origin=[0.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=float(BEAM_WIDTH(t)),
+                angular_width=sample_scalar(BEAM_WIDTH, t),
                 intensity=0.8,
             )
         ],
@@ -134,7 +135,11 @@ def animate(ctx: FrameContext) -> Frame:
         scene=Scene(
             groups=[make_box(), make_spheres(), make_fill_light(), make_beam(ctx.time)],
         ),
-        look=Look(exposure=float(EXPOSURE(ctx.time)), tonemap="reinhardx", white_point=0.5),
+        look=Look(
+            exposure=sample_scalar(EXPOSURE, ctx.time),
+            tonemap="reinhardx",
+            white_point=0.5,
+        ),
     )
 
 

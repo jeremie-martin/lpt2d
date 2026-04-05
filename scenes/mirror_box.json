@@ -13,19 +13,47 @@
     "width": 1920,
     "height": 1080
   },
-  "look": {
-    "exposure": -5,
-    "gamma": 2,
-    "tonemap": "reinhardx",
-    "white_point": 0.5,
-    "normalize": "rays"
-  },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "wall_mirror": {
+      "ior": 1,
+      "roughness": 0.1,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.95
+    },
+    "glass_180": {
+      "ior": 1.8,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.4,
+      "cauchy_b": 25000,
+      "albedo": 1
+    },
+    "glass_150": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "glass_200": {
+      "ior": 2,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.5,
+      "cauchy_b": 30000,
+      "albedo": 1
+    }
   },
   "shapes": [
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -0.9,
@@ -35,18 +63,10 @@
         0.9,
         -0.50625
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_0"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         0.9,
@@ -56,18 +76,10 @@
         -0.9,
         0.50625
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -0.9,
@@ -77,18 +89,10 @@
         -0.9,
         -0.50625
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         0.9,
@@ -98,74 +102,42 @@
         0.9,
         0.50625
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "glass_left",
       "type": "circle",
       "center": [
         -0.3,
         0.15
       ],
       "radius": 0.15,
-      "material": {
-        "ior": 1.8,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.4,
-        "cauchy_b": 25000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_4"
+      "material_id": "glass_180"
     },
     {
+      "id": "glass_right",
       "type": "circle",
       "center": [
         0.3,
         -0.1
       ],
       "radius": 0.1,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_5"
+      "material_id": "glass_150"
     },
     {
+      "id": "glass_bottom",
       "type": "circle",
       "center": [
         0,
         -0.25
       ],
       "radius": 0.08,
-      "material": {
-        "ior": 2,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 30000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_6"
+      "material_id": "glass_200"
     }
   ],
   "lights": [
     {
+      "id": "source_lower_left",
       "type": "point",
       "pos": [
         -0.6,
@@ -173,10 +145,10 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     },
     {
+      "id": "source_upper_right",
       "type": "point",
       "pos": [
         0.6,
@@ -184,8 +156,7 @@
       ],
       "intensity": 0.7,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_1"
+      "wavelength_max": 780
     }
   ]
 }

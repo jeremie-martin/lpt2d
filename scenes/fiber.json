@@ -13,19 +13,38 @@
     "width": 1920,
     "height": 1080
   },
-  "look": {
-    "exposure": -5,
-    "gamma": 2,
-    "tonemap": "reinhardx",
-    "white_point": 0.5,
-    "normalize": "rays"
-  },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "guide_wall": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.98
+    },
+    "fiber_glass": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.5,
+      "cauchy_b": 15000,
+      "albedo": 1
+    },
+    "stop_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "fiber_floor",
       "type": "segment",
       "a": [
         -1.5,
@@ -35,18 +54,10 @@
         1.5,
         -0.12
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.98
-      },
-      "id": "root_shape_segment_0"
+      "material_id": "guide_wall"
     },
     {
+      "id": "fiber_ceiling",
       "type": "segment",
       "a": [
         -1.5,
@@ -56,72 +67,40 @@
         1.5,
         0.12
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.98
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "guide_wall"
     },
     {
+      "id": "fiber_core_center",
       "type": "circle",
       "center": [
         0,
         0
       ],
       "radius": 0.06,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 15000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_2"
+      "material_id": "fiber_glass"
     },
     {
+      "id": "fiber_core_right",
       "type": "circle",
       "center": [
         0.5,
         0
       ],
       "radius": 0.06,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 15000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_3"
+      "material_id": "fiber_glass"
     },
     {
+      "id": "fiber_core_left",
       "type": "circle",
       "center": [
         -0.5,
         0
       ],
       "radius": 0.06,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.5,
-        "cauchy_b": 15000,
-        "albedo": 1
-      },
-      "id": "root_shape_circle_4"
+      "material_id": "fiber_glass"
     },
     {
+      "id": "fiber_stopper_right",
       "type": "segment",
       "a": [
         1.5,
@@ -131,20 +110,12 @@
         1.5,
         0.12
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "stop_absorber"
     }
   ],
   "lights": [
     {
+      "id": "injector_left",
       "type": "segment",
       "a": [
         -1.5,
@@ -156,8 +127,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_segment_0"
+      "wavelength_max": 780
     }
   ]
 }

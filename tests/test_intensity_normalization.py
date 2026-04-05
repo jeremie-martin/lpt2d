@@ -23,8 +23,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from itertools import count
 from dataclasses import dataclass
+from itertools import count
 
 CLI = "./build/lpt2d-cli"
 _LIGHT_IDS = count()

@@ -241,44 +241,14 @@ int App::run(const AppConfig& config) {
     };
     auto rename_material_binding = [&](std::string_view old_id, std::string_view new_id) {
         if (old_id == new_id) return;
-        auto it = ed.shot.scene.materials.find(std::string(old_id));
-        if (it == ed.shot.scene.materials.end()) return;
-
-        Material material = it->second;
-        ed.shot.scene.materials.erase(it);
-        ed.shot.scene.materials[std::string(new_id)] = material;
-
-        auto rewrite_shapes = [&](auto& shapes) {
-            for (auto& shape : shapes) {
-                rewrite_shape_material_binding(shape, old_id, new_id);
-            }
-        };
-        rewrite_shapes(ed.shot.scene.shapes);
-        for (auto& group : ed.shot.scene.groups)
-            rewrite_shapes(group.shapes);
-        sync_material_bindings(ed.shot.scene);
+        if (!rename_material(ed.shot.scene, old_id, new_id)) return;
         rewrite_clipboard_material_binding(old_id, new_id);
     };
     auto bind_shape_material = [&](Shape& shape, std::string_view material_id) {
-        auto it = ed.shot.scene.materials.find(std::string(material_id));
-        if (it == ed.shot.scene.materials.end()) return;
-        shape_material_id_mut(shape) = it->first;
-        shape_material_mut(shape) = it->second;
+        bind_material(shape, ed.shot.scene, material_id);
     };
     auto detach_shape_material = [&](Shape& shape) {
-        shape_material_id_mut(shape).clear();
-    };
-    auto material_usage_count = [&](std::string_view material_id) {
-        int count = 0;
-        auto count_shapes = [&](const auto& shapes) {
-            for (const auto& shape : shapes)
-                if (shape_material_id(shape) == material_id)
-                    ++count;
-        };
-        count_shapes(ed.shot.scene.shapes);
-        for (const auto& group : ed.shot.scene.groups)
-            count_shapes(group.shapes);
-        return count;
+        detach_material(shape);
     };
     auto apply_material_to_selection = [&](std::string_view material_id) {
         bool changed = false;
@@ -1873,7 +1843,7 @@ int App::run(const AppConfig& config) {
                     reload();
                 }
 
-                int bound_count = material_usage_count(selected_mat_name);
+                int bound_count = material_usage_count(ed.shot.scene, selected_mat_name);
                 ImGui::Text("%d bound shape(s)", bound_count);
 
                 if (ImGui::Button("Apply to Selection")) {
@@ -1896,16 +1866,17 @@ int App::run(const AppConfig& config) {
                     }
                 }
                 ImGui::SameLine();
-                if (bound_count > 0) ImGui::BeginDisabled();
-                if (ImGui::Button("Delete##mat") && bound_count == 0) {
+                if (ImGui::Button("Delete##mat")) {
                     ed.undo.push(ed.shot.scene);
+                    delete_material(ed.shot.scene, selected_mat_name);
                     detach_clipboard_material_binding(selected_mat_name);
-                    mats.erase(selected_mat_name);
                     selected_mat_name.clear();
                     material_name_buffer.clear();
                     reload();
                 }
-                if (bound_count > 0) ImGui::EndDisabled();
+                if (bound_count > 0) {
+                    ImGui::TextDisabled("Delete detaches bound shapes to inline materials");
+                }
             }
 
             ImGui::Separator();

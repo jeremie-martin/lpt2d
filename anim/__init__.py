@@ -6,8 +6,8 @@ from .builders import double_slit as double_slit
 from .builders import elliptical_lens as elliptical_lens
 from .builders import grating as grating
 from .builders import hemispherical_lens as hemispherical_lens
-from .builders import mirror_box as mirror_box
 from .builders import mirror_block as mirror_block
+from .builders import mirror_box as mirror_box
 from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
 from .builders import prism as prism
@@ -37,6 +37,8 @@ from .stats import frame_stats as frame_stats
 from .track import Key as Key
 from .track import Track as Track
 from .track import Wrap as Wrap
+from .track import sample_scalar as sample_scalar
+from .track import sample_vec2 as sample_vec2
 from .types import Arc as Arc
 from .types import BeamLight as BeamLight
 from .types import Bezier as Bezier
@@ -103,6 +105,8 @@ __all__ = [
     "TraceDefaults",
     "Transform2D",
     "Wrap",
+    "sample_scalar",
+    "sample_vec2",
     "QualityGate",
     "StatsDiff",
     "auto_look",

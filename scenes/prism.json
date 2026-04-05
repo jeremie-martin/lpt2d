@@ -13,19 +13,38 @@
     "width": 1920,
     "height": 1080
   },
-  "look": {
-    "exposure": -5,
-    "gamma": 2,
-    "tonemap": "reinhardx",
-    "white_point": 0.5,
-    "normalize": "rays"
-  },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "prism_glass": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 30000,
+      "albedo": 1
+    },
+    "wall_mirror": {
+      "ior": 1,
+      "roughness": 0.1,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.95
+    },
+    "slit_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "prism_edge_left",
       "type": "segment",
       "a": [
         -0.1,
@@ -35,18 +54,10 @@
         -0.5,
         0.13856407
       ],
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 30000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_0"
+      "material_id": "prism_glass"
     },
     {
+      "id": "prism_edge_top",
       "type": "segment",
       "a": [
         -0.5,
@@ -56,18 +67,10 @@
         0.3,
         0.13856407
       ],
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 30000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_1"
+      "material_id": "prism_glass"
     },
     {
+      "id": "prism_edge_right",
       "type": "segment",
       "a": [
         0.3,
@@ -77,18 +80,10 @@
         -0.1,
         -0.2078461
       ],
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 30000,
-        "albedo": 1
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "prism_glass"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.2,
@@ -98,18 +93,10 @@
         1.2,
         -0.675
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.2,
@@ -119,18 +106,10 @@
         -1.2,
         0.675
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -140,18 +119,10 @@
         -1.2,
         -0.675
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -161,18 +132,10 @@
         1.2,
         0.675
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0.1,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.95
-      },
-      "id": "root_shape_segment_6"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "slit_lower",
       "type": "segment",
       "a": [
         -0.7,
@@ -182,18 +145,10 @@
         -0.7,
         -0.04
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_7"
+      "material_id": "slit_absorber"
     },
     {
+      "id": "slit_upper",
       "type": "segment",
       "a": [
         -0.7,
@@ -203,20 +158,12 @@
         -0.7,
         0.675
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_8"
+      "material_id": "slit_absorber"
     }
   ],
   "lights": [
     {
+      "id": "source_main",
       "type": "point",
       "pos": [
         -1,
@@ -224,8 +171,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_point_0"
+      "wavelength_max": 780
     }
   ]
 }

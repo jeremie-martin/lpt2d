@@ -29,7 +29,7 @@ DURATION = 14.0
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCENE_PATH = REPO_ROOT / "scenes" / "twin_prisms.json"
 BINARY = REPO_ROOT / "build" / "lpt2d-cli"
-PRIMARY_BEAM_ID = "root_light_beam_0"
+PRIMARY_BEAM_ID = "beam_main"
 
 FRAME_LOOK = Look(
     exposure=2.0,

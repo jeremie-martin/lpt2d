@@ -64,6 +64,10 @@ The central concept is the **Shot** — the complete authored document that pres
 
 The GUI save/load, CLI, and Python API all operate on Shots. The one GUI-only exception is trace batch size: the GUI always uses a session batch of `20_000`, ignores any saved `trace.batch` when loading, and omits `trace.batch` when saving.
 
+**Authored version policy:** committed authored JSON is strict `version: 5`.
+Older authored shot versions are intentionally rejected; the repo does not
+carry compatibility fallback for pre-v5 authored files.
+
 ### Layer model
 
 The same data flows through five layers. **All layers must stay consistent.**
@@ -81,6 +85,10 @@ The same data flows through five layers. **All layers must stay consistent.**
 Materials have 8 properties: `ior`, `roughness`, `metallic`, `transmission`, `absorption`, `cauchy_b`, `albedo`, `emission`.
 
 **Named materials**: Scenes can define a `materials` dictionary mapping authored material ids to shared material assets. Shapes reference shared assets with `"material_id": "glass"` or carry an inline custom `"material": {...}` block, but never both. Runtime shape structs still keep a resolved material value alongside the authored `material_id` binding.
+
+**Repo policy**: committed scene and benchmark JSON should use named materials
+plus `material_id` bindings only. Inline shape materials remain format support
+for one-off data, not the normalized repo baseline.
 
 **Convenience constructors** (C++ `mat_*`, Python functions):
 - `glass(ior, cauchy_b, absorption)` — transparent dielectric
@@ -172,15 +180,14 @@ src/
   "name": "scene_name",
   "camera": { "bounds": [-1.2, -0.675, 1.2, 0.675] },
   "canvas": { "width": 1920, "height": 1080 },
-  "look": { "exposure": -5, "gamma": 2, "tonemap": "reinhardx", "white_point": 0.5, "normalize": "rays" },
-  "trace": { "rays": 10000000, "depth": 12 },
   "materials": {
     "glass": {"ior": 1.5, "transmission": 1, "cauchy_b": 20000},
+    "floor_absorber": {"albedo": 0},
     "mirror": {"metallic": 1, "roughness": 0.1, "albedo": 0.95, "transmission": 1}
   },
   "shapes": [
     {"id": "lens", "type": "circle", "center": [0, 0], "radius": 0.2, "material_id": "glass"},
-    {"id": "floor", "type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": {"albedo": 0}},
+    {"id": "floor", "type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material_id": "floor_absorber"},
     {"id": "collector", "type": "ellipse", "center": [0, 0], "semi_a": 0.3, "semi_b": 0.15, "rotation": 0.5, "material_id": "glass"}
   ],
   "lights": [
@@ -199,7 +206,10 @@ src/
 }
 ```
 
-Camera, canvas, look, and trace blocks are at the root level alongside scene content. Persisted shapes, lights, and groups all carry authored `id` values that are globally unique within a scene. Shapes either reference a shared material asset through `material_id` or carry an inline `material` object.
+Camera, canvas, look, and trace blocks are at the root level alongside scene
+content. Persisted shapes, lights, and groups all carry authored `id` values
+that are globally unique within a scene. Committed repo scenes use named
+materials plus `material_id` bindings throughout.
 
 **Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
 

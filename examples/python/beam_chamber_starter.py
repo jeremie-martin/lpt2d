@@ -15,12 +15,13 @@ from anim import (
     Circle,
     Frame,
     FrameContext,
+    Key,
     Look,
+    Material,
     Scene,
     Shot,
     Track,
     Wrap,
-    Key,
     beam_splitter,
     glass,
     mirror,
@@ -77,6 +78,11 @@ EXPOSURE = Track(
 )
 
 
+def _bind_material_id(shape, material_id: str):
+    shape.material_id = material_id
+    return shape
+
+
 def _unit(angle: float) -> list[float]:
     return [math.cos(angle), math.sin(angle)]
 
@@ -101,20 +107,45 @@ def make_settings(mode: str = "preview") -> Shot:
 def frame(ctx: FrameContext) -> Frame:
     phase = math.sin(math.tau * ctx.progress)
     panel_sway = PANEL_SWAY(ctx.time)
+    materials: dict[str, Material] = {
+        "wall_mirror": WALL,
+        "primary_glass": PRIMARY_GLASS,
+        "secondary_glass": SECONDARY_GLASS,
+        "splitter_panel": SPLITTER,
+    }
+    chamber = [
+        _bind_material_id(shape, "wall_mirror")
+        for shape in mirror_box(1.2, 0.7, materials["wall_mirror"], id_prefix="wall")
+    ]
     scene = Scene(
+        materials=materials,
         shapes=[
-            *mirror_box(1.2, 0.7, WALL),
-            Circle(center=[-0.38, 0.18 + 0.05 * phase], radius=0.22, material=PRIMARY_GLASS),
-            Circle(center=[0.36, -0.14 - 0.04 * phase], radius=0.17, material=SECONDARY_GLASS),
+            *chamber,
+            Circle(
+                id="glass_left",
+                center=[-0.38, 0.18 + 0.05 * phase],
+                radius=0.22,
+                material=materials["primary_glass"],
+                material_id="primary_glass",
+            ),
+            Circle(
+                id="glass_right",
+                center=[0.36, -0.14 - 0.04 * phase],
+                radius=0.17,
+                material=materials["secondary_glass"],
+                material_id="secondary_glass",
+            ),
             thick_segment(
                 (-0.18, -0.42 + panel_sway),
                 (0.24, 0.30 + panel_sway),
                 0.05,
-                SPLITTER,
+                materials["splitter_panel"],
+                id_prefix="splitter_panel",
             ),
         ],
         lights=[
             BeamLight(
+                id="beam_main",
                 origin=[-1.02, BEAM_HEIGHT(ctx.time)],
                 direction=_unit(BEAM_ANGLE(ctx.time)),
                 angular_width=0.02,
@@ -122,6 +153,7 @@ def frame(ctx: FrameContext) -> Frame:
             )
         ],
     )
+    scene.shapes[-1].material_id = "splitter_panel"
     return Frame(scene=scene, look=Look(exposure=EXPOSURE(ctx.time)))
 
 

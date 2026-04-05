@@ -9,7 +9,6 @@ import pytest
 from anim import renderer as renderer_mod
 from anim.types import BeamLight, Circle, Frame, Group, Material, Scene, Segment, Shot
 
-
 CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
 
 
@@ -285,6 +284,44 @@ def test_cpp_stream_rejects_truncated_json():
 
     assert result.returncode != 0
     assert "frame 0: Invalid JSON" in result.stderr
+
+
+def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_path):
+    source_path = tmp_path / "source.json"
+    saved_path = tmp_path / "saved.json"
+
+    shot = Shot(name="cpp_save", scene=_make_bound_scene())
+    shot.save(source_path)
+
+    result = subprocess.run(
+        [
+            str(CLI_BINARY),
+            "--scene",
+            str(source_path),
+            "--save-shot",
+            str(saved_path),
+            "--width",
+            "640",
+            "--exposure",
+            "2.5",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert saved_path.exists()
+
+    saved = Shot.load(saved_path)
+    assert saved.canvas.width == 640
+    assert saved.look.exposure == pytest.approx(2.5)
+    assert saved.scene.require_shape("lens_a").material_id == "glass"
+    assert saved.scene.require_shape("lens_b").material_id == "glass"
+    assert saved.scene.require_light("beam_main").id == "beam_main"
+    assert saved.scene.require_group("cluster").id == "cluster"
+    assert saved.scene.require_shape("cluster_edge").material_id is None
 
 
 def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):

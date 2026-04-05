@@ -14,9 +14,14 @@ def _shape_id(id_prefix: str | None, suffix: str) -> str:
     return f"{id_prefix}_{suffix}"
 
 
-def polygon(vertices: list[list[float]], material: Material) -> Polygon:
+def polygon(
+    vertices: list[list[float]],
+    material: Material,
+    *,
+    id_prefix: str | None = None,
+) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
-    return Polygon(vertices=[list(v) for v in vertices], material=material)
+    return Polygon(id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices], material=material)
 
 
 def regular_polygon(
@@ -25,6 +30,8 @@ def regular_polygon(
     n: int,
     material: Material,
     rotation: float = 0.0,
+    *,
+    id_prefix: str | None = None,
 ) -> Polygon:
     """Regular *n*-sided polygon inscribed in a circle.
 
@@ -38,7 +45,7 @@ def regular_polygon(
         ]
         for i in range(n)
     ]
-    return polygon(verts, material)
+    return polygon(verts, material, id_prefix=id_prefix)
 
 
 def rectangle(
@@ -46,6 +53,8 @@ def rectangle(
     width: float,
     height: float,
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> Polygon:
     """Axis-aligned rectangle centered at *center*."""
     cx, cy = center
@@ -53,6 +62,7 @@ def rectangle(
     return polygon(
         [[cx - hw, cy - hh], [cx - hw, cy + hh], [cx + hw, cy + hh], [cx + hw, cy - hh]],
         material,
+        id_prefix=id_prefix,
     )
 
 
@@ -334,6 +344,8 @@ def thick_segment(
     b: tuple[float, float],
     thickness: float,
     material: Material,
+    *,
+    id_prefix: str | None = None,
 ) -> Polygon:
     """Segment with physical width — creates a rectangle Polygon.
 
@@ -348,6 +360,7 @@ def thick_segment(
         raise ValueError("thick_segment endpoints must be distinct")
     nx, ny = -dy / length * thickness / 2, dx / length * thickness / 2
     return Polygon(
+        id=_shape_id(id_prefix, "body"),
         vertices=[
             [ax + nx, ay + ny],
             [bx + nx, by + ny],
@@ -366,12 +379,14 @@ def prism(
     size: float,
     material: Material,
     rotation: float = math.pi / 2,
+    *,
+    id_prefix: str | None = None,
 ) -> Polygon:
     """Equilateral triangular prism (2D cross-section).
 
     Convenience wrapper around :func:`regular_polygon` with *n=3*.
     """
-    return regular_polygon(center, size, 3, material, rotation=rotation)
+    return regular_polygon(center, size, 3, material, rotation=rotation, id_prefix=id_prefix)
 
 
 def mirror_block(

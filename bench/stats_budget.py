@@ -17,13 +17,15 @@ import json
 import statistics
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from anim.types import Shot
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
-
-from anim.renderer import DEFAULT_BINARY, Renderer, _build_wire_json
-from anim.types import Frame, Shot
+DEFAULT_BINARY = str(PROJECT_DIR / "build" / "lpt2d-cli")
 
 
 def load_manifest_configs(manifest_path: Path) -> list[dict]:
@@ -57,8 +59,16 @@ def apply_bench_config(shot: Shot, config: dict) -> Shot:
 
 
 def measure_scene(path: Path, config: dict, *, binary: str, fast: bool, repeats: int, warmup: int) -> dict:
+    from anim.renderer import Renderer, _build_wire_json
+    from anim.types import Frame, Shot
+
     shot = apply_bench_config(Shot.load(path), config)
-    wire = _build_wire_json(Frame(scene=shot.scene), shot.camera, shot.canvas.aspect)
+    wire = _build_wire_json(
+        Frame(scene=shot.scene),
+        camera=None,
+        shot_camera=shot.camera,
+        aspect=shot.canvas.aspect,
+    )
     total_ms: list[float] = []
     stats_ms: list[float] = []
     ratio_pct: list[float] = []

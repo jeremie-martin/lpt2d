@@ -234,6 +234,109 @@ const Group* find_group(const Scene& scene, std::string_view id) {
     return find_group(const_cast<Scene&>(scene), id);
 }
 
+Material* find_material(Scene& scene, std::string_view id) {
+    if (id.empty()) return nullptr;
+    if (auto it = scene.materials.find(std::string(id)); it != scene.materials.end())
+        return &it->second;
+    return nullptr;
+}
+
+const Material* find_material(const Scene& scene, std::string_view id) {
+    return find_material(const_cast<Scene&>(scene), id);
+}
+
+bool bind_material(Shape& shape, const Scene& scene, std::string_view material_id, std::string* error) {
+    if (material_id.empty()) {
+        if (error) *error = "material ids must be non-empty";
+        return false;
+    }
+    const Material* material = find_material(scene, material_id);
+    if (!material) {
+        if (error) *error = "unknown material_id: " + std::string(material_id);
+        return false;
+    }
+    std::visit([&](auto& value) {
+        value.material_id = std::string(material_id);
+        value.material = *material;
+    }, shape);
+    return true;
+}
+
+void detach_material(Shape& shape) {
+    std::visit([](auto& value) {
+        value.material_id.clear();
+    }, shape);
+}
+
+int material_usage_count(const Scene& scene, std::string_view material_id) {
+    int count = 0;
+    if (material_id.empty()) return count;
+    for_each_shape(scene, [&](const Shape& shape) {
+        std::visit([&](const auto& value) {
+            if (value.material_id == material_id)
+                ++count;
+        }, shape);
+    });
+    return count;
+}
+
+bool rename_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error) {
+    auto fail = [&](std::string message) {
+        if (error) *error = std::move(message);
+        return false;
+    };
+
+    if (old_id.empty() || new_id.empty())
+        return fail("material ids must be non-empty");
+    if (old_id == new_id)
+        return find_material(scene, old_id) != nullptr || fail("unknown material_id: " + std::string(old_id));
+    if (scene.materials.contains(std::string(new_id)))
+        return fail("duplicate material_id: " + std::string(new_id));
+
+    auto it = scene.materials.find(std::string(old_id));
+    if (it == scene.materials.end())
+        return fail("unknown material_id: " + std::string(old_id));
+
+    Material material = it->second;
+    scene.materials.erase(it);
+    scene.materials[std::string(new_id)] = material;
+
+    for_each_shape(scene, [&](Shape& shape) {
+        std::visit([&](auto& value) {
+            if (value.material_id == old_id) {
+                value.material_id = std::string(new_id);
+                value.material = material;
+            }
+        }, shape);
+    });
+    return true;
+}
+
+bool delete_material(Scene& scene, std::string_view material_id, std::string* error) {
+    auto fail = [&](std::string message) {
+        if (error) *error = std::move(message);
+        return false;
+    };
+
+    if (material_id.empty())
+        return fail("material ids must be non-empty");
+    auto it = scene.materials.find(std::string(material_id));
+    if (it == scene.materials.end())
+        return fail("unknown material_id: " + std::string(material_id));
+
+    Material material = it->second;
+    scene.materials.erase(it);
+    for_each_shape(scene, [&](Shape& shape) {
+        std::visit([&](auto& value) {
+            if (value.material_id == material_id) {
+                value.material = material;
+                value.material_id.clear();
+            }
+        }, shape);
+    });
+    return true;
+}
+
 float normalize_angle(float angle) {
     angle = std::fmod(angle, TWO_PI);
     if (angle < 0.0f) angle += TWO_PI;

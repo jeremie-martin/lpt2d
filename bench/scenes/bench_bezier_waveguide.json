@@ -13,12 +13,38 @@
     "width": 1920,
     "height": 1080
   },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
+  "materials": {
+    "waveguide_glass": {
+      "ior": 1.5,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 1,
+      "absorption": 0.3,
+      "cauchy_b": 20000,
+      "albedo": 1
+    },
+    "aperture_mirror": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 1,
+      "transmission": 1,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0.9
+    },
+    "room_absorber": {
+      "ior": 1,
+      "roughness": 0,
+      "metallic": 0,
+      "transmission": 0,
+      "absorption": 0,
+      "cauchy_b": 0,
+      "albedo": 0
+    }
   },
   "shapes": [
     {
+      "id": "waveguide_upper",
       "type": "bezier",
       "p0": [
         -0.8,
@@ -32,18 +58,10 @@
         0.8,
         0.15
       ],
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_bezier_0"
+      "material_id": "waveguide_glass"
     },
     {
+      "id": "waveguide_lower",
       "type": "bezier",
       "p0": [
         -0.8,
@@ -57,18 +75,10 @@
         0.8,
         -0.15
       ],
-      "material": {
-        "ior": 1.5,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 1,
-        "absorption": 0.3,
-        "cauchy_b": 20000,
-        "albedo": 1
-      },
-      "id": "root_shape_bezier_1"
+      "material_id": "waveguide_glass"
     },
     {
+      "id": "aperture_left",
       "type": "segment",
       "a": [
         -0.85,
@@ -78,18 +88,10 @@
         -0.85,
         -0.15
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_2"
+      "material_id": "aperture_mirror"
     },
     {
+      "id": "aperture_right",
       "type": "segment",
       "a": [
         0.85,
@@ -99,18 +101,10 @@
         0.85,
         0.15
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 1,
-        "transmission": 1,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0.9
-      },
-      "id": "root_shape_segment_3"
+      "material_id": "aperture_mirror"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.2,
@@ -120,18 +114,10 @@
         1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_4"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.2,
@@ -141,18 +127,10 @@
         -1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_5"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.2,
@@ -162,18 +140,10 @@
         -1.2,
         -0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_6"
+      "material_id": "room_absorber"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.2,
@@ -183,20 +153,12 @@
         1.2,
         0.8
       ],
-      "material": {
-        "ior": 1,
-        "roughness": 0,
-        "metallic": 0,
-        "transmission": 0,
-        "absorption": 0,
-        "cauchy_b": 0,
-        "albedo": 0
-      },
-      "id": "root_shape_segment_7"
+      "material_id": "room_absorber"
     }
   ],
   "lights": [
     {
+      "id": "emitter_left",
       "type": "segment",
       "a": [
         -1.1,
@@ -208,8 +170,7 @@
       ],
       "intensity": 1,
       "wavelength_min": 380,
-      "wavelength_max": 780,
-      "id": "root_light_segment_0"
+      "wavelength_max": 780
     }
   ]
 }

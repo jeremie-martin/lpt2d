@@ -11,7 +11,6 @@ import pytest
 
 from anim import Frame, FrameContext, Scene, Shot, Timeline
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DIR = REPO_ROOT / "examples" / "python"
 SECONDARY_DIR = REPO_ROOT / "anim" / "examples" / "secondary"

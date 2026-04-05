@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from anim import renderer as renderer_mod
 from anim.types import (
     Camera2D,
     Canvas,
@@ -17,7 +18,6 @@ from anim.types import (
     Shot,
     TraceDefaults,
 )
-from anim import renderer as renderer_mod
 
 
 def _install_capturing_renderer(monkeypatch):

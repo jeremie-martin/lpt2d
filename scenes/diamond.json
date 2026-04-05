@@ -13,46 +13,39 @@
     "width": 1920,
     "height": 1080
   },
-  "look": {
-    "exposure": -5,
-    "gamma": 2,
-    "tonemap": "reinhardx",
-    "white_point": 0.5,
-    "normalize": "rays"
-  },
-  "trace": {
-    "rays": 10000000,
-    "depth": 12
-  },
   "materials": {
-    "diamond": {
+    "diamond_material": {
       "ior": 2.42,
+      "roughness": 0.0,
+      "metallic": 0.0,
       "transmission": 1,
       "absorption": 0.2,
-      "cauchy_b": 30000
+      "cauchy_b": 30000,
+      "albedo": 1.0
     },
-    "mirror_wall": {
-      "metallic": 1,
-      "transmission": 1,
-      "albedo": 0.95,
+    "wall_mirror": {
       "ior": 1,
       "roughness": 0.1,
+      "metallic": 1,
+      "transmission": 1,
       "absorption": 0,
-      "cauchy_b": 0
+      "cauchy_b": 0,
+      "albedo": 0.95
     }
   },
   "shapes": [
     {
+      "id": "diamond_core",
       "type": "circle",
       "center": [
         0,
         0
       ],
       "radius": 0.35,
-      "id": "root_shape_circle_0",
-      "material_id": "diamond"
+      "material_id": "diamond_material"
     },
     {
+      "id": "wall_floor",
       "type": "segment",
       "a": [
         -1.0,
@@ -62,10 +55,10 @@
         1.0,
         -0.5625
       ],
-      "id": "root_shape_segment_1",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_ceiling",
       "type": "segment",
       "a": [
         1.0,
@@ -75,10 +68,10 @@
         -1.0,
         0.5625
       ],
-      "id": "root_shape_segment_2",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_left",
       "type": "segment",
       "a": [
         -1.0,
@@ -88,10 +81,10 @@
         -1.0,
         -0.5625
       ],
-      "id": "root_shape_segment_3",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     },
     {
+      "id": "wall_right",
       "type": "segment",
       "a": [
         1.0,
@@ -101,37 +94,42 @@
         1.0,
         0.5625
       ],
-      "id": "root_shape_segment_4",
-      "material_id": "mirror_wall"
+      "material_id": "wall_mirror"
     }
   ],
   "lights": [
     {
+      "id": "source_left",
       "type": "point",
       "pos": [
         -0.7,
         0.4
       ],
       "intensity": 1,
-      "id": "root_light_point_0"
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
+      "id": "source_right",
       "type": "point",
       "pos": [
         0.7,
         0.4
       ],
       "intensity": 1,
-      "id": "root_light_point_1"
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
+      "id": "source_bottom",
       "type": "point",
       "pos": [
         0,
         -0.5
       ],
       "intensity": 0.5,
-      "id": "root_light_point_2"
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ]
 }
