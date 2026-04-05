@@ -478,10 +478,15 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
             [&](const Polygon& p) {
                 int n = (int)p.vertices.size();
                 if (n < 2) return;
+                bool clockwise = polygon_is_clockwise(p);
                 for (int i = 0; i < n; ++i) {
+                    Vec2 a = p.vertices[i];
+                    Vec2 b = p.vertices[(i + 1) % n];
                     GPUSegment gs{};
-                    gs.a[0] = p.vertices[i].x;        gs.a[1] = p.vertices[i].y;
-                    gs.b[0] = p.vertices[(i+1)%n].x;  gs.b[1] = p.vertices[(i+1)%n].y;
+                    Vec2 edge_a = clockwise ? a : b;
+                    Vec2 edge_b = clockwise ? b : a;
+                    gs.a[0] = edge_a.x; gs.a[1] = edge_a.y;
+                    gs.b[0] = edge_b.x; gs.b[1] = edge_b.y;
                     fill_material(gs, p.material);
                     segs.push_back(gs);
                 }

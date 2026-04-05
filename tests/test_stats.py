@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from anim import renderer as renderer_mod
 from anim.stats import (
     FrameStats,
     QualityGate,
@@ -136,3 +137,28 @@ def test_stats_diff_summary():
     s = d.summary()
     assert "mean=+5.00" in s
     assert "clip=+0.02" in s
+
+
+def test_renderer_enables_histogram(monkeypatch):
+    captured = {}
+
+    class DummyProc:
+        def __init__(self):
+            self.stdin = None
+            self.stdout = None
+            self.stderr = None
+
+        def poll(self):
+            return 0
+
+        def wait(self):
+            return 0
+
+    def fake_popen(cmd, stdin=None, stdout=None, stderr=None):
+        captured["cmd"] = cmd
+        return DummyProc()
+
+    monkeypatch.setattr(renderer_mod.subprocess, "Popen", fake_popen)
+    renderer = renderer_mod.Renderer(fast=True)
+    assert "--histogram" in captured["cmd"]
+    renderer.close()

@@ -285,8 +285,11 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez) {
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
     std::optional<Hit> best;
     int n = (int)poly.vertices.size();
+    bool clockwise = polygon_is_clockwise(poly);
     for (int i = 0; i < n; ++i) {
-        Segment edge{poly.vertices[i], poly.vertices[(i + 1) % n], poly.material};
+        Vec2 a = poly.vertices[i];
+        Vec2 b = poly.vertices[(i + 1) % n];
+        Segment edge{clockwise ? a : b, clockwise ? b : a, poly.material};
         auto hit = intersect(ray, edge);
         if (hit && (!best || hit->t < best->t)) {
             best = hit;
@@ -580,18 +583,13 @@ std::vector<Light> emission_light(const Shape& s) {
             }
         },
         [&](const Segment& seg) {
-            // SegmentLight emits in a hemisphere perpendicular to the segment,
-            // giving correct "neon tube" emission from the surface.
+            // SegmentLight is an isotropic line source, so a glowing segment
+            // emits from its full length without depending on endpoint order.
             float total = mat.emission * perimeter;
             lights.push_back(SegmentLight{seg.a, seg.b, total});
         },
         [&](const Arc& a) {
-            // Approximate arc as chain of short SegmentLights so each
-            // sub-segment emits perpendicular to the local tangent.
-            // Sweep is always positive (CCW), so tangent (cur-prev) has
-            // its left perp pointing inward.  Reverse the endpoints so
-            // the left perp points radially outward, matching the arc's
-            // surface normal (hit_point - center).
+            // Approximate arc as a chain of short isotropic SegmentLights.
             float sweep = clamp_arc_sweep(a.sweep);
             int N = emission_point_count(perimeter);
             float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
@@ -600,12 +598,12 @@ std::vector<Light> emission_light(const Shape& s) {
                 float t = (float)i / (N - 1);
                 float angle = a.angle_start + sweep * t;
                 Vec2 cur = arc_point(a, angle);
-                lights.push_back(SegmentLight{cur, prev, seg_intensity});
+                lights.push_back(SegmentLight{prev, cur, seg_intensity});
                 prev = cur;
             }
         },
         [&](const Bezier& b) {
-            // Approximate bezier as chain of short SegmentLights.
+            // Approximate bezier as a chain of short isotropic SegmentLights.
             int N = emission_point_count(perimeter);
             float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
             Vec2 prev = bezier_eval(b, 0.0f);
@@ -617,7 +615,7 @@ std::vector<Light> emission_light(const Shape& s) {
             }
         },
         [&](const Polygon& p) {
-            // One SegmentLight per edge — emits perpendicular to each face.
+            // One isotropic SegmentLight per edge.
             int n = (int)p.vertices.size();
             if (n < 2) return;
             for (int i = 0; i < n; ++i) {

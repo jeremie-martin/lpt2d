@@ -363,14 +363,11 @@ void main() {
         ro = lt.pos_a;
         rd = vec2(cos(a), sin(a));
     } else if (lt.type == 1u) {
-        // Segment light: random point, hemisphere
+        // Segment light: random point, full 360° emission
         float t = rand01();
         ro = mix(lt.pos_a, lt.pos_b, t);
-        vec2 seg_d = lt.pos_b - lt.pos_a;
-        vec2 normal = normalize(vec2(-seg_d.y, seg_d.x));
-        vec2 tangent = normalize(seg_d);
-        float a = (rand01() - 0.5) * PI;
-        rd = normal * cos(a) + tangent * sin(a);
+        float a = rand01() * 2.0 * PI;
+        rd = vec2(cos(a), sin(a));
     } else if (lt.type == 2u) {
         // Beam light: origin + direction ± angular half-width
         ro = lt.pos_a;

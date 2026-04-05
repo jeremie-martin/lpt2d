@@ -182,6 +182,14 @@ def column_centroid(pixels: np.ndarray, row_start: int, row_end: int) -> float:
     return float(np.dot(col_brightness, cols) / total)
 
 
+def polygon_area2(vertices) -> float:
+    area2 = 0.0
+    for i, a in enumerate(vertices):
+        b = vertices[(i + 1) % len(vertices)]
+        area2 += a[0] * b[1] - b[0] * a[1]
+    return area2
+
+
 # ---------------------------------------------------------------------------
 # Test 1: Snell's law — beam through glass slab
 # ---------------------------------------------------------------------------
@@ -241,6 +249,36 @@ def test_snell_law():
     assert error_px < 25, f"Snell's law lateral displacement: {detail}"
 
 
+def test_polygon_winding_is_physics_invariant():
+    print("\n=== Test 1b: Polygon winding invariance ===\n")
+
+    clockwise = [[-0.8, -0.15], [-0.8, 0.15], [0.8, 0.15], [0.8, -0.15]]
+    counter_clockwise = list(reversed(clockwise))
+    assert polygon_area2(clockwise) < 0
+    assert polygon_area2(counter_clockwise) > 0
+
+    theta_i = math.radians(30)
+    dx, dy = math.sin(theta_i), -math.cos(theta_i)
+    light = beam_light([0.0, 0.7], [dx, dy], angular_width=0.003)
+    bounds = [-1.0, -1.0, 1.0, 1.0]
+    W, H = 240, 240
+
+    def centroid_for(vertices):
+        scene = make_scene([polygon_shape(vertices, GLASS)], [light], bounds)
+        pixels, _ = render_pixels(scene, width=W, height=H, rays=4_000_000, exposure=-4.0)
+        y_measure = -0.5
+        y_row = int((bounds[3] - y_measure) / (bounds[3] - bounds[1]) * H)
+        row_lo = max(0, y_row - 12)
+        row_hi = min(H, y_row + 12)
+        return column_centroid(pixels, row_lo, row_hi)
+
+    cw_centroid = centroid_for(clockwise)
+    ccw_centroid = centroid_for(counter_clockwise)
+    detail = f"CW={cw_centroid:.1f}px, CCW={ccw_centroid:.1f}px"
+    print(f"        {detail}")
+    assert abs(cw_centroid - ccw_centroid) < 10.0, f"polygon winding changed refraction: {detail}"
+
+
 # ---------------------------------------------------------------------------
 # Test 2: Energy linear scaling
 # ---------------------------------------------------------------------------
@@ -272,6 +310,56 @@ def test_energy_linear():
     detail = f"mean1={mean1:.2f}, mean2={mean2:.2f}, ratio={ratio:.3f} (expected ~2.0)"
     print(f"        {detail}")
     assert abs(ratio - 2.0) < 0.20, f"intensity 2x → brightness 2x: {detail}"
+
+
+def test_segment_light_emits_both_sides():
+    print("\n=== Test 2b: Segment light emits both sides ===\n")
+
+    collectors = [
+        segment_shape([-0.9, 0.7], [0.9, 0.7], ABSORBER),
+        segment_shape([0.9, -0.7], [-0.9, -0.7], ABSORBER),
+    ]
+    light = {"type": "segment", "a": [-0.4, 0.0], "b": [0.4, 0.0], "intensity": 2.0}
+    scene = make_scene(collectors, [light], [-1.0, -1.0, 1.0, 1.0])
+
+    pixels, _ = render_pixels(scene, width=220, height=220, rays=5_000_000, exposure=-4.0)
+    top = region_brightness(pixels, 20, 80, 60, 160)
+    bottom = region_brightness(pixels, 140, 200, 60, 160)
+    detail = f"top={top:.2f}, bottom={bottom:.2f}"
+    print(f"        {detail}")
+    assert top > 2.0 and bottom > 2.0, f"segment light should illuminate both sides: {detail}"
+    assert abs(top - bottom) / max(top, bottom) < 0.2, f"segment light should be roughly symmetric: {detail}"
+
+
+def test_emissive_segment_is_endpoint_order_invariant():
+    print("\n=== Test 2c: Emissive segment endpoint order invariance ===\n")
+
+    collectors = [
+        segment_shape([-0.9, 0.7], [0.9, 0.7], ABSORBER),
+        segment_shape([0.9, -0.7], [-0.9, -0.7], ABSORBER),
+    ]
+    bounds = [-1.0, -1.0, 1.0, 1.0]
+
+    def measure(a, b):
+        scene = make_scene(
+            collectors + [segment_shape(a, b, {"albedo": 0.0, "emission": 2.0})],
+            [],
+            bounds,
+        )
+        pixels, _ = render_pixels(scene, width=220, height=220, rays=5_000_000, exposure=-4.0)
+        top = region_brightness(pixels, 20, 80, 60, 160)
+        bottom = region_brightness(pixels, 140, 200, 60, 160)
+        return top, bottom
+
+    forward = measure([-0.4, 0.0], [0.4, 0.0])
+    reverse = measure([0.4, 0.0], [-0.4, 0.0])
+    detail = (
+        f"forward(top={forward[0]:.2f}, bottom={forward[1]:.2f}), "
+        f"reverse(top={reverse[0]:.2f}, bottom={reverse[1]:.2f})"
+    )
+    print(f"        {detail}")
+    assert abs(forward[0] - reverse[0]) / max(forward[0], reverse[0]) < 0.2, detail
+    assert abs(forward[1] - reverse[1]) / max(forward[1], reverse[1]) < 0.2, detail
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +419,7 @@ def test_dispersion():
     # Prism geometry matching prism.json convention (CW winding, outward normals).
     prism = polygon_shape(
         [[-0.1, -0.208], [0.3, 0.139], [-0.5, 0.139]],
-        {"ior": 1.5, "transmission": 1.0, "cauchy_b": 30000.0, "absorption": 0.3},
+        {"ior": 1.5, "transmission": 1.0, "cauchy_b": 80000.0, "absorption": 0.3},
     )
 
     # Beam aimed directly at the left face for maximum throughput

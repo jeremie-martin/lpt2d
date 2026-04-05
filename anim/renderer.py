@@ -50,6 +50,7 @@ class Renderer:
         cmd = [
             binary,
             "--stream",
+            "--histogram",
             "--width",
             str(canvas.width),
             "--height",
@@ -312,6 +313,36 @@ def _resolve_args(
     return timeline, settings
 
 
+def _sample_frame_indices(timeline: Timeline, frame: int | None, sample_count: int) -> list[int]:
+    if frame is not None:
+        return [frame]
+    total = timeline.total_frames
+    if total <= 1 or sample_count <= 1:
+        return [0]
+    return sorted({round(i * (total - 1) / (sample_count - 1)) for i in range(sample_count)})
+
+
+def _aggregate_frame_stats(results: list[tuple[int, float, FrameStats]]) -> FrameStats | None:
+    if not results:
+        return None
+    stats = [entry[2] for entry in results]
+    width = stats[0].width
+    height = stats[0].height
+    return FrameStats(
+        mean=sum(s.mean for s in stats) / len(stats),
+        max=max(s.max for s in stats),
+        min=min(s.min for s in stats),
+        std=sum(s.std for s in stats) / len(stats),
+        pct_black=sum(s.pct_black for s in stats) / len(stats),
+        pct_clipped=max(s.pct_clipped for s in stats),
+        p05=sum(s.p05 for s in stats) / len(stats),
+        p50=sum(s.p50 for s in stats) / len(stats),
+        p95=sum(s.p95 for s in stats) / len(stats),
+        width=width,
+        height=height,
+    )
+
+
 def render(
     animate: AnimateFn,
     timeline: Timeline | float,
@@ -464,8 +495,7 @@ def render_contact_sheet(
     sheet_h = h * rows
 
     # Sample frames evenly across timeline
-    total = timeline.total_frames
-    indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
+    indices = _sample_frame_indices(timeline, None, count)
 
     renderer = Renderer(shot, binary=binary, fast=fast)
     try:
@@ -511,9 +541,8 @@ def render_stats(
     timeline, shot = _resolve_args(timeline, settings)
 
     # Resolve frame indices
-    total = timeline.total_frames
     if frames is None:
-        indices = [round(i * (total - 1) / (count - 1)) for i in range(count)] if count > 1 else [0]
+        indices = _sample_frame_indices(timeline, None, count)
     elif isinstance(frames, int):
         indices = [frames]
     else:
@@ -548,13 +577,15 @@ def auto_look(
     tonemap: str | None = None,
     normalize: str | None = None,
     binary: str = DEFAULT_BINARY,
-    frame: int = 0,
+    frame: int | None = None,
+    sample_count: int = 4,
 ) -> Look:
     """Analyze a scene and return a Look with good exposure settings.
 
     Works with a static Scene or an (animate, timeline) pair. Renders a
-    low-quality test frame, measures brightness, and computes exposure to
-    hit *target_mean* (0-1 scale) without exceeding *max_clipping*.
+    low-quality draft pass over one or more frames, measures brightness, and
+    computes exposure to hit *target_mean* (0-1 scale) without exceeding
+    *max_clipping*.
 
     If *tonemap* or *normalize* are None, they are inferred from the
     scene's light distribution.
@@ -569,6 +600,8 @@ def auto_look(
         if timeline_or_none is None:
             raise ValueError("timeline is required when passing an animate callback")
         timeline = timeline_or_none
+    timeline, _ = _resolve_args(timeline, None)
+    analysis_frames = _sample_frame_indices(timeline, frame, sample_count)
 
     # Use neutral defaults for the draft render so we can measure the raw distribution
     draft_tonemap = tonemap or "reinhardx"
@@ -577,25 +610,25 @@ def auto_look(
     # Render a fast draft with the target tonemap and gamma so the measured
     # brightness matches what the user will see in the final render.
     draft_canvas = canvas or Canvas(width=480, height=480)
-    draft_shot = Shot(
-        canvas=draft_canvas,
-        look=Look(exposure=-5.0, tonemap=draft_tonemap, normalize=draft_normalize),
-        trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
-    )
+    draft_trace = TraceDefaults(rays=500_000, batch=100_000, depth=12)
 
-    stats_results = render_stats(
-        animate,
-        timeline,
-        frames=frame,
-        settings=draft_shot,
-        camera=camera,
-        binary=binary,
-        fast=True,
-    )
-    if not stats_results:
+    def measure_stats(look: Look) -> FrameStats | None:
+        draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
+        return _aggregate_frame_stats(
+            render_stats(
+                animate,
+                timeline,
+                frames=analysis_frames,
+                settings=draft_shot,
+                camera=camera,
+                binary=binary,
+                fast=True,
+            )
+        )
+
+    stats = measure_stats(Look(exposure=-5.0, tonemap=draft_tonemap, normalize=draft_normalize))
+    if stats is None:
         return Look(tonemap=draft_tonemap, normalize=draft_normalize)
-
-    _, _, stats = stats_results[0]
 
     # Infer tonemap from scene characteristics if not explicitly set
     if tonemap is None:
@@ -612,22 +645,27 @@ def auto_look(
         chosen_tonemap = tonemap
 
     # Infer normalize mode if not explicitly set
-    chosen_normalize = normalize or "rays"
+    chosen_normalize = normalize or "fixed"
+    chosen_normalize_ref = 0.0
+    if chosen_normalize == "fixed":
+        chosen_normalize_ref = calibrate_normalize_ref(
+            animate,
+            timeline,
+            settings=Shot(canvas=draft_canvas, trace=draft_trace),
+            camera=camera,
+            binary=binary,
+            frame=analysis_frames,
+        )
 
     # If the inferred tonemap differs from the draft, re-render with the
-    # correct tonemap so that the measured brightness matches the final output.
-    if chosen_tonemap != draft_tonemap:
-        draft_shot_recal = Shot(
-            canvas=draft_canvas,
-            look=Look(exposure=-5.0, tonemap=chosen_tonemap, normalize=draft_normalize),
-            trace=TraceDefaults(rays=500_000, batch=100_000, depth=12),
-        )
-        recal_results = render_stats(
-            animate, timeline, frames=frame,
-            settings=draft_shot_recal, camera=camera, binary=binary, fast=True,
-        )
-        if recal_results:
-            _, _, stats = recal_results[0]
+    # correct tonemap/normalization so the measured brightness matches the final output.
+    if chosen_tonemap != draft_tonemap or chosen_normalize != draft_normalize:
+        recal_look = Look(exposure=-5.0, tonemap=chosen_tonemap, normalize=chosen_normalize)
+        if chosen_normalize_ref > 0:
+            recal_look.normalize_ref = chosen_normalize_ref
+        recal_stats = measure_stats(recal_look)
+        if recal_stats is not None:
+            stats = recal_stats
 
     # Compute exposure adjustment to hit target brightness
     measured_mean = stats.mean / 255.0
@@ -645,12 +683,8 @@ def auto_look(
 
     result = Look(exposure=round(exposure, 2), tonemap=chosen_tonemap, normalize=chosen_normalize)
 
-    # For fixed normalization, calibrate the reference value
-    if chosen_normalize == "fixed":
-        ref = calibrate_normalize_ref(
-            animate, timeline, settings=draft_shot, camera=camera, binary=binary, frame=frame
-        )
-        result.normalize_ref = ref
+    if chosen_normalize_ref > 0:
+        result.normalize_ref = chosen_normalize_ref
 
     return result
 
@@ -663,29 +697,34 @@ def calibrate_normalize_ref(
     camera: Camera2D | None = None,
     binary: str = DEFAULT_BINARY,
     fast: bool = False,
-    frame: int = 0,
+    frame: int | list[int] | None = 0,
 ) -> float:
-    """Render one frame with max-normalize to determine a good normalize_ref.
+    """Render one or more frames with max-normalize to determine a good normalize_ref.
 
     Returns the HDR max value suitable for use as ``Look(normalize="fixed",
     normalize_ref=...)``.
     """
     timeline, shot = _resolve_args(timeline, settings)
+    frames = [frame] if isinstance(frame, int) else frame
+    frame_indices = [0] if frames is None else list(frames)
 
     # Force max mode so the C++ renderer computes and reports true HDR peak.
     cal_shot = shot.with_look(normalize="max", normalize_pct=1.0)
 
     renderer = Renderer(cal_shot, binary=binary, fast=fast)
     try:
-        ctx = timeline.context_at(frame)
-        result = animate(ctx)
-        f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, cal_shot.canvas.aspect)
-        renderer.render_frame(wire)  # discard pixels, we want the report
+        max_hdr = 0.0
+        for fi in frame_indices:
+            ctx = timeline.context_at(fi)
+            result = animate(ctx)
+            f = result if isinstance(result, Frame) else Frame(scene=result)
+            wire = _build_wire_json(f, camera, cal_shot.canvas.aspect)
+            renderer.render_frame(wire)  # discard pixels, we want the report
 
-        rpt = renderer.last_report
-        if rpt is None or rpt.max_hdr <= 0:
-            raise RuntimeError("Calibration failed: no max_hdr in renderer report")
-        return rpt.max_hdr
+            rpt = renderer.last_report
+            if rpt is None or rpt.max_hdr <= 0:
+                raise RuntimeError("Calibration failed: no max_hdr in renderer report")
+            max_hdr = max(max_hdr, rpt.max_hdr)
+        return max_hdr
     finally:
         renderer.close()

@@ -163,6 +163,21 @@ struct Polygon {
     }
 };
 
+inline float polygon_signed_area2(const Polygon& p) {
+    float area2 = 0.0f;
+    int n = (int)p.vertices.size();
+    for (int i = 0; i < n; ++i) {
+        const Vec2& a = p.vertices[i];
+        const Vec2& b = p.vertices[(i + 1) % n];
+        area2 += a.x * b.y - b.x * a.y;
+    }
+    return area2;
+}
+
+inline bool polygon_is_clockwise(const Polygon& p) {
+    return polygon_signed_area2(p) <= 0.0f;
+}
+
 struct Ellipse {
     Vec2 center;
     float semi_a;          // semi-axis length along rotated X

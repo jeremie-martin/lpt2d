@@ -35,6 +35,13 @@ void apply_gui_shot_defaults(Shot& shot) {
     shot.trace.batch = kGuiTraceBatch;
 }
 
+struct AlignmentGuide {
+    bool vertical = true;
+    float axis = 0.0f;
+    float span_min = 0.0f;
+    float span_max = 0.0f;
+};
+
 } // namespace
 
 // ─── App::run ───────────────────────────────────────────────────────────
@@ -408,6 +415,112 @@ int App::run(const AppConfig& config) {
                 Vec2 mw = cv.to_world(io.MousePos);
                 int hov_h = vp_hovered ? handle_hit_test(handles, mw, 8.0f / cv.cam.zoom) : -1;
                 draw_handles(dl, cv, ed.shot.scene, handles, hov_h);
+            }
+
+            // Alignment guides while dragging top-level objects
+            if (ed.dragging && ed.editing_group < 0 && !ed.selection.empty()) {
+                auto object_bounds = [&](const ObjectId& id) -> std::optional<Bounds> {
+                    if (id.type == ObjectId::Shape &&
+                        id.index >= 0 && id.index < (int)ed.shot.scene.shapes.size()) {
+                        return shape_bounds(ed.shot.scene.shapes[id.index]);
+                    }
+                    if (id.type == ObjectId::Light &&
+                        id.index >= 0 && id.index < (int)ed.shot.scene.lights.size()) {
+                        return light_bounds(ed.shot.scene.lights[id.index]);
+                    }
+                    if (id.type == ObjectId::Group &&
+                        id.index >= 0 && id.index < (int)ed.shot.scene.groups.size()) {
+                        const auto& group = ed.shot.scene.groups[id.index];
+                        bool initialized = false;
+                        Bounds combined{};
+                        auto expand = [&](const Bounds& b) {
+                            if (!initialized) {
+                                combined = b;
+                                initialized = true;
+                            } else {
+                                combined.min.x = std::min(combined.min.x, b.min.x);
+                                combined.min.y = std::min(combined.min.y, b.min.y);
+                                combined.max.x = std::max(combined.max.x, b.max.x);
+                                combined.max.y = std::max(combined.max.y, b.max.y);
+                            }
+                        };
+                        for (const auto& shape : group.shapes)
+                            expand(shape_bounds(transform_shape(shape, group.transform)));
+                        for (const auto& light : group.lights)
+                            expand(light_bounds(transform_light(light, group.transform)));
+                        if (initialized)
+                            return combined;
+                    }
+                    return std::nullopt;
+                };
+
+                Bounds sel = ed.selection_bounds();
+                float sel_xs[3] = {sel.min.x, (sel.min.x + sel.max.x) * 0.5f, sel.max.x};
+                float sel_ys[3] = {sel.min.y, (sel.min.y + sel.max.y) * 0.5f, sel.max.y};
+                float guide_thresh = 8.0f / cv.cam.zoom;
+
+                struct BestGuide {
+                    bool found = false;
+                    float diff = 1e30f;
+                    AlignmentGuide guide{};
+                };
+                BestGuide best_v, best_h;
+
+                auto consider_vertical = [&](float sx, float cx, float y0, float y1) {
+                    float diff = std::abs(sx - cx);
+                    if (diff <= guide_thresh && diff < best_v.diff) {
+                        best_v.found = true;
+                        best_v.diff = diff;
+                        best_v.guide = AlignmentGuide{true, cx, y0, y1};
+                    }
+                };
+                auto consider_horizontal = [&](float sy, float cy, float x0, float x1) {
+                    float diff = std::abs(sy - cy);
+                    if (diff <= guide_thresh && diff < best_h.diff) {
+                        best_h.found = true;
+                        best_h.diff = diff;
+                        best_h.guide = AlignmentGuide{false, cy, x0, x1};
+                    }
+                };
+                auto compare_against = [&](const Bounds& b) {
+                    float cand_xs[3] = {b.min.x, (b.min.x + b.max.x) * 0.5f, b.max.x};
+                    float cand_ys[3] = {b.min.y, (b.min.y + b.max.y) * 0.5f, b.max.y};
+                    for (float sx : sel_xs)
+                        for (float cx : cand_xs)
+                            consider_vertical(
+                                sx, cx, std::min(sel.min.y, b.min.y), std::max(sel.max.y, b.max.y));
+                    for (float sy : sel_ys)
+                        for (float cy : cand_ys)
+                            consider_horizontal(
+                                sy, cy, std::min(sel.min.x, b.min.x), std::max(sel.max.x, b.max.x));
+                };
+
+                for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
+                    ObjectId id{ObjectId::Shape, i};
+                    if (ed.is_selected(id) || !ed.is_shape_visible(i)) continue;
+                    if (auto b = object_bounds(id)) compare_against(*b);
+                }
+                for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i) {
+                    ObjectId id{ObjectId::Light, i};
+                    if (ed.is_selected(id) || !ed.is_light_visible(i)) continue;
+                    if (auto b = object_bounds(id)) compare_against(*b);
+                }
+                for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
+                    ObjectId id{ObjectId::Group, i};
+                    if (ed.is_selected(id) || !ed.is_group_visible(i)) continue;
+                    if (auto b = object_bounds(id)) compare_against(*b);
+                }
+
+                if (best_v.found) {
+                    ImVec2 a = cv.to_screen({best_v.guide.axis, best_v.guide.span_min});
+                    ImVec2 b = cv.to_screen({best_v.guide.axis, best_v.guide.span_max});
+                    dl->AddLine(a, b, COL_ALIGN_GUIDE, 1.5f * dpi_scale);
+                }
+                if (best_h.found) {
+                    ImVec2 a = cv.to_screen({best_h.guide.span_min, best_h.guide.axis});
+                    ImVec2 b = cv.to_screen({best_h.guide.span_max, best_h.guide.axis});
+                    dl->AddLine(a, b, COL_ALIGN_GUIDE, 1.5f * dpi_scale);
+                }
             }
 
             // Creation preview

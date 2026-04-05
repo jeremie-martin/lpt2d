@@ -68,36 +68,38 @@ def thick_arc(
     sweep: float,
     material: Material,
 ) -> list[Shape]:
-    """Arc with physical thickness (two concentric arcs + two end-cap segments).
+    """Arc with physical thickness, approximated as a polygonal annular sector.
 
     *radius* is the mid-line radius; the shape spans from ``radius - thickness/2``
     to ``radius + thickness/2``.
     """
+    if thickness <= 0:
+        raise ValueError("thickness must be positive")
+    sweep = max(0.0, min(sweep, math.tau))
+    if sweep <= 0:
+        raise ValueError("sweep must be positive")
+
     cx, cy = center
     r_inner = radius - thickness / 2
     r_outer = radius + thickness / 2
-    shapes: list[Shape] = [
-        Arc(
-            center=[cx, cy],
-            radius=r_outer,
-            angle_start=angle_start,
-            sweep=sweep,
-            material=material,
-        ),
-        Arc(
-            center=[cx, cy],
-            radius=r_inner,
-            angle_start=angle_start,
-            sweep=sweep,
-            material=material,
-        ),
+    if r_inner <= 0:
+        raise ValueError("thickness is too large for the given radius")
+
+    steps = max(12, min(128, math.ceil(r_outer * sweep / 0.03)))
+
+    def ring_point(r: float, angle: float) -> list[float]:
+        return [cx + r * math.cos(angle), cy + r * math.sin(angle)]
+
+    end_angle = angle_start + sweep
+    outer = [
+        ring_point(r_outer, end_angle - sweep * (i / steps))
+        for i in range(steps + 1)
     ]
-    # End-cap segments connecting the two arcs
-    for angle in (angle_start, angle_start + sweep):
-        p_inner = [cx + r_inner * math.cos(angle), cy + r_inner * math.sin(angle)]
-        p_outer = [cx + r_outer * math.cos(angle), cy + r_outer * math.sin(angle)]
-        shapes.append(Segment(a=p_inner, b=p_outer, material=material))
-    return shapes
+    inner = [
+        ring_point(r_inner, angle_start + sweep * (i / steps))
+        for i in range(steps + 1)
+    ]
+    return [Polygon(vertices=outer + inner, material=material)]
 
 
 def _convex_face(

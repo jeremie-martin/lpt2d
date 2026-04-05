@@ -32,6 +32,7 @@ inline constexpr ImU32 COL_GHOST_LIGHT   = IM_COL32(200, 180, 40, 60);
 inline constexpr ImU32 COL_CAMERA_FRAME  = IM_COL32(255, 180, 40, 180);
 inline constexpr ImU32 COL_CAMERA_DIM    = IM_COL32(0, 0, 0, 100);
 inline constexpr ImU32 COL_CAMERA_HANDLE = IM_COL32(255, 180, 40, 200);
+inline constexpr ImU32 COL_ALIGN_GUIDE   = IM_COL32(60, 220, 180, 180);
 
 // Overlay drawing
 void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape, ImU32 col, float th);

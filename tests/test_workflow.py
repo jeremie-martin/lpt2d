@@ -11,6 +11,7 @@ from anim.types import (
     Shot,
     TraceDefaults,
 )
+from anim import renderer as renderer_mod
 
 
 def test_scene_find_group():
@@ -71,3 +72,64 @@ def test_look_with_overrides():
     assert look.exposure == -5.0
     assert new_look.exposure == 4.0
     assert new_look.gamma == 2.0
+
+
+def test_auto_look_infers_fixed_normalization(monkeypatch):
+    sample = renderer_mod.FrameStats(
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=100,
+        height=100,
+    )
+
+    def fake_render_stats(*args, **kwargs):
+        return [(0, 0.0, sample)]
+
+    monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
+    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", lambda *args, **kwargs: 321.0)
+
+    look = renderer_mod.auto_look(Scene(), 1.0)
+
+    assert look.normalize == "fixed"
+    assert look.normalize_ref == 321.0
+
+
+def test_auto_look_respects_explicit_normalize(monkeypatch):
+    sample = renderer_mod.FrameStats(
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=100,
+        height=100,
+    )
+
+    def fake_render_stats(*args, **kwargs):
+        return [(0, 0.0, sample)]
+
+    called = {"count": 0}
+
+    def fake_calibrate(*args, **kwargs):
+        called["count"] += 1
+        return 123.0
+
+    monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
+    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", fake_calibrate)
+
+    look = renderer_mod.auto_look(Scene(), 1.0, normalize="rays")
+
+    assert look.normalize == "rays"
+    assert look.normalize_ref == 0.0
+    assert called["count"] == 0
