@@ -22,30 +22,47 @@ Performance remains important, but it should stay a permanent engineering discip
 
 ---
 
-## Phase 0 — Consolidate The New Baseline
+## Phase 0 — Consolidated The New Baseline
 
-Before pushing into new major capabilities, the repo should clearly reflect what this project is now.
+Status: shipped on 2026-04-05. This phase remains here as the baseline that
+sets up the rest of the roadmap.
 
 ### 0.1 Retire stale project stories
 
-Some repo guidance still reflects the old `clean_room` era and the previous foundations roadmap. That should be cleaned up so the repository tells a single, current story.
+Some repo guidance reflected the old `clean_room` era and the previous
+foundations roadmap. That cleanup was the last step needed before the next
+chapter of work could become legible.
 
-**What we want:** the docs, examples, and roadmap should all make it obvious that the project has already crossed the “missing core primitives and workflow basics” stage and is now solving a different class of problems. The repo should clearly distinguish:
+**What we now have:** the docs, examples, and roadmap make it explicit that the
+project has already crossed the “missing core primitives and workflow basics”
+stage and is now solving a different class of problems. The repo now clearly
+distinguishes:
 - a canonical public example surface
 - the built-in scene set that still drives runtime discovery and benchmarks
 - secondary exploratory material that is no longer the public face of the tool
 
 ### 0.2 Define a compact canonical example pack
 
-The next roadmap should not be driven by a giant example library. It should be driven by a **small canonical set** of scenes and animations that pressure-test the tool honestly.
+The roadmap should not be driven by a giant example library. It should be
+driven by a **small canonical set** of scenes and animations that pressure-test
+the tool honestly.
 
-**What we want:** a dedicated top-level canonical example surface with a fresh first pack, not a relabeling of older exploratory scripts. The first pack should be workflow-first and compact: procedural-from-scratch, builder/composition, and load-modify-animate. It is not a content-production phase; it is the proving ground for the later phases.
+**What we now have:** a dedicated top-level canonical example surface with a
+fresh first pack, not a relabeling of older exploratory scripts. The initial
+pack is workflow-first and compact: procedural-from-scratch,
+builder/composition, and load-modify-animate. It is not a content-production
+phase; it is the proving ground for the later phases.
 
 ### 0.3 Keep the guardrails alive
 
-The project already has valuable benchmark and render-based regression infrastructure. That should remain active throughout the roadmap.
+The project already has valuable benchmark and render-based regression
+infrastructure. That must remain active throughout the roadmap.
 
-**What we want:** physics tests, workflow tests, and benchmark discipline stay in place while the authored-scene model evolves. The built-in scene set should remain stable enough to support `benchmark.sh` as the general performance snapshot workflow, while focused optimization work continues to use `bench/bench.sh`. Render artifacts remain out of scope for this phase.
+**What we now have:** physics tests, workflow tests, and benchmark discipline
+staying in place while the authored-scene model evolves. The built-in scene set
+remains stable enough to support `benchmark.sh` as the general performance
+snapshot workflow, while focused optimization work continues to use
+`bench/bench.sh`. Render artifacts remain out of scope for this phase.
 
 ---
 

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
 import sys
 from functools import cache
 from pathlib import Path
+
+import pytest
 
 from anim import Frame, FrameContext, Scene, Shot, Timeline
 
@@ -12,6 +15,7 @@ from anim import Frame, FrameContext, Scene, Shot, Timeline
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DIR = REPO_ROOT / "examples" / "python"
 SECONDARY_DIR = REPO_ROOT / "anim" / "examples" / "secondary"
+BINARY = REPO_ROOT / "build" / "lpt2d-cli"
 EXPECTED_CANONICAL = {
     "beam_chamber_starter.py",
     "prism_crown_builder.py",
@@ -104,3 +108,31 @@ def test_root_readme_points_to_canonical_examples_surface():
     readme = (REPO_ROOT / "README.md").read_text()
     assert "examples/" in readme
     assert "python examples/python/beam_chamber_starter.py" in readme
+
+
+@pytest.mark.parametrize("filename", sorted(EXPECTED_CANONICAL))
+def test_canonical_examples_render_frame_zero(tmp_path: Path, filename: str):
+    script = CANONICAL_DIR / filename
+    output = tmp_path / f"{script.stem}_frame0.png"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--frame",
+            "0",
+            "--output",
+            str(output),
+            "--binary",
+            str(BINARY),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+    assert result.returncode == 0, (
+        f"{filename} failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert output.exists(), f"{filename} did not produce {output.name}"
+    assert output.stat().st_size > 0, f"{filename} produced an empty PNG"
