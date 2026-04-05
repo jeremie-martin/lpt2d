@@ -67,6 +67,8 @@ python examples/python/beam_chamber_starter.py
   Documentation index.
 - [docs/AUTHORED_V5.md](/home/holo/prog/lpt2d/docs/AUTHORED_V5.md)
   Strict v5 authored-scene policy and committed scene conventions.
+- [docs/VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
+  Shot-aware look development, clutter diagnostics, and GUI comparison workflows.
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
   Canonical example pack and how to run it.
 - [docs/ROADMAP_GUIDELINES.md](/home/holo/prog/lpt2d/docs/ROADMAP_GUIDELINES.md)
@@ -94,6 +96,20 @@ general `benchmark.sh` performance workflow.
 Built-in authored JSON, the Python API, the CLI, and the GUI all target one
 strict v5 authored format. Older authored versions are intentionally rejected;
 the project no longer carries fallback compatibility for pre-v5 shot JSON.
+
+## Visual Iteration
+
+Phase 2 work now spans both the Python authoring surface and the GUI:
+
+- Python exposes shot-aware look-development and diagnostic helpers such as
+  `auto_look`, `compare_looks`, `look_report`, `diagnose_scene`,
+  `light_contributions`, `scene_light_report`, and `structure_contribution`.
+- The GUI supports frozen snapshot A/B comparison, live histogram/stat
+  inspection, authored-framing light-contribution analysis, structural scene
+  warnings, and authored-size PNG export.
+
+See [docs/VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
+for the current Phase 2 workflow surface.
 
 ## Design Priorities
 

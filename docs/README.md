@@ -7,6 +7,10 @@ and should not be buried inside implementation-specific files.
 
 - [AUTHORED_V5.md](/home/holo/prog/lpt2d/docs/AUTHORED_V5.md)
   The strict authored-scene v5 policy and committed scene conventions.
+- [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
+  The current Phase 2 visual-iteration surface across Python and the GUI.
+- [PHASE2_REVIEW_INVENTORY.md](/home/holo/prog/lpt2d/docs/PHASE2_REVIEW_INVENTORY.md)
+  Feature-sliced review plan for auditing the current Phase 2 implementation.
 - [ROADMAP.md](/home/holo/prog/lpt2d/ROADMAP.md)
   The current strategic roadmap for the project.
 - [ROADMAP_GUIDELINES.md](/home/holo/prog/lpt2d/docs/ROADMAP_GUIDELINES.md)

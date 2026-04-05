@@ -39,8 +39,9 @@ public:
     void trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches);
 
     // Post-processing and readback (unchanged)
-    void update_display(const PostProcess& pp);
-    void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp);
+    void update_display(const PostProcess& pp, float display_aspect = 0.0f);
+    void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f);
+    void read_display_rgba(std::vector<uint8_t>& out_rgba);
 
     GLuint display_texture() const { return display_texture_; }
     float last_max() const { return last_max_; }
@@ -55,6 +56,10 @@ public:
     // Compute per-frame stats from the post-processed RGBA8 buffer.
     // Must be called after read_pixels() (which populates rgba_buffer_).
     FrameMetrics compute_frame_metrics() const;
+
+    // Compute metrics from the current display FBO (reads back RGBA8 pixels).
+    // Standalone — does not require prior read_pixels() call.
+    FrameMetrics compute_display_metrics();
 
 private:
     int width_ = 0, height_ = 0;
@@ -144,6 +149,10 @@ private:
     GLint loc_ambient_ = -1;
     GLint loc_background_ = -1;
     GLint loc_opacity_ = -1;
+    GLint loc_saturation_ = -1;
+    GLint loc_vignette_ = -1;
+    GLint loc_vignette_radius_ = -1;
+    GLint loc_aspect_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();

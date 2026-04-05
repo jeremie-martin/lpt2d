@@ -21,7 +21,9 @@ def polygon(
     id_prefix: str | None = None,
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
-    return Polygon(id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices], material=material)
+    return Polygon(
+        id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices], material=material
+    )
 
 
 def regular_polygon(
@@ -75,10 +77,30 @@ def mirror_box(
 ) -> list[Segment]:
     """Axis-aligned rectangular enclosure (4 segments, normals face inward)."""
     return [
-        Segment(id=_shape_id(id_prefix, "bottom"), a=[-half_w, -half_h], b=[half_w, -half_h], material=material),
-        Segment(id=_shape_id(id_prefix, "top"), a=[half_w, half_h], b=[-half_w, half_h], material=material),
-        Segment(id=_shape_id(id_prefix, "left"), a=[-half_w, half_h], b=[-half_w, -half_h], material=material),
-        Segment(id=_shape_id(id_prefix, "right"), a=[half_w, -half_h], b=[half_w, half_h], material=material),
+        Segment(
+            id=_shape_id(id_prefix, "bottom"),
+            a=[-half_w, -half_h],
+            b=[half_w, -half_h],
+            material=material,
+        ),
+        Segment(
+            id=_shape_id(id_prefix, "top"),
+            a=[half_w, half_h],
+            b=[-half_w, half_h],
+            material=material,
+        ),
+        Segment(
+            id=_shape_id(id_prefix, "left"),
+            a=[-half_w, half_h],
+            b=[-half_w, -half_h],
+            material=material,
+        ),
+        Segment(
+            id=_shape_id(id_prefix, "right"),
+            a=[half_w, -half_h],
+            b=[half_w, half_h],
+            material=material,
+        ),
     ]
 
 
@@ -115,14 +137,8 @@ def thick_arc(
         return [cx + r * math.cos(angle), cy + r * math.sin(angle)]
 
     end_angle = angle_start + sweep
-    outer = [
-        ring_point(r_outer, end_angle - sweep * (i / steps))
-        for i in range(steps + 1)
-    ]
-    inner = [
-        ring_point(r_inner, angle_start + sweep * (i / steps))
-        for i in range(steps + 1)
-    ]
+    outer = [ring_point(r_outer, end_angle - sweep * (i / steps)) for i in range(steps + 1)]
+    inner = [ring_point(r_inner, angle_start + sweep * (i / steps)) for i in range(steps + 1)]
     return [Polygon(id=_shape_id(id_prefix, "sector"), vertices=outer + inner, material=material)]
 
 
@@ -333,7 +349,9 @@ def ball_lens(
 ) -> list[Circle]:
     """Ball lens represented by its actual circular boundary."""
     cx, cy = center
-    return [Circle(id=_shape_id(id_prefix, "body"), center=[cx, cy], radius=radius, material=material)]
+    return [
+        Circle(id=_shape_id(id_prefix, "body"), center=[cx, cy], radius=radius, material=material)
+    ]
 
 
 # ─── Thick shapes ───────────────────────────────────────────────────────
@@ -477,8 +495,12 @@ def slit(
         right.id = _shape_id(id_prefix, "right")
         return [left, right]
     return [
-        Segment(id=_shape_id(id_prefix, "left"), a=[cx - hw, cy], b=[cx - hg, cy], material=material),
-        Segment(id=_shape_id(id_prefix, "right"), a=[cx + hg, cy], b=[cx + hw, cy], material=material),
+        Segment(
+            id=_shape_id(id_prefix, "left"), a=[cx - hw, cy], b=[cx - hg, cy], material=material
+        ),
+        Segment(
+            id=_shape_id(id_prefix, "right"), a=[cx + hg, cy], b=[cx + hw, cy], material=material
+        ),
     ]
 
 
@@ -554,7 +576,9 @@ def waveguide(
     id_prefix: str | None = None,
 ) -> list[Polygon]:
     """Chain of thick segments following a path."""
-    shapes = [thick_segment(points[i], points[i + 1], width, material) for i in range(len(points) - 1)]
+    shapes = [
+        thick_segment(points[i], points[i + 1], width, material) for i in range(len(points) - 1)
+    ]
     for i, shape in enumerate(shapes):
         shape.id = _shape_id(id_prefix, f"segment_{i}")
     return shapes

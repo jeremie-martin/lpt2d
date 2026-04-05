@@ -108,7 +108,10 @@ Applied per-pixel in `postprocess.frag`:
 4. Tone map (none/reinhard/reinhardx/aces/log)
 5. Contrast
 6. Gamma
-7. Opacity fade
+7. Saturation (BT.709 luminance mix in post-tonemap linear space)
+8. Gamma
+9. Vignette (radial edge darkening with configurable radius)
+10. Opacity fade
 
 ### Project structure
 
@@ -118,11 +121,11 @@ examples/                   — canonical public example pack
   python/                   — workflow-first canonical Python animations
 anim/                       — Python animation library (pip install -e .)
   types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
-  renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet
+  renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet, auto_look, compare_looks, look_report, light_contributions
   builders.py               — Shape composition: polygon, regular_polygon, mirror_box/mirror_block, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
-  stats.py                  — Frame statistics (luminance, clipping, percentiles)
+  stats.py                  — Frame statistics, LookProfile/LookComparison/LookReport, LightContribution, diagnose_scene
   examples/secondary/       — exploratory or superseded Python examples
 scenes/                     — JSON shot files (v5 authored format, built-in runtime and benchmark scene set)
 src/
@@ -163,6 +166,9 @@ src/
 - **Material Library**: Shared materials with create/rename/delete/apply-to-selection. Editing a bound object or library entry updates the shared asset through `material_id`.
 - **Undo/Redo**: Ctrl+Z/Ctrl+Shift+Z, 200-level history (tracks Scene only, not Look/TraceDefaults).
 - **Save/Load**: Ctrl+S/Ctrl+O saves/loads the Shot (scene content + camera + look + trace + canvas), except GUI trace batch size, which is session-only and always resets to `20_000`.
+- **Look scrubbing**: `[`/`]` nudge exposure ±0.5 stops. Alt+scroll in viewport adjusts exposure. Look A/B snapshot/toggle via Display panel buttons or `` ` `` key.
+- **Stats overlay**: Collapsible Stats panel shows live histogram, mean/median/p95, black%/clipped%.
+- **Light analysis**: "Analyze Lights" button in Objects panel renders each light solo and shows per-light energy% and coverage%.
 
 ### Important constraints
 
@@ -213,7 +219,7 @@ materials plus `material_id` bindings throughout.
 
 **Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
 
-**Look** only needs to include non-default values. Defaults: exposure=-5, contrast=1, gamma=2, tonemap=reinhardx, white_point=0.5, normalize=rays, ambient=0, background=[0,0,0], opacity=1.
+**Look** only needs to include non-default values. Defaults: exposure=-5, contrast=1, gamma=2, tonemap=reinhardx, white_point=0.5, normalize=rays, ambient=0, background=[0,0,0], opacity=1, saturation=1, vignette=0, vignette_radius=0.7.
 
 **Trace** only needs to include non-default values. Defaults: rays=10M, batch=200K, depth=12, intensity=1. The GUI does not persist `trace.batch`: it always uses `20_000` as an interactive session default.
 

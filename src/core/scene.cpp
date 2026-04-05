@@ -787,6 +787,68 @@ Bounds compute_bounds(const Scene& scene, float padding) {
     return {lo - Vec2{pad, pad}, hi + Vec2{pad, pad}};
 }
 
+std::vector<std::string> diagnose_scene(const Scene& scene) {
+    std::vector<std::string> warnings;
+
+    auto shape_material = [](const Shape& shape) -> const Material& {
+        return std::visit([](const auto& value) -> const Material& { return value.material; }, shape);
+    };
+    auto overlaps = [](const Bounds& a, const Bounds& b) {
+        return a.min.x < b.max.x && a.max.x > b.min.x && a.min.y < b.max.y && a.max.y > b.min.y;
+    };
+
+    std::vector<Shape> all_shapes(scene.shapes.begin(), scene.shapes.end());
+    for (const auto& group : scene.groups)
+        for (const auto& shape : group.shapes)
+            all_shapes.push_back(transform_shape(shape, group.transform));
+
+    if ((int)all_shapes.size() > 20) {
+        warnings.push_back(
+            "High surface count (" + std::to_string(all_shapes.size()) +
+            "): many optical surfaces increase scatter probability");
+    }
+
+    int glass_no_absorb = 0;
+    int emissive_sources = 0;
+    for (const auto& shape : all_shapes) {
+        const Material& mat = shape_material(shape);
+        if (mat.transmission > 0.5f && mat.absorption < 0.01f)
+            ++glass_no_absorb;
+        if (mat.emission > 0.0f)
+            ++emissive_sources;
+    }
+    if (glass_no_absorb > 5) {
+        warnings.push_back(
+            std::to_string(glass_no_absorb) +
+            " transparent shapes with near-zero absorption: rays may bounce indefinitely, creating muddy renders");
+    }
+
+    std::vector<Bounds> shape_bounds_list;
+    shape_bounds_list.reserve(all_shapes.size());
+    for (const auto& shape : all_shapes)
+        shape_bounds_list.push_back(shape_bounds(shape));
+
+    int overlap_count = 0;
+    for (int i = 0; i < (int)shape_bounds_list.size(); ++i) {
+        for (int j = i + 1; j < (int)shape_bounds_list.size(); ++j) {
+            if (overlaps(shape_bounds_list[i], shape_bounds_list[j]))
+                ++overlap_count;
+        }
+    }
+    if (overlap_count > 10)
+        warnings.push_back(std::to_string(overlap_count) + " overlapping shape pairs: may cause visual clutter");
+
+    int total_sources = (int)scene.lights.size() + emissive_sources;
+    for (const auto& group : scene.groups)
+        total_sources += (int)group.lights.size();
+    if (total_sources > 10) {
+        warnings.push_back(
+            "High light/source count (" + std::to_string(total_sources) + "): may create visual noise");
+    }
+
+    return warnings;
+}
+
 void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int width, int height) {
     Vec2 size = bounds.max - bounds.min;
     float scale_x = (float)width / size.x;

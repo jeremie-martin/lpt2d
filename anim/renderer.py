@@ -6,10 +6,23 @@ import json
 import math
 import subprocess
 import sys
+from dataclasses import replace as dc_replace
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 
-from .stats import FrameStats, QualityGate, check_quality, frame_stats, frame_stats_from_report
+from .stats import (
+    FrameStats,
+    LightContribution,
+    LookComparison,
+    LookProfile,
+    LookReport,
+    QualityGate,
+    StatsDiff,
+    StructureReport,
+    check_quality,
+    frame_stats,
+    frame_stats_from_report,
+)
 from .types import (
     Camera2D,
     Canvas,
@@ -25,6 +38,10 @@ from .types import (
 )
 
 DEFAULT_BINARY = "./build/lpt2d-cli"
+
+# Draft quality for analysis functions (auto_look, compare_looks, look_report, etc.)
+_ANALYSIS_CANVAS = Canvas(width=480, height=480)
+_ANALYSIS_TRACE = TraceDefaults(rays=500_000, batch=100_000, depth=12)
 
 
 def _require_pipe(pipe, name: str):
@@ -91,6 +108,12 @@ class Renderer:
             cmd.extend(["--background", f"{bg[0]},{bg[1]},{bg[2]}"])
         if look.opacity < 1.0:
             cmd.extend(["--opacity", str(look.opacity)])
+        if look.saturation != 1.0:
+            cmd.extend(["--saturation", str(look.saturation)])
+        if look.vignette > 0:
+            cmd.extend(["--vignette", str(look.vignette)])
+        if look.vignette_radius != 0.7:
+            cmd.extend(["--vignette-radius", str(look.vignette_radius)])
         if trace.intensity != 1.0:
             cmd.extend(["--intensity", str(trace.intensity)])
         if fast:
@@ -313,7 +336,7 @@ def _build_wire_json(
 
     # Per-frame look overrides
     if frame.look is not None:
-        render_block.update(frame.look.to_dict())
+        render_block.update(frame.look.to_override_dict())
 
     # Per-frame trace overrides
     if frame.trace is not None:
@@ -353,25 +376,104 @@ def _sample_frame_indices(timeline: Timeline, frame: int | None, sample_count: i
     return sorted({round(i * (total - 1) / (sample_count - 1)) for i in range(sample_count)})
 
 
-def _aggregate_frame_stats(results: list[tuple[int, float, FrameStats]]) -> FrameStats | None:
-    if not results:
-        return None
-    stats = [entry[2] for entry in results]
-    width = stats[0].width
-    height = stats[0].height
-    return FrameStats(
-        mean=sum(s.mean for s in stats) / len(stats),
-        max=max(s.max for s in stats),
-        min=min(s.min for s in stats),
-        std=sum(s.std for s in stats) / len(stats),
-        pct_black=sum(s.pct_black for s in stats) / len(stats),
-        pct_clipped=max(s.pct_clipped for s in stats),
-        p05=sum(s.p05 for s in stats) / len(stats),
-        p50=sum(s.p50 for s in stats) / len(stats),
-        p95=sum(s.p95 for s in stats) / len(stats),
-        width=width,
-        height=height,
+def _analysis_canvas(base: Canvas | None) -> Canvas:
+    """Analysis renders keep authored framing while capping resolution."""
+    if base is None:
+        return _ANALYSIS_CANVAS
+    longest = max(base.width, base.height)
+    if longest <= max(_ANALYSIS_CANVAS.width, _ANALYSIS_CANVAS.height):
+        return Canvas(width=base.width, height=base.height)
+    scale = max(_ANALYSIS_CANVAS.width, _ANALYSIS_CANVAS.height) / longest
+    return Canvas(
+        width=max(1, round(base.width * scale)),
+        height=max(1, round(base.height * scale)),
     )
+
+
+def _analysis_trace(base: TraceDefaults | None, *, rays: int | None = None) -> TraceDefaults:
+    """Analysis renders reuse authored intent while staying cheap."""
+    ref = base or TraceDefaults()
+    chosen_rays = ref.rays if rays is None else rays
+    return TraceDefaults(
+        rays=min(chosen_rays, _ANALYSIS_TRACE.rays) if rays is None else chosen_rays,
+        batch=min(ref.batch, _ANALYSIS_TRACE.batch),
+        depth=min(ref.depth, _ANALYSIS_TRACE.depth),
+        intensity=ref.intensity,
+    )
+
+
+def _analysis_result_look(
+    authored: Look,
+    *,
+    tonemap: str,
+    normalize: str,
+    normalize_ref: float = 0.0,
+) -> Look:
+    look = authored.with_overrides(tonemap=tonemap, normalize=normalize)
+    if normalize_ref > 0.0:
+        look = look.with_overrides(normalize_ref=normalize_ref)
+    return look
+
+
+def _resolve_analysis_subject(
+    subject: Scene | Shot | AnimateFn,
+    timeline_or_none: Timeline | float | None,
+    settings: Shot | Quality | str | None,
+) -> tuple[AnimateFn, Timeline, Shot]:
+    if isinstance(subject, Shot):
+        if settings is not None:
+            raise ValueError("settings= is not supported when the analysis subject is a Shot")
+        timeline = (
+            Timeline(duration=1.0, fps=1)
+            if timeline_or_none is None
+            else _resolve_args(timeline_or_none, None)[0]
+        )
+
+        def animate_from_shot(_ctx: FrameContext, _scene: Scene = subject.scene) -> Frame:
+            return Frame(scene=_scene)
+
+        return animate_from_shot, timeline, subject
+
+    if isinstance(subject, Scene):
+        timeline, shot = _resolve_args(
+            Timeline(duration=1.0, fps=1) if timeline_or_none is None else timeline_or_none,
+            settings,
+        )
+
+        def animate_from_scene(_ctx: FrameContext, _scene: Scene = subject) -> Frame:
+            return Frame(scene=_scene)
+
+        return animate_from_scene, timeline, shot
+
+    if timeline_or_none is None:
+        raise ValueError("timeline is required when passing an animate callback")
+    timeline, shot = _resolve_args(timeline_or_none, settings)
+    return subject, timeline, shot
+
+
+def _resolve_static_scene_subject(
+    subject: Scene | Shot,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    look: Look | None = None,
+    trace: TraceDefaults | None = None,
+) -> tuple[Scene, Shot]:
+    if isinstance(subject, Shot):
+        shot = subject
+        scene = subject.scene
+    else:
+        shot = Shot(scene=subject)
+        scene = subject
+    if camera is not None:
+        shot = dc_replace(shot, camera=camera)
+    if canvas is not None:
+        shot = dc_replace(shot, canvas=canvas)
+    if look is not None:
+        shot = dc_replace(shot, look=look)
+    if trace is not None:
+        shot = dc_replace(shot, trace=trace)
+    return scene, shot
 
 
 def render(
@@ -616,9 +718,10 @@ def render_stats(
 
 
 def auto_look(
-    scene_or_animate: Scene | AnimateFn,
+    scene_or_animate: Scene | Shot | AnimateFn,
     timeline_or_none: Timeline | float | None = None,
     *,
+    settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
     target_mean: float = 0.35,
@@ -627,119 +730,108 @@ def auto_look(
     normalize: str | None = None,
     binary: str = DEFAULT_BINARY,
     frame: int | None = None,
-    sample_count: int = 4,
+    sample_count: int = 8,
 ) -> Look:
     """Analyze a scene and return a Look with good exposure settings.
 
     Works with a static Scene or an (animate, timeline) pair. Renders a
-    low-quality draft pass over one or more frames, measures brightness, and
+    low-quality draft pass over sampled frames, measures brightness, and
     computes exposure to hit *target_mean* (0-1 scale) without exceeding
     *max_clipping*.
 
-    If *tonemap* or *normalize* are None, they are inferred from the
-    scene's light distribution.
+    When passed a :class:`Shot`, authored camera/canvas/trace defaults are used
+    automatically. For animated callbacks, pass ``settings=shot`` to make the
+    analysis match the authored shot instead of the generic draft defaults.
     """
-    # Build animate callback from static Scene
-    if isinstance(scene_or_animate, Scene):
-        scene = scene_or_animate
-
-        def animate_from_scene(ctx: FrameContext) -> Frame:
-            return Frame(scene=scene)
-
-        animate: AnimateFn = animate_from_scene
-        timeline: Timeline | float = 1.0
-    else:
-        animate = scene_or_animate
-        if timeline_or_none is None:
-            raise ValueError("timeline is required when passing an animate callback")
-        timeline = timeline_or_none
-    timeline, _ = _resolve_args(timeline, None)
+    animate, timeline, shot = _resolve_analysis_subject(scene_or_animate, timeline_or_none, settings)
     analysis_frames = _sample_frame_indices(timeline, frame, sample_count)
 
-    # Use neutral defaults for the draft render so we can measure the raw distribution
-    draft_tonemap = tonemap or "reinhardx"
-    draft_normalize = normalize or "rays"
+    draft_canvas = canvas or _analysis_canvas(shot.canvas)
+    draft_trace = _analysis_trace(shot.trace)
+    chosen_tonemap = shot.look.tonemap if tonemap is None else tonemap
+    chosen_normalize = shot.look.normalize if normalize is None else normalize
 
-    # Render a fast draft with the target tonemap and gamma so the measured
-    # brightness matches what the user will see in the final render.
-    draft_canvas = canvas or Canvas(width=480, height=480)
-    draft_trace = TraceDefaults(rays=500_000, batch=100_000, depth=12)
-
-    def measure_stats(look: Look) -> FrameStats | None:
-        draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
-        return _aggregate_frame_stats(
-            render_stats(
-                animate,
-                timeline,
-                frames=analysis_frames,
-                settings=draft_shot,
-                camera=camera,
-                binary=binary,
-                fast=True,
-            )
+    def measure_per_frame(look: Look) -> list[tuple[int, float, FrameStats]]:
+        draft_shot = dc_replace(shot, canvas=draft_canvas, look=look, trace=draft_trace)
+        return render_stats(
+            animate,
+            timeline,
+            frames=analysis_frames,
+            settings=draft_shot,
+            camera=camera or shot.camera,
+            binary=binary,
+            fast=True,
         )
 
-    stats = measure_stats(Look(exposure=-5.0, tonemap=draft_tonemap, normalize=draft_normalize))
-    if stats is None:
-        return Look(tonemap=draft_tonemap, normalize=draft_normalize)
-
-    # Infer tonemap from scene characteristics if not explicitly set
-    if tonemap is None:
-        if stats.pct_black > 0.7:
-            # Very sparse scene (mostly dark) — log compresses bright spots
-            chosen_tonemap = "log"
-        elif stats.p95 > 0 and stats.mean > 0 and stats.p95 / max(stats.mean, 0.01) > 10:
-            # High dynamic range — ACES handles strong highlights gracefully
-            chosen_tonemap = "aces"
-        else:
-            # Moderate range — ReinhardX gives good contrast
-            chosen_tonemap = "reinhardx"
-    else:
-        chosen_tonemap = tonemap
-
-    # Infer normalize mode if not explicitly set
-    chosen_normalize = normalize or "fixed"
+    # Calibrate normalize_ref if using fixed mode
     chosen_normalize_ref = 0.0
     if chosen_normalize == "fixed":
         chosen_normalize_ref = calibrate_normalize_ref(
             animate,
             timeline,
             settings=Shot(canvas=draft_canvas, trace=draft_trace),
-            camera=camera,
+            camera=camera or shot.camera,
             binary=binary,
             frame=analysis_frames,
         )
 
-    # If the inferred tonemap differs from the draft, re-render with the
-    # correct tonemap/normalization so the measured brightness matches the final output.
-    if chosen_tonemap != draft_tonemap or chosen_normalize != draft_normalize:
-        recal_look = Look(exposure=-5.0, tonemap=chosen_tonemap, normalize=chosen_normalize)
-        if chosen_normalize_ref > 0:
-            recal_look.normalize_ref = chosen_normalize_ref
-        recal_stats = measure_stats(recal_look)
-        if recal_stats is not None:
-            stats = recal_stats
+    result_base = _analysis_result_look(
+        shot.look,
+        tonemap=chosen_tonemap,
+        normalize=chosen_normalize,
+        normalize_ref=chosen_normalize_ref,
+    )
 
-    # Compute exposure adjustment to hit target brightness
-    measured_mean = stats.mean / 255.0
+    # Measure at baseline exposure
+    baseline_look = result_base.with_overrides(exposure=-5.0)
+
+    per_frame = measure_per_frame(baseline_look)
+    if not per_frame:
+        return result_base
+
+    # Compute per-frame brightness
+    brightnesses = [s.mean / 255.0 for _, _, s in per_frame]
+    measured_mean = sum(brightnesses) / len(brightnesses)
+
+    # Stability check: if brightness varies a lot, target the dimmer frames
+    # to prevent clipping on bright frames while keeping dark frames visible.
+    if len(brightnesses) > 1:
+        std_b = (
+            sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)
+        ) ** 0.5
+        if std_b > 0.05:
+            sorted_b = sorted(brightnesses)
+            measured_mean = sorted_b[len(sorted_b) // 4]  # 25th percentile
+
     if measured_mean > 0.001:
-        # Current exposure is -5.0 (the draft default). Adjust to hit target_mean.
         exposure = -5.0 + math.log2(target_mean / measured_mean)
     else:
-        exposure = -1.0  # very dark scene, boost aggressively
+        exposure = -1.0
 
-    # Clamp to reasonable range
     exposure = max(-15.0, min(exposure, 10.0))
+    best_exposure = exposure
 
-    if stats.pct_clipped > max_clipping:
-        exposure = exposure - 1.0
+    candidate_stats = measure_per_frame(result_base.with_overrides(exposure=exposure))
+    if candidate_stats:
+        candidate_clipping = max(s.pct_clipped for _, _, s in candidate_stats)
+        if candidate_clipping > max_clipping:
+            low = -15.0
+            high = exposure
+            best_exposure = low
+            for _ in range(8):
+                mid = (low + high) * 0.5
+                mid_stats = measure_per_frame(result_base.with_overrides(exposure=mid))
+                if not mid_stats:
+                    high = mid
+                    continue
+                mid_clipping = max(s.pct_clipped for _, _, s in mid_stats)
+                if mid_clipping <= max_clipping:
+                    best_exposure = mid
+                    low = mid
+                else:
+                    high = mid
 
-    result = Look(exposure=round(exposure, 2), tonemap=chosen_tonemap, normalize=chosen_normalize)
-
-    if chosen_normalize_ref > 0:
-        result.normalize_ref = chosen_normalize_ref
-
-    return result
+    return result_base.with_overrides(exposure=round(best_exposure, 2))
 
 
 def calibrate_normalize_ref(
@@ -784,3 +876,456 @@ def calibrate_normalize_ref(
         return max_hdr
     finally:
         renderer.close()
+
+
+def compare_looks(
+    scene_or_animate: Scene | Shot | AnimateFn,
+    timeline_or_looks: Timeline | float | list[Look] | None = None,
+    looks: list[Look] | None = None,
+    *,
+    settings: Shot | Quality | str | None = None,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    binary: str = DEFAULT_BINARY,
+    count: int = 8,
+    frames: list[int] | None = None,
+) -> LookComparison:
+    """Render candidate Looks against the same frames and compare.
+
+    All candidates are evaluated on the same frame set for fair comparison.
+    Uses draft quality for speed while preserving the authored shot aspect when
+    enough shot context is available.
+    """
+    if looks is None:
+        if not isinstance(timeline_or_looks, list):
+            raise ValueError("looks are required")
+        timeline_or_none: Timeline | float | None = None
+        candidate_looks = list(cast(list[Look], timeline_or_looks))
+    else:
+        timeline_or_none = timeline_or_looks  # type: ignore[assignment]
+        candidate_looks = looks
+
+    animate, timeline, shot = _resolve_analysis_subject(scene_or_animate, timeline_or_none, settings)
+    draft_canvas = canvas or _analysis_canvas(shot.canvas)
+    draft_trace = _analysis_trace(shot.trace)
+    frame_indices = _sample_frame_indices(timeline, None, count) if frames is None else list(frames)
+
+    profiles: list[LookProfile] = []
+    for look in candidate_looks:
+        draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
+        stats = render_stats(
+            animate,
+            timeline,
+            frames=frame_indices,
+            settings=draft_shot,
+            camera=camera or shot.camera,
+            binary=binary,
+            fast=True,
+        )
+        profiles.append(LookProfile.from_stats(look, stats))
+    return LookComparison(profiles=profiles, frame_indices=frame_indices)
+
+
+def look_report(
+    scene_or_animate: Scene | Shot | AnimateFn,
+    timeline_or_look: Timeline | float | Look | None = None,
+    look: Look | None = None,
+    *,
+    settings: Shot | Quality | str | None = None,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    binary: str = DEFAULT_BINARY,
+    count: int = 12,
+    frames: list[int] | None = None,
+    dark_threshold: float = 0.15,
+    bright_threshold: float = 0.70,
+    clip_threshold: float = 0.05,
+    contrast_threshold: float = 30.0,
+) -> LookReport:
+    """Diagnose how a Look performs across an animation's timeline.
+
+    Renders at sampled frames and identifies problem regions.
+    """
+    if look is None:
+        if not isinstance(timeline_or_look, Look):
+            raise ValueError("look is required")
+        timeline_or_none: Timeline | float | None = None
+        candidate_look = cast(Look, timeline_or_look)
+    else:
+        timeline_or_none = timeline_or_look  # type: ignore[assignment]
+        candidate_look = look
+
+    animate, timeline, shot = _resolve_analysis_subject(scene_or_animate, timeline_or_none, settings)
+    draft_canvas = canvas or _analysis_canvas(shot.canvas)
+    draft_trace = _analysis_trace(shot.trace)
+    frame_indices = _sample_frame_indices(timeline, None, count) if frames is None else list(frames)
+
+    draft_shot = Shot(canvas=draft_canvas, look=candidate_look, trace=draft_trace)
+    stats = render_stats(
+        animate,
+        timeline,
+        frames=frame_indices,
+        settings=draft_shot,
+        camera=camera or shot.camera,
+        binary=binary,
+        fast=True,
+    )
+    profile = LookProfile.from_stats(candidate_look, stats)
+    return LookReport.from_profile(
+        profile,
+        dark_threshold=dark_threshold,
+        bright_threshold=bright_threshold,
+        clip_threshold=clip_threshold,
+        contrast_threshold=contrast_threshold,
+    )
+
+
+# --- Clutter diagnostics ---
+
+
+def _neutral_contribution_look(normalize_ref: float) -> Look:
+    """Neutral linear look for additive source-comparison work."""
+    return Look(
+        exposure=0.0,
+        contrast=1.0,
+        gamma=1.0,
+        tonemap="none",
+        normalize="fixed",
+        normalize_ref=normalize_ref,
+        ambient=0.0,
+        background=[0.0, 0.0, 0.0],
+        opacity=1.0,
+        saturation=1.0,
+        vignette=0.0,
+        vignette_radius=0.7,
+    )
+
+
+def _collect_light_sources(scene: Scene) -> list[tuple[str, str]]:
+    """Collect (display_label, kind:key) for all authored light sources.
+
+    Includes explicit lights and emissive shapes (which auto-generate lights
+    during C++ upload_scene).  The second element encodes the source type:
+    ``"light:0"``, ``"group:1:0"``, ``"emissive:3"``, ``"emissive_group:1:2"``.
+    """
+    from .types import Material
+
+    sources: list[tuple[str, str]] = []
+    for i, light in enumerate(scene.lights):
+        sources.append((light.id or f"light_{i}", f"light:{i}"))
+    for gi, group in enumerate(scene.groups):
+        for li, light in enumerate(group.lights):
+            label = (group.id or f"group_{gi}") + "/" + (light.id or f"light_{li}")
+            sources.append((label, f"group:{gi}:{li}"))
+    # Emissive shapes act as light sources via auto-generated synthetic lights
+    for si, shape in enumerate(scene.shapes):
+        mat: Material = shape.material  # type: ignore[union-attr]
+        if mat.emission > 0:
+            sources.append((shape.id or f"emissive_shape_{si}", f"emissive:{si}"))  # type: ignore[union-attr]
+    for gi, group in enumerate(scene.groups):
+        for si, shape in enumerate(group.shapes):
+            mat = shape.material  # type: ignore[union-attr]
+            if mat.emission > 0:
+                label = (group.id or f"group_{gi}") + "/" + (shape.id or f"emissive_{si}")  # type: ignore[union-attr]
+                sources.append((label, f"emissive_group:{gi}:{si}"))
+    return sources
+
+
+def _zero_emission(shape: object) -> object:
+    """Return a copy of *shape* with emission zeroed out."""
+    mat = shape.material  # type: ignore[union-attr]
+    if mat.emission > 0:
+        new_mat = dc_replace(mat, emission=0.0)
+        return dc_replace(shape, material=new_mat)  # type: ignore[type-var]
+    return shape
+
+
+def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
+    """Build a scene with only one light source active.
+
+    *key* is a ``kind:detail`` string from ``_collect_lights``.
+    """
+    kind, _, detail = key.partition(":")
+
+    if kind == "light":
+        idx = int(detail)
+        return dc_replace(
+            scene,
+            lights=[scene.lights[idx]],
+            shapes=[_zero_emission(s) for s in scene.shapes],  # type: ignore[misc]
+            groups=[
+                dc_replace(g, lights=[], shapes=[_zero_emission(s) for s in g.shapes])  # type: ignore[misc]
+                for g in scene.groups
+            ],
+        )
+
+    if kind == "group":
+        parts = detail.split(":")
+        gi, li = int(parts[0]), int(parts[1])
+        new_groups = []
+        for i, g in enumerate(scene.groups):
+            kept_lights = [g.lights[li]] if i == gi else []
+            new_groups.append(
+                dc_replace(g, lights=kept_lights, shapes=[_zero_emission(s) for s in g.shapes])  # type: ignore[misc]
+            )
+        return dc_replace(
+            scene,
+            lights=[],
+            shapes=[_zero_emission(s) for s in scene.shapes],  # type: ignore[misc]
+            groups=new_groups,
+        )
+
+    if kind in ("emissive", "emissive_group"):
+        # Keep this one emissive shape, zero all others, remove explicit lights.
+        target_gi = -1
+        target_si = int(detail)
+        if kind == "emissive_group":
+            group_part, shape_part = detail.split(":")
+            target_gi = int(group_part)
+            target_si = int(shape_part)
+        new_shapes = []
+        for si, s in enumerate(scene.shapes):
+            if target_gi < 0 and si == target_si:
+                new_shapes.append(s)
+            else:
+                new_shapes.append(_zero_emission(s))  # type: ignore[misc]
+        new_groups = []
+        for gi, g in enumerate(scene.groups):
+            gs = []
+            for si, s in enumerate(g.shapes):
+                if gi == target_gi and si == target_si:
+                    gs.append(s)
+                else:
+                    gs.append(_zero_emission(s))  # type: ignore[misc]
+            new_groups.append(dc_replace(g, lights=[], shapes=gs))
+        return dc_replace(scene, lights=[], shapes=new_shapes, groups=new_groups)
+
+    return scene  # fallback
+
+
+def _contribution_reference_shot(
+    subject: Scene | Shot,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    rays_per_light: int = 500_000,
+    binary: str = DEFAULT_BINARY,
+) -> tuple[Scene, Shot]:
+    scene, shot = _resolve_static_scene_subject(subject, camera=camera, canvas=canvas)
+    scene = scene.clone()
+    scene.ensure_ids()
+    analysis_shot = Shot(
+        scene=scene,
+        camera=shot.camera,
+        canvas=_analysis_canvas(shot.canvas),
+        trace=_analysis_trace(shot.trace, rays=rays_per_light),
+    )
+    normalize_ref = calibrate_normalize_ref(
+        lambda _ctx, _scene=scene: Frame(scene=_scene),
+        1.0,
+        settings=analysis_shot,
+        camera=analysis_shot.camera,
+        binary=binary,
+        fast=True,
+        frame=[0],
+    )
+    return scene, dc_replace(analysis_shot, look=_neutral_contribution_look(normalize_ref))
+
+
+def light_contributions(
+    subject: Scene | Shot,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    rays_per_light: int = 500_000,
+    binary: str = DEFAULT_BINARY,
+) -> list[LightContribution]:
+    """Render each source solo and measure its linear frame contribution.
+
+    Includes explicit lights and emissive shapes. The measurement uses a shared
+    fixed normalization reference captured from the full scene plus a neutral
+    linear look, so source shares remain additive and comparable.
+    """
+    scene, analysis_shot = _contribution_reference_shot(
+        subject,
+        camera=camera,
+        canvas=canvas,
+        rays_per_light=rays_per_light,
+        binary=binary,
+    )
+    all_sources = _collect_light_sources(scene)
+    if not all_sources:
+        return []
+
+    results: list[tuple[str, int, float, float]] = []  # (label, idx, mean, coverage)
+    total_mean = 0.0
+
+    for idx, (label, key) in enumerate(all_sources):
+        solo_scene = _scene_with_solo_source(scene, key)
+
+        def animate_solo(_ctx: FrameContext, _s: Scene = solo_scene) -> Frame:
+            return Frame(scene=_s)
+
+        stats_list = render_stats(
+            animate_solo,
+            1.0,
+            frames=[0],
+            settings=dc_replace(analysis_shot, scene=solo_scene),
+            camera=analysis_shot.camera,
+            binary=binary,
+            fast=True,
+        )
+        if stats_list:
+            s = stats_list[0][2]
+            results.append((label, idx, s.mean, 1.0 - s.pct_black))
+            total_mean += s.mean
+        else:
+            results.append((label, idx, 0.0, 0.0))
+
+    contributions = []
+    for label, idx, mean, coverage in results:
+        frac = mean / total_mean if total_mean > 0 else 0.0
+        contributions.append(
+            LightContribution(
+                source_id=label,
+                source_index=idx,
+                mean_linear_luma=mean,
+                coverage_fraction=coverage,
+                share=frac,
+            )
+        )
+    contributions.sort(key=lambda c: c.share, reverse=True)
+    return contributions
+
+
+def structure_contribution(
+    subject: Scene | Shot,
+    shape_id: str,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    rays: int = 5_000_000,
+    binary: str = DEFAULT_BINARY,
+) -> StructureReport:
+    """Measure one shape's effect with the same neutral reference on both runs."""
+    if isinstance(subject, Shot):
+        subject.scene.require_shape(shape_id)
+    else:
+        subject.require_shape(shape_id)
+
+    scene, analysis_shot = _contribution_reference_shot(
+        subject,
+        camera=camera,
+        canvas=canvas,
+        rays_per_light=rays,
+        binary=binary,
+    )
+
+    # Build scene without the shape
+    scene_without = dc_replace(
+        scene,
+        shapes=[s for s in scene.shapes if s.id != shape_id],
+        groups=[
+            dc_replace(
+                g,
+                shapes=[s for s in g.shapes if s.id != shape_id],
+            )
+            for g in scene.groups
+        ],
+    )
+
+    stats_with = render_stats(
+        lambda _ctx, _s=scene: Frame(scene=_s),
+        1.0,
+        frames=[0],
+        settings=dc_replace(analysis_shot, scene=scene),
+        camera=analysis_shot.camera,
+        binary=binary,
+        fast=True,
+    )
+    stats_without = render_stats(
+        lambda _ctx, _s=scene_without: Frame(scene=_s),
+        1.0,
+        frames=[0],
+        settings=dc_replace(analysis_shot, scene=scene_without),
+        camera=analysis_shot.camera,
+        binary=binary,
+        fast=True,
+    )
+
+    s_with = stats_with[0][2] if stats_with else FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
+    s_without = (
+        stats_without[0][2] if stats_without else FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
+    )
+
+    diff = StatsDiff(
+        mean=s_without.mean - s_with.mean,
+        pct_black=s_without.pct_black - s_with.pct_black,
+        pct_clipped=s_without.pct_clipped - s_with.pct_clipped,
+        p50=s_without.p50 - s_with.p50,
+        p95=s_without.p95 - s_with.p95,
+    )
+
+    # Infer the role from the neutral linear delta.
+    if diff.mean > 5.0:
+        role = "dimmer"  # removing the shape makes it brighter
+    elif diff.mean < -5.0:
+        role = "brightener"  # removing the shape makes it dimmer
+    else:
+        role = "neutral"
+
+    return StructureReport(
+        shape_id=shape_id,
+        stats_with=s_with,
+        stats_without=s_without,
+        diff=diff,
+        role=role,
+    )
+
+
+def scene_light_report(
+    subject: Scene | Shot,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    binary: str = DEFAULT_BINARY,
+) -> str:
+    """Human-readable contribution report for authored light sources."""
+    contribs = light_contributions(subject, camera=camera, canvas=canvas, binary=binary)
+
+    if not contribs:
+        return "No lights in scene."
+
+    lines = ["Light contribution report:"]
+    lines.append(f"  {'ID':<20} {'Share%':>8} {'Coverage%':>10} {'Mean':>8}")
+    for c in contribs:
+        lines.append(
+            f"  {c.source_id:<20} {c.share:>7.1%} {c.coverage_fraction:>9.1%} {c.mean_linear_luma:>8.1f}"
+        )
+
+    # Warnings
+    warnings = []
+    for c in contribs:
+        if c.share < 0.01 and c.mean_linear_luma > 0:
+            warnings.append(f"  {c.source_id}: contributes <1% of linear frame share")
+        if c.share > 0.70:
+            warnings.append(f"  {c.source_id}: dominates the frame (>70% share)")
+        if c.coverage_fraction > 0.50 and c.share < 0.10:
+            warnings.append(f"  {c.source_id}: wide coverage but low share (potential clutter)")
+
+    if warnings:
+        lines.append("Warnings:")
+        lines.extend(warnings)
+
+    return "\n".join(lines)
+
+
+def scene_energy_report(
+    subject: Scene | Shot,
+    *,
+    camera: Camera2D | None = None,
+    canvas: Canvas | None = None,
+    binary: str = DEFAULT_BINARY,
+) -> str:
+    """Compatibility alias for older worktree code; prefer scene_light_report()."""
+    return scene_light_report(subject, camera=camera, canvas=canvas, binary=binary)

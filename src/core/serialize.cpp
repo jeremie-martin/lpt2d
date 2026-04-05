@@ -237,6 +237,9 @@ static void write_look(std::ostream& f, const Look& look) {
         entries.push_back({"\"background\"", "[" + fmt(look.background[0]) + ", " + fmt(look.background[1]) + ", " + fmt(look.background[2]) + "]"});
     }
     if (look.opacity != def.opacity) entries.push_back({"\"opacity\"", fmt(look.opacity)});
+    if (look.saturation != def.saturation) entries.push_back({"\"saturation\"", fmt(look.saturation)});
+    if (look.vignette != def.vignette) entries.push_back({"\"vignette\"", fmt(look.vignette)});
+    if (look.vignette_radius != def.vignette_radius) entries.push_back({"\"vignette_radius\"", fmt(look.vignette_radius)});
 
     if (entries.empty()) return; // all defaults, skip block
 
@@ -761,6 +764,9 @@ static Look read_look(const JsonValue* v) {
         }
     }
     if (auto* f = v->get("opacity")) look.opacity = f->as_float(1.0f);
+    if (auto* f = v->get("saturation")) look.saturation = f->as_float(1.0f);
+    if (auto* f = v->get("vignette")) look.vignette = f->as_float(0.0f);
+    if (auto* f = v->get("vignette_radius")) look.vignette_radius = f->as_float(0.7f);
     return look;
 }
 
@@ -896,15 +902,22 @@ Shot load_shot_json(const std::string& path) {
     return {};
 }
 
-FrameOverrides parse_frame_overrides(std::string_view json) {
-    FrameOverrides fo;
+StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
+    StreamFrameDirectives directives;
     Parser parser{json.data(), json.data() + json.size()};
     JsonValue root = parser.parse_value();
     parser.skip_ws();
-    if (parser.failed || parser.p != parser.end || root.type != JsonValue::Object) return fo;
+    if (parser.failed || parser.p != parser.end || root.type != JsonValue::Object) return directives;
 
+    directives.has_name = root.get("name") != nullptr;
+    directives.has_camera = root.get("camera") != nullptr;
+    directives.has_canvas = root.get("canvas") != nullptr;
+    directives.has_look = root.get("look") != nullptr;
+    directives.has_trace = root.get("trace") != nullptr;
+
+    FrameOverrides& fo = directives.render;
     auto* render = root.get("render");
-    if (!render || render->type != JsonValue::Object) return fo;
+    if (!render || render->type != JsonValue::Object) return directives;
 
     if (auto* v = render->get("rays")) fo.rays = (int64_t)v->number;
     if (auto* v = render->get("batch")) fo.batch = (int)v->number;
@@ -934,6 +947,13 @@ FrameOverrides parse_frame_overrides(std::string_view json) {
     }
     if (auto* v = render->get("opacity")) fo.opacity = v->as_float();
     if (auto* v = render->get("intensity")) fo.intensity = v->as_float();
+    if (auto* v = render->get("saturation")) fo.saturation = v->as_float();
+    if (auto* v = render->get("vignette")) fo.vignette = v->as_float();
+    if (auto* v = render->get("vignette_radius")) fo.vignette_radius = v->as_float();
 
-    return fo;
+    return directives;
+}
+
+FrameOverrides parse_frame_overrides(std::string_view json) {
+    return parse_stream_frame_directives(json).render;
 }

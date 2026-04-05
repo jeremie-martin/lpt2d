@@ -317,6 +317,7 @@ struct Bounds {
     Vec2 min, max;
 };
 Bounds compute_bounds(const Scene& scene, float padding = 0.05f);
+std::vector<std::string> diagnose_scene(const Scene& scene);
 
 // Arc geometry helpers
 float normalize_angle(float angle);
@@ -388,6 +389,9 @@ struct PostProcess {
     float ambient = 0.0f;       // constant fill light (added after exposure, before tonemap)
     float background[3] = {0, 0, 0}; // background color (linear RGB, applied to unlit pixels)
     float opacity = 1.0f;       // global opacity (applied after tonemap, for fade-to-black)
+    float saturation = 1.0f;    // color saturation (1=normal, 0=grayscale, >1=boosted)
+    float vignette = 0.0f;      // radial edge darkening strength [0,1]
+    float vignette_radius = 0.7f; // falloff start (smaller=more aggressive, default 0.7)
 };
 
 // --- Shot: the authored document ---

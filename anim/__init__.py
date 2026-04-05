@@ -23,13 +23,24 @@ from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
 from .renderer import auto_look as auto_look
 from .renderer import calibrate_normalize_ref as calibrate_normalize_ref
+from .renderer import compare_looks as compare_looks
+from .renderer import light_contributions as light_contributions
+from .renderer import look_report as look_report
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
+from .renderer import scene_energy_report as scene_energy_report
+from .renderer import scene_light_report as scene_light_report
+from .renderer import structure_contribution as structure_contribution
 from .stats import FrameStats as FrameStats
+from .stats import LightContribution as LightContribution
+from .stats import LookComparison as LookComparison
+from .stats import LookProfile as LookProfile
+from .stats import LookReport as LookReport
 from .stats import QualityGate as QualityGate
 from .stats import StatsDiff as StatsDiff
+from .stats import StructureReport as StructureReport
 from .stats import check_quality as check_quality
 from .stats import compare_stats as compare_stats
 from .stats import compare_summary as compare_summary
@@ -66,6 +77,7 @@ from .types import TraceDefaults as TraceDefaults
 from .types import Transform2D as Transform2D
 from .types import absorber as absorber
 from .types import beam_splitter as beam_splitter
+from .types import diagnose_scene as diagnose_scene
 from .types import diffuse as diffuse
 from .types import emissive as emissive
 from .types import glass as glass
@@ -110,11 +122,23 @@ __all__ = [
     "QualityGate",
     "StatsDiff",
     "auto_look",
+    "compare_looks",
+    "look_report",
+    "LookComparison",
+    "LookProfile",
+    "LookReport",
     "absorber",
     "ball_lens",
     "beam_splitter",
     "biconvex_lens",
     "calibrate_normalize_ref",
+    "diagnose_scene",
+    "light_contributions",
+    "LightContribution",
+    "StructureReport",
+    "scene_light_report",
+    "scene_energy_report",
+    "structure_contribution",
     "diffuse",
     "emissive",
     "check_quality",

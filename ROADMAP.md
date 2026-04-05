@@ -18,7 +18,8 @@ detailed next phase and current center of gravity:
 
 1. first, make authored scenes easier to identify, address, reuse, mutate, and understand
 2. then, make visual iteration much stronger, since look development and clutter remain major friction
-3. then, deepen the physical model where it risks becoming the next real limitation
+3. then, reduce structural ambiguity and unnecessary complexity in the tool itself before deeper capability work
+4. then, deepen the physical model where it risks becoming the next real limitation
 
 Performance remains important, but it should stay a permanent engineering discipline guarded by benchmarks rather than a roadmap phase for now. If throughput becomes the dominant pain again, it should be promoted back into explicit roadmap structure.
 
@@ -173,13 +174,88 @@ This phase should feel successful when trying, comparing, and understanding alte
 
 ---
 
-## Phase 3 — Deeper Physical Semantics
+## Phase 3 — Structural Cleanup Before Deeper Semantics
+
+After visual iteration, the next risk is not only physical-model limits. It is
+also the growing amount of structural complexity inside the tool itself:
+duplicated authored-model semantics across layers, blurry boundaries between
+saved shots and transient render requests, and GUI/editor code that is becoming
+harder to reason about as more capability accumulates.
+
+This phase is intentionally more technical and a bit more concrete about
+structural problems than the surrounding roadmap phases, because the goal here
+is to make the project easier to evolve coherently before it takes on harder
+physical semantics. It should still stay problem-led rather than prematurely
+locking in one exact refactor plan.
+
+### 3.1 Reduce duplicated authored-model semantics
+
+**Problem:** the same authored concepts increasingly risk being defined,
+validated, normalized, or diagnosed in multiple places across the C++ core, the
+CLI/streaming surface, the GUI, and the Python authoring layer. That creates
+drift risk and makes simple model changes feel more global and fragile than
+they should.
+
+**What we want:** the project should have a clearer sense of ownership for
+authored-scene meaning. Scene identity, material binding behavior, format
+semantics, validation rules, and related diagnostics should not need to evolve
+as loosely synchronized parallel stories across multiple layers of the tool.
+
+### 3.2 Untangle authored documents from transient render protocol concerns
+
+**Problem:** the boundary between “saved authored shot,” “session defaults,”
+and “per-frame transient override” is becoming too conceptually muddy. When the
+same structures try to serve all of those roles at once, the code becomes more
+indirect and the meaning of changes becomes harder to see.
+
+**What we want:** the project should present cleaner conceptual boundaries
+between authored data, temporary render/session directives, and internal
+runtime structures. A saved shot should feel like one thing, a transient render
+request should feel like another, and the path between them should be easier to
+follow.
+
+This matters because future physical-model work will likely add more state and
+more meaning, not less.
+
+### 3.3 Make GUI/editor structure easier to extend without incidental coupling
+
+**Problem:** the GUI is already strategically valuable, but its implementation
+shape can become the next source of drag if too much behavior remains
+concentrated in large, tightly coupled control surfaces with broad shared
+mutable state and fragile editor-side identity assumptions.
+
+**What we want:** the GUI/editor layer should become more legible
+architecturally. Rendering concerns, editor state transitions, authored-scene
+operations, diagnostics, and presentation should have clearer boundaries, so
+future work does not require navigating one oversized control surface just to
+change one concept safely.
+
+### 3.4 Consolidate diagnostic and analysis ownership
+
+**Problem:** visual diagnostics and contribution-analysis logic are now
+important enough that they can become their own coherence problem if their
+rules, assumptions, or meaning drift across Python, GUI, and core code.
+
+**What we want:** diagnostic semantics should have clearer ownership. When the
+tool explains why a scene is cluttered, where energy is coming from, or what a
+structure is contributing, those explanations should come from a coherent
+project-wide story rather than from parallel heuristics that merely happen to
+look similar.
+
+This phase should feel complete when adding or evolving an authored concept no
+longer first requires untangling where its meaning currently lives, and when
+the next phase can deepen the physical model without compounding internal
+ambiguity.
+
+---
+
+## Phase 4 — Deeper Physical Semantics
 
 After the authoring and iteration loop is stronger, the next foundational question becomes: what kinds of optics can the renderer model honestly before its physical simplifications start to become the limiting factor?
 
 This phase is specifically about nested media, touching media, and other scenes where medium boundaries become ambiguous under the current model.
 
-### 3.1 Stronger medium semantics
+### 4.1 Stronger medium semantics
 
 **Problem:** the current model is already good enough for many scenes, but it risks becoming the next invisible ceiling as scenes become more ambitious. There is a difference between “looks convincing in many cases” and “has a clear physical meaning in harder cases.”
 
@@ -189,7 +265,7 @@ This matters because otherwise the project may become *more expressive while bec
 
 At the authored-scene level, success means authors can build nested-glass, touching-solid, and similarly ambiguous boundary scenes and rely on them to behave consistently rather than only working by accident.
 
-### 3.2 Physical safety for seductive scenes
+### 4.2 Physical safety for seductive scenes
 
 The more advanced and beautiful the scenes become, the more dangerous it is for the renderer to be physically wrong in ways that are not obvious.
 
@@ -197,7 +273,7 @@ The more advanced and beautiful the scenes become, the more dangerous it is for 
 
 This is about guarding against plausible-looking but wrong results: incorrect medium assignment, impossible enter/exit behavior, or subtly broken energy behavior in scenes that still render beautifully enough to fool the author.
 
-### 3.3 Expand physics verification accordingly
+### 4.3 Expand physics verification accordingly
 
 As the physical model deepens, the validation must deepen too.
 
@@ -207,23 +283,23 @@ This phase should come **before** reopening more seductive advanced geometry, no
 
 ---
 
-## Phase 4 — Advanced Expressiveness
+## Phase 5 — Advanced Expressiveness
 
 Only after the physical foundations above are stronger should the roadmap reopen major expansion of the scene language.
 
-### 4.1 Advanced geometry and composite optics
+### 5.1 Advanced geometry and composite optics
 
 Ideas like CSG, more powerful composite shape systems, and richer constructive optics can be very valuable, but they should land on top of a stronger authored model and a stronger physical model.
 
 **What we want:** advanced geometry that actually expands what kinds of animations can be made, rather than merely adding impressive-sounding surface area.
 
-### 4.2 High-value new expressive systems
+### 5.2 High-value new expressive systems
 
 The next wave of expressive features should be chosen for the animation families they unlock.
 
 **What we want:** new lights, materials, or higher-level optical constructs should only move forward when they clearly enable scene families the project genuinely wants to make. If a proposed feature cannot name those scene families concretely, it should wait.
 
-### 4.3 Reuse over sprawl
+### 5.3 Reuse over sprawl
 
 This phase should continue the discipline of extracting reusable motifs from real work instead of accumulating disconnected features.
 
@@ -231,23 +307,23 @@ This phase should continue the discipline of extracting reusable motifs from rea
 
 ---
 
-## Phase 5 — Studio Workflow
+## Phase 6 — Studio Workflow
 
 This is the long-term destination rather than a near-term commitment.
 
-### 5.1 Animation-level GUI/Python fluency
+### 6.1 Animation-level GUI/Python fluency
 
 Once scene-level coherence exists, the remaining long-term gap is animation-level workflow between the GUI and Python authoring workflows.
 
 **What we want:** authors should be able to move more fluidly between GUI-based inspection and exploration of animations and Python-based animation authoring, with parameter discoveries and workflow intent carrying naturally between them.
 
-### 5.2 Animation-aware GUI
+### 6.2 Animation-aware GUI
 
 The GUI is already essential for scene exploration. In the long run, it can become more than that.
 
 **What we want:** the GUI gradually evolves from scene editor toward lightweight animation tool: able to inspect animations, preview them intelligently, expose animation-specific controls, and eventually support more interactive editing of animated parameters.
 
-### 5.3 Long-term studio vision
+### 6.3 Long-term studio vision
 
 Timeline- and keyframe-oriented editing belongs here, after the earlier phases make that kind of workflow worth building properly.
 

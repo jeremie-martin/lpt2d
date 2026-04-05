@@ -114,6 +114,42 @@ int App::run(const AppConfig& config) {
     float frame_ms = 16.0f;
     bool show_wireframe = true;
     bool open_load_popup = false;
+
+    struct RenderFilterState {
+        std::set<int> hidden_shapes;
+        std::set<int> hidden_lights;
+        std::set<int> hidden_groups;
+        int solo_light = -1;
+        int solo_light_group = -1;
+        int solo_light_index = -1;
+    };
+
+    // Full-shot A/B comparison state
+    struct CompareSnapshot {
+        bool active = false;
+        bool showing_a = false;
+        bool metrics_valid = false;
+        Shot shot;
+        Bounds view_bounds{{-1, -1}, {1, 1}};
+        FrameMetrics metrics{};
+        GLuint texture = 0;
+        int texture_width = 0;
+        int texture_height = 0;
+    } compare_ab;
+
+    FrameMetrics live_metrics{};
+    int stats_counter = 30; // trigger immediate compute on first frame
+    bool force_live_metrics_refresh = true;
+
+    // Light contribution analysis results (cleared on scene reload)
+    struct LightContributionView {
+        std::string id;
+        float mean_linear_luma = 0.0f;
+        float coverage_fraction = 0.0f;
+        float share = 0.0f;
+    };
+    std::vector<LightContributionView> light_analysis;
+    bool light_analysis_valid = false;
     auto make_default_arc = [](Vec2 center, Vec2 target) {
         Vec2 delta = target - center;
         float angle = delta.length_sq() > 1e-10f
@@ -151,6 +187,11 @@ int App::run(const AppConfig& config) {
     auto shape_material_id_mut = [](Shape& shape) -> std::string& {
         return std::visit([](auto& value) -> std::string& {
             return value.material_id;
+        }, shape);
+    };
+    auto shape_material = [](const Shape& shape) -> const Material& {
+        return std::visit([](const auto& value) -> const Material& {
+            return value.material;
         }, shape);
     };
     auto shape_material_mut = [](Shape& shape) -> Material& {
@@ -289,31 +330,73 @@ int App::run(const AppConfig& config) {
     };
 
     // Build a filtered scene applying editor visibility/solo state.
-    auto build_render_scene = [&]() -> Scene {
+    auto capture_render_filters = [&]() -> RenderFilterState {
+        return {
+            ed.hidden_shapes,
+            ed.hidden_lights,
+            ed.hidden_groups,
+            ed.solo_light,
+            ed.solo_light_group,
+            ed.solo_light_index,
+        };
+    };
+    auto current_display_camera = [&]() -> Camera {
+        if (!compare_ab.active)
+            return ed.camera;
+        Camera comparison_camera;
+        comparison_camera.fit(compare_ab.view_bounds, (float)win_w, (float)win_h);
+        return comparison_camera;
+    };
+    auto current_display_view = [&]() -> Bounds {
+        if (compare_ab.active)
+            return compare_ab.view_bounds;
+        Camera display_camera = current_display_camera();
+        return display_camera.visible_bounds((float)win_w, (float)win_h);
+    };
+    auto shape_visible = [](const RenderFilterState& filters, int index) {
+        return !filters.hidden_shapes.contains(index);
+    };
+    auto light_visible = [](const RenderFilterState& filters, int index) {
+        return !filters.hidden_lights.contains(index);
+    };
+    auto group_visible = [](const RenderFilterState& filters, int index) {
+        return !filters.hidden_groups.contains(index);
+    };
+    auto build_render_scene_for = [&](const Shot& shot, const RenderFilterState& filters) -> Scene {
+        auto strip_shape_emission = [](Shape shape) -> Shape {
+            std::visit([](auto& value) {
+                if (value.material.emission > 0.0f)
+                    value.material.emission = 0.0f;
+            }, shape);
+            return shape;
+        };
         Scene filtered;
-        for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i)
-            if (ed.is_shape_visible(i))
-                filtered.shapes.push_back(ed.shot.scene.shapes[i]);
-        bool any_solo = (ed.solo_light >= 0 || ed.solo_light_group >= 0);
-        if (ed.solo_light >= 0) {
+        bool any_solo = (filters.solo_light >= 0 || filters.solo_light_group >= 0);
+        for (int i = 0; i < (int)shot.scene.shapes.size(); ++i)
+            if (shape_visible(filters, i))
+                filtered.shapes.push_back(any_solo ? strip_shape_emission(shot.scene.shapes[i])
+                                                   : shot.scene.shapes[i]);
+        if (filters.solo_light >= 0) {
             // Top-level solo: only include the soloed top-level light
-            if (ed.solo_light < (int)ed.shot.scene.lights.size())
-                filtered.lights.push_back(ed.shot.scene.lights[ed.solo_light]);
-        } else if (ed.solo_light_group >= 0) {
+            if (filters.solo_light < (int)shot.scene.lights.size())
+                filtered.lights.push_back(shot.scene.lights[filters.solo_light]);
+        } else if (filters.solo_light_group >= 0) {
             // Group solo: strip all top-level lights
         } else {
-            for (int i = 0; i < (int)ed.shot.scene.lights.size(); ++i)
-                if (ed.is_light_visible(i))
-                    filtered.lights.push_back(ed.shot.scene.lights[i]);
+            for (int i = 0; i < (int)shot.scene.lights.size(); ++i)
+                if (light_visible(filters, i))
+                    filtered.lights.push_back(shot.scene.lights[i]);
         }
-        for (int i = 0; i < (int)ed.shot.scene.groups.size(); ++i) {
-            if (!ed.is_group_visible(i)) continue;
+        for (int i = 0; i < (int)shot.scene.groups.size(); ++i) {
+            if (!group_visible(filters, i)) continue;
             if (any_solo) {
-                Group g = ed.shot.scene.groups[i];
-                if (ed.solo_light_group == i &&
-                    ed.solo_light_index >= 0 &&
-                    ed.solo_light_index < (int)g.lights.size()) {
-                    Light soloed = g.lights[ed.solo_light_index];
+                Group g = shot.scene.groups[i];
+                for (auto& shape : g.shapes)
+                    shape = strip_shape_emission(shape);
+                if (filters.solo_light_group == i &&
+                    filters.solo_light_index >= 0 &&
+                    filters.solo_light_index < (int)g.lights.size()) {
+                    Light soloed = g.lights[filters.solo_light_index];
                     g.lights.clear();
                     g.lights.push_back(std::move(soloed));
                 } else {
@@ -321,26 +404,190 @@ int App::run(const AppConfig& config) {
                 }
                 filtered.groups.push_back(std::move(g));
             } else {
-                filtered.groups.push_back(ed.shot.scene.groups[i]);
+                filtered.groups.push_back(shot.scene.groups[i]);
             }
         }
         return filtered;
+    };
+    struct AuthoredSource {
+        enum class Kind { SceneLight, GroupLight, ShapeEmission } kind = Kind::SceneLight;
+        std::string label;
+        int group_index = -1;
+        int light_index = -1;
+        int shape_index = -1;
+    };
+    auto zero_shape_emission = [&](Shape shape) -> Shape {
+        if (shape_material(shape).emission > 0.0f)
+            shape_material_mut(shape).emission = 0.0f;
+        return shape;
+    };
+    auto collect_authored_sources = [&](const Scene& scene) {
+        std::vector<AuthoredSource> sources;
+        for (int i = 0; i < (int)scene.lights.size(); ++i) {
+            sources.push_back({AuthoredSource::Kind::SceneLight, light_display_name(scene.lights[i], i), -1, i, -1});
+        }
+        for (int gi = 0; gi < (int)scene.groups.size(); ++gi) {
+            const auto& group = scene.groups[gi];
+            for (int li = 0; li < (int)group.lights.size(); ++li) {
+                sources.push_back({
+                    AuthoredSource::Kind::GroupLight,
+                    group_display_name(group, gi) + "/" + light_display_name(group.lights[li], li),
+                    gi,
+                    li,
+                    -1,
+                });
+            }
+        }
+        for (int i = 0; i < (int)scene.shapes.size(); ++i) {
+            if (shape_material(scene.shapes[i]).emission <= 0.0f) continue;
+            sources.push_back({
+                AuthoredSource::Kind::ShapeEmission,
+                shape_display_name(scene.shapes[i], i),
+                -1,
+                -1,
+                i,
+            });
+        }
+        for (int gi = 0; gi < (int)scene.groups.size(); ++gi) {
+            const auto& group = scene.groups[gi];
+            for (int si = 0; si < (int)group.shapes.size(); ++si) {
+                if (shape_material(group.shapes[si]).emission <= 0.0f) continue;
+                sources.push_back({
+                    AuthoredSource::Kind::ShapeEmission,
+                    group_display_name(group, gi) + "/" + shape_display_name(group.shapes[si], si),
+                    gi,
+                    -1,
+                    si,
+                });
+            }
+        }
+        return sources;
+    };
+    auto scene_with_only_source = [&](const Scene& scene, const AuthoredSource& source) {
+        Scene isolated = scene;
+        for (auto& shape : isolated.shapes)
+            shape = zero_shape_emission(shape);
+        for (auto& group : isolated.groups)
+            for (auto& shape : group.shapes)
+                shape = zero_shape_emission(shape);
+        isolated.lights.clear();
+        for (auto& group : isolated.groups)
+            group.lights.clear();
+
+        switch (source.kind) {
+        case AuthoredSource::Kind::SceneLight:
+            if (source.light_index >= 0 && source.light_index < (int)scene.lights.size())
+                isolated.lights.push_back(scene.lights[source.light_index]);
+            break;
+        case AuthoredSource::Kind::GroupLight:
+            if (source.group_index >= 0 && source.group_index < (int)scene.groups.size()
+                && source.light_index >= 0 && source.light_index < (int)scene.groups[source.group_index].lights.size()) {
+                isolated.groups[source.group_index].lights.push_back(
+                    scene.groups[source.group_index].lights[source.light_index]);
+            }
+            break;
+        case AuthoredSource::Kind::ShapeEmission:
+            for (int i = 0; i < (int)scene.shapes.size(); ++i) {
+                if (source.group_index < 0 && i == source.shape_index)
+                    isolated.shapes[i] = scene.shapes[i];
+            }
+            for (int gi = 0; gi < (int)scene.groups.size(); ++gi) {
+                for (int si = 0; si < (int)scene.groups[gi].shapes.size(); ++si) {
+                    if (gi == source.group_index && si == source.shape_index)
+                        isolated.groups[gi].shapes[si] = scene.groups[gi].shapes[si];
+                }
+            }
+            break;
+        }
+        return isolated;
+    };
+    auto current_authored_shot = [&]() -> const Shot& {
+        return (compare_ab.active && compare_ab.showing_a) ? compare_ab.shot : ed.shot;
+    };
+    auto scene_default_bounds = [](const Scene& scene) -> Bounds {
+        if (scene.shapes.empty() && scene.lights.empty() && scene.groups.empty())
+            return {{-1, -1}, {1, 1}};
+        return compute_bounds(scene);
+    };
+    auto fit_bounds_rect = [](const Bounds& bounds, float width, float height) -> std::array<float, 4> {
+        Vec2 size = bounds.max - bounds.min;
+        size.x = std::max(size.x, 0.01f);
+        size.y = std::max(size.y, 0.01f);
+        float scale = std::min(width / size.x, height / size.y);
+        return {
+            (width - size.x * scale) * 0.5f,
+            (height - size.y * scale) * 0.5f,
+            size.x * scale,
+            size.y * scale,
+        };
+    };
+    auto destroy_compare_snapshot = [&]() {
+        if (compare_ab.texture) {
+            glDeleteTextures(1, &compare_ab.texture);
+            compare_ab.texture = 0;
+        }
+        compare_ab.texture_width = 0;
+        compare_ab.texture_height = 0;
+    };
+    auto upload_compare_snapshot = [&](const std::vector<uint8_t>& rgba, int tex_w, int tex_h) {
+        if (!compare_ab.texture)
+            glGenTextures(1, &compare_ab.texture);
+        glBindTexture(GL_TEXTURE_2D, compare_ab.texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, tex_w, tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+        compare_ab.texture_width = tex_w;
+        compare_ab.texture_height = tex_h;
     };
 
     // Reload: re-upload scene to GPU, clear accumulation
     // Renderer viewport always tracks the camera's visible bounds.
     // Bounds computed from FULL scene (hiding objects doesn't shift viewport).
-    auto reload = [&]() {
+    auto reload = [&](bool mark_dirty = true) {
         ensure_scene_entity_ids(ed.shot.scene);
         sync_material_bindings(ed.shot.scene);
-        if (ed.shot.scene.shapes.empty() && ed.shot.scene.lights.empty() && ed.shot.scene.groups.empty())
-            ed.scene_bounds = {{-1, -1}, {1, 1}};
-        else
-            ed.scene_bounds = compute_bounds(ed.shot.scene);
-        Bounds view = ed.camera.visible_bounds((float)win_w, (float)win_h);
-        renderer.upload_scene(build_render_scene(), view);
+        ed.scene_bounds = scene_default_bounds(ed.shot.scene);
+        Bounds view = current_display_view();
+        renderer.upload_scene(build_render_scene_for(ed.shot, capture_render_filters()), view);
         renderer.clear();
-        ed.dirty = true;
+        if (mark_dirty)
+            ed.dirty = true;
+        light_analysis_valid = false;
+        force_live_metrics_refresh = true;
+    };
+
+    auto export_authored_png = [&](const Shot& source_shot) -> bool {
+        Shot output_shot = source_shot;
+        ensure_scene_entity_ids(output_shot.scene);
+        sync_material_bindings(output_shot.scene);
+
+        Renderer export_renderer;
+        if (!export_renderer.init(output_shot.canvas.width, output_shot.canvas.height))
+            return false;
+
+        Bounds scene_bounds = scene_default_bounds(output_shot.scene);
+        Bounds bounds = output_shot.camera.resolve(output_shot.canvas.aspect(), scene_bounds);
+        export_renderer.upload_scene(output_shot.scene, bounds);
+        export_renderer.clear();
+
+        TraceConfig tcfg = output_shot.trace.to_trace_config();
+        int64_t total_rays = output_shot.trace.rays;
+        int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
+        const int dispatches_per_draw = 4;
+        int64_t batch = 0;
+        while (batch < num_batches) {
+            int n = std::min((int64_t)dispatches_per_draw, num_batches - batch);
+            export_renderer.trace_and_draw_multi(tcfg, n);
+            batch += n;
+        }
+
+        std::vector<uint8_t> pixels;
+        export_renderer.read_pixels(pixels, output_shot.look, output_shot.canvas.aspect());
+        std::string filename = output_shot.name + ".png";
+        return export_png(filename, pixels.data(), output_shot.canvas.width, output_shot.canvas.height);
     };
 
     auto do_save = [&]() {
@@ -374,12 +621,16 @@ int App::run(const AppConfig& config) {
         ed.handle_dragging = false;
         ed.cam_handle_dragging = CameraHandle::None;
         ed.cam_handle_hovered = CameraHandle::None;
+        destroy_compare_snapshot();
+        compare_ab.active = false;
+        compare_ab.showing_a = false;
+        compare_ab.metrics_valid = false;
         ed.undo.clear();
         ed.undo.push(ed.shot.scene);
         // reload() updates ed.scene_bounds, then fit camera
         reload();
         ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
-        reload(); // re-upload with fitted camera view
+        reload(false); // re-upload with fitted camera view
         ed.dirty = false;
     };
 
@@ -435,15 +686,26 @@ int App::run(const AppConfig& config) {
         ed.validate_selection();
 
         // Camera view for this frame
-        CameraView cv{ed.camera, (float)win_w, (float)win_h};
+        Camera active_camera = current_display_camera();
+        CameraView cv{active_camera, (float)win_w, (float)win_h};
+        bool showing_snapshot_a = compare_ab.active && compare_ab.showing_a;
 
         // Trace
         auto t0 = std::chrono::steady_clock::now();
-        if (!paused && renderer.num_lights() > 0) {
+        if (!showing_snapshot_a && !paused && renderer.num_lights() > 0) {
             renderer.trace_and_draw(ed.shot.trace.to_trace_config());
             glFinish();
         }
-        renderer.update_display(ed.shot.look);
+        if (!showing_snapshot_a)
+            renderer.update_display(ed.shot.look, ed.shot.canvas.aspect());
+
+        if (showing_snapshot_a && compare_ab.metrics_valid) {
+            live_metrics = compare_ab.metrics;
+        } else if (force_live_metrics_refresh || ++stats_counter >= 30) {
+            stats_counter = 0;
+            force_live_metrics_refresh = false;
+            live_metrics = renderer.compute_display_metrics();
+        }
 
         // ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -467,8 +729,23 @@ int App::run(const AppConfig& config) {
             ImGuiWindowFlags_NoBackground);
 
         // Display rendered image (FBO always matches camera view)
-        ImGui::Image((ImTextureID)(intptr_t)renderer.display_texture(),
-                     ImVec2((float)win_w, (float)win_h), ImVec2(0, 1), ImVec2(1, 0));
+        if (showing_snapshot_a && compare_ab.texture) {
+            auto src = fit_bounds_rect(compare_ab.view_bounds,
+                                       (float)compare_ab.texture_width,
+                                       (float)compare_ab.texture_height);
+            auto dst = fit_bounds_rect(compare_ab.view_bounds, (float)win_w, (float)win_h);
+            ImGui::SetCursorPos(ImVec2(dst[0], dst[1]));
+            ImVec2 uv0(src[0] / (float)compare_ab.texture_width,
+                       1.0f - src[1] / (float)compare_ab.texture_height);
+            ImVec2 uv1((src[0] + src[2]) / (float)compare_ab.texture_width,
+                       1.0f - (src[1] + src[3]) / (float)compare_ab.texture_height);
+            ImGui::Image((ImTextureID)(intptr_t)compare_ab.texture,
+                         ImVec2(dst[2], dst[3]), uv0, uv1);
+            ImGui::SetCursorPos(ImVec2(0, 0));
+        } else {
+            ImGui::Image((ImTextureID)(intptr_t)renderer.display_texture(),
+                         ImVec2((float)win_w, (float)win_h), ImVec2(0, 1), ImVec2(1, 0));
+        }
 
         bool vp_hovered = ImGui::IsWindowHovered();
 
@@ -482,7 +759,7 @@ int App::run(const AppConfig& config) {
 
         // ── Wireframe overlay ───────────────────────────────────────────
 
-        if (show_wireframe) {
+        if (show_wireframe && !showing_snapshot_a) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
             for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
@@ -733,7 +1010,7 @@ int App::run(const AppConfig& config) {
         }
 
         // ── Measurement overlay ──────────────────────────────────────────
-        if (ed.tool == EditTool::Measure && ed.measure_active) {
+        if (!showing_snapshot_a && ed.tool == EditTool::Measure && ed.measure_active) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
             ImU32 meas_col = IM_COL32(0, 255, 180, 200);
             Vec2 mend = cv.to_world(io.MousePos);
@@ -760,7 +1037,7 @@ int App::run(const AppConfig& config) {
         Bounds cam_frame{};
         CamHandlePt cam_handle_pts[8] = {};
         int n_cam_handles = 0;
-        bool cam_active = ed.show_camera_frame && !ed.shot.camera.empty();
+        bool cam_active = !showing_snapshot_a && ed.show_camera_frame && !ed.shot.camera.empty();
 
         if (cam_active) {
             cam_frame = ed.shot.camera.resolve(ed.shot.canvas.aspect(), ed.scene_bounds);
@@ -812,7 +1089,7 @@ int App::run(const AppConfig& config) {
         float hit_thresh = 8.0f / cv.cam.zoom;
 
         // Camera handle interaction (hover + start drag)
-        if (vp_hovered && ed.selection.empty() && ed.tool == EditTool::Select
+        if (!showing_snapshot_a && vp_hovered && ed.selection.empty() && ed.tool == EditTool::Select
             && !ed.transform.active() && cam_active
             && ed.cam_handle_dragging == CameraHandle::None) {
 
@@ -833,7 +1110,7 @@ int App::run(const AppConfig& config) {
         }
 
         // Camera handle drag (continues even outside viewport)
-        if (ed.cam_handle_dragging != CameraHandle::None) {
+        if (!showing_snapshot_a && ed.cam_handle_dragging != CameraHandle::None) {
             if (ImGui::IsMouseDragging(0)) {
                 Bounds b = ed.cam_drag_start_bounds;
                 Vec2 drag_origin = cv.to_world(io.MouseClickedPos[0]);
@@ -868,11 +1145,13 @@ int App::run(const AppConfig& config) {
         }
 
         // Hover detection (Select tool only, skip during camera drag)
-        if (vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()
+        if (!showing_snapshot_a && vp_hovered && ed.tool == EditTool::Select && !ed.dragging && !ed.creating && !ed.box_selecting && !ed.transform.active()
             && ed.cam_handle_dragging == CameraHandle::None) {
             SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.editing_group);
             ed.hovered = hit;
         } else if (!vp_hovered) {
+            ed.hovered = {SelectionRef::Shape, -1};
+        } else if (showing_snapshot_a) {
             ed.hovered = {SelectionRef::Shape, -1};
         }
 
@@ -880,10 +1159,11 @@ int App::run(const AppConfig& config) {
 
         // Pan: middle mouse drag or Alt+LMB drag
         if (vp_hovered) {
+            bool compare_view_locked = compare_ab.active;
             bool middle_drag = ImGui::IsMouseDragging(2); // middle button
             bool alt_drag = io.KeyAlt && ImGui::IsMouseDragging(0);
 
-            if (middle_drag || alt_drag) {
+            if (!compare_view_locked && (middle_drag || alt_drag)) {
                 ImVec2 delta = io.MouseDelta;
                 ed.camera.center.x -= delta.x / ed.camera.zoom;
                 ed.camera.center.y += delta.y / ed.camera.zoom;
@@ -891,19 +1171,24 @@ int App::run(const AppConfig& config) {
                 renderer.clear();
             }
 
-            // Zoom: scroll wheel (cursor-centered)
+            // Scroll wheel: Alt+scroll = exposure scrub, otherwise zoom
             if (io.MouseWheel != 0) {
-                Vec2 world_before = cv.to_world(io.MousePos);
-                float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
-                ed.camera.zoom *= factor;
-                ed.camera.zoom = std::clamp(ed.camera.zoom, 1.0f, 100000.0f);
-                // Recompute cv after zoom change
-                CameraView cv2{ed.camera, (float)win_w, (float)win_h};
-                Vec2 world_after = cv2.to_world(io.MousePos);
-                ed.camera.center = ed.camera.center + (world_before - world_after);
-                cv = CameraView{ed.camera, (float)win_w, (float)win_h};
-                renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
-                renderer.clear();
+                if (io.KeyAlt && !ImGui::IsMouseDragging(0)) {
+                    // Exposure scrub
+                    ed.shot.look.exposure += io.MouseWheel * 0.5f;
+                } else if (!compare_view_locked) {
+                    Vec2 world_before = cv.to_world(io.MousePos);
+                    float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
+                    ed.camera.zoom *= factor;
+                    ed.camera.zoom = std::clamp(ed.camera.zoom, 1.0f, 100000.0f);
+                    // Recompute cv after zoom change
+                    CameraView cv2{ed.camera, (float)win_w, (float)win_h};
+                    Vec2 world_after = cv2.to_world(io.MousePos);
+                    ed.camera.center = ed.camera.center + (world_before - world_after);
+                    cv = CameraView{ed.camera, (float)win_w, (float)win_h};
+                    renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
+                    renderer.clear();
+                }
             }
         }
 
@@ -912,7 +1197,7 @@ int App::run(const AppConfig& config) {
         // Skip tool interactions during alt-drag (pan) or middle drag
         bool panning = (io.KeyAlt && ImGui::IsMouseDown(0)) || ImGui::IsMouseDown(2);
 
-        if (vp_hovered && !panning && !ed.transform.active()
+        if (!showing_snapshot_a && vp_hovered && !panning && !ed.transform.active()
             && ed.cam_handle_dragging == CameraHandle::None) {
             // Double-click: enter group editing mode
             if (ImGui::IsMouseDoubleClicked(0) && ed.tool == EditTool::Select) {
@@ -1347,7 +1632,7 @@ int App::run(const AppConfig& config) {
             ImGui::PushID("Camera");
 
             if (ImGui::Button("Set from View")) {
-                ed.shot.camera.bounds = ed.camera.visible_bounds((float)win_w, (float)win_h);
+                ed.shot.camera.bounds = current_display_view();
                 ed.shot.camera.center.reset();
                 ed.shot.camera.width.reset();
                 ed.dirty = true;
@@ -1555,6 +1840,96 @@ int App::run(const AppConfig& config) {
                     delete_selected();
                 }
             }
+
+            // Visual diagnostics
+            {
+                Shot diagnostic_shot = current_authored_shot();
+                ensure_scene_entity_ids(diagnostic_shot.scene);
+                sync_material_bindings(diagnostic_shot.scene);
+                auto scene_warnings = diagnose_scene(diagnostic_shot.scene);
+                if (!scene_warnings.empty()) {
+                    ImGui::Text("Scene Warnings:");
+                    for (const auto& warning : scene_warnings)
+                        ImGui::BulletText("%s", warning.c_str());
+                }
+
+                if (ImGui::Button("Analyze Contributions")) {
+                    light_analysis.clear();
+                    light_analysis_valid = false;
+                    auto authored_sources = collect_authored_sources(diagnostic_shot.scene);
+                    if (!authored_sources.empty()) {
+                        Bounds scene_bounds = scene_default_bounds(diagnostic_shot.scene);
+                        Bounds view = diagnostic_shot.camera.resolve(
+                            diagnostic_shot.canvas.aspect(), scene_bounds);
+                        TraceConfig tcfg{
+                            std::min(diagnostic_shot.trace.batch, 100000),
+                            std::min(diagnostic_shot.trace.depth, 12),
+                            diagnostic_shot.trace.intensity,
+                        };
+                        int analysis_dispatches =
+                            std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
+
+                        renderer.upload_scene(diagnostic_shot.scene, view);
+                        renderer.clear();
+                        if (renderer.num_lights() > 0)
+                            renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
+                        float normalize_ref = std::max(renderer.compute_current_max(), 1.0f);
+
+                        PostProcess contribution_look{};
+                        contribution_look.exposure = 0.0f;
+                        contribution_look.contrast = 1.0f;
+                        contribution_look.gamma = 1.0f;
+                        contribution_look.tone_map = ToneMap::None;
+                        contribution_look.normalize = NormalizeMode::Fixed;
+                        contribution_look.normalize_ref = normalize_ref;
+                        contribution_look.ambient = 0.0f;
+                        contribution_look.background[0] = 0.0f;
+                        contribution_look.background[1] = 0.0f;
+                        contribution_look.background[2] = 0.0f;
+                        contribution_look.opacity = 1.0f;
+                        contribution_look.saturation = 1.0f;
+                        contribution_look.vignette = 0.0f;
+                        contribution_look.vignette_radius = 0.7f;
+
+                        float total_mean = 0.0f;
+                        for (const auto& source : authored_sources) {
+                            Scene solo = scene_with_only_source(diagnostic_shot.scene, source);
+                            renderer.upload_scene(solo, view);
+                            renderer.clear();
+                            if (renderer.num_lights() > 0)
+                                renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
+                            renderer.update_display(contribution_look, diagnostic_shot.canvas.aspect());
+                            auto metrics = renderer.compute_display_metrics();
+                            light_analysis.push_back({
+                                source.label,
+                                metrics.mean_lum,
+                                1.0f - metrics.pct_black,
+                                0.0f,
+                            });
+                            total_mean += metrics.mean_lum;
+                        }
+
+                        for (auto& entry : light_analysis)
+                            entry.share = (total_mean > 0.0f) ? entry.mean_linear_luma / total_mean : 0.0f;
+                        std::sort(light_analysis.begin(), light_analysis.end(), [](const auto& a, const auto& b) {
+                            return a.share > b.share;
+                        });
+
+                        reload(false);
+                        light_analysis_valid = !light_analysis.empty();
+                    }
+                }
+
+                if (light_analysis_valid && !light_analysis.empty()) {
+                    ImGui::Text("Light Contributions (linear share):");
+                    for (int i = 0; i < (int)light_analysis.size(); ++i) {
+                        const auto& la = light_analysis[i];
+                        ImGui::Text("  %s: %.0f%% share, %.0f%% coverage",
+                                    la.id.c_str(), la.share * 100.0f, la.coverage_fraction * 100.0f);
+                    }
+                }
+            }
+
             ImGui::PopID();
         }
 
@@ -1956,10 +2331,60 @@ int App::run(const AppConfig& config) {
                         ed.shot.look.white_point = p.wp;
                         ed.shot.look.normalize = p.norm;
                         ed.shot.look.ambient = p.ambient;
+                        ed.shot.look.saturation = 1.0f;
+                        ed.shot.look.vignette = 0.0f;
+                        ed.shot.look.vignette_radius = 0.7f;
                         // Preserve scene-specific: normalize_ref, normalize_pct, background, opacity
                     }
                 }
                 ImGui::EndCombo();
+            }
+
+            // Full-shot A/B comparison
+            if (showing_snapshot_a)
+                ImGui::BeginDisabled();
+            if (ImGui::Button("Snapshot A")) {
+                std::vector<uint8_t> snapshot_rgba;
+                renderer.read_display_rgba(snapshot_rgba);
+                compare_ab.shot = ed.shot;
+                ensure_scene_entity_ids(compare_ab.shot.scene);
+                sync_material_bindings(compare_ab.shot.scene);
+                compare_ab.view_bounds = current_display_view();
+                compare_ab.metrics = renderer.compute_frame_metrics();
+                compare_ab.metrics_valid = true;
+                upload_compare_snapshot(snapshot_rgba, fb_w, fb_h);
+                compare_ab.active = true;
+                compare_ab.showing_a = false;
+                force_live_metrics_refresh = true;
+            }
+            if (showing_snapshot_a)
+                ImGui::EndDisabled();
+            if (compare_ab.active) {
+                ImGui::SameLine();
+                if (ImGui::Button(compare_ab.showing_a ? "Show B (live)" : "Show A")) {
+                    compare_ab.showing_a = !compare_ab.showing_a;
+                    if (!compare_ab.showing_a)
+                        reload(false);
+                    force_live_metrics_refresh = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Clear A/B")) {
+                    bool was_showing_a = compare_ab.showing_a;
+                    destroy_compare_snapshot();
+                    compare_ab.active = false;
+                    compare_ab.showing_a = false;
+                    compare_ab.metrics_valid = false;
+                    if (was_showing_a)
+                        reload(false);
+                    force_live_metrics_refresh = true;
+                }
+                if (compare_ab.showing_a) {
+                    ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1),
+                                       "Showing: A (frozen snapshot, snapshot framing)");
+                } else {
+                    ImGui::TextDisabled("Snapshot A is available for frozen-image comparison");
+                }
+                ImGui::TextDisabled("Comparison framing is locked to Snapshot A while A/B is active.");
             }
 
             ImGui::SliderFloat("Exposure", &ed.shot.look.exposure, -15.0f, 15.0f);
@@ -1989,6 +2414,11 @@ int App::run(const AppConfig& config) {
             ImGui::ColorEdit3("Background", ed.shot.look.background,
                               ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
             ImGui::SliderFloat("Opacity", &ed.shot.look.opacity, 0.0f, 1.0f);
+            ImGui::Separator();
+            ImGui::SliderFloat("Saturation", &ed.shot.look.saturation, 0.0f, 3.0f);
+            ImGui::SliderFloat("Vignette", &ed.shot.look.vignette, 0.0f, 1.0f);
+            if (ed.shot.look.vignette > 0.0f)
+                ImGui::SliderFloat("Vignette Radius", &ed.shot.look.vignette_radius, 0.3f, 1.5f);
             ImGui::PopID();
         }
 
@@ -1997,6 +2427,8 @@ int App::run(const AppConfig& config) {
             ImGui::PushID("Output");
             char ray_str[32];
             int64_t tr = renderer.total_rays();
+            const Shot& output_shot = current_authored_shot();
+            const Look& output_look = output_shot.look;
             if (tr >= 1'000'000)
                 std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
             else if (tr >= 1'000)
@@ -2004,7 +2436,7 @@ int App::run(const AppConfig& config) {
             else
                 std::snprintf(ray_str, sizeof(ray_str), "%lld", (long long)tr);
             ImGui::Text("Rays: %s", ray_str);
-            if (ed.shot.look.normalize == NormalizeMode::Max)
+            if (!showing_snapshot_a && output_look.normalize == NormalizeMode::Max)
                 ImGui::Text("Max HDR: %.2f", renderer.last_max());
             else
                 ImGui::TextDisabled("Max HDR: —");
@@ -2016,11 +2448,41 @@ int App::run(const AppConfig& config) {
             }
             ImGui::SameLine();
             if (ImGui::Button("Export PNG")) {
-                std::vector<uint8_t> pixels;
-                renderer.read_pixels(pixels, ed.shot.look);
-                std::string filename = ed.shot.name + ".png";
-                if (export_png(filename, pixels.data(), fb_w, fb_h))
+                std::string filename = output_shot.name + ".png";
+                if (export_authored_png(output_shot))
                     std::cerr << "Exported: " << filename << "\n";
+            }
+            ImGui::PopID();
+        }
+
+        // -- Stats --
+        if (ImGui::CollapsingHeader("Stats")) {
+            ImGui::PushID("Stats");
+
+            // Histogram
+            float hist_f[256];
+            float hist_max = 0;
+            for (int i = 0; i < 256; ++i) {
+                hist_f[i] = (float)live_metrics.histogram[i];
+                if (hist_f[i] > hist_max) hist_max = hist_f[i];
+            }
+            ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
+                                 ImVec2(-1, 60.0f * dpi_scale));
+
+            ImGui::Text("Mean: %.1f  Median: %.0f  P95: %.0f",
+                        live_metrics.mean_lum, live_metrics.p50, live_metrics.p95);
+            ImGui::Text("Black: %.1f%%  Clipped: %.1f%%",
+                        live_metrics.pct_black * 100, live_metrics.pct_clipped * 100);
+            if (compare_ab.metrics_valid) {
+                ImGui::Separator();
+                ImGui::Text("Snapshot A: mean %.1f  black %.1f%%  clipped %.1f%%",
+                            compare_ab.metrics.mean_lum,
+                            compare_ab.metrics.pct_black * 100.0f,
+                            compare_ab.metrics.pct_clipped * 100.0f);
+                ImGui::Text("Delta vs A: mean %+.1f  black %+.1f%%  clipped %+.1f%%",
+                            live_metrics.mean_lum - compare_ab.metrics.mean_lum,
+                            (live_metrics.pct_black - compare_ab.metrics.pct_black) * 100.0f,
+                            (live_metrics.pct_clipped - compare_ab.metrics.pct_clipped) * 100.0f);
             }
             ImGui::PopID();
         }
@@ -2091,6 +2553,18 @@ int App::run(const AppConfig& config) {
                     if (ed.undo.redo(ed.shot.scene)) { ed.validate_selection(); reload(); }
                 } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z)) {
                     if (ed.undo.undo(ed.shot.scene)) { ed.validate_selection(); reload(); }
+                }
+
+                // Exposure nudge: [ / ]
+                if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) ed.shot.look.exposure -= 0.5f;
+                if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) ed.shot.look.exposure += 0.5f;
+
+                // A/B look toggle: ` (grave accent)
+                if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent) && compare_ab.active) {
+                    compare_ab.showing_a = !compare_ab.showing_a;
+                    if (!compare_ab.showing_a)
+                        reload(false);
+                    force_live_metrics_refresh = true;
                 }
 
                 // Save/Load
@@ -2311,7 +2785,7 @@ int App::run(const AppConfig& config) {
                 }
 
                 // Fit to view
-                if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+                if (!compare_ab.active && ImGui::IsKeyPressed(ImGuiKey_F)) {
                     if (!ed.selection.empty()) {
                         Bounds sb = ed.selection_bounds();
                         Vec2 sz = sb.max - sb.min;
@@ -2327,7 +2801,7 @@ int App::run(const AppConfig& config) {
                     renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                     renderer.clear();
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                if (!compare_ab.active && ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     ed.camera.fit(ed.scene_bounds, (float)win_w, (float)win_h);
                     renderer.update_viewport(ed.camera.visible_bounds((float)win_w, (float)win_h));
                     renderer.clear();
@@ -2383,6 +2857,7 @@ int App::run(const AppConfig& config) {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+    destroy_compare_snapshot();
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

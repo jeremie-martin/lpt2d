@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from anim import renderer as renderer_mod
-from anim.types import BeamLight, Circle, Frame, Group, Material, Scene, Segment, Shot
+from anim.types import Camera2D, Canvas, BeamLight, Circle, Frame, Group, Look, Material, Scene, Segment, Shot, TraceDefaults
 
 CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
 
@@ -41,6 +41,16 @@ def _make_bound_scene() -> Scene:
                 ],
             )
         ],
+    )
+
+
+def _run_stream(line: str, *args: str) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        [str(CLI_BINARY), "--stream", *args],
+        input=(line + "\n").encode(),
+        capture_output=True,
+        check=False,
+        timeout=180,
     )
 
 
@@ -286,6 +296,88 @@ def test_cpp_stream_rejects_truncated_json():
     assert "frame 0: Invalid JSON" in result.stderr
 
 
+def test_cpp_stream_full_shot_json_ignores_session_look_defaults():
+    shot = Shot(
+        name="stream_full_default_look",
+        scene=_make_bound_scene(),
+        canvas=Canvas(width=8, height=8),
+        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
+    )
+    line = shot.to_json()
+
+    result_dark = _run_stream(line, "--width", "16", "--height", "16", "--exposure", "-5")
+    result_bright = _run_stream(line, "--width", "16", "--height", "16", "--exposure", "5")
+
+    assert result_dark.returncode == 0, result_dark.stderr.decode()
+    assert result_bright.returncode == 0, result_bright.stderr.decode()
+    assert len(result_dark.stdout) == 8 * 8 * 3
+    assert result_dark.stdout == result_bright.stdout
+
+
+def test_cpp_stream_wire_frame_still_uses_session_look_defaults():
+    wire = renderer_mod._build_wire_json(
+        Frame(scene=_make_bound_scene()),
+        camera=None,
+        shot_camera=None,
+        aspect=1.0,
+    )
+
+    result_dark = _run_stream(wire, "--width", "8", "--height", "8", "--rays", "50000", "--exposure", "-5")
+    result_bright = _run_stream(wire, "--width", "8", "--height", "8", "--rays", "50000", "--exposure", "5")
+
+    assert result_dark.returncode == 0, result_dark.stderr.decode()
+    assert result_bright.returncode == 0, result_bright.stderr.decode()
+    assert result_dark.stdout != result_bright.stdout
+
+
+def test_cpp_stream_full_shot_json_respects_top_level_canvas_and_trace():
+    shot = Shot(
+        name="stream_canvas_trace",
+        scene=_make_bound_scene(),
+        canvas=Canvas(width=7, height=5),
+        trace=TraceDefaults(rays=1234, batch=1234, depth=1),
+    )
+
+    result = _run_stream(
+        shot.to_json(),
+        "--width",
+        "16",
+        "--height",
+        "16",
+        "--rays",
+        "999",
+    )
+
+    assert result.returncode == 0, result.stderr.decode()
+    assert len(result.stdout) == 7 * 5 * 3
+    assert '"rays": 1234' in result.stderr.decode()
+
+
+def test_cpp_stream_full_shot_json_respects_top_level_camera():
+    base = _make_bound_scene()
+    wide = Shot(
+        name="camera_wide",
+        scene=base,
+        camera=Camera2D(bounds=[-1.5, -1.0, 1.5, 1.0]),
+        canvas=Canvas(width=8, height=8),
+        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
+    )
+    tight = Shot(
+        name="camera_tight",
+        scene=base,
+        camera=Camera2D(bounds=[-0.35, -0.35, 0.35, 0.35]),
+        canvas=Canvas(width=8, height=8),
+        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
+    )
+
+    result_wide = _run_stream(wide.to_json(), "--width", "16", "--height", "16")
+    result_tight = _run_stream(tight.to_json(), "--width", "16", "--height", "16")
+
+    assert result_wide.returncode == 0, result_wide.stderr.decode()
+    assert result_tight.returncode == 0, result_tight.stderr.decode()
+    assert result_wide.stdout != result_tight.stdout
+
+
 def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_path):
     source_path = tmp_path / "source.json"
     saved_path = tmp_path / "saved.json"
@@ -322,6 +414,38 @@ def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_pat
     assert saved.scene.require_light("beam_main").id == "beam_main"
     assert saved.scene.require_group("cluster").id == "cluster"
     assert saved.scene.require_shape("cluster_edge").material_id is None
+
+
+def test_cpp_save_shot_round_trip_preserves_phase2_look_fields(tmp_path):
+    source_path = tmp_path / "source_phase2.json"
+    saved_path = tmp_path / "saved_phase2.json"
+
+    shot = Shot(
+        name="cpp_save_phase2",
+        look=Look(saturation=1.7, vignette=0.3, vignette_radius=0.9),
+        scene=_make_bound_scene(),
+    )
+    shot.save(source_path)
+
+    result = subprocess.run(
+        [
+            str(CLI_BINARY),
+            "--scene",
+            str(source_path),
+            "--save-shot",
+            str(saved_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stderr
+    saved = Shot.load(saved_path)
+    assert saved.look.saturation == pytest.approx(1.7)
+    assert saved.look.vignette == pytest.approx(0.3)
+    assert saved.look.vignette_radius == pytest.approx(0.9)
 
 
 def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):

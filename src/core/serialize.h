@@ -37,7 +37,23 @@ struct FrameOverrides {
     std::optional<std::array<float, 3>> background;
     std::optional<float> opacity;
     std::optional<float> intensity;
+    std::optional<float> saturation;
+    std::optional<float> vignette;
+    std::optional<float> vignette_radius;
+};
+
+struct StreamFrameDirectives {
+    bool has_name = false;
+    bool has_camera = false;
+    bool has_canvas = false;
+    bool has_look = false;
+    bool has_trace = false;
+    FrameOverrides render;
 };
 
 // Extract optional "render" overrides from a shot JSON string.
 FrameOverrides parse_frame_overrides(std::string_view json);
+
+// Extract authored-shot block presence plus nested "render" overrides from a
+// stream frame JSON string.
+StreamFrameDirectives parse_stream_frame_directives(std::string_view json);

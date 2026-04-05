@@ -35,6 +35,9 @@ static void print_usage() {
               << "  --background <r,g,b>     Background color, linear RGB 0-1 (overrides shot look)\n"
               << "  --opacity <float>        Global opacity 0-1 (overrides shot look)\n"
               << "  --intensity <float>      Trace intensity multiplier (overrides shot trace)\n"
+              << "  --saturation <float>     Color saturation (1=normal, 0=grayscale, >1=boost)\n"
+              << "  --vignette <float>       Radial edge darkening 0-1 (overrides shot look)\n"
+              << "  --vignette-radius <float> Vignette falloff start (default: 0.7)\n"
               << "  --fast                   Half-precision FBO (RGBA16F) — ~3x faster, slight precision loss\n"
               << "  --histogram              Include 256-bin luminance histogram in stderr JSON\n"
               << "  --stream                 Streaming mode: read JSON shots from stdin, write raw RGB to stdout\n"
@@ -80,6 +83,7 @@ struct CLIOverrides {
     std::optional<NormalizeMode> normalize;
     std::optional<float> normalize_ref, normalize_pct;
     std::optional<float> ambient, opacity, intensity;
+    std::optional<float> saturation, vignette, vignette_radius;
     std::optional<std::array<float, 3>> background;
 };
 
@@ -100,6 +104,9 @@ static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
     if (ov.normalize_pct) shot.look.normalize_pct = *ov.normalize_pct;
     if (ov.ambient) shot.look.ambient = *ov.ambient;
     if (ov.opacity) shot.look.opacity = *ov.opacity;
+    if (ov.saturation) shot.look.saturation = *ov.saturation;
+    if (ov.vignette) shot.look.vignette = *ov.vignette;
+    if (ov.vignette_radius) shot.look.vignette_radius = *ov.vignette_radius;
     if (ov.background) {
         shot.look.background[0] = (*ov.background)[0];
         shot.look.background[1] = (*ov.background)[1];
@@ -108,18 +115,17 @@ static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
 }
 
 static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool histogram = false) {
+    (void)default_rays;
     HeadlessGL gl;
     if (!gl.init()) return 1;
 
     int width = session.canvas.width;
     int height = session.canvas.height;
-    TraceConfig default_tcfg = session.trace.to_trace_config();
-    PostProcess default_pp = session.look;
 
     Renderer renderer;
     if (!renderer.init(width, height, fast)) return 1;
 
-    const size_t frame_bytes = (size_t)width * height * 3;
+    size_t frame_bytes = (size_t)width * height * 3;
     std::vector<uint8_t> pixels;
     std::vector<uint8_t> black(frame_bytes, 0);
 
@@ -147,16 +153,37 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
             return 1;
         }
 
-        // Parse per-frame render overrides
-        FrameOverrides fo = parse_frame_overrides(line);
+        StreamFrameDirectives directives = parse_stream_frame_directives(line);
+        bool authored_contract = directives.has_name || directives.has_camera || directives.has_canvas
+            || directives.has_look || directives.has_trace;
 
-        int64_t rays = fo.rays.value_or(default_rays);
-        TraceConfig tcfg = default_tcfg;
+        Shot merged = authored_contract ? *frame_shot : session;
+        merged.scene = frame_shot->scene;
+        merged.name = frame_shot->name;
+        if (directives.has_camera) merged.camera = frame_shot->camera;
+        if (directives.has_canvas) merged.canvas = frame_shot->canvas;
+        if (directives.has_look) merged.look = frame_shot->look;
+        if (directives.has_trace) merged.trace = frame_shot->trace;
+
+        width = merged.canvas.width;
+        height = merged.canvas.height;
+        size_t current_frame_bytes = (size_t)width * height * 3;
+        if (current_frame_bytes != frame_bytes) {
+            frame_bytes = current_frame_bytes;
+            black.assign(frame_bytes, 0);
+            renderer.resize(width, height);
+        }
+
+        FrameOverrides fo = directives.render;
+
+        int64_t rays = merged.trace.rays;
+        TraceConfig tcfg = merged.trace.to_trace_config();
         if (fo.batch) tcfg.batch_size = *fo.batch;
         if (fo.depth) tcfg.max_depth = *fo.depth;
         if (fo.intensity) tcfg.intensity = *fo.intensity;
+        if (fo.rays) rays = *fo.rays;
 
-        PostProcess pp = default_pp;
+        PostProcess pp = merged.look;
         if (fo.exposure) pp.exposure = *fo.exposure;
         if (fo.contrast) pp.contrast = *fo.contrast;
         if (fo.gamma) pp.gamma = *fo.gamma;
@@ -172,17 +199,24 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
             pp.background[2] = (*fo.background)[2];
         }
         if (fo.opacity) pp.opacity = *fo.opacity;
+        if (fo.saturation) pp.saturation = *fo.saturation;
+        if (fo.vignette) pp.vignette = *fo.vignette;
+        if (fo.vignette_radius) pp.vignette_radius = *fo.vignette_radius;
 
         Bounds bounds;
         if (fo.bounds) {
             bounds = *fo.bounds;
-        } else if (frame_shot->scene.shapes.empty() && frame_shot->scene.lights.empty()
-                   && frame_shot->scene.groups.empty()) {
-            bounds = {{-1, -1}, {1, 1}};
         } else {
-            bounds = compute_bounds(frame_shot->scene);
+            Bounds fallback = (merged.scene.shapes.empty() && merged.scene.lights.empty()
+                               && merged.scene.groups.empty())
+                ? Bounds{{-1, -1}, {1, 1}}
+                : compute_bounds(merged.scene);
+            if (!merged.camera.empty())
+                bounds = merged.camera.resolve(merged.canvas.aspect(), fallback);
+            else
+                bounds = fallback;
         }
-        renderer.upload_scene(frame_shot->scene, bounds);
+        renderer.upload_scene(merged.scene, bounds);
         renderer.clear();
 
         // Trace rays in batched dispatches (skip if no lights)
@@ -198,8 +232,8 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         }
 
         // Read pixels and write raw RGB to stdout
-        renderer.read_pixels(pixels, pp);
-        std::fwrite(pixels.data(), 1, frame_bytes, stdout);
+        renderer.read_pixels(pixels, pp, merged.canvas.aspect());
+        std::fwrite(pixels.data(), 1, current_frame_bytes, stdout);
         std::fflush(stdout);
 
         auto stats_t0 = std::chrono::steady_clock::now();
@@ -289,6 +323,12 @@ int main(int argc, char** argv) {
             overrides.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--intensity") == 0 && i + 1 < argc) {
             overrides.intensity = std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--saturation") == 0 && i + 1 < argc) {
+            overrides.saturation = std::max(std::atof(argv[++i]), 0.0);
+        } else if (std::strcmp(argv[i], "--vignette") == 0 && i + 1 < argc) {
+            overrides.vignette = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+        } else if (std::strcmp(argv[i], "--vignette-radius") == 0 && i + 1 < argc) {
+            overrides.vignette_radius = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--fast") == 0) {
             fast_mode = true;
         } else if (std::strcmp(argv[i], "--histogram") == 0) {

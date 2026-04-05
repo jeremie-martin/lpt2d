@@ -327,6 +327,10 @@ bool Renderer::create_pp_shader() {
     loc_ambient_ = glGetUniformLocation(pp_program_, "uAmbient");
     loc_background_ = glGetUniformLocation(pp_program_, "uBackground");
     loc_opacity_ = glGetUniformLocation(pp_program_, "uOpacity");
+    loc_saturation_ = glGetUniformLocation(pp_program_, "uSaturation");
+    loc_vignette_ = glGetUniformLocation(pp_program_, "uVignette");
+    loc_vignette_radius_ = glGetUniformLocation(pp_program_, "uVignetteRadius");
+    loc_aspect_ = glGetUniformLocation(pp_program_, "uAspect");
     return true;
 }
 
@@ -716,7 +720,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
-void Renderer::update_display(const PostProcess& pp) {
+void Renderer::update_display(const PostProcess& pp, float display_aspect) {
     // Only do the expensive glReadPixels + CPU scan when Max normalization
     // actually needs it.  Other modes compute their divisor without GPU readback.
     // compute_current_max() is still available on demand (e.g. GUI "Capture Ref").
@@ -768,6 +772,13 @@ void Renderer::update_display(const PostProcess& pp) {
     glUniform1f(loc_ambient_, pp.ambient);
     glUniform3f(loc_background_, pp.background[0], pp.background[1], pp.background[2]);
     glUniform1f(loc_opacity_, pp.opacity);
+    glUniform1f(loc_saturation_, pp.saturation);
+    glUniform1f(loc_vignette_, pp.vignette);
+    glUniform1f(loc_vignette_radius_, pp.vignette_radius);
+    float aspect = display_aspect > 0.0f
+        ? display_aspect
+        : ((width_ > 0 && height_ > 0) ? (float)width_ / (float)height_ : 1.0f);
+    glUniform1f(loc_aspect_, aspect);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
@@ -780,15 +791,10 @@ void Renderer::update_display(const PostProcess& pp) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp) {
-    update_display(pp);
+void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect) {
+    update_display(pp, display_aspect);
 
-    // Use glReadPixels via the display FBO — glGetTexImage returns stale data
-    // on NVIDIA EGL after many additive-blend draw operations.
-    glFinish();
-    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
-    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    read_display_rgba(rgba_buffer_);
 
     out_rgb.resize(width_ * height_ * 3);
     // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
@@ -803,6 +809,22 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp)
             dst[x * 3 + 2] = src[x * 4 + 2];
         }
     }
+}
+
+void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
+    // Use glReadPixels via the display FBO — glGetTexImage returns stale data
+    // on NVIDIA EGL after many additive-blend draw operations.
+    rgba_buffer_.resize((size_t)width_ * height_ * 4);
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
+    glReadPixels(0, 0, width_, height_, GL_RGBA, GL_UNSIGNED_BYTE, rgba_buffer_.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    out_rgba = rgba_buffer_;
+}
+
+FrameMetrics Renderer::compute_display_metrics() {
+    read_display_rgba(rgba_buffer_);
+    return compute_frame_metrics();
 }
 
 FrameMetrics Renderer::compute_frame_metrics() const {

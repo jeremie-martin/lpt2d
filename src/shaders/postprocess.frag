@@ -12,6 +12,10 @@ uniform float uWhitePoint;
 uniform float uAmbient;
 uniform vec3 uBackground;
 uniform float uOpacity;
+uniform float uSaturation;
+uniform float uVignette;
+uniform float uVignetteRadius;
+uniform float uAspect;
 
 float toneMapReinhard(float v) { return v / (1.0 + v); }
 
@@ -53,8 +57,25 @@ void main() {
         v = toneMap(v, uToneMapOp, uWhitePoint);
         v = (v - 0.5) * uContrast + 0.5;
         v = clamp(v, 0.0, 1.0);
-        v = pow(v, uInvGamma);
         color[c] = v;
+    }
+
+    // Saturation in post-tonemap linear space (BT.709 weights are correct here)
+    if (uSaturation != 1.0) {
+        float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = clamp(mix(vec3(lum), color, uSaturation), 0.0, 1.0);
+    }
+
+    // Gamma
+    color = pow(color, vec3(uInvGamma));
+
+    // Vignette: radial edge darkening
+    if (uVignette > 0.0) {
+        vec2 uv = flippedCoord - 0.5;
+        uv.x *= uAspect;
+        float dist = length(uv) * 2.0;
+        float vig = 1.0 - uVignette * smoothstep(uVignetteRadius, uVignetteRadius + 0.5, dist);
+        color *= vig;
     }
 
     color *= uOpacity;
