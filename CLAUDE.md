@@ -97,7 +97,7 @@ CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lp
 anim/                       — Python animation library (pip install -e .)
   types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
   renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet
-  builders.py               — Shape composition: polygon, regular_polygon, mirror_box, thick_arc, biconvex_lens
+  builders.py               — Shape composition: polygon, regular_polygon, mirror_box, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
   stats.py                  — Frame statistics (luminance, clipping, percentiles)
@@ -130,7 +130,7 @@ src/
 1. Flatten all shapes: ungrouped `scene.shapes` + transform `scene.groups[*].shapes` → `all_shapes`
 2. Flatten all lights: ungrouped `scene.lights` + transform `scene.groups[*].lights` → `all_lights`
 3. Auto-generate lights from emissive shapes and append to `all_lights`
-4. Upload to SSBOs (GPUCircle, GPUSegment, GPUArc, GPUBezier, GPULight)
+4. Upload to SSBOs (GPUCircle, GPUSegment, GPUArc, GPUBezier, GPUEllipse, GPULight)
 5. GPU struct layout verified by `static_assert` on sizeof
 
 ### GUI editing
@@ -145,7 +145,7 @@ src/
 ### Important constraints
 
 - **NVIDIA EGL driver quirk**: `glGetTexImage` returns stale data after many additive-blend draw operations. Always use `glReadPixels` on an FBO with `glFinish()` for reliable readback.
-- **GPU struct layout**: C++ structs (GPUCircle/GPUSegment/GPULight) must exactly match GLSL std430 layout. All have `static_assert` on sizeof.
+- **GPU struct layout**: C++ structs (GPUCircle/GPUSegment/GPUArc/GPUBezier/GPUEllipse/GPULight) must exactly match GLSL std430 layout. All have `static_assert` on sizeof.
 - **Shader editing**: Edit `.glsl` files in `src/shaders/`, not embedded strings. The build system generates `build/generated/shaders.h` automatically.
 - **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed.
 - **String-to-enum parsing**: Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` — do not duplicate the string-matching logic.
@@ -166,10 +166,13 @@ src/
   },
   "shapes": [
     {"type": "circle", "center": [0, 0], "radius": 0.2, "material": "glass"},
-    {"type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": {"albedo": 0}}
+    {"type": "segment", "a": [-1, -0.7], "b": [1, -0.7], "material": {"albedo": 0}},
+    {"type": "ellipse", "center": [0, 0], "semi_a": 0.3, "semi_b": 0.15, "rotation": 0.5, "material": "glass"}
   ],
   "lights": [
-    {"type": "point", "pos": [0, 0.5], "intensity": 1}
+    {"type": "point", "pos": [0, 0.5], "intensity": 1},
+    {"type": "parallel_beam", "a": [-0.5, 0.8], "b": [0.5, 0.8], "direction": [0, -1], "angular_width": 0, "intensity": 1},
+    {"type": "spot", "pos": [0, 1], "direction": [0, -1], "angular_width": 0.5, "falloff": 2, "intensity": 1}
   ],
   "groups": [
     {
@@ -213,3 +216,9 @@ render(animate, Timeline(10.0), "output.mp4", settings="preview")
 ```
 
 Key types: `Shot` (authored document), `Scene` (content only), `Canvas`, `Look`, `TraceDefaults`, `Camera2D`, `Frame` (per-frame return from animate callback), `Quality` presets (draft/preview/production/final).
+
+**Shape types**: `Circle`, `Segment`, `Arc`, `Bezier`, `Polygon`, `Ellipse` (center + semi_a/semi_b + rotation).
+
+**Light types**: `PointLight`, `SegmentLight`, `BeamLight`, `ParallelBeamLight` (segment origin + direction + spread), `SpotLight` (point + direction + cone + cosine-power falloff).
+
+**Builder functions** (`anim/builders.py`): `polygon`, `regular_polygon`, `rectangle`, `mirror_box`, `thick_arc`, `thick_segment`, `prism`, `slit`, `double_slit`, `grating`, `waveguide`, `elliptical_lens`, `biconvex_lens`, `plano_convex_lens`, `hemispherical_lens`, `ball_lens`.

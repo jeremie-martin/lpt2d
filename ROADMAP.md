@@ -53,9 +53,9 @@ These tests serve as a safety net: if a shader change or refraction fix breaks t
 
 ---
 
-## Phase 2 — Expressiveness
+## Phase 2 — Expressiveness ✓
 
-New primitives and lights that unlock animations you can't currently make.
+New primitives and lights that unlock animations you can't currently make. **Complete.**
 
 ### 2.1 Parallel segment beam (beam with width)
 
@@ -123,7 +123,7 @@ Broader strokes. Tackle when the core is solid.
 
 ### 4.1 Post-processing additions
 - **Vignette**: darken edges for artistic framing
-- **Background gradient**: radial or linear, replacing pure black void
+- **Background gradient**: radial or linear, replacing pure black void (defer to later)
 - **Color grading**: hue/saturation/temperature adjustments
 
 ### 4.2 More light types
