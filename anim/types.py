@@ -777,8 +777,11 @@ class Shot:
         """Create a shot from a named quality preset with optional overrides."""
         if isinstance(quality, str):
             quality = Quality(quality)
-        values = dict(_QUALITY_PRESETS[quality])
-        shot = Shot(canvas=values["canvas"], trace=values["trace"])
+        preset = _QUALITY_PRESETS[quality]
+        shot = Shot(
+            canvas=replace(preset["canvas"]),
+            trace=replace(preset["trace"]),
+        )
         for key, val in overrides.items():
             if hasattr(shot.canvas, key):
                 setattr(shot.canvas, key, val)

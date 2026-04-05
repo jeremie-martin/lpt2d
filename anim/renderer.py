@@ -275,15 +275,37 @@ class PpmOutput:
 # --- Wire format bridge ---
 
 
-def _build_wire_json(frame: Frame, session_camera: Camera2D | None, aspect: float) -> str:
+def _resolve_frame_camera(
+    frame: Frame,
+    camera: Camera2D | None,
+    shot_camera: Camera2D | None,
+) -> Camera2D | None:
+    """Resolve camera precedence for Python render helpers.
+
+    Per-frame camera overrides the explicit helper argument, which overrides the
+    authored Shot camera. If all are absent, the renderer auto-fits bounds.
+    """
+    if frame.camera is not None:
+        return frame.camera
+    if camera is not None:
+        return camera
+    return shot_camera
+
+
+def _build_wire_json(
+    frame: Frame,
+    camera: Camera2D | None,
+    shot_camera: Camera2D | None,
+    aspect: float,
+) -> str:
     """Serialize a Frame into the v4 wire-format JSON that C++ expects."""
     d = frame.scene.to_dict()
     d["version"] = 4
 
     render_block: dict = {}
 
-    # Camera: per-frame overrides session-level
-    effective_camera = frame.camera if frame.camera is not None else session_camera
+    # Camera precedence: per-frame override > explicit helper argument > authored Shot
+    effective_camera = _resolve_frame_camera(frame, camera, shot_camera)
     if effective_camera is not None:
         bounds = effective_camera.resolve(aspect)
         if bounds is not None:
@@ -377,7 +399,8 @@ def render(
         output: Output path. .mp4/.webm/.mkv -> video via ffmpeg.
                 Trailing / or directory -> PPM sequence.
         settings: Shot, Quality preset, preset name (str), or None for defaults.
-        camera: Session-level camera. Per-frame Frame.camera overrides this.
+        camera: Explicit helper camera. Per-frame Frame.camera overrides this,
+                and this overrides ``settings.camera`` when present.
         binary: Path to lpt2d-cli executable.
         codec: Video codec (default: libx264).
         crf: Video quality (default: 18, visually lossless).
@@ -403,7 +426,7 @@ def render(
         ctx = timeline.context_at(i)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, aspect)
+        wire = _build_wire_json(f, camera, shot.camera, aspect)
         return renderer.render_frame(wire)
 
     def _check_gate(frame_idx: int) -> None:
@@ -465,7 +488,11 @@ def render_still(
     binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> None:
-    """Render a single frame to an image file."""
+    """Render a single frame to an image file.
+
+    Camera precedence matches :func:`render`: per-frame camera override,
+    then explicit ``camera=``, then ``settings.camera``.
+    """
     timeline, shot = _resolve_args(timeline, settings)
 
     renderer = Renderer(shot, binary=binary, fast=fast)
@@ -473,7 +500,7 @@ def render_still(
         ctx = timeline.context_at(frame)
         result = animate(ctx)
         f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, shot.canvas.aspect)
+        wire = _build_wire_json(f, camera, shot.camera, shot.canvas.aspect)
         rgb = renderer.render_frame(wire)
         _save_image(output, rgb, shot.canvas.width, shot.canvas.height)
         sys.stderr.write(
@@ -495,7 +522,11 @@ def render_contact_sheet(
     binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> None:
-    """Render a grid of frames spread across the timeline."""
+    """Render a grid of frames spread across the timeline.
+
+    Camera precedence matches :func:`render`: per-frame camera override,
+    then explicit ``camera=``, then ``settings.camera``.
+    """
     timeline, shot = _resolve_args(timeline, settings)
 
     w, h = shot.canvas.width, shot.canvas.height
@@ -513,7 +544,7 @@ def render_contact_sheet(
             ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, shot.canvas.aspect)
+            wire = _build_wire_json(f, camera, shot.camera, shot.canvas.aspect)
             frames_rgb.append(renderer.render_frame(wire))
             sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
             sys.stderr.flush()
@@ -546,7 +577,11 @@ def render_stats(
     binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> list[tuple[int, float, FrameStats]]:
-    """Render frames and return their statistics. No file output."""
+    """Render frames and return their statistics. No file output.
+
+    Camera precedence matches :func:`render`: per-frame camera override,
+    then explicit ``camera=``, then ``settings.camera``.
+    """
     timeline, shot = _resolve_args(timeline, settings)
 
     # Resolve frame indices
@@ -567,7 +602,7 @@ def render_stats(
             ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, aspect)
+            wire = _build_wire_json(f, camera, shot.camera, aspect)
             rgb = renderer.render_frame(wire)
             stats = None
             if renderer.last_report is not None:
@@ -717,6 +752,9 @@ def calibrate_normalize_ref(
 
     Returns the HDR max value suitable for use as ``Look(normalize="fixed",
     normalize_ref=...)``.
+
+    Camera precedence matches :func:`render`: per-frame camera override,
+    then explicit ``camera=``, then ``settings.camera``.
     """
     timeline, shot = _resolve_args(timeline, settings)
     frames = [frame] if isinstance(frame, int) else frame
@@ -732,7 +770,7 @@ def calibrate_normalize_ref(
             ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, cal_shot.canvas.aspect)
+            wire = _build_wire_json(f, camera, cal_shot.camera, cal_shot.canvas.aspect)
             renderer.render_frame(wire)  # discard pixels, we want the report
 
             rpt = renderer.last_report

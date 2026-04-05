@@ -7,6 +7,7 @@ from .builders import elliptical_lens as elliptical_lens
 from .builders import grating as grating
 from .builders import hemispherical_lens as hemispherical_lens
 from .builders import mirror_box as mirror_box
+from .builders import mirror_block as mirror_block
 from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
 from .builders import prism as prism
@@ -119,6 +120,7 @@ __all__ = [
     "glass",
     "hemispherical_lens",
     "mirror",
+    "mirror_block",
     "mirror_box",
     "opaque_mirror",
     "plano_convex_lens",

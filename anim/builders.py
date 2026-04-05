@@ -332,6 +332,45 @@ def prism(
     return regular_polygon(center, size, 3, material, rotation=rotation)
 
 
+def mirror_block(
+    center: tuple[float, float],
+    width: float,
+    height: float,
+    material: Material,
+    *,
+    top: Material | None = None,
+    right: Material | None = None,
+    bottom: Material | None = None,
+    left: Material | None = None,
+) -> list[Segment]:
+    """Rectangle convenience builder with per-face material overrides.
+
+    The returned segments follow the same clockwise boundary order as
+    :func:`rectangle`: left, top, right, bottom. This keeps outward normals
+    coherent for solid-block use while still allowing face-specific materials.
+    """
+    if width <= 0:
+        raise ValueError("width must be positive")
+    if height <= 0:
+        raise ValueError("height must be positive")
+
+    verts = rectangle(center, width, height, material).vertices
+    face_materials = [
+        left if left is not None else material,
+        top if top is not None else material,
+        right if right is not None else material,
+        bottom if bottom is not None else material,
+    ]
+    return [
+        Segment(
+            a=list(verts[i]),
+            b=list(verts[(i + 1) % len(verts)]),
+            material=face_materials[i],
+        )
+        for i in range(len(verts))
+    ]
+
+
 def elliptical_lens(
     center: tuple[float, float],
     semi_a: float,

@@ -137,6 +137,17 @@ def ellipse_shape(center, semi_a, semi_b, rotation, material):
     }
 
 
+def arc_shape(center, radius, angle_start, sweep, material):
+    return {
+        "type": "arc",
+        "center": center,
+        "radius": radius,
+        "angle_start": angle_start,
+        "sweep": sweep,
+        "material": material,
+    }
+
+
 def parallel_beam_light(a, b, direction, angular_width=0.0, intensity=1.0):
     return {
         "type": "parallel_beam",
@@ -223,6 +234,55 @@ def refract_exit(direction, outward_normal, n_inside: float, n_outside: float = 
             eta * d[0] + (cos_t - eta * cos_i) * n[0],
             eta * d[1] + (cos_t - eta * cos_i) * n[1],
         ]
+    )
+
+
+def measure_emissive_shape_both_sides(
+    shape: dict,
+    *,
+    bounds: list[float] | None = None,
+    width: int = 180,
+    height: int = 180,
+    rays: int = 1_500_000,
+) -> tuple[float, float]:
+    if bounds is None:
+        bounds = [-1.0, -1.0, 1.0, 1.0]
+
+    collectors = [
+        segment_shape([-0.9, 0.75], [0.9, 0.75], ABSORBER),
+        segment_shape([0.9, -0.75], [-0.9, -0.75], ABSORBER),
+    ]
+    scene = make_scene(collectors + [shape], [], bounds)
+    pixels, _ = render_pixels(
+        scene,
+        width=width,
+        height=height,
+        rays=rays,
+        normalize="rays",
+        tonemap="none",
+        exposure=-4.0,
+        gamma=1.0,
+    )
+    top = region_brightness(pixels, 10, 50, 40, width - 40)
+    bottom = region_brightness(pixels, height - 50, height - 10, 40, width - 40)
+    return top, bottom
+
+
+def assert_emissive_shape_lights_both_sides(
+    name: str,
+    shape: dict,
+    *,
+    min_brightness: float = 0.75,
+    max_imbalance: float = 0.35,
+) -> None:
+    top, bottom = measure_emissive_shape_both_sides(shape)
+    detail = f"top={top:.2f}, bottom={bottom:.2f}"
+    print(f"        {name}: {detail}")
+    assert top > min_brightness and bottom > min_brightness, (
+        f"{name} should light both sides: {detail}"
+    )
+    assert abs(top - bottom) / max(top, bottom) < max_imbalance, (
+        f"{name} should be roughly symmetric above/below: {detail}"
     )
 
 
@@ -396,6 +456,49 @@ def test_emissive_segment_is_endpoint_order_invariant():
     print(f"        {detail}")
     assert abs(forward[0] - reverse[0]) / max(forward[0], reverse[0]) < 0.2, detail
     assert abs(forward[1] - reverse[1]) / max(forward[1], reverse[1]) < 0.2, detail
+
+
+def test_emissive_circle_lights_both_sides():
+    print("\n=== Test 2d: Emissive circle lights both sides ===\n")
+
+    assert_emissive_shape_lights_both_sides(
+        "circle",
+        circle_shape([0.0, 0.0], 0.32, {"albedo": 0.0, "emission": 2.0}),
+        max_imbalance=0.25,
+    )
+
+
+def test_emissive_polygon_lights_both_sides():
+    print("\n=== Test 2e: Emissive polygon lights both sides ===\n")
+
+    assert_emissive_shape_lights_both_sides(
+        "polygon",
+        polygon_shape(
+            [[-0.32, -0.32], [-0.32, 0.32], [0.32, 0.32], [0.32, -0.32]],
+            {"albedo": 0.0, "emission": 2.0},
+        ),
+        max_imbalance=0.25,
+    )
+
+
+def test_emissive_arc_lights_both_sides():
+    print("\n=== Test 2f: Emissive arc lights both sides ===\n")
+
+    assert_emissive_shape_lights_both_sides(
+        "arc",
+        arc_shape([0.0, 0.0], 0.42, -math.pi / 2, math.pi, {"albedo": 0.0, "emission": 2.0}),
+        max_imbalance=0.35,
+    )
+
+
+def test_emissive_ellipse_lights_both_sides():
+    print("\n=== Test 2g: Emissive ellipse lights both sides ===\n")
+
+    assert_emissive_shape_lights_both_sides(
+        "ellipse",
+        ellipse_shape([0.0, 0.0], 0.42, 0.24, 0.0, {"albedo": 0.0, "emission": 2.0}),
+        max_imbalance=0.25,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -782,6 +885,10 @@ if __name__ == "__main__":
         test_energy_linear,
         test_segment_light_emits_both_sides,
         test_emissive_segment_is_endpoint_order_invariant,
+        test_emissive_circle_lights_both_sides,
+        test_emissive_polygon_lights_both_sides,
+        test_emissive_arc_lights_both_sides,
+        test_emissive_ellipse_lights_both_sides,
         test_energy_depth_convergence,
         test_dispersion,
         test_tir,

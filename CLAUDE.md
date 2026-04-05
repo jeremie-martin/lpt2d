@@ -97,7 +97,7 @@ CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lp
 anim/                       — Python animation library (pip install -e .)
   types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
   renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet
-  builders.py               — Shape composition: polygon, regular_polygon, mirror_box, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
+  builders.py               — Shape composition: polygon, regular_polygon, mirror_box/mirror_block, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
   stats.py                  — Frame statistics (luminance, clipping, percentiles)
@@ -221,4 +221,4 @@ Key types: `Shot` (authored document), `Scene` (content only), `Canvas`, `Look`,
 
 **Light types**: `PointLight`, `SegmentLight`, `BeamLight`, `ParallelBeamLight` (segment origin + direction + spread), `SpotLight` (point + direction + cone + cosine-power falloff).
 
-**Builder functions** (`anim/builders.py`): `polygon`, `regular_polygon`, `rectangle`, `mirror_box`, `thick_arc`, `thick_segment`, `prism`, `slit`, `double_slit`, `grating`, `waveguide`, `elliptical_lens`, `biconvex_lens`, `plano_convex_lens`, `hemispherical_lens`, `ball_lens`.
+**Builder functions** (`anim/builders.py`): `polygon`, `regular_polygon`, `rectangle`, `mirror_box`, `mirror_block`, `thick_arc`, `thick_segment`, `prism`, `slit`, `double_slit`, `grating`, `waveguide`, `elliptical_lens`, `biconvex_lens`, `plano_convex_lens`, `hemispherical_lens`, `ball_lens`.
