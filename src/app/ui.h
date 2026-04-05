@@ -7,7 +7,6 @@
 #include <vector>
 
 // Material UI
-const char* material_name(const Material& m);
 bool edit_material(Material& mat);
 
 // Style
@@ -47,7 +46,3 @@ ImVec4 material_color(const Material& m);
 float adaptive_grid_spacing(float pixels_per_unit);
 Vec2 snap_to_grid_pos(Vec2 pos, float spacing);
 void draw_grid(ImDrawList* dl, const CameraView& cv, float spacing);
-
-// Camera UV mapping
-void compute_display_uvs(const Camera& cam, const Bounds& scene_bounds,
-                         float win_w, float win_h, ImVec2& uv0, ImVec2& uv1);

@@ -347,7 +347,3 @@ void apply_transform_group(Group& dst, const Group& src, const TransformMode& tm
 
 // Translate a group by a delta (modifies transform.translate)
 void translate_group(Group& g, Vec2 delta);
-
-// Find which group (if any) contains the given world-space point
-// Returns group index or -1
-int hit_test_groups(Vec2 wp, const Scene& scene, float threshold);

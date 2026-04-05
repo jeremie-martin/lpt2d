@@ -218,25 +218,6 @@ SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_
     return result;
 }
 
-int hit_test_groups(Vec2 wp, const Scene& scene, float threshold) {
-    float best = threshold;
-    int result = -1;
-    for (int g = 0; g < (int)scene.groups.size(); ++g) {
-        const auto& group = scene.groups[g];
-        for (const auto& shape : group.shapes) {
-            Shape ws = transform_shape(shape, group.transform);
-            float d = shape_distance(wp, ws);
-            if (d < best) { best = d; result = g; }
-        }
-        for (const auto& light : group.lights) {
-            Light wl = transform_light(light, group.transform);
-            float d = light_distance(wp, wl);
-            if (d < best) { best = d; result = g; }
-        }
-    }
-    return result;
-}
-
 bool object_in_rect(const Scene& scene, SelectionRef id, Vec2 rect_min, Vec2 rect_max) {
     auto overlaps = [&](const Bounds& b) {
         return b.max.x >= rect_min.x && b.min.x <= rect_max.x &&

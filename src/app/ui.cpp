@@ -3,16 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-// ─── Helpers ────────────────────────────────────────────────────────────
-
-const char* material_name(const Material& m) {
-    if (m.albedo <= 0.0f) return "Absorber";
-    if (m.transmission > 0.5f && m.metallic < 0.5f && m.ior > 1.01f) return "Glass";
-    if (m.metallic > 0.5f) return "Mirror";
-    if (m.roughness > 0.5f) return "Diffuse";
-    return "Material";
-}
-
 ImVec4 material_color(const Material& m) {
     if (m.emission > 0.0f) return {1.0f, 0.95f, 0.3f, 1.0f};
     if (m.albedo <= 0.01f) return {0.05f, 0.05f, 0.05f, 1.0f};
@@ -203,10 +193,11 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
     for (auto& h : handles) {
         if (h.obj.type == SelectionRef::Shape && h.kind == Handle::Position && h.param_index == 1) {
             // This is a Bezier control point — draw dashed lines to P0 and P2
-            auto& shape = scene.shapes[h.obj.index];
-            if (auto* b = std::get_if<Bezier>(&shape)) {
-                dl->AddLine(cv.to_screen(b->p0), cv.to_screen(b->p1), guide_col, 1.0f);
-                dl->AddLine(cv.to_screen(b->p1), cv.to_screen(b->p2), guide_col, 1.0f);
+            if (const Shape* shape = resolve_shape(scene, h.obj)) {
+                if (const auto* b = std::get_if<Bezier>(shape)) {
+                    dl->AddLine(cv.to_screen(b->p0), cv.to_screen(b->p1), guide_col, 1.0f);
+                    dl->AddLine(cv.to_screen(b->p1), cv.to_screen(b->p2), guide_col, 1.0f);
+                }
             }
         }
     }
@@ -230,41 +221,6 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
                               ImVec2(sp.x, sp.y + r), ImVec2(sp.x - r, sp.y), col);
         }
     }
-}
-
-// ─── UV computation for camera-independent rendering ────────────────────
-
-void compute_display_uvs(const Camera& cam, const Bounds& scene_bounds,
-                         float win_w, float win_h,
-                         ImVec2& uv0, ImVec2& uv1) {
-    Vec2 scene_sz = scene_bounds.max - scene_bounds.min;
-    scene_sz.x = std::max(scene_sz.x, 0.01f);
-    scene_sz.y = std::max(scene_sz.y, 0.01f);
-    float renderer_scale = std::min(win_w / scene_sz.x, win_h / scene_sz.y);
-
-    Bounds vis = cam.visible_bounds(win_w, win_h);
-
-    float fbo_used_w = scene_sz.x * renderer_scale;
-    float fbo_used_h = scene_sz.y * renderer_scale;
-    float offset_x = (win_w - fbo_used_w) * 0.5f;
-    float offset_y = (win_h - fbo_used_h) * 0.5f;
-
-    auto world_to_uv_x = [&](float wx) -> float {
-        float px = (wx - scene_bounds.min.x) * renderer_scale + offset_x;
-        return px / win_w;
-    };
-    auto world_to_uv_y = [&](float wy) -> float {
-        float py = (wy - scene_bounds.min.y) * renderer_scale + offset_y;
-        return py / win_h;
-    };
-
-    float u_left  = world_to_uv_x(vis.min.x);
-    float u_right = world_to_uv_x(vis.max.x);
-    float v_bottom = world_to_uv_y(vis.min.y);
-    float v_top    = world_to_uv_y(vis.max.y);
-
-    uv0 = ImVec2(u_left, v_top);
-    uv1 = ImVec2(u_right, v_bottom);
 }
 
 // ─── Grid ──────────────────────────────────────────────────────────────

@@ -150,6 +150,20 @@ int App::run(const AppConfig& config) {
     };
     std::vector<LightContributionView> light_analysis;
     bool light_analysis_valid = false;
+    struct LoadSceneDialogState {
+        std::array<char, 256> path{};
+        std::string error;
+    } load_dialog;
+    struct IdEditorState {
+        SelectionRef target{SelectionRef::Shape, -2};
+        std::string buffer;
+    } id_editor;
+    struct MaterialLibraryPanelState {
+        std::string selected_name;
+        std::string rename_buffer;
+        std::array<char, 64> new_name{};
+        bool editing = false;
+    } material_panel;
     auto make_default_arc = [](Vec2 center, Vec2 target) {
         Vec2 delta = target - center;
         float angle = delta.length_sq() > 1e-10f
@@ -1555,33 +1569,31 @@ int App::run(const AppConfig& config) {
             }
 
             // Load popup (can be triggered by Ctrl+O shortcut)
-            static char load_path_buf[256] = "";
-            static std::string load_error_message;
             if (open_load_popup) { ImGui::OpenPopup("Load Scene##popup"); open_load_popup = false; }
             if (ImGui::BeginPopup("Load Scene##popup")) {
                 ImGui::Text("File path:");
-                if (ImGui::InputText("##loadpath", load_path_buf, sizeof(load_path_buf)))
-                    load_error_message.clear();
-                if (!load_error_message.empty())
-                    ImGui::TextWrapped("%s", load_error_message.c_str());
-                if (ImGui::Button("OK") && load_path_buf[0]) {
+                if (ImGui::InputText("##loadpath", load_dialog.path.data(), load_dialog.path.size()))
+                    load_dialog.error.clear();
+                if (!load_dialog.error.empty())
+                    ImGui::TextWrapped("%s", load_dialog.error.c_str());
+                if (ImGui::Button("OK") && load_dialog.path[0]) {
                     std::string error;
-                    if (auto loaded = try_load_shot_json(load_path_buf, &error)) {
+                    if (auto loaded = try_load_shot_json(load_dialog.path.data(), &error)) {
                         apply_gui_shot_defaults(*loaded);
                         ed.shot = *loaded;
-                        ed.save_path = load_path_buf;
+                        ed.save_path = load_dialog.path.data();
                         current_scene = -1;
-                        load_error_message.clear();
+                        load_dialog.error.clear();
                         reset_editor();
                     } else {
-                        load_error_message = error.empty() ? "Failed to load scene" : error;
+                        load_dialog.error = error.empty() ? "Failed to load scene" : error;
                     }
-                    if (load_error_message.empty())
+                    if (load_dialog.error.empty())
                         ImGui::CloseCurrentPopup();
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Cancel")) {
-                    load_error_message.clear();
+                    load_dialog.error.clear();
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::EndPopup();
@@ -1946,31 +1958,29 @@ int App::run(const AppConfig& config) {
                 ImGui::Separator();
             }
 
-            static SelectionRef id_edit_target{SelectionRef::Shape, -2};
-            static std::string id_edit_buffer;
             auto sync_id_editor = [&](const std::string& current_id) {
-                if (!(id_edit_target == sid)) {
-                    id_edit_target = sid;
-                    id_edit_buffer = current_id;
+                if (!(id_editor.target == sid)) {
+                    id_editor.target = sid;
+                    id_editor.buffer = current_id;
                 }
             };
             auto show_id_editor = [&](const std::string& current_id, auto&& commit) {
                 sync_id_editor(current_id);
                 std::array<char, 128> id_buf{};
-                std::snprintf(id_buf.data(), id_buf.size(), "%s", id_edit_buffer.c_str());
+                std::snprintf(id_buf.data(), id_buf.size(), "%s", id_editor.buffer.c_str());
                 if (ImGui::InputText("ID", id_buf.data(), id_buf.size())) {
-                    id_edit_buffer = id_buf.data();
+                    id_editor.buffer = id_buf.data();
                 }
                 if (ImGui::IsItemDeactivatedAfterEdit()
-                    && id_edit_buffer != current_id
-                    && !id_edit_buffer.empty()
-                    && entity_id_available(id_edit_buffer, current_id)) {
-                    commit(id_edit_buffer);
+                    && id_editor.buffer != current_id
+                    && !id_editor.buffer.empty()
+                    && entity_id_available(id_editor.buffer, current_id)) {
+                    commit(id_editor.buffer);
                     changed = true;
                 }
-                if (id_edit_buffer.empty()) {
+                if (id_editor.buffer.empty()) {
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "ID must be non-empty");
-                } else if (id_edit_buffer != current_id && !entity_id_available(id_edit_buffer, current_id)) {
+                } else if (id_editor.buffer != current_id && !entity_id_available(id_editor.buffer, current_id)) {
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "ID already in use");
                 }
             };
@@ -2156,25 +2166,21 @@ int App::run(const AppConfig& config) {
         // -- Material Library --
         if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::PushID("Materials");
-            static std::string selected_mat_name;
-            static std::string material_name_buffer;
-            static char new_name_buf[64] = "";
-            static bool material_editing = false;
-
             // Material list
             auto& mats = ed.shot.scene.materials;
-            if (!selected_mat_name.empty() && !mats.contains(selected_mat_name)) {
-                selected_mat_name.clear();
-                material_name_buffer.clear();
+            if (!material_panel.selected_name.empty() && !mats.contains(material_panel.selected_name)) {
+                material_panel.selected_name.clear();
+                material_panel.rename_buffer.clear();
             }
             if (mats.empty()) {
                 ImGui::TextDisabled("No materials defined");
             } else {
-                if (ImGui::BeginCombo("##matlist", selected_mat_name.empty() ? "(select)" : selected_mat_name.c_str())) {
+                if (ImGui::BeginCombo("##matlist",
+                                      material_panel.selected_name.empty() ? "(select)" : material_panel.selected_name.c_str())) {
                     for (auto& [name, _] : mats) {
-                        if (ImGui::Selectable(name.c_str(), name == selected_mat_name)) {
-                            selected_mat_name = name;
-                            material_name_buffer = name;
+                        if (ImGui::Selectable(name.c_str(), name == material_panel.selected_name)) {
+                            material_panel.selected_name = name;
+                            material_panel.rename_buffer = name;
                         }
                     }
                     ImGui::EndCombo();
@@ -2182,48 +2188,48 @@ int App::run(const AppConfig& config) {
             }
 
             // Edit selected material
-            if (!selected_mat_name.empty() && mats.contains(selected_mat_name)) {
-                auto& mat = mats[selected_mat_name];
-                if (material_name_buffer.empty())
-                    material_name_buffer = selected_mat_name;
+            if (!material_panel.selected_name.empty() && mats.contains(material_panel.selected_name)) {
+                auto& mat = mats[material_panel.selected_name];
+                if (material_panel.rename_buffer.empty())
+                    material_panel.rename_buffer = material_panel.selected_name;
 
                 std::array<char, 128> rename_buf{};
-                std::snprintf(rename_buf.data(), rename_buf.size(), "%s", material_name_buffer.c_str());
+                std::snprintf(rename_buf.data(), rename_buf.size(), "%s", material_panel.rename_buffer.c_str());
                 if (ImGui::InputText("Rename", rename_buf.data(), rename_buf.size()))
-                    material_name_buffer = rename_buf.data();
+                    material_panel.rename_buffer = rename_buf.data();
 
-                if (!material_name_buffer.empty()
-                    && material_name_buffer != selected_mat_name
-                    && !material_id_available(material_name_buffer, selected_mat_name)) {
+                if (!material_panel.rename_buffer.empty()
+                    && material_panel.rename_buffer != material_panel.selected_name
+                    && !material_id_available(material_panel.rename_buffer, material_panel.selected_name)) {
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "Material ID already in use");
-                } else if (material_name_buffer.empty()) {
+                } else if (material_panel.rename_buffer.empty()) {
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f), "Material ID must be non-empty");
                 }
 
                 if (ImGui::Button("Rename##mat")
-                    && !material_name_buffer.empty()
-                    && material_id_available(material_name_buffer, selected_mat_name)) {
+                    && !material_panel.rename_buffer.empty()
+                    && material_id_available(material_panel.rename_buffer, material_panel.selected_name)) {
                     ed.undo.push(ed.shot.scene);
-                    rename_material_binding(selected_mat_name, material_name_buffer);
-                    selected_mat_name = material_name_buffer;
+                    rename_material_binding(material_panel.selected_name, material_panel.rename_buffer);
+                    material_panel.selected_name = material_panel.rename_buffer;
                     reload();
                 }
 
                 bool mat_changed = edit_material(mat);
                 if (mat_changed) {
-                    if (!material_editing) {
+                    if (!material_panel.editing) {
                         ed.undo.push(ed.shot.scene);
-                        material_editing = true;
+                        material_panel.editing = true;
                     }
                     reload();
                 }
 
-                int bound_count = material_usage_count(ed.shot.scene, selected_mat_name);
+                int bound_count = material_usage_count(ed.shot.scene, material_panel.selected_name);
                 ImGui::Text("%d bound shape(s)", bound_count);
 
                 if (ImGui::Button("Apply to Selection")) {
                     Scene before = ed.shot.scene;
-                    if (apply_material_to_selection(selected_mat_name)) {
+                    if (apply_material_to_selection(material_panel.selected_name)) {
                         ed.undo.push(ed.shot.scene);
                         reload();
                     } else {
@@ -2233,7 +2239,7 @@ int App::run(const AppConfig& config) {
                 ImGui::SameLine();
                 if (ImGui::Button("Detach Selection")) {
                     Scene before = ed.shot.scene;
-                    if (detach_material_from_selection(selected_mat_name)) {
+                    if (detach_material_from_selection(material_panel.selected_name)) {
                         ed.undo.push(ed.shot.scene);
                         reload();
                     } else {
@@ -2243,10 +2249,10 @@ int App::run(const AppConfig& config) {
                 ImGui::SameLine();
                 if (ImGui::Button("Delete##mat")) {
                     ed.undo.push(ed.shot.scene);
-                    delete_material(ed.shot.scene, selected_mat_name);
-                    detach_clipboard_material_binding(selected_mat_name);
-                    selected_mat_name.clear();
-                    material_name_buffer.clear();
+                    delete_material(ed.shot.scene, material_panel.selected_name);
+                    detach_clipboard_material_binding(material_panel.selected_name);
+                    material_panel.selected_name.clear();
+                    material_panel.rename_buffer.clear();
                     reload();
                 }
                 if (bound_count > 0) {
@@ -2257,14 +2263,14 @@ int App::run(const AppConfig& config) {
             ImGui::Separator();
 
             // Create new material
-            ImGui::InputText("Name##newmat", new_name_buf, sizeof(new_name_buf));
+            ImGui::InputText("Name##newmat", material_panel.new_name.data(), material_panel.new_name.size());
             ImGui::SameLine();
-            if (ImGui::Button("Add") && new_name_buf[0] != '\0' && !mats.count(new_name_buf)) {
+            if (ImGui::Button("Add") && material_panel.new_name[0] != '\0' && !mats.count(material_panel.new_name.data())) {
                 ed.undo.push(ed.shot.scene);
-                mats[new_name_buf] = Material{};
-                selected_mat_name = new_name_buf;
-                material_name_buffer = new_name_buf;
-                new_name_buf[0] = '\0';
+                mats[material_panel.new_name.data()] = Material{};
+                material_panel.selected_name = material_panel.new_name.data();
+                material_panel.rename_buffer = material_panel.new_name.data();
+                material_panel.new_name[0] = '\0';
                 reload();
             }
 
@@ -2276,8 +2282,8 @@ int App::run(const AppConfig& config) {
                     if (mats.count(name)) { int n = 2; while (mats.count(name + " " + std::to_string(n))) ++n; name += " " + std::to_string(n); }
                     ed.undo.push(ed.shot.scene);
                     mats[name] = mat;
-                    selected_mat_name = name;
-                    material_name_buffer = name;
+                    material_panel.selected_name = name;
+                    material_panel.rename_buffer = name;
                     reload();
                 }
             };
@@ -2289,8 +2295,8 @@ int App::run(const AppConfig& config) {
             ImGui::SameLine();
             preset_btn("Absorber", mat_absorber());
 
-            if (!ImGui::IsAnyItemActive() && material_editing)
-                material_editing = false;
+            if (!ImGui::IsAnyItemActive() && material_panel.editing)
+                material_panel.editing = false;
 
             ImGui::PopID();
         }
