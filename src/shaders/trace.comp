@@ -402,8 +402,20 @@ void main() {
     uint gid = gl_GlobalInvocationID.x;
     uint total_rays = uBatchRays * uNumDispatches;
     if (gid >= total_rays) return;
-    uint batch_id = gid / uBatchRays;
-    uint ray_id = gid - batch_id * uBatchRays;
+    uint batch_id = 0u;
+    uint ray_id = gid;
+    if (uNumDispatches > 1u && ray_id >= uBatchRays) {
+        batch_id = 1u;
+        ray_id -= uBatchRays;
+    }
+    if (uNumDispatches > 2u && ray_id >= uBatchRays) {
+        batch_id = 2u;
+        ray_id -= uBatchRays;
+    }
+    if (uNumDispatches > 3u && ray_id >= uBatchRays) {
+        batch_id = 3u;
+        ray_id -= uBatchRays;
+    }
     rng_state = ray_id * 1099087573u + uDispatchSeeds[batch_id];
     pcg_next(); pcg_next();
 
