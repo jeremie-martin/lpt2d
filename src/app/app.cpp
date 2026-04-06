@@ -216,8 +216,7 @@ int App::run(const AppConfig& config) {
         // Trace
         auto t0 = std::chrono::steady_clock::now();
         if (!showing_snapshot_a && !panel.paused && renderer.num_lights() > 0) {
-            TraceConfig trace_cfg = ed.shot.trace.to_trace_config();
-            trace_cfg.frame_index = ed.session.frame_index;
+            TraceConfig trace_cfg = ed.shot.trace.to_trace_config(ed.session.frame_index);
             renderer.trace_and_draw(trace_cfg);
             glFinish();
         }

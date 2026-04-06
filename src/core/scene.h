@@ -514,7 +514,7 @@ struct TraceDefaults {
     float intensity = 1.0f;
     SeedMode seed_mode = SeedMode::Deterministic;
 
-    TraceConfig to_trace_config() const;
+    TraceConfig to_trace_config(int frame_index = 0) const;
 };
 
 struct Shot {

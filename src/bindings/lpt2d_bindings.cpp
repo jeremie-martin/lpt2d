@@ -476,7 +476,7 @@ NB_MODULE(_lpt2d, m) {
         .def_prop_rw("seed_mode",
             [](const TraceDefaults& t) { return seed_mode_to_string(t.seed_mode); },
             [](TraceDefaults& t, nb::object obj) { t.seed_mode = parse_seed_mode_arg(obj); })
-        .def("to_trace_config", &TraceDefaults::to_trace_config);
+        .def("to_trace_config", &TraceDefaults::to_trace_config, "frame_index"_a = 0);
 
     // ── TraceConfig (runtime) ────────────────────────────────────
     nb::class_<TraceConfig>(m, "TraceConfig")

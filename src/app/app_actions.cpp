@@ -165,8 +165,7 @@ bool export_authored_png(const Shot& source_shot, int frame_index) {
     export_renderer.upload_scene(output_shot.scene, bounds);
     export_renderer.clear();
 
-    TraceConfig tcfg = output_shot.trace.to_trace_config();
-    tcfg.frame_index = frame_index;
+    TraceConfig tcfg = output_shot.trace.to_trace_config(frame_index);
     int64_t total_rays = output_shot.trace.rays;
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
     const int dispatches_per_draw = 4;

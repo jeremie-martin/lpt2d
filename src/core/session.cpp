@@ -47,8 +47,7 @@ RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
     Bounds bounds = shot.camera.resolve(shot.canvas.aspect(), scene_bounds);
 
     // Convert authored types to runtime types
-    TraceConfig tcfg = shot.trace.to_trace_config();
-    tcfg.frame_index = frame_index;
+    TraceConfig tcfg = shot.trace.to_trace_config(frame_index);
     PostProcess pp = shot.look.to_post_process();
     int64_t total_rays = shot.trace.rays;
 

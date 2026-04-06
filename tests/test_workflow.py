@@ -77,6 +77,20 @@ def test_shot_with_trace_can_override_seed_mode():
     assert new_shot.trace.seed_mode == "decorrelated"
 
 
+def test_trace_defaults_to_trace_config_accepts_runtime_frame_index():
+    trace = TraceDefaults(batch=1234, depth=9, intensity=2.5, seed_mode="decorrelated")
+
+    default_cfg = trace.to_trace_config()
+    cfg = trace.to_trace_config(7)
+
+    assert default_cfg.frame_index == 0
+    assert cfg.batch_size == 1234
+    assert cfg.max_depth == 9
+    assert cfg.intensity == pytest.approx(2.5)
+    assert cfg.seed_mode == "decorrelated"
+    assert cfg.frame_index == 7
+
+
 def test_shot_preset_returns_isolated_mutable_state():
     first = Shot.preset("draft", width=123, rays=654_321)
     second = Shot.preset("draft")

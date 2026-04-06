@@ -129,7 +129,7 @@ const Shot& current_authored_shot(const EditorState& ed, const CompareSnapshot& 
     return (compare_ab.active && compare_ab.showing_a) ? compare_ab.shot : ed.shot;
 }
 
-int current_output_frame_index(const EditorState& ed, const CompareSnapshot& compare_ab) {
+int current_runtime_frame_index(const EditorState& ed, const CompareSnapshot& compare_ab) {
     return (compare_ab.active && compare_ab.showing_a) ? compare_ab.frame_index : ed.session.frame_index;
 }
 
@@ -508,10 +508,10 @@ void draw_controls_panel(
                     Bounds scene_bounds = scene_default_bounds(diagnostic_copy.scene);
                     Bounds view = diagnostic_copy.camera.resolve(
                         diagnostic_copy.canvas.aspect(), scene_bounds);
-                    TraceConfig tcfg = diagnostic_copy.trace.to_trace_config();
+                    TraceConfig tcfg =
+                        diagnostic_copy.trace.to_trace_config(current_runtime_frame_index(ed, compare_ab));
                     tcfg.batch_size = std::min(tcfg.batch_size, 100000);
                     tcfg.max_depth = std::min(tcfg.max_depth, 12);
-                    tcfg.frame_index = ed.session.frame_index;
                     int analysis_dispatches =
                         std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
 
@@ -1078,7 +1078,7 @@ void draw_controls_panel(
         char ray_str[32];
         int64_t tr = renderer.total_rays();
         const Shot& output_shot = current_authored_shot(ed, compare_ab);
-        int output_frame_index = current_output_frame_index(ed, compare_ab);
+        int output_frame_index = current_runtime_frame_index(ed, compare_ab);
         const Look& output_look = output_shot.look;
         if (tr >= 1'000'000)
             std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
