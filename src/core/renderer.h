@@ -16,6 +16,12 @@ struct FrameMetrics {
     std::array<int, 256> histogram{}; // BT.709 luminance histogram (256 bins)
 };
 
+struct VignetteFrame {
+    float center[2] = {0.5f, 0.5f};
+    float inv_size[2] = {1.0f, 1.0f};
+    float x_scale = 1.0f;
+};
+
 class Renderer {
 public:
     ~Renderer();
@@ -39,8 +45,10 @@ public:
     void trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches);
 
     // Post-processing and readback (unchanged)
-    void update_display(const PostProcess& pp, float display_aspect = 0.0f);
-    void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f);
+    void update_display(const PostProcess& pp, float display_aspect = 0.0f,
+                        const VignetteFrame* vignette_frame = nullptr);
+    void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f,
+                     const VignetteFrame* vignette_frame = nullptr);
     void read_display_rgba(std::vector<uint8_t>& out_rgba);
 
     GLuint display_texture() const { return display_texture_; }
@@ -152,7 +160,9 @@ private:
     GLint loc_saturation_ = -1;
     GLint loc_vignette_ = -1;
     GLint loc_vignette_radius_ = -1;
-    GLint loc_aspect_ = -1;
+    GLint loc_vignette_center_ = -1;
+    GLint loc_vignette_inv_size_ = -1;
+    GLint loc_vignette_x_scale_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();

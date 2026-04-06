@@ -331,7 +331,9 @@ bool Renderer::create_pp_shader() {
     loc_saturation_ = glGetUniformLocation(pp_program_, "uSaturation");
     loc_vignette_ = glGetUniformLocation(pp_program_, "uVignette");
     loc_vignette_radius_ = glGetUniformLocation(pp_program_, "uVignetteRadius");
-    loc_aspect_ = glGetUniformLocation(pp_program_, "uAspect");
+    loc_vignette_center_ = glGetUniformLocation(pp_program_, "uVignetteCenter");
+    loc_vignette_inv_size_ = glGetUniformLocation(pp_program_, "uVignetteInvSize");
+    loc_vignette_x_scale_ = glGetUniformLocation(pp_program_, "uVignetteXScale");
     return true;
 }
 
@@ -721,7 +723,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 
 // ─── Post-processing (unchanged logic) ───────────────────────────────
 
-void Renderer::update_display(const PostProcess& pp, float display_aspect) {
+void Renderer::update_display(const PostProcess& pp, float display_aspect, const VignetteFrame* vignette_frame) {
     // Only do the expensive glReadPixels + CPU scan when Max normalization
     // actually needs it.  Other modes compute their divisor without GPU readback.
     // compute_current_max() is still available on demand (e.g. GUI "Capture Ref").
@@ -758,6 +760,12 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect) {
 
     float exposure_mult = std::pow(2.0f, pp.exposure);
     float inv_gamma = 1.0f / pp.gamma;
+    float aspect = display_aspect > 0.0f
+        ? display_aspect
+        : ((width_ > 0 && height_ > 0) ? (float)width_ / (float)height_ : 1.0f);
+    VignetteFrame full_frame{};
+    full_frame.x_scale = aspect;
+    const VignetteFrame& vf = vignette_frame ? *vignette_frame : full_frame;
 
     glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
     glViewport(0, 0, width_, height_);
@@ -776,10 +784,9 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect) {
     glUniform1f(loc_saturation_, pp.saturation);
     glUniform1f(loc_vignette_, pp.vignette);
     glUniform1f(loc_vignette_radius_, pp.vignette_radius);
-    float aspect = display_aspect > 0.0f
-        ? display_aspect
-        : ((width_ > 0 && height_ > 0) ? (float)width_ / (float)height_ : 1.0f);
-    glUniform1f(loc_aspect_, aspect);
+    glUniform2f(loc_vignette_center_, vf.center[0], vf.center[1]);
+    glUniform2f(loc_vignette_inv_size_, vf.inv_size[0], vf.inv_size[1]);
+    glUniform1f(loc_vignette_x_scale_, vf.x_scale);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
@@ -792,8 +799,9 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect) {
-    update_display(pp, display_aspect);
+void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect,
+                           const VignetteFrame* vignette_frame) {
+    update_display(pp, display_aspect, vignette_frame);
 
     read_display_rgba(rgba_buffer_);
 

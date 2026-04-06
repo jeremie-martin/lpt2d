@@ -29,6 +29,33 @@ struct AlignmentGuide {
     float span_max = 0.0f;
 };
 
+VignetteFrame make_camera_vignette_frame(const Bounds& display_bounds,
+                                         const Bounds& camera_bounds, int tex_w, int tex_h) {
+    VignetteFrame frame{};
+    if (tex_w <= 0 || tex_h <= 0)
+        return frame;
+
+    Camera display_camera;
+    display_camera.fit(display_bounds, (float)tex_w, (float)tex_h);
+    CameraView display_view{display_camera, (float)tex_w, (float)tex_h};
+    ImVec2 top_left = display_view.to_screen({camera_bounds.min.x, camera_bounds.max.y});
+    ImVec2 bottom_right = display_view.to_screen({camera_bounds.max.x, camera_bounds.min.y});
+
+    float left = top_left.x / (float)tex_w;
+    float top = top_left.y / (float)tex_h;
+    float right = bottom_right.x / (float)tex_w;
+    float bottom = bottom_right.y / (float)tex_h;
+    float size_x = std::max(right - left, 1e-6f);
+    float size_y = std::max(bottom - top, 1e-6f);
+
+    frame.center[0] = (left + right) * 0.5f;
+    frame.center[1] = (top + bottom) * 0.5f;
+    frame.inv_size[0] = 1.0f / size_x;
+    frame.inv_size[1] = 1.0f / size_y;
+    frame.x_scale = ((float)tex_w / (float)tex_h) * (size_x / size_y);
+    return frame;
+}
+
 } // namespace
 
 // ─── App::run ───────────────────────────────────────────────────────────
@@ -183,8 +210,18 @@ int App::run(const AppConfig& config) {
             renderer.trace_and_draw(ed.shot.trace.to_trace_config());
             glFinish();
         }
-        if (!showing_snapshot_a)
-            renderer.update_display(ed.shot.look.to_post_process(), ed.shot.canvas.aspect());
+        if (!showing_snapshot_a) {
+            PostProcess pp = ed.shot.look.to_post_process();
+            if (pp.vignette > 0.0f && !ed.shot.camera.empty()) {
+                Bounds display_view = current_display_view(ed, compare_ab, win_w, win_h);
+                Bounds vignette_camera = ed.shot.camera.resolve(ed.shot.canvas.aspect(), ed.view.scene_bounds);
+                VignetteFrame vignette_frame = make_camera_vignette_frame(
+                    display_view, vignette_camera, renderer.width(), renderer.height());
+                renderer.update_display(pp, 0.0f, &vignette_frame);
+            } else {
+                renderer.update_display(pp, ed.shot.canvas.aspect());
+            }
+        }
 
         if (showing_snapshot_a && compare_ab.metrics_valid) {
             live_metrics = compare_ab.metrics;

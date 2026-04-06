@@ -15,7 +15,9 @@ uniform float uOpacity;
 uniform float uSaturation;
 uniform float uVignette;
 uniform float uVignetteRadius;
-uniform float uAspect;
+uniform vec2 uVignetteCenter;
+uniform vec2 uVignetteInvSize;
+uniform float uVignetteXScale;
 
 float toneMapReinhard(float v) { return v / (1.0 + v); }
 
@@ -72,8 +74,8 @@ void main() {
 
     // Vignette: radial edge darkening
     if (uVignette > 0.0) {
-        vec2 uv = flippedCoord - 0.5;
-        uv.x *= uAspect;
+        vec2 uv = (flippedCoord - uVignetteCenter) * uVignetteInvSize;
+        uv.x *= uVignetteXScale;
         float dist = length(uv) * 2.0;
         float vig = 1.0 - uVignette * smoothstep(uVignetteRadius, uVignetteRadius + 0.5, dist);
         color *= vig;
