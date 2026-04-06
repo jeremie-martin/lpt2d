@@ -49,30 +49,25 @@ Vec3 wavelength_to_rgb(float nm) {
     return {a.r + (b.r - a.r) * frac, a.g + (b.g - a.g) * frac, a.b + (b.b - a.b) * frac};
 }
 
-Vec3 spectral_fill_rgb(float wavelength, float bandwidth) {
-    if (wavelength <= 0.0f) return {1.0f, 1.0f, 1.0f};
+Vec3 spectral_fill_rgb(float c0, float c1, float c2) {
+    if (c0 == 0.0f && c1 == 0.0f && c2 == 0.0f) return {1.0f, 1.0f, 1.0f};
 
-    float sigma = std::max(bandwidth, 1.0f);
-    constexpr int N = 40;
-    constexpr float lo = 380.0f, hi = 780.0f;
-
+    // Integrate sigmoid(c0 + c1*t + c2*t²) × wavelength_rgb over visible spectrum
+    constexpr int N = 81;
     Vec3 sum{0, 0, 0};
-    float weight_sum = 0.0f;
     for (int i = 0; i < N; ++i) {
-        float nm = lo + (hi - lo) * (i + 0.5f) / N;
-        float x = (nm - wavelength) / sigma;
-        float w = std::exp(-0.5f * x * x);
+        float nm = 380.0f + i * 5.0f;
+        float t = (nm - 380.0f) / 400.0f;
+        float x = c0 + c1 * t + c2 * t * t;
+        float R = 0.5f + x / (2.0f * std::sqrt(1.0f + x * x));
         Vec3 rgb = wavelength_to_rgb(nm);
-        sum.r += rgb.r * w;
-        sum.g += rgb.g * w;
-        sum.b += rgb.b * w;
-        weight_sum += w;
+        sum.r += R * rgb.r;
+        sum.g += R * rgb.g;
+        sum.b += R * rgb.b;
     }
-    if (weight_sum > 0.0f) {
-        sum.r /= weight_sum;
-        sum.g /= weight_sum;
-        sum.b /= weight_sum;
-    }
+    sum.r /= N;
+    sum.g /= N;
+    sum.b /= N;
     // Normalize so max channel = 1
     float m = std::max({sum.r, sum.g, sum.b, 1e-6f});
     return {sum.r / m, sum.g / m, sum.b / m};

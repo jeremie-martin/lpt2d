@@ -1,5 +1,6 @@
 #include "ui.h"
 
+#include "color.h"
 #include "editor.h"
 #include "geometry.h"
 
@@ -9,6 +10,11 @@
 
 ImVec4 material_color(const Material& m) {
     if (m.emission > 0.0f) return {1.0f, 0.95f, 0.3f, 1.0f};
+    if (m.spectral_c0 != 0.0f || m.spectral_c1 != 0.0f || m.spectral_c2 != 0.0f) {
+        Vec3 rgb = spectral_to_rgb(m.spectral_c0, m.spectral_c1, m.spectral_c2);
+        float scale = m.albedo;
+        return {rgb.r * scale, rgb.g * scale, rgb.b * scale, 1.0f};
+    }
     if (m.albedo <= 0.01f) return {0.05f, 0.05f, 0.05f, 1.0f};
     if (m.transmission > 0.5f && m.ior > 1.01f) return {0.6f, 0.85f, 1.0f, 0.7f};
     if (m.metallic > 0.5f) return {0.85f, 0.85f, 0.9f, 1.0f};
@@ -39,9 +45,29 @@ bool edit_material(Material& mat) {
     changed |= ImGui::SliderFloat("Albedo", &mat.albedo, 0.0f, 1.0f);
     changed |= ImGui::SliderFloat("Emission", &mat.emission, 0.0f, 10.0f, "%.2f",
                                    ImGuiSliderFlags_Logarithmic);
-    changed |= ImGui::SliderFloat("Color \xce\xbb", &mat.color_wavelength, 0.0f, 780.0f, "%.0f nm");
-    if (mat.color_wavelength > 0.0f)
-        changed |= ImGui::SliderFloat("Color BW", &mat.color_bandwidth, 5.0f, 200.0f, "%.0f nm");
+    // Spectral color
+    Vec3 spec_rgb = spectral_to_rgb(mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
+    float col[3] = {spec_rgb.r, spec_rgb.g, spec_rgb.b};
+    bool is_neutral = (mat.spectral_c0 == 0.0f && mat.spectral_c1 == 0.0f && mat.spectral_c2 == 0.0f);
+    if (!is_neutral) {
+        if (ImGui::ColorEdit3("Color", col, ImGuiColorEditFlags_Float)) {
+            auto sc = rgb_to_spectral(col[0], col[1], col[2]);
+            mat.spectral_c0 = sc.c0;
+            mat.spectral_c1 = sc.c1;
+            mat.spectral_c2 = sc.c2;
+            changed = true;
+        }
+    }
+    bool has_color = !is_neutral;
+    if (ImGui::Checkbox("Colored", &has_color)) {
+        if (has_color) {
+            auto sc = rgb_to_spectral(0.8f, 0.2f, 0.2f); // default to reddish
+            mat.spectral_c0 = sc.c0; mat.spectral_c1 = sc.c1; mat.spectral_c2 = sc.c2;
+        } else {
+            mat.spectral_c0 = mat.spectral_c1 = mat.spectral_c2 = 0.0f;
+        }
+        changed = true;
+    }
     changed |= ImGui::SliderFloat("Fill", &mat.fill, 0.0f, 1.0f);
     return changed;
 }

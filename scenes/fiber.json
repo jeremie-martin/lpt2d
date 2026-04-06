@@ -57,8 +57,9 @@
       "cauchy_b": 15000.0,
       "albedo": 1.0,
       "emission": 0.0,
-      "color_wavelength": 0.0,
-      "color_bandwidth": 50.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
       "fill": 0.0
     },
     "guide_wall": {
@@ -70,8 +71,9 @@
       "cauchy_b": 0.0,
       "albedo": 0.9800000190734863,
       "emission": 0.0,
-      "color_wavelength": 0.0,
-      "color_bandwidth": 50.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
       "fill": 0.0
     },
     "stop_absorber": {
@@ -83,8 +85,9 @@
       "cauchy_b": 0.0,
       "albedo": 0.0,
       "emission": 0.0,
-      "color_wavelength": 0.0,
-      "color_bandwidth": 50.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
       "fill": 0.0
     }
   },

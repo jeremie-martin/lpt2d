@@ -110,10 +110,10 @@ struct GPUCircle {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
-    float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad0, _pad1; // std430: stride must be multiple of 8 (vec2 alignment)
 };
-static_assert(sizeof(GPUCircle) == 56);
+static_assert(sizeof(GPUCircle) == 64);
 
 struct GPUSegment {
     float a[2];
@@ -121,9 +121,10 @@ struct GPUSegment {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
 };
-static_assert(sizeof(GPUSegment) == 56);
+static_assert(sizeof(GPUSegment) == 64);
 
 struct GPULight {
     uint32_t type;    // 0=point, 1=segment, 2=projector
@@ -149,9 +150,10 @@ struct GPUArc {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad1;
 };
-static_assert(sizeof(GPUArc) == 64);
+static_assert(sizeof(GPUArc) == 72);
 
 struct GPUBezier {
     float p0[2];
@@ -160,20 +162,22 @@ struct GPUBezier {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
 };
-static_assert(sizeof(GPUBezier) == 64);
+static_assert(sizeof(GPUBezier) == 72);
 
 struct GPUEllipse {
     float center[2];
     float semi_a, semi_b;
     float rotation;
-    float _pad;
+    float _pad0;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad1;
 };
-static_assert(sizeof(GPUEllipse) == 64);
+static_assert(sizeof(GPUEllipse) == 72);
 
 // ─── Renderer implementation ─────────────────────────────────────────
 
@@ -527,8 +531,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         gpu.cauchy_b = mat.cauchy_b;
         gpu.albedo = mat.albedo;
         gpu.emission = mat.emission;
-        gpu.color_wavelength = mat.color_wavelength;
-        gpu.color_bandwidth = mat.color_bandwidth;
+        gpu.spectral_c0 = mat.spectral_c0;
+        gpu.spectral_c1 = mat.spectral_c1;
+        gpu.spectral_c2 = mat.spectral_c2;
     };
 
     // Collect all world-space shapes (ungrouped + transformed group shapes)
@@ -738,7 +743,7 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
     auto resolve_fill = [&](const MaterialBinding& binding) -> std::optional<FillColor> {
         const Material& mat = resolve_binding(binding, scene.materials);
         if (mat.fill <= 0.0f) return std::nullopt;
-        Vec3 rgb = spectral_fill_rgb(mat.color_wavelength, mat.color_bandwidth);
+        Vec3 rgb = spectral_fill_rgb(mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
         return FillColor{rgb.r * mat.fill, rgb.g * mat.fill, rgb.b * mat.fill};
     };
 

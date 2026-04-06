@@ -44,7 +44,7 @@ def make_scene(lights: list[dict], name: str = "test") -> dict:
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004, "color_wavelength": 0.0, "color_bandwidth": 50.0, "fill": 0.0},
+                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0},
             }
         ],
         "lights": lights,

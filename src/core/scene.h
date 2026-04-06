@@ -71,9 +71,10 @@ struct Material {
     float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
     float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
     float emission = 0.0f;     // Emissive intensity (adds energy at hit wavelength)
-    float color_wavelength = 0.0f;  // Peak passband wavelength in nm (0 = spectrally neutral)
-    float color_bandwidth = 50.0f;  // Gaussian sigma in nm (width of spectral response)
-    float fill = 0.0f;              // Interior fill intensity (0 = no fill, >0 = rasterized fill)
+    float spectral_c0 = 0.0f;  // Sigmoid spectral coefficients (Jakob & Hanika model)
+    float spectral_c1 = 0.0f;  // R(λ) = sigmoid(c0 + c1·t + c2·t²), t = (λ-380)/400
+    float spectral_c2 = 0.0f;  // All zeros = spectrally neutral (R=0.5, shader returns 1.0)
+    float fill = 0.0f;         // Interior fill intensity (0 = no fill, >0 = rasterized fill)
 
     bool operator==(const Material&) const = default;
 };

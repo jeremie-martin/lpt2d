@@ -49,63 +49,68 @@ PostProcess = _lpt2d.PostProcess
 
 from .colors import resolve_color  # noqa: E402
 
+# Color type accepted by all material constructors
+ColorSpec = str | tuple[float, float, float] | None
+
+
+def _sc(color: ColorSpec) -> dict:
+    """Resolve color to spectral coefficient kwargs for Material()."""
+    c0, c1, c2 = resolve_color(color)
+    return {"spectral_c0": c0, "spectral_c1": c1, "spectral_c2": c2}
+
 
 def glass(
     ior: float = 1.5,
     cauchy_b: float = 0.0,
     absorption: float = 0.0,
     *,
-    color: str | None = None,
+    color: ColorSpec = None,
     fill: float = 0.0,
 ) -> Material:
-    wl, bw = resolve_color(color)
     return Material(ior=ior, transmission=1.0, absorption=absorption,
-                    cauchy_b=cauchy_b, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+                    cauchy_b=cauchy_b, fill=fill, **_sc(color))
 
 
-def mirror(reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0) -> Material:
-    wl, bw = resolve_color(color)
+def mirror(reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0) -> Material:
     return Material(roughness=roughness, metallic=1.0, transmission=1.0,
-                    albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+                    albedo=reflectance, fill=fill, **_sc(color))
 
 
 def opaque_mirror(
-    reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0,
+    reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0,
 ) -> Material:
-    wl, bw = resolve_color(color)
     return Material(roughness=roughness, metallic=1.0, transmission=0.0,
-                    albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+                    albedo=reflectance, fill=fill, **_sc(color))
 
 
-def diffuse(reflectance: float, *, color: str | None = None, fill: float = 0.0) -> Material:
-    wl, bw = resolve_color(color)
-    return Material(albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+def diffuse(reflectance: float, *, color: ColorSpec = None, fill: float = 0.0) -> Material:
+    return Material(albedo=reflectance, fill=fill, **_sc(color))
 
 
 def absorber() -> Material:
     return Material(albedo=0.0)
 
 
-def emissive(emission: float, base: Material | None = None, *, color: str | None = None) -> Material:
+def emissive(emission: float, base: Material | None = None, *, color: ColorSpec = None) -> Material:
     if base is None:
         base = Material()
-    # Copy to avoid mutating the caller's material
     m = Material(
         ior=base.ior, roughness=base.roughness, metallic=base.metallic,
         transmission=base.transmission, absorption=base.absorption, cauchy_b=base.cauchy_b,
         albedo=base.albedo, emission=emission,
-        color_wavelength=base.color_wavelength, color_bandwidth=base.color_bandwidth,
+        spectral_c0=base.spectral_c0, spectral_c1=base.spectral_c1, spectral_c2=base.spectral_c2,
         fill=base.fill,
     )
     if color is not None:
-        wl, bw = resolve_color(color)
-        m.color_wavelength = wl
-        m.color_bandwidth = bw
+        c0, c1, c2 = resolve_color(color)
+        m.spectral_c0 = c0
+        m.spectral_c1 = c1
+        m.spectral_c2 = c2
     return m
 
 
 def beam_splitter(
-    reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0,
+    reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0,
 ) -> Material:
     return mirror(reflectance, roughness, color=color, fill=fill)
 

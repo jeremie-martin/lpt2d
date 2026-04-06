@@ -805,16 +805,6 @@ static int emission_point_count(float perimeter) {
     return std::min(n, EMISSION_MAX_POINTS);
 }
 
-// Narrow emitted light wavelength range to ±3σ around the material's spectral peak.
-template <typename LightT>
-static void apply_spectral_range(LightT& light, const Material& mat) {
-    if (mat.color_wavelength > 0.0f) {
-        float sigma = std::max(mat.color_bandwidth, 1.0f);
-        light.wavelength_min = std::max(380.0f, mat.color_wavelength - 3.0f * sigma);
-        light.wavelength_max = std::min(780.0f, mat.color_wavelength + 3.0f * sigma);
-    }
-}
-
 std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) {
     const Material& mat = resolve_shape_material(s, materials);
     if (mat.emission <= 0.0f) return {};
@@ -834,7 +824,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 PointLight light;
                 light.pos = pos;
                 light.intensity = per_point;
-                apply_spectral_range(light, mat);
+
                 lights.push_back(light);
             }
         },
@@ -844,7 +834,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
             light.a = seg.a;
             light.b = seg.b;
             light.intensity = total;
-            apply_spectral_range(light, mat);
+
             lights.push_back(light);
         },
         [&](const Arc& a) {
@@ -860,7 +850,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 light.a = prev;
                 light.b = cur;
                 light.intensity = seg_intensity;
-                apply_spectral_range(light, mat);
+
                 lights.push_back(light);
                 prev = cur;
             }
@@ -876,7 +866,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 light.a = prev;
                 light.b = cur;
                 light.intensity = seg_intensity;
-                apply_spectral_range(light, mat);
+
                 lights.push_back(light);
                 prev = cur;
             }
@@ -893,7 +883,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                         sl.a = e.a;
                         sl.b = e.b;
                         sl.intensity = mat.emission * (e.b - e.a).length();
-                        apply_spectral_range(sl, mat);
+
                         lights.push_back(sl);
                     }
                     for (auto& c : parts.corners) {
@@ -911,7 +901,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                             sl.a = prev;
                             sl.b = cur;
                             sl.intensity = seg_i;
-                            apply_spectral_range(sl, mat);
+    
                             lights.push_back(sl);
                             prev = cur;
                         }
@@ -926,7 +916,6 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 sl.a = a;
                 sl.b = b;
                 sl.intensity = mat.emission * (b - a).length();
-                apply_spectral_range(sl, mat);
                 lights.push_back(sl);
             }
         },
@@ -942,7 +931,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 PointLight light;
                 light.pos = pos;
                 light.intensity = per_point;
-                apply_spectral_range(light, mat);
+
                 lights.push_back(light);
             }
         },

@@ -119,12 +119,12 @@ NB_MODULE(_lpt2d, m) {
         .def("__init__", [](Material* mat,
                             float ior, float roughness, float metallic, float transmission,
                             float absorption, float cauchy_b, float albedo, float emission,
-                            float color_wavelength, float color_bandwidth, float fill) {
+                            float spectral_c0, float spectral_c1, float spectral_c2, float fill) {
             new (mat) Material{ior, roughness, metallic, transmission, absorption, cauchy_b, albedo, emission,
-                               color_wavelength, color_bandwidth, fill};
+                               spectral_c0, spectral_c1, spectral_c2, fill};
         }, "ior"_a = 1.0f, "roughness"_a = 0.0f, "metallic"_a = 0.0f, "transmission"_a = 0.0f,
            "absorption"_a = 0.0f, "cauchy_b"_a = 0.0f, "albedo"_a = 1.0f, "emission"_a = 0.0f,
-           "color_wavelength"_a = 0.0f, "color_bandwidth"_a = 50.0f, "fill"_a = 0.0f)
+           "spectral_c0"_a = 0.0f, "spectral_c1"_a = 0.0f, "spectral_c2"_a = 0.0f, "fill"_a = 0.0f)
         .def_rw("ior", &Material::ior)
         .def_rw("roughness", &Material::roughness)
         .def_rw("metallic", &Material::metallic)
@@ -133,8 +133,9 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("cauchy_b", &Material::cauchy_b)
         .def_rw("albedo", &Material::albedo)
         .def_rw("emission", &Material::emission)
-        .def_rw("color_wavelength", &Material::color_wavelength)
-        .def_rw("color_bandwidth", &Material::color_bandwidth)
+        .def_rw("spectral_c0", &Material::spectral_c0)
+        .def_rw("spectral_c1", &Material::spectral_c1)
+        .def_rw("spectral_c2", &Material::spectral_c2)
         .def_rw("fill", &Material::fill)
         .def("__eq__", &Material::operator==)
         .def("__repr__", [](const Material& mat) {
@@ -143,8 +144,9 @@ NB_MODULE(_lpt2d, m) {
                << ", metallic=" << mat.metallic << ", transmission=" << mat.transmission
                << ", absorption=" << mat.absorption << ", cauchy_b=" << mat.cauchy_b
                << ", albedo=" << mat.albedo << ", emission=" << mat.emission
-               << ", color_wavelength=" << mat.color_wavelength
-               << ", color_bandwidth=" << mat.color_bandwidth
+               << ", spectral_c0=" << mat.spectral_c0
+               << ", spectral_c1=" << mat.spectral_c1
+               << ", spectral_c2=" << mat.spectral_c2
                << ", fill=" << mat.fill << ")";
             return os.str();
         });
@@ -163,16 +165,20 @@ NB_MODULE(_lpt2d, m) {
     m.def("named_color", [](const std::string& name) -> nb::tuple {
         auto result = named_color(name);
         if (!result) throw nb::value_error(("unknown color name: " + name).c_str());
-        return nb::make_tuple(result->wavelength, result->bandwidth);
+        return nb::make_tuple(result->c0, result->c1, result->c2);
     }, "name"_a);
-    m.def("spectral_fill_rgb", [](float wavelength, float bandwidth) -> nb::tuple {
-        Vec3 rgb = spectral_fill_rgb(wavelength, bandwidth);
+    m.def("spectral_fill_rgb", [](float c0, float c1, float c2) -> nb::tuple {
+        Vec3 rgb = spectral_fill_rgb(c0, c1, c2);
         return nb::make_tuple(rgb.r, rgb.g, rgb.b);
-    }, "wavelength"_a, "bandwidth"_a);
+    }, "c0"_a, "c1"_a, "c2"_a);
+    m.def("rgb_to_spectral", [](float r, float g, float b) -> nb::tuple {
+        SpectralCoeffs sc = rgb_to_spectral(r, g, b);
+        return nb::make_tuple(sc.c0, sc.c1, sc.c2);
+    }, "r"_a, "g"_a, "b"_a);
     m.def("named_color_list", []() -> nb::list {
         nb::list result;
         for (const auto* e = named_colors(); e->name; ++e)
-            result.append(nb::make_tuple(e->name, e->params.wavelength, e->params.bandwidth));
+            result.append(nb::make_tuple(e->name, e->r, e->g, e->b));
         return result;
     });
 

@@ -7,8 +7,8 @@ struct GPUCircle {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
-    float _pad;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad0, _pad1;
 };
 
 struct GPUSeg {
@@ -17,7 +17,8 @@ struct GPUSeg {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
 };
 
 struct GPULight {
@@ -61,7 +62,8 @@ struct GPUArc {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad1;
 };
 
 struct GPUBezier {
@@ -71,7 +73,8 @@ struct GPUBezier {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
 };
 
 layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
@@ -84,7 +87,8 @@ struct GPUEllipse {
     float _pad;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
-    float color_wavelength, color_bandwidth;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad1;
 };
 
 layout(std430, binding = 8) readonly buffer EllipseBuf { GPUEllipse ellipses[]; };
@@ -198,11 +202,12 @@ struct Hit {
     float cauchy_b;
     float albedo;
     float emission;
-    float color_wavelength;
-    float color_bandwidth;
+    float spectral_c0;
+    float spectral_c1;
+    float spectral_c2;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 50.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -219,7 +224,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.color_wavelength, c.color_bandwidth);
+    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.spectral_c0, c.spectral_c1, c.spectral_c2);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -234,7 +239,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.color_wavelength, s.color_bandwidth);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.spectral_c0, s.spectral_c1, s.spectral_c2);
 }
 
 bool in_arc(float angle, float start, float sweep) {
@@ -267,7 +272,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.sweep)) {
             return Hit(t, p, normalize(p - a.center),
-                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.color_wavelength, a.color_bandwidth);
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.spectral_c0, a.spectral_c1, a.spectral_c2);
         }
     }
     return NO_HIT;
@@ -312,7 +317,7 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission, b.color_wavelength, b.color_bandwidth);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission, b.spectral_c0, b.spectral_c1, b.spectral_c2);
     }
     return best;
 }
@@ -347,16 +352,16 @@ Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
     vec2 n = vec2(ln.x*cr - ln.y*sr, ln.x*sr + ln.y*cr);
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission, e.color_wavelength, e.color_bandwidth);
+    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission, e.spectral_c0, e.spectral_c1, e.spectral_c2);
 }
 
-// Spectral response: Gaussian passband centered at material's color wavelength.
-// Returns 1.0 for spectrally neutral materials (center <= 0).
-float spectral_response(float lambda, float center, float bw) {
-    if (center <= 0.0) return 1.0;
-    float sigma = max(bw, 1.0);
-    float x = (lambda - center) / sigma;
-    return exp(-0.5 * x * x);
+// Sigmoid spectral reflectance (Jakob & Hanika model).
+// Returns 1.0 for neutral materials (all coefficients zero).
+float spectral_response(float lambda_nm, float c0, float c1, float c2) {
+    if (c0 == 0.0 && c1 == 0.0 && c2 == 0.0) return 1.0;
+    float t = (lambda_nm - 380.0) / 400.0;
+    float x = c0 + c1 * t + c2 * t * t;
+    return 0.5 + x / (2.0 * sqrt(1.0 + x * x));
 }
 
 Hit hit_scene(vec2 ro, vec2 rd) {
@@ -449,8 +454,9 @@ void main() {
 
     // Trace
     float current_absorption = 0.0;
-    float current_color_wl = 0.0;
-    float current_color_bw = 50.0;
+    float current_sc0 = 0.0;
+    float current_sc1 = 0.0;
+    float current_sc2 = 0.0;
 
     for (uint depth = 0u; depth < uMaxDepth; depth++) {
         Hit h = hit_scene(ro, rd);
@@ -461,7 +467,7 @@ void main() {
         }
 
         // Beer-Lambert attenuation inside absorbing medium (wavelength-dependent)
-        float vol_response = spectral_response(wavelength, current_color_wl, current_color_bw);
+        float vol_response = spectral_response(wavelength, current_sc0, current_sc1, current_sc2);
         float absorption_eff = current_absorption * (1.0 + 2.0 * (1.0 - vol_response));
         color *= exp(-absorption_eff * h.t);
 
@@ -469,7 +475,7 @@ void main() {
 
         // Emissive surface: adds energy at the current wavelength (spectrally selective)
         if (h.emission > 0.0) {
-            float emit_resp = spectral_response(wavelength, h.color_wavelength, h.color_bandwidth);
+            float emit_resp = spectral_response(wavelength, h.spectral_c0, h.spectral_c1, h.spectral_c2);
             color += vec4(rgb * h.emission * emit_resp * uIntensity * total_w,
                           h.emission * emit_resp * uIntensity * total_w);
         }
@@ -480,7 +486,7 @@ void main() {
             float cos_i = dot(rd, n);
 
             // Spectral material color: modulates albedo by wavelength
-            float response = spectral_response(wavelength, h.color_wavelength, h.color_bandwidth);
+            float response = spectral_response(wavelength, h.spectral_c0, h.spectral_c1, h.spectral_c2);
 
             // Cauchy dispersion: ior(λ) = A + B/λ² (wavelength in nm, cauchy_b in nm²)
             float ior = h.ior + h.cauchy_b / (wavelength * wavelength);
@@ -549,12 +555,14 @@ void main() {
                     ro = h.point - n * SCATTER_EPS;
                     if (entering) {
                         current_absorption = h.absorption;
-                        current_color_wl = h.color_wavelength;
-                        current_color_bw = h.color_bandwidth;
+                        current_sc0 = h.spectral_c0;
+                        current_sc1 = h.spectral_c1;
+                        current_sc2 = h.spectral_c2;
                     } else {
                         current_absorption = 0.0;
-                        current_color_wl = 0.0;
-                        current_color_bw = 50.0;
+                        current_sc0 = 0.0;
+                        current_sc1 = 0.0;
+                        current_sc2 = 0.0;
                     }
                 } else {
                     // Diffuse or absorb: metals absorb non-reflected energy,

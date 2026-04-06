@@ -57,8 +57,9 @@
       "cauchy_b": 30000.0,
       "albedo": 1.0,
       "emission": 0.0,
-      "color_wavelength": 0.0,
-      "color_bandwidth": 50.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
       "fill": 0.0
     },
     "wall_mirror": {
@@ -70,8 +71,9 @@
       "cauchy_b": 0.0,
       "albedo": 0.949999988079071,
       "emission": 0.0,
-      "color_wavelength": 0.0,
-      "color_bandwidth": 50.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
       "fill": 0.0
     }
   },
