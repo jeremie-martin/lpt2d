@@ -408,7 +408,8 @@ void main() {
         Hit h = hit_scene(ro, rd);
 
         if (h.t >= 1e29) {
-            return; // ray escaped — don't draw escape segments
+            emit(ro, ro + rd * ESCAPE_DIST, color);
+            return;
         }
 
         // Beer-Lambert attenuation inside absorbing medium
