@@ -16,6 +16,36 @@ Install the Python package (builds the C++ extension via CMake):
 uv pip install -e .
 ```
 
+## Static Analysis
+
+Normal development loop:
+
+```bash
+cmake --build build -j$(nproc)
+```
+
+Use compiler errors and warnings as the always-on baseline.
+
+For meaningful C++ changes, run:
+
+```bash
+cmake --build build --target static-analysis-cppcheck
+```
+
+For header/include cleanup after refactors, run:
+
+```bash
+cmake --build build --target static-analysis-iwyu
+```
+
+To run both:
+
+```bash
+cmake --build build --target static-analysis
+```
+
+`cppcheck` is an explicit second pass, not part of every build. IWYU is a deliberate cleanup tool, not something to run on every edit. For extra advisory `cppcheck` findings, configure with `-DLPT2D_CPPCHECK_INCONCLUSIVE=ON`.
+
 ## Run
 
 ```bash
