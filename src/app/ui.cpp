@@ -1,5 +1,7 @@
 #include "ui.h"
 
+#include "geometry.h"
+
 #include <algorithm>
 #include <cmath>
 

@@ -38,6 +38,7 @@ find_package(GLEW REQUIRED)
 # ── Core library ──────────────────────────────────────────────────
 add_library(lpt2d-core STATIC
     src/core/scene.cpp
+    src/core/geometry.cpp
     src/core/scenes.cpp
     src/core/renderer.cpp
     src/core/spectrum.cpp
@@ -79,6 +80,8 @@ set(IMGUI_SOURCES
 add_executable(lpt2d
     src/app/main.cpp
     src/app/app.cpp
+    src/app/app_actions.cpp
+    src/app/app_panels.cpp
     src/app/editor.cpp
     src/app/ui.cpp
     ${IMGUI_SOURCES}

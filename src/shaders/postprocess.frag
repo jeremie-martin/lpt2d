@@ -60,7 +60,8 @@ void main() {
         color[c] = v;
     }
 
-    // Saturation in post-tonemap linear space (BT.709 weights are correct here)
+    // Saturation in post-tonemap linear space (BT.709 luminance weights).
+    // Integer approximation (218/732/74 >>10) used in renderer.cpp and stats.py.
     if (uSaturation != 1.0) {
         float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
         color = clamp(mix(vec3(lum), color, uSaturation), 0.0, 1.0);

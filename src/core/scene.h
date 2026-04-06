@@ -295,6 +295,12 @@ Light* find_light(Scene& scene, std::string_view id);
 const Light* find_light(const Scene& scene, std::string_view id);
 Group* find_group(Scene& scene, std::string_view id);
 const Group* find_group(const Scene& scene, std::string_view id);
+
+// Find shape/light within a specific vector (for group-scoped lookups)
+Shape* find_shape_in(std::vector<Shape>& shapes, std::string_view id);
+const Shape* find_shape_in(const std::vector<Shape>& shapes, std::string_view id);
+Light* find_light_in(std::vector<Light>& lights, std::string_view id);
+const Light* find_light_in(const std::vector<Light>& lights, std::string_view id);
 Material* find_material(Scene& scene, std::string_view id);
 const Material* find_material(const Scene& scene, std::string_view id);
 bool bind_material(Shape& shape, const Scene& scene, std::string_view material_id, std::string* error = nullptr);
@@ -303,38 +309,38 @@ int material_usage_count(const Scene& scene, std::string_view material_id);
 bool rename_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error = nullptr);
 bool delete_material(Scene& scene, std::string_view material_id, std::string* error = nullptr);
 
-// Intersection testing
-std::optional<Hit> intersect(const Ray& ray, const Circle& circle);
-std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
-std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
-std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
-std::optional<Hit> intersect(const Ray& ray, const Polygon& poly);
-std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse);
-std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
+// Prepare a scene for serialization: assign IDs, sync materials, validate.
+// Returns false and sets *error if validation fails.
+bool normalize_scene(Scene& scene, std::string* error = nullptr);
+
+// Common variant field accessors
+const std::string& shape_id(const Shape& s);
+std::string& shape_id(Shape& s);
+const std::string& light_id(const Light& l);
+std::string& light_id(Light& l);
+const Material& shape_material(const Shape& s);
+Material& shape_material(Shape& s);
+const std::string& shape_material_id(const Shape& s);
+std::string& shape_material_id(Shape& s);
+std::string shape_display_name(const Shape& s, int fallback_index);
+std::string light_display_name(const Light& l, int fallback_index);
+
+// ─── Authored source enumeration ──────────────────────────────────
+
+struct AuthoredSource {
+    enum Kind { SceneLight, GroupLight, ShapeEmission } kind;
+    std::string label;
+    std::string entity_id;
+    std::string group_id; // empty for top-level
+};
+
+std::vector<AuthoredSource> collect_authored_sources(const Scene& scene);
+Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source);
 
 // Scene bounds (AABB with padding)
 struct Bounds {
     Vec2 min, max;
 };
-Bounds compute_bounds(const Scene& scene, float padding = 0.05f);
-std::vector<std::string> diagnose_scene(const Scene& scene);
-
-// Arc geometry helpers
-float normalize_angle(float angle);
-float clamp_arc_sweep(float sweep);
-float arc_end_angle(const Arc& arc);
-float arc_mid_angle(const Arc& arc);
-Vec2 arc_point(const Arc& arc, float angle);
-Vec2 arc_start_point(const Arc& arc);
-Vec2 arc_end_point(const Arc& arc);
-Vec2 arc_mid_point(const Arc& arc);
-bool angle_in_arc(float angle, const Arc& arc);
-Bounds arc_bounds(const Arc& arc);
-float point_arc_distance(Vec2 p, const Arc& arc);
-
-// Primitive bounds helpers
-Bounds shape_bounds(const Shape& s);
-Bounds light_bounds(const Light& l);
 
 // --- Rendering types ---
 
@@ -412,8 +418,32 @@ struct Canvas {
     float aspect() const { return (float)width / height; }
 };
 
-// Look is the authored name for post-process settings. Same type — no conversion needed.
-using Look = PostProcess;
+// Look: authored display intent (what the user saves).
+// PostProcess: runtime GPU uniform state (what the shader consumes).
+// Identical fields, distinct types — use to_post_process() to convert.
+struct Look {
+    float exposure = -5.0f;
+    float contrast = 1.0f;
+    float gamma = 2.0f;
+    ToneMap tone_map = ToneMap::ReinhardExtended;
+    float white_point = 0.5f;
+    NormalizeMode normalize = NormalizeMode::Rays;
+    float normalize_ref = 0.0f;
+    float normalize_pct = 1.0f;
+    float ambient = 0.0f;
+    float background[3] = {0, 0, 0};
+    float opacity = 1.0f;
+    float saturation = 1.0f;
+    float vignette = 0.0f;
+    float vignette_radius = 0.7f;
+
+    PostProcess to_post_process() const {
+        return {exposure, contrast, gamma, tone_map, white_point, normalize,
+                normalize_ref, normalize_pct, ambient,
+                {background[0], background[1], background[2]},
+                opacity, saturation, vignette, vignette_radius};
+    }
+};
 
 struct TraceDefaults {
     int64_t rays = 10'000'000;
@@ -447,14 +477,3 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
 // Add four axis-aligned walls forming a box
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);
 
-// Transform a shape/light from local to world coordinates using a Transform2D
-Shape transform_shape(const Shape& s, const Transform2D& t);
-Light transform_light(const Light& l, const Transform2D& t);
-
-// Perimeter (arc length) of a shape — used for emission light intensity scaling
-float shape_perimeter(const Shape& s);
-
-// Generate lights that approximate emission from an emissive shape.
-// Returns empty vector if the shape's material has no emission.
-// Distributes point lights along the shape's surface for physically correct surface glow.
-std::vector<Light> emission_light(const Shape& s);

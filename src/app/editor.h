@@ -13,9 +13,9 @@
 // ─── Object identification ─────────────────────────────────────────────
 
 struct SelectionRef {
-    enum Type { Shape, Light, Group } type;
-    int index;
-    int group = -1; // -1 = top-level, >= 0 = member of scene.groups[group]
+    enum Type { Shape, Light, Group } type = Shape;
+    std::string id;
+    std::string group_id; // empty = top-level, non-empty = member of that group
     bool operator==(const SelectionRef&) const = default;
 };
 
@@ -138,112 +138,94 @@ enum class CameraHandle : int {
 // ─── Editor state ──────────────────────────────────────────────────────
 
 struct EditorState {
-    // Authored document
+    // Authored document (serialized)
     Shot shot;
-    Bounds scene_bounds{{-1, -1}, {1, 1}}; // cached, updated on reload
 
-    // Camera (editor viewport, not authored camera)
-    Camera camera;
+    // Session state (not serialized, reset on load)
+    struct Session {
+        UndoHistory undo;
+        Clipboard clipboard;
+        bool dirty = false;
+        std::string save_path;
+    } session;
 
-    // Selection
-    std::vector<SelectionRef> selection;
-    SelectionRef hovered{SelectionRef::Shape, -1};
-    int editing_group = -1; // -1 = normal mode, >= 0 = editing inside group[i]
+    // View state (camera, display flags — not serialized)
+    struct View {
+        Camera camera;
+        Bounds scene_bounds{{-1, -1}, {1, 1}};
+        bool show_grid = false;
+        bool snap_to_grid = false;
+        bool show_camera_frame = true;
+        bool dim_outside_camera = true;
+    } view;
 
-    // Tool
-    EditTool tool = EditTool::Select;
-    bool creating = false;
-    Vec2 create_start{};
+    // Interaction state (ephemeral — active during input gestures)
+    struct Interaction {
+        std::vector<SelectionRef> selection;
+        SelectionRef hovered{};
+        std::string editing_group_id;
+        EditTool tool = EditTool::Select;
+        bool creating = false;
+        Vec2 create_start{};
+        bool dragging = false;
+        struct DragOffset { Vec2 a{}, b{}; };
+        std::vector<DragOffset> drag_offsets;
+        bool handle_dragging = false;
+        Handle active_handle{{}, {}, -1, {}};
+        bool box_selecting = false;
+        ImVec2 box_start{};
+        TransformMode transform;
+        bool prop_editing = false;
+        CameraHandle cam_handle_hovered = CameraHandle::None;
+        CameraHandle cam_handle_dragging = CameraHandle::None;
+        Bounds cam_drag_start_bounds{};
+        bool measure_active = false;
+        Vec2 measure_start{};
+    } interaction;
 
-    // Drag state
-    bool dragging = false;
-    struct DragOffset { Vec2 a{}, b{}; };
-    std::vector<DragOffset> drag_offsets; // one per selected object
+    // Visibility filters (transient, not serialized, not undone)
+    struct Visibility {
+        std::set<std::string> hidden_shapes;
+        std::set<std::string> hidden_lights;
+        std::set<std::string> hidden_groups;
+        std::string solo_light_id;
+        std::string solo_light_group_id;
 
-    // Handle drag state
-    bool handle_dragging = false;
-    Handle active_handle{{}, {SelectionRef::Shape, -1}, -1, {}};
+        bool is_shape_visible(const std::string& id) const { return !hidden_shapes.contains(id); }
+        bool is_light_visible(const std::string& id) const { return !hidden_lights.contains(id); }
+        bool is_group_visible(const std::string& id) const { return !hidden_groups.contains(id); }
 
-    // Box select
-    bool box_selecting = false;
-    ImVec2 box_start{};
+        void toggle_shape(const std::string& id) {
+            if (hidden_shapes.contains(id)) hidden_shapes.erase(id); else hidden_shapes.insert(id);
+        }
+        void toggle_light(const std::string& id) {
+            if (hidden_lights.contains(id)) hidden_lights.erase(id); else hidden_lights.insert(id);
+        }
+        void toggle_group(const std::string& id) {
+            if (hidden_groups.contains(id)) hidden_groups.erase(id); else hidden_groups.insert(id);
+        }
+        void clear_solo() {
+            solo_light_id.clear();
+            solo_light_group_id.clear();
+        }
+        void show_all() {
+            hidden_shapes.clear(); hidden_lights.clear(); hidden_groups.clear();
+            clear_solo();
+        }
+    } visibility;
 
-    // Transform
-    TransformMode transform;
-
-    // Undo
-    UndoHistory undo;
-
-    // Clipboard
-    Clipboard clipboard;
-
-    // Property editing state (for undo grouping)
-    bool prop_editing = false;
-
-    // Camera frame overlay
-    CameraHandle cam_handle_hovered = CameraHandle::None;
-    CameraHandle cam_handle_dragging = CameraHandle::None;
-    Bounds cam_drag_start_bounds{};
-    bool show_camera_frame = true;
-    bool dim_outside_camera = true;
-
-    // Dirty flag (unsaved changes)
-    bool dirty = false;
-    std::string save_path;
-
-    // Visibility (editor-only, not serialized, not undo-tracked)
-    std::set<int> hidden_shapes;
-    std::set<int> hidden_lights;
-    std::set<int> hidden_groups;
-    int solo_light = -1; // -1 = off, >= 0 = only this top-level light rendered
-    int solo_light_group = -1; // -1 = not soloing a group light; >= 0 = group index
-    int solo_light_index = -1; // light index within the group (-1 = off)
-
-    // Grid
-    bool show_grid = false;
-    bool snap_to_grid = false;
-
-    // Measurement tool
-    bool measure_active = false;
-    Vec2 measure_start{};
-
-    // ── Visibility helpers ─────────────────────────────────────────
-
-    bool is_shape_visible(int i) const { return hidden_shapes.find(i) == hidden_shapes.end(); }
-    bool is_light_visible(int i) const { return hidden_lights.find(i) == hidden_lights.end(); }
-    bool is_group_visible(int i) const { return hidden_groups.find(i) == hidden_groups.end(); }
-
-    void toggle_shape_visibility(int i) {
-        if (hidden_shapes.count(i)) hidden_shapes.erase(i); else hidden_shapes.insert(i);
-    }
-    void toggle_light_visibility(int i) {
-        if (hidden_lights.count(i)) hidden_lights.erase(i); else hidden_lights.insert(i);
-    }
-    void toggle_group_visibility(int i) {
-        if (hidden_groups.count(i)) hidden_groups.erase(i); else hidden_groups.insert(i);
-    }
-    void clear_solo() {
-        solo_light = -1;
-        solo_light_group = -1;
-        solo_light_index = -1;
-    }
-    void show_all() {
-        hidden_shapes.clear(); hidden_lights.clear(); hidden_groups.clear();
-        clear_solo();
-    }
-
-    // ── Selection helpers ───────────────────────────────────────────
+    // ── Selection helpers (delegate to interaction) ────────────────
 
     bool is_selected(SelectionRef id) const {
-        return std::find(selection.begin(), selection.end(), id) != selection.end();
+        return std::find(interaction.selection.begin(), interaction.selection.end(), id) != interaction.selection.end();
     }
 
     void select(SelectionRef id) {
-        if (!is_selected(id)) selection.push_back(id);
+        if (!is_selected(id)) interaction.selection.push_back(id);
     }
 
     void deselect(SelectionRef id) {
-        selection.erase(std::remove(selection.begin(), selection.end(), id), selection.end());
+        interaction.selection.erase(std::remove(interaction.selection.begin(), interaction.selection.end(), id), interaction.selection.end());
     }
 
     void toggle_select(SelectionRef id) {
@@ -251,16 +233,16 @@ struct EditorState {
         else select(id);
     }
 
-    void clear_selection() { selection.clear(); }
+    void clear_selection() { interaction.selection.clear(); }
 
     void select_all() {
-        selection.clear();
-        for (int i = 0; i < (int)shot.scene.shapes.size(); ++i)
-            selection.push_back({SelectionRef::Shape, i});
-        for (int i = 0; i < (int)shot.scene.lights.size(); ++i)
-            selection.push_back({SelectionRef::Light, i});
-        for (int i = 0; i < (int)shot.scene.groups.size(); ++i)
-            selection.push_back({SelectionRef::Group, i});
+        interaction.selection.clear();
+        for (const auto& s : shot.scene.shapes)
+            interaction.selection.push_back({SelectionRef::Shape, shape_id(s), ""});
+        for (const auto& l : shot.scene.lights)
+            interaction.selection.push_back({SelectionRef::Light, light_id(l), ""});
+        for (const auto& g : shot.scene.groups)
+            interaction.selection.push_back({SelectionRef::Group, g.id, ""});
     }
 
     // Centroid of selected objects (for transform pivot)
@@ -272,44 +254,52 @@ struct EditorState {
     // Validate selection indices after scene changes
     void validate_selection() {
         const auto& sc = shot.scene;
-        selection.erase(
-            std::remove_if(selection.begin(), selection.end(), [&](const SelectionRef& id) {
-                if (id.group >= 0) {
-                    // Group member: validate group exists and member index is in range
-                    if (id.group >= (int)sc.groups.size()) return true;
-                    const auto& g = sc.groups[id.group];
-                    if (id.type == SelectionRef::Shape) return id.index >= (int)g.shapes.size();
-                    if (id.type == SelectionRef::Light) return id.index >= (int)g.lights.size();
-                    return true;
-                }
-                if (id.type == SelectionRef::Shape) return id.index >= (int)sc.shapes.size();
-                if (id.type == SelectionRef::Light) return id.index >= (int)sc.lights.size();
-                if (id.type == SelectionRef::Group) return id.index >= (int)sc.groups.size();
+        auto resolve_shape_ref = [&](const SelectionRef& ref) -> bool {
+            if (ref.id.empty()) return false;
+            if (!ref.group_id.empty()) {
+                const Group* g = find_group(sc, ref.group_id);
+                return g && find_shape_in(g->shapes, ref.id);
+            }
+            return find_shape_in(sc.shapes, ref.id) != nullptr;
+        };
+        auto resolve_light_ref = [&](const SelectionRef& ref) -> bool {
+            if (ref.id.empty()) return false;
+            if (!ref.group_id.empty()) {
+                const Group* g = find_group(sc, ref.group_id);
+                return g && find_light_in(g->lights, ref.id);
+            }
+            return find_light_in(sc.lights, ref.id) != nullptr;
+        };
+        interaction.selection.erase(
+            std::remove_if(interaction.selection.begin(), interaction.selection.end(), [&](const SelectionRef& ref) {
+                if (ref.type == SelectionRef::Shape)
+                    return !resolve_shape_ref(ref);
+                if (ref.type == SelectionRef::Light)
+                    return !resolve_light_ref(ref);
+                if (ref.type == SelectionRef::Group)
+                    return find_group(sc, ref.id) == nullptr;
                 return true;
             }),
-            selection.end());
+            interaction.selection.end());
         // Validate editing_group
-        if (editing_group >= (int)sc.groups.size()) {
-            editing_group = -1;
-        }
-        // Prune stale visibility indices
-        std::erase_if(hidden_shapes, [&](int i) { return i >= (int)sc.shapes.size(); });
-        std::erase_if(hidden_lights, [&](int i) { return i >= (int)sc.lights.size(); });
-        std::erase_if(hidden_groups, [&](int i) { return i >= (int)sc.groups.size(); });
-        if (solo_light >= (int)sc.lights.size()) solo_light = -1;
-        if (solo_light_group >= (int)sc.groups.size() ||
-            (solo_light_group >= 0 && solo_light_index >= (int)sc.groups[solo_light_group].lights.size())) {
-            solo_light_group = -1;
-            solo_light_index = -1;
-        }
+        if (!interaction.editing_group_id.empty() && !find_group(sc, interaction.editing_group_id))
+            interaction.editing_group_id.clear();
+        // Prune stale visibility ids
+        std::erase_if(visibility.hidden_shapes, [&](const std::string& id) { return !find_shape(sc, id); });
+        std::erase_if(visibility.hidden_lights, [&](const std::string& id) { return !find_light(sc, id); });
+        std::erase_if(visibility.hidden_groups, [&](const std::string& id) { return !find_group(sc, id); });
+        if (!visibility.solo_light_id.empty() && !find_light(sc, visibility.solo_light_id))
+            visibility.clear_solo();
+        if (!visibility.solo_light_group_id.empty() && !find_group(sc, visibility.solo_light_group_id))
+            visibility.clear_solo();
     }
 };
 
 // ─── Hit testing ───────────────────────────────────────────────────────
 
-// Returns SelectionRef with index=-1 if nothing hit.
-// When editing_group >= 0, only tests members of that group (returns group-scoped SelectionRefs).
-SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, int editing_group = -1);
+// Returns SelectionRef with empty id if nothing hit.
+// When editing_group_id is non-empty, only tests members of that group (returns group-scoped SelectionRefs).
+SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, const std::string& editing_group_id = "");
 
 // Test if an object's geometry intersects a world-space rectangle
 bool object_in_rect(const Scene& scene, SelectionRef id, Vec2 rect_min, Vec2 rect_max);

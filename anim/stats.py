@@ -14,7 +14,9 @@ import numpy as np
 if TYPE_CHECKING:
     from .types import FrameReport, Look
 
-_LUM_WEIGHTS = np.array([218, 732, 74], dtype=np.uint32)
+# BT.709 luminance: integer approximation (>>10) of 0.2126/0.7152/0.0722.
+# Must match C++ renderer.cpp and GLSL postprocess.frag.
+BT709_WEIGHTS = np.array([218, 732, 74], dtype=np.uint32)
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,7 @@ def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
     arr = np.frombuffer(rgb, dtype=np.uint8).reshape(n_pixels, 3)
 
     # BT.709 luminance via matrix multiply (uint32 intermediate, >>10)
-    lum = (arr.astype(np.uint32) @ _LUM_WEIGHTS >> 10).astype(np.uint8)
+    lum = (arr.astype(np.uint32) @ BT709_WEIGHTS >> 10).astype(np.uint8)
 
     # Histogram-based stats (256 bins, exact for uint8)
     hist = np.bincount(lum, minlength=256)

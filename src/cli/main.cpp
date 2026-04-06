@@ -1,4 +1,5 @@
 #include "export.h"
+#include "geometry.h"
 #include "headless.h"
 #include "renderer.h"
 #include "scenes.h"
@@ -73,46 +74,7 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
-// CLI overrides — all optional, applied on top of shot defaults
-struct CLIOverrides {
-    std::optional<int> width, height;
-    std::optional<int64_t> rays;
-    std::optional<int> batch, depth;
-    std::optional<float> exposure, contrast, gamma, white_point;
-    std::optional<ToneMap> tonemap;
-    std::optional<NormalizeMode> normalize;
-    std::optional<float> normalize_ref, normalize_pct;
-    std::optional<float> ambient, opacity, intensity;
-    std::optional<float> saturation, vignette, vignette_radius;
-    std::optional<std::array<float, 3>> background;
-};
-
-static void apply_overrides(Shot& shot, const CLIOverrides& ov) {
-    if (ov.width) shot.canvas.width = *ov.width;
-    if (ov.height) shot.canvas.height = *ov.height;
-    if (ov.rays) shot.trace.rays = *ov.rays;
-    if (ov.batch) shot.trace.batch = *ov.batch;
-    if (ov.depth) shot.trace.depth = *ov.depth;
-    if (ov.intensity) shot.trace.intensity = *ov.intensity;
-    if (ov.exposure) shot.look.exposure = *ov.exposure;
-    if (ov.contrast) shot.look.contrast = *ov.contrast;
-    if (ov.gamma) shot.look.gamma = *ov.gamma;
-    if (ov.white_point) shot.look.white_point = *ov.white_point;
-    if (ov.tonemap) shot.look.tone_map = *ov.tonemap;
-    if (ov.normalize) shot.look.normalize = *ov.normalize;
-    if (ov.normalize_ref) shot.look.normalize_ref = *ov.normalize_ref;
-    if (ov.normalize_pct) shot.look.normalize_pct = *ov.normalize_pct;
-    if (ov.ambient) shot.look.ambient = *ov.ambient;
-    if (ov.opacity) shot.look.opacity = *ov.opacity;
-    if (ov.saturation) shot.look.saturation = *ov.saturation;
-    if (ov.vignette) shot.look.vignette = *ov.vignette;
-    if (ov.vignette_radius) shot.look.vignette_radius = *ov.vignette_radius;
-    if (ov.background) {
-        shot.look.background[0] = (*ov.background)[0];
-        shot.look.background[1] = (*ov.background)[1];
-        shot.look.background[2] = (*ov.background)[2];
-    }
-}
+// CLI overrides now use the shared RenderOverrides type from serialize.h.
 
 static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool histogram = false) {
     (void)default_rays;
@@ -174,34 +136,15 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
             renderer.resize(width, height);
         }
 
-        FrameOverrides fo = directives.render;
+        const RenderOverrides& fo = directives.render;
 
         int64_t rays = merged.trace.rays;
-        TraceConfig tcfg = merged.trace.to_trace_config();
-        if (fo.batch) tcfg.batch_size = *fo.batch;
-        if (fo.depth) tcfg.max_depth = *fo.depth;
-        if (fo.intensity) tcfg.intensity = *fo.intensity;
         if (fo.rays) rays = *fo.rays;
+        TraceConfig tcfg = merged.trace.to_trace_config();
+        fo.apply_to(tcfg);
 
-        PostProcess pp = merged.look;
-        if (fo.exposure) pp.exposure = *fo.exposure;
-        if (fo.contrast) pp.contrast = *fo.contrast;
-        if (fo.gamma) pp.gamma = *fo.gamma;
-        if (fo.white_point) pp.white_point = *fo.white_point;
-        if (fo.tonemap) pp.tone_map = *fo.tonemap;
-        if (fo.normalize) pp.normalize = *fo.normalize;
-        if (fo.normalize_ref) pp.normalize_ref = *fo.normalize_ref;
-        if (fo.normalize_pct) pp.normalize_pct = *fo.normalize_pct;
-        if (fo.ambient) pp.ambient = *fo.ambient;
-        if (fo.background) {
-            pp.background[0] = (*fo.background)[0];
-            pp.background[1] = (*fo.background)[1];
-            pp.background[2] = (*fo.background)[2];
-        }
-        if (fo.opacity) pp.opacity = *fo.opacity;
-        if (fo.saturation) pp.saturation = *fo.saturation;
-        if (fo.vignette) pp.vignette = *fo.vignette;
-        if (fo.vignette_radius) pp.vignette_radius = *fo.vignette_radius;
+        PostProcess pp = merged.look.to_post_process();
+        fo.apply_to(pp);
 
         Bounds bounds;
         if (fo.bounds) {
@@ -275,7 +218,7 @@ int main(int argc, char** argv) {
     bool stream_mode = false;
     bool fast_mode = false;
     bool emit_histogram = false;
-    CLIOverrides overrides;
+    RenderOverrides overrides;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
@@ -348,16 +291,17 @@ int main(int argc, char** argv) {
     if (stream_mode) {
         // Stream mode: use default shot (no scene file needed), apply CLI overrides
         Shot session;
-        apply_overrides(session, overrides);
+        overrides.apply_to(session);
         return run_stream(session, session.trace.rays, fast_mode, emit_histogram);
     }
     (void)emit_histogram; // only used in stream mode
 
     // Load shot (scene file provides defaults for everything)
     Shot shot = resolve_shot(scene_name);
-    apply_overrides(shot, overrides);
+    overrides.apply_to(shot);
 
     if (!save_shot_path.empty()) {
+        normalize_scene(shot.scene);
         if (!save_shot_json(shot, save_shot_path)) {
             std::cerr << "Failed to save shot: " << save_shot_path << "\n";
             return 1;
@@ -384,7 +328,7 @@ int main(int argc, char** argv) {
     renderer.clear();
 
     TraceConfig tcfg = shot.trace.to_trace_config();
-    PostProcess pp = shot.look;
+    PostProcess pp = shot.look.to_post_process();
     int64_t total_rays = shot.trace.rays;
 
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;

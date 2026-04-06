@@ -1,5 +1,10 @@
 """lpt2d animation library — f(ctx) -> Scene -> video."""
 
+from .analysis import auto_look as auto_look
+from .analysis import calibrate_normalize_ref as calibrate_normalize_ref
+from .analysis import compare_looks as compare_looks
+from .analysis import look_report as look_report
+from .diagnostics import diagnose_scene as diagnose_scene
 from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
 from .builders import double_slit as double_slit
@@ -19,20 +24,15 @@ from .builders import thick_segment as thick_segment
 from .builders import waveguide as waveguide
 from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
+from .light_analysis import light_contributions as light_contributions
+from .light_analysis import scene_light_report as scene_light_report
+from .light_analysis import structure_contribution as structure_contribution
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import Renderer as Renderer
-from .renderer import auto_look as auto_look
-from .renderer import calibrate_normalize_ref as calibrate_normalize_ref
-from .renderer import compare_looks as compare_looks
-from .renderer import light_contributions as light_contributions
-from .renderer import look_report as look_report
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
-from .renderer import scene_energy_report as scene_energy_report
-from .renderer import scene_light_report as scene_light_report
-from .renderer import structure_contribution as structure_contribution
 from .stats import FrameStats as FrameStats
 from .stats import LightContribution as LightContribution
 from .stats import LookComparison as LookComparison
@@ -77,7 +77,6 @@ from .types import TraceDefaults as TraceDefaults
 from .types import Transform2D as Transform2D
 from .types import absorber as absorber
 from .types import beam_splitter as beam_splitter
-from .types import diagnose_scene as diagnose_scene
 from .types import diffuse as diffuse
 from .types import emissive as emissive
 from .types import glass as glass
@@ -137,7 +136,6 @@ __all__ = [
     "LightContribution",
     "StructureReport",
     "scene_light_report",
-    "scene_energy_report",
     "structure_contribution",
     "diffuse",
     "emissive",

@@ -1,5 +1,7 @@
 #include "serialize.h"
 
+#include "geometry.h"
+
 #include <charconv>
 #include <cmath>
 #include <cstring>
@@ -273,25 +275,17 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
     std::ofstream f(path);
     if (!f) { std::cerr << "Failed to open " << path << " for writing\n"; return false; }
 
-    Shot normalized = shot;
-    ensure_scene_entity_ids(normalized.scene);
-    sync_material_bindings(normalized.scene);
-    std::string error;
-    if (!validate_scene(normalized.scene, &error)) {
-        std::cerr << "Invalid scene for save: " << error << "\n";
-        return false;
-    }
-    const auto& scene = normalized.scene;
+    const auto& scene = shot.scene;
 
     f << "{\n";
     f << "  \"version\": " << SHOT_JSON_VERSION << ",\n";
-    f << "  \"name\": "; write_json_string(f, normalized.name); f << ",\n";
+    f << "  \"name\": "; write_json_string(f, shot.name); f << ",\n";
 
     // Shot-level blocks
-    write_camera(f, normalized.camera);
-    write_canvas(f, normalized.canvas);
-    write_look(f, normalized.look);
-    write_trace(f, normalized.trace);
+    write_camera(f, shot.camera);
+    write_canvas(f, shot.canvas);
+    write_look(f, shot.look);
+    write_trace(f, shot.trace);
 
     // Materials library
     if (!scene.materials.empty()) {
@@ -902,6 +896,74 @@ Shot load_shot_json(const std::string& path) {
     return {};
 }
 
+// ─── RenderOverrides apply_to methods ─────────────────────────────
+
+void RenderOverrides::apply_to(Look& look) const {
+    if (exposure) look.exposure = *exposure;
+    if (contrast) look.contrast = *contrast;
+    if (gamma) look.gamma = *gamma;
+    if (white_point) look.white_point = *white_point;
+    if (tonemap) look.tone_map = *tonemap;
+    if (normalize) look.normalize = *normalize;
+    if (normalize_ref) look.normalize_ref = *normalize_ref;
+    if (normalize_pct) look.normalize_pct = *normalize_pct;
+    if (ambient) look.ambient = *ambient;
+    if (opacity) look.opacity = *opacity;
+    if (saturation) look.saturation = *saturation;
+    if (vignette) look.vignette = *vignette;
+    if (vignette_radius) look.vignette_radius = *vignette_radius;
+    if (background) {
+        look.background[0] = (*background)[0];
+        look.background[1] = (*background)[1];
+        look.background[2] = (*background)[2];
+    }
+}
+
+void RenderOverrides::apply_to(PostProcess& pp) const {
+    if (exposure) pp.exposure = *exposure;
+    if (contrast) pp.contrast = *contrast;
+    if (gamma) pp.gamma = *gamma;
+    if (white_point) pp.white_point = *white_point;
+    if (tonemap) pp.tone_map = *tonemap;
+    if (normalize) pp.normalize = *normalize;
+    if (normalize_ref) pp.normalize_ref = *normalize_ref;
+    if (normalize_pct) pp.normalize_pct = *normalize_pct;
+    if (ambient) pp.ambient = *ambient;
+    if (opacity) pp.opacity = *opacity;
+    if (saturation) pp.saturation = *saturation;
+    if (vignette) pp.vignette = *vignette;
+    if (vignette_radius) pp.vignette_radius = *vignette_radius;
+    if (background) {
+        pp.background[0] = (*background)[0];
+        pp.background[1] = (*background)[1];
+        pp.background[2] = (*background)[2];
+    }
+}
+
+void RenderOverrides::apply_to(TraceDefaults& trace) const {
+    if (rays) trace.rays = *rays;
+    if (batch) trace.batch = *batch;
+    if (depth) trace.depth = *depth;
+    if (intensity) trace.intensity = *intensity;
+}
+
+void RenderOverrides::apply_to(TraceConfig& tcfg) const {
+    if (batch) tcfg.batch_size = *batch;
+    if (depth) tcfg.max_depth = *depth;
+    if (intensity) tcfg.intensity = *intensity;
+}
+
+void RenderOverrides::apply_to(Canvas& canvas) const {
+    if (width) canvas.width = *width;
+    if (height) canvas.height = *height;
+}
+
+void RenderOverrides::apply_to(Shot& shot) const {
+    apply_to(shot.canvas);
+    apply_to(shot.look);
+    apply_to(shot.trace);
+}
+
 StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
     StreamFrameDirectives directives;
     Parser parser{json.data(), json.data() + json.size()};
@@ -915,7 +977,7 @@ StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
     directives.has_look = root.get("look") != nullptr;
     directives.has_trace = root.get("trace") != nullptr;
 
-    FrameOverrides& fo = directives.render;
+    RenderOverrides& fo = directives.render;
     auto* render = root.get("render");
     if (!render || render->type != JsonValue::Object) return directives;
 
@@ -954,6 +1016,6 @@ StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
     return directives;
 }
 
-FrameOverrides parse_frame_overrides(std::string_view json) {
+RenderOverrides parse_frame_overrides(std::string_view json) {
     return parse_stream_frame_directives(json).render;
 }

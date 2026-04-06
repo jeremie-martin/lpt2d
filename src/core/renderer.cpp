@@ -1,5 +1,6 @@
 #include "renderer.h"
 
+#include "geometry.h"
 #include "shaders.h"
 #include "spectrum.h"
 
@@ -829,7 +830,9 @@ FrameMetrics Renderer::compute_display_metrics() {
 
 FrameMetrics Renderer::compute_frame_metrics() const {
     // Single pass over rgba_buffer_ (already populated by read_pixels).
-    // BT.709 luminance weights matching Python frame_stats(): 218/732/74 >> 10
+    // BT.709 luminance: integer approximation (>>10) of 0.2126/0.7152/0.0722.
+    // Must match Python stats.py and GLSL postprocess.frag.
+    static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
     const size_t n_pixels = (size_t)width_ * height_;
     if (n_pixels == 0) return {0, 1, 0, 0, 0};
 
@@ -842,7 +845,7 @@ FrameMetrics Renderer::compute_frame_metrics() const {
         uint8_t g = rgba_buffer_[off + 1];
         uint8_t b = rgba_buffer_[off + 2];
 
-        uint32_t lum = (218u * r + 732u * g + 74u * b) >> 10;
+        uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
         if (lum > 255) lum = 255;
         histogram[lum]++;
 

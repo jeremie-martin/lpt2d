@@ -22,24 +22,35 @@ Shot load_shot_json(const std::string& path);
 // Parse shot from a JSON string. Returns default shot on failure.
 Shot load_shot_json_string(std::string_view json_content);
 
-// Per-frame render overrides for --stream mode.
-// Fields set to std::nullopt use session defaults.
-struct FrameOverrides {
-    std::optional<int64_t> rays;
-    std::optional<int> batch, depth;
+// Sparse render overrides — fields set to std::nullopt use session defaults.
+// Used by CLI args, per-frame streaming directives, and GUI session overrides.
+struct RenderOverrides {
+    // Canvas
+    std::optional<int> width, height;
+
+    // Look
     std::optional<float> exposure, contrast, gamma, white_point;
     std::optional<ToneMap> tonemap;
-    std::optional<Bounds> bounds; // fixed camera
     std::optional<NormalizeMode> normalize;
-    std::optional<float> normalize_ref;
-    std::optional<float> normalize_pct;
-    std::optional<float> ambient;
+    std::optional<float> normalize_ref, normalize_pct;
+    std::optional<float> ambient, opacity, saturation;
+    std::optional<float> vignette, vignette_radius;
     std::optional<std::array<float, 3>> background;
-    std::optional<float> opacity;
+
+    // Trace
+    std::optional<int64_t> rays;
+    std::optional<int> batch, depth;
     std::optional<float> intensity;
-    std::optional<float> saturation;
-    std::optional<float> vignette;
-    std::optional<float> vignette_radius;
+
+    // Camera
+    std::optional<Bounds> bounds;
+
+    void apply_to(Look& look) const;
+    void apply_to(PostProcess& pp) const;
+    void apply_to(TraceDefaults& trace) const;
+    void apply_to(TraceConfig& tcfg) const;
+    void apply_to(Canvas& canvas) const;
+    void apply_to(Shot& shot) const;
 };
 
 struct StreamFrameDirectives {
@@ -48,11 +59,11 @@ struct StreamFrameDirectives {
     bool has_canvas = false;
     bool has_look = false;
     bool has_trace = false;
-    FrameOverrides render;
+    RenderOverrides render;
 };
 
 // Extract optional "render" overrides from a shot JSON string.
-FrameOverrides parse_frame_overrides(std::string_view json);
+RenderOverrides parse_frame_overrides(std::string_view json);
 
 // Extract authored-shot block presence plus nested "render" overrides from a
 // stream frame JSON string.

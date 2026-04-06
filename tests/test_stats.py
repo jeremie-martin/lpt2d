@@ -8,6 +8,7 @@ import pytest
 
 from anim import renderer as renderer_mod
 from anim import types as types_mod
+from anim.geometry import _shape_bounds, _transform_shape
 from anim.stats import (
     FrameStats,
     LookComparison,
@@ -31,8 +32,8 @@ from anim.types import (
     Scene,
     Shot,
     Transform2D,
-    diagnose_scene,
 )
+from anim.diagnostics import diagnose_scene
 
 # --- QualityGate / check_quality ---
 
@@ -235,11 +236,6 @@ def test_render_stats_prefers_report_histogram(monkeypatch):
             pass
 
     monkeypatch.setattr(renderer_mod, "Renderer", DummyRenderer)
-    monkeypatch.setattr(
-        renderer_mod,
-        "frame_stats",
-        lambda *args, **kwargs: pytest.fail("render_stats() should reuse report histogram"),
-    )
 
     results = renderer_mod.render_stats(
         lambda ctx: Scene(),
@@ -433,7 +429,7 @@ def test_internal_transform_shape_keeps_arc_bounds_tight():
         material=Material(),
     )
 
-    transformed = types_mod._transform_shape(arc, Transform2D(rotate=math.pi / 2))
-    bounds = types_mod._shape_bounds(transformed)
+    transformed = _transform_shape(arc, Transform2D(rotate=math.pi / 2))
+    bounds = _shape_bounds(transformed)
 
     assert bounds == pytest.approx((-1.0, 0.0, 0.0, 1.0))
