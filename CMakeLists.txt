@@ -7,11 +7,14 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+option(LPT2D_BUILD_PYTHON "Build Python bindings" ON)
+option(LPT2D_CPPCHECK_INCONCLUSIVE "Enable inconclusive cppcheck diagnostics" OFF)
+
 # ── Shader embedding ──────────────────────────────────────────────
 include(cmake/embed_shaders.cmake)
 include(cmake/static_analysis.cmake)
 
-set(SHADER_DIR ${CMAKE_SOURCE_DIR}/src/shaders)
+set(SHADER_DIR ${PROJECT_SOURCE_DIR}/src/shaders)
 set(SHADER_FILES
     ${SHADER_DIR}/trace.comp
     ${SHADER_DIR}/line.vert
@@ -20,7 +23,7 @@ set(SHADER_FILES
     ${SHADER_DIR}/postprocess.frag
     ${SHADER_DIR}/max_reduce.comp
 )
-set(GENERATED_SHADER_HEADER ${CMAKE_BINARY_DIR}/generated/shaders.h)
+set(GENERATED_SHADER_HEADER ${PROJECT_BINARY_DIR}/generated/shaders.h)
 
 embed_shaders(
     OUTPUT ${GENERATED_SHADER_HEADER}
@@ -47,14 +50,14 @@ add_library(lpt2d-core STATIC
 )
 
 target_include_directories(lpt2d-core PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_BINARY_DIR}/generated
+    ${PROJECT_SOURCE_DIR}/src/core
+    ${PROJECT_BINARY_DIR}/generated
 )
 target_include_directories(lpt2d-core SYSTEM PUBLIC
-    ${CMAKE_SOURCE_DIR}/external/nlohmann/single_include
+    ${PROJECT_SOURCE_DIR}/external/nlohmann/single_include
 )
 target_include_directories(lpt2d-core SYSTEM PRIVATE
-    ${CMAKE_SOURCE_DIR}/external/stb
+    ${PROJECT_SOURCE_DIR}/external/stb
 )
 target_link_libraries(lpt2d-core PUBLIC
     OpenGL::GL
@@ -62,7 +65,7 @@ target_link_libraries(lpt2d-core PUBLIC
     ${EGL_LIBRARY}
 )
 target_compile_definitions(lpt2d-core PUBLIC
-    LPT2D_SCENES_DIR="${CMAKE_SOURCE_DIR}/scenes"
+    LPT2D_SCENES_DIR="${PROJECT_SOURCE_DIR}/scenes"
 )
 lpt2d_enable_build_options(lpt2d-core)
 lpt2d_enable_warnings(lpt2d-core)
@@ -74,7 +77,7 @@ lpt2d_register_analysis_sources(lpt2d-core IWYU)
 # ── Interactive GUI executable ────────────────────────────────────
 find_package(glfw3 REQUIRED)
 
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui)
+set(IMGUI_DIR ${PROJECT_SOURCE_DIR}/external/imgui)
 set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
@@ -107,7 +110,7 @@ add_executable(lpt2d
 )
 
 target_include_directories(lpt2d PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/app
+    ${PROJECT_SOURCE_DIR}/src/app
 )
 target_link_libraries(lpt2d PRIVATE
     lpt2d-core
@@ -115,7 +118,7 @@ target_link_libraries(lpt2d PRIVATE
     glfw
 )
 target_compile_definitions(lpt2d PRIVATE
-    LPT2D_FONT_PATH="${CMAKE_SOURCE_DIR}/external/imgui/misc/fonts/Roboto-Medium.ttf"
+    LPT2D_FONT_PATH="${PROJECT_SOURCE_DIR}/external/imgui/misc/fonts/Roboto-Medium.ttf"
 )
 lpt2d_enable_build_options(lpt2d)
 lpt2d_enable_warnings(lpt2d)
@@ -134,24 +137,28 @@ lpt2d_enable_warnings(lpt2d-cli)
 lpt2d_register_analysis_sources(lpt2d-cli IWYU)
 
 # ── Python extension module (nanobind) ───────────────────────────
-find_package(Python3 COMPONENTS Interpreter Development.Module)
-if(Python3_FOUND)
-    # nanobind uses find_package(Python), not find_package(Python3).
-    # Bridge the variables so nanobind finds the same Python.
-    set(Python_EXECUTABLE ${Python3_EXECUTABLE})
-    set(Python_INCLUDE_DIRS ${Python3_INCLUDE_DIRS})
-    set(Python_LIBRARIES ${Python3_LIBRARIES})
-    set(Python_FOUND TRUE)
+if(LPT2D_BUILD_PYTHON)
+    find_package(Python3 COMPONENTS Interpreter Development.Module)
+    if(Python3_FOUND)
+        # nanobind uses find_package(Python), not find_package(Python3).
+        # Bridge the variables so nanobind finds the same Python.
+        set(Python_EXECUTABLE ${Python3_EXECUTABLE})
+        set(Python_INCLUDE_DIRS ${Python3_INCLUDE_DIRS})
+        set(Python_LIBRARIES ${Python3_LIBRARIES})
+        set(Python_FOUND TRUE)
 
-    add_subdirectory(${CMAKE_SOURCE_DIR}/external/nanobind)
-    nanobind_add_module(_lpt2d
-        src/bindings/lpt2d_bindings.cpp
-    )
-    target_link_libraries(_lpt2d PRIVATE lpt2d-core)
-    lpt2d_enable_build_options(_lpt2d)
-    lpt2d_enable_warnings(_lpt2d)
-    lpt2d_register_analysis_sources(_lpt2d)
-    install(TARGETS _lpt2d LIBRARY DESTINATION .)
+        add_subdirectory(${PROJECT_SOURCE_DIR}/external/nanobind)
+        nanobind_add_module(_lpt2d
+            src/bindings/lpt2d_bindings.cpp
+        )
+        target_link_libraries(_lpt2d PRIVATE lpt2d-core)
+        lpt2d_enable_build_options(_lpt2d)
+        lpt2d_enable_warnings(_lpt2d)
+        lpt2d_register_analysis_sources(_lpt2d)
+        install(TARGETS _lpt2d LIBRARY DESTINATION .)
+    else()
+        message(STATUS "Python3 development components not found; skipping _lpt2d module")
+    endif()
 endif()
 
 lpt2d_add_static_analysis_targets()

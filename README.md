@@ -34,6 +34,41 @@ This produces:
 - `build/liblpt2d-core.a` — core static library
 
 System dependencies include OpenGL, GLEW, GLFW3, and EGL.
+The Python extension module is built when `-DLPT2D_BUILD_PYTHON=ON` (default)
+and compatible Python development components are available.
+
+## Static Analysis
+
+The default build keeps compiler warnings enabled on project-owned C++ targets:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+```
+
+The repo exports `build/compile_commands.json`, and the opt-in analysis targets
+reuse that compile database instead of maintaining separate include or flag
+lists.
+
+```bash
+# Lightweight bug finding
+cmake --build build --target static-analysis-cppcheck
+
+# Include hygiene
+cmake --build build --target static-analysis-iwyu
+
+# Run both
+cmake --build build --target static-analysis
+```
+
+Notes:
+
+- `cppcheck` and IWYU are optional local tools, not required for a normal build
+- enable `-DLPT2D_CPPCHECK_INCONCLUSIVE=ON` if you want extra advisory cppcheck findings
+- the analysis targets only inspect project-owned translation units under `src/`
+- normal builds do not use `-Werror`
+- IWYU is intended as an explicit cleanup pass after header or API churn, not as
+  a constant background task
 
 ## Run
 
