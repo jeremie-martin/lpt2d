@@ -192,26 +192,11 @@ float sample_projector_angle(GPULight lt) {
     return sample_uniform_angle(lt.spread);
 }
 
-// ── Intersection (geometry-only hit, material deferred) ──
-
-// Lightweight hit: only geometry needed for closest-hit search
-struct HitGeo {
+// ── Intersection ──
+struct Hit {
     float t;
     vec2 point;
     vec2 normal;
-};
-
-const HitGeo NO_HIT = HitGeo(1e30, vec2(0), vec2(0));
-
-// Primitive type tags for deferred material lookup
-const uint PRIM_CIRCLE  = 0u;
-const uint PRIM_SEGMENT = 1u;
-const uint PRIM_ARC     = 2u;
-const uint PRIM_BEZIER  = 3u;
-const uint PRIM_ELLIPSE = 4u;
-
-// Material properties fetched after hit_scene identifies the winner
-struct MatProps {
     float ior;
     float roughness;
     float metallic;
@@ -225,55 +210,12 @@ struct MatProps {
     float spectral_c2;
 };
 
-MatProps fetch_material(uint prim_type, uint prim_index) {
-    MatProps m;
-    switch (prim_type) {
-    case PRIM_CIRCLE: {
-        GPUCircle c = circles[prim_index];
-        m.ior = c.ior; m.roughness = c.roughness; m.metallic = c.metallic;
-        m.transmission = c.transmission; m.absorption = c.absorption;
-        m.cauchy_b = c.cauchy_b; m.albedo = c.albedo; m.emission = c.emission;
-        m.spectral_c0 = c.spectral_c0; m.spectral_c1 = c.spectral_c1; m.spectral_c2 = c.spectral_c2;
-        break;
-    }
-    case PRIM_SEGMENT: {
-        GPUSeg s = segments[prim_index];
-        m.ior = s.ior; m.roughness = s.roughness; m.metallic = s.metallic;
-        m.transmission = s.transmission; m.absorption = s.absorption;
-        m.cauchy_b = s.cauchy_b; m.albedo = s.albedo; m.emission = s.emission;
-        m.spectral_c0 = s.spectral_c0; m.spectral_c1 = s.spectral_c1; m.spectral_c2 = s.spectral_c2;
-        break;
-    }
-    case PRIM_ARC: {
-        GPUArc a = arcs[prim_index];
-        m.ior = a.ior; m.roughness = a.roughness; m.metallic = a.metallic;
-        m.transmission = a.transmission; m.absorption = a.absorption;
-        m.cauchy_b = a.cauchy_b; m.albedo = a.albedo; m.emission = a.emission;
-        m.spectral_c0 = a.spectral_c0; m.spectral_c1 = a.spectral_c1; m.spectral_c2 = a.spectral_c2;
-        break;
-    }
-    case PRIM_BEZIER: {
-        GPUBezier b = beziers[prim_index];
-        m.ior = b.ior; m.roughness = b.roughness; m.metallic = b.metallic;
-        m.transmission = b.transmission; m.absorption = b.absorption;
-        m.cauchy_b = b.cauchy_b; m.albedo = b.albedo; m.emission = b.emission;
-        m.spectral_c0 = b.spectral_c0; m.spectral_c1 = b.spectral_c1; m.spectral_c2 = b.spectral_c2;
-        break;
-    }
-    default: { // PRIM_ELLIPSE
-        GPUEllipse e = ellipses[prim_index];
-        m.ior = e.ior; m.roughness = e.roughness; m.metallic = e.metallic;
-        m.transmission = e.transmission; m.absorption = e.absorption;
-        m.cauchy_b = e.cauchy_b; m.albedo = e.albedo; m.emission = e.emission;
-        m.spectral_c0 = e.spectral_c0; m.spectral_c1 = e.spectral_c1; m.spectral_c2 = e.spectral_c2;
-        break;
-    }
-    }
-    return m;
-}
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
 
-HitGeo hit_circle(vec2 ro, vec2 rd, GPUCircle c, float max_t) {
+Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c, float max_t) {
     vec2 oc = ro - c.center;
+    // All ray directions are normalized before tracing, so this quadratic
+    // can use the cheaper unit-length form.
     float b = dot(oc, rd);
     float cc = dot(oc, oc) - c.radius_sq;
     float disc = b * b - cc;
@@ -286,10 +228,10 @@ HitGeo hit_circle(vec2 ro, vec2 rd, GPUCircle c, float max_t) {
     if (t < INTERSECT_EPS || t >= max_t) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return HitGeo(t, p, (p - c.center) * c.inv_radius);
+    return Hit(t, p, (p - c.center) * c.inv_radius, c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.spectral_c0, c.spectral_c1, c.spectral_c2);
 }
 
-HitGeo hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
+Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
     vec2 d = s.b - s.a;
     float denom = rd.x * d.y - rd.y * d.x;
     if (abs(denom) < INTERSECT_EPS) return NO_HIT;
@@ -301,7 +243,7 @@ HitGeo hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
 
     vec2 p = ro + rd * t;
     vec2 n = vec2(-d.y, d.x) * s.inv_len;
-    return HitGeo(t, p, n);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.spectral_c0, s.spectral_c1, s.spectral_c2);
 }
 
 bool in_arc(float angle, float start, float sweep) {
@@ -313,7 +255,7 @@ bool in_arc(float angle, float start, float sweep) {
     return delta <= arc_sweep + INTERSECT_EPS;
 }
 
-HitGeo hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
+Hit hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
     vec2 oc = ro - a.center;
     float qb = dot(oc, rd);
     float qc = dot(oc, oc) - a.radius_sq;
@@ -332,13 +274,14 @@ HitGeo hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
         if (angle < 0.0) angle += 2.0 * PI;
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.sweep)) {
-            return HitGeo(t, p, (p - a.center) * a.inv_radius);
+            return Hit(t, p, (p - a.center) * a.inv_radius,
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.spectral_c0, a.spectral_c1, a.spectral_c2);
         }
     }
     return NO_HIT;
 }
 
-HitGeo hit_bezier(vec2 ro, vec2 rd, GPUBezier b, float max_t) {
+Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b, float max_t) {
     vec2 A = b.p0 - 2.0*b.p1 + b.p2;
     vec2 B = 2.0*(b.p1 - b.p0);
     vec2 C = b.p0;
@@ -365,7 +308,7 @@ HitGeo hit_bezier(vec2 ro, vec2 rd, GPUBezier b, float max_t) {
         }
     }
 
-    HitGeo best = HitGeo(max_t, vec2(0), vec2(0));
+    Hit best = Hit(max_t, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
     for (int i = 0; i < n_roots; i++) {
         float t = roots[i];
         if (t < 0.0 || t > 1.0) continue;
@@ -377,12 +320,12 @@ HitGeo hit_bezier(vec2 ro, vec2 rd, GPUBezier b, float max_t) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = HitGeo(s, p, n);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission, b.spectral_c0, b.spectral_c1, b.spectral_c2);
     }
     return best.t < max_t ? best : NO_HIT;
 }
 
-HitGeo hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e, float max_t) {
+Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e, float max_t) {
     float cr = e.rot_cos, sr = e.rot_sin;
     vec2 oc = ro - e.center;
     vec2 lo = vec2(oc.x*cr + oc.y*sr, -oc.x*sr + oc.y*cr);
@@ -400,12 +343,15 @@ HitGeo hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e, float max_t) {
     float t = (t1 > INTERSECT_EPS) ? t1 : t2;
     if (t < INTERSECT_EPS || t >= max_t) return NO_HIT;
 
+    // Hit point in local coords
     vec2 lp = lo + ld * t;
+    // Normal: gradient of ellipse equation
     vec2 ln = normalize(vec2(2.0*lp.x*e.inv_a2, 2.0*lp.y*e.inv_b2));
+    // Rotate normal back to world coords (forward rotation: cr, sr)
     vec2 n = vec2(ln.x*cr - ln.y*sr, ln.x*sr + ln.y*cr);
 
     vec2 p = ro + rd * t;
-    return HitGeo(t, p, n);
+    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission, e.spectral_c0, e.spectral_c1, e.spectral_c2);
 }
 
 // Sigmoid spectral reflectance (Jakob & Hanika model).
@@ -417,30 +363,27 @@ float spectral_response(float lambda_nm, float c0, float c1, float c2) {
     return 0.5 + x / (2.0 * sqrt(1.0 + x * x));
 }
 
-// Returns geometry hit + writes winner type/index to out params
-HitGeo hit_scene(vec2 ro, vec2 rd, out uint out_type, out uint out_index) {
-    HitGeo best = NO_HIT;
-    out_type = 0u;
-    out_index = 0u;
+Hit hit_scene(vec2 ro, vec2 rd) {
+    Hit best = NO_HIT;
     for (uint i = 0u; i < uNumCircles; i++) {
-        HitGeo h = hit_circle(ro, rd, circles[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_CIRCLE; out_index = i; }
+        Hit h = hit_circle(ro, rd, circles[i], best.t);
+        if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumSegments; i++) {
-        HitGeo h = hit_segment(ro, rd, segments[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_SEGMENT; out_index = i; }
+        Hit h = hit_segment(ro, rd, segments[i], best.t);
+        if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumArcs; i++) {
-        HitGeo h = hit_arc(ro, rd, arcs[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_ARC; out_index = i; }
+        Hit h = hit_arc(ro, rd, arcs[i], best.t);
+        if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumBeziers; i++) {
-        HitGeo h = hit_bezier(ro, rd, beziers[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_BEZIER; out_index = i; }
+        Hit h = hit_bezier(ro, rd, beziers[i], best.t);
+        if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumEllipses; i++) {
-        HitGeo h = hit_ellipse(ro, rd, ellipses[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_ELLIPSE; out_index = i; }
+        Hit h = hit_ellipse(ro, rd, ellipses[i], best.t);
+        if (h.t < best.t) best = h;
     }
     return best;
 }
@@ -537,16 +480,12 @@ void main() {
     float current_sc2 = 0.0;
 
     for (uint depth = 0u; depth < uMaxDepth; depth++) {
-        uint hit_type, hit_index;
-        HitGeo h = hit_scene(ro, rd, hit_type, hit_index);
+        Hit h = hit_scene(ro, rd);
 
         if (h.t >= 1e29) {
             emit(ro, ro + rd * ESCAPE_DIST, color);
             return;
         }
-
-        // Fetch material only for the winning primitive
-        MatProps mat = fetch_material(hit_type, hit_index);
 
         // Beer-Lambert attenuation inside absorbing medium (wavelength-dependent)
         float vol_response = spectral_response(wavelength, current_sc0, current_sc1, current_sc2);
@@ -556,10 +495,10 @@ void main() {
         emit(ro, h.point, color);
 
         // Emissive surface: adds energy at the current wavelength (spectrally selective)
-        if (mat.emission > 0.0) {
-            float emit_resp = spectral_response(wavelength, mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
-            color += vec4(rgb * mat.emission * emit_resp * uIntensity * total_w,
-                          mat.emission * emit_resp * uIntensity * total_w);
+        if (h.emission > 0.0) {
+            float emit_resp = spectral_response(wavelength, h.spectral_c0, h.spectral_c1, h.spectral_c2);
+            color += vec4(rgb * h.emission * emit_resp * uIntensity * total_w,
+                          h.emission * emit_resp * uIntensity * total_w);
         }
 
         // ── Unified Principled BSDF ──
@@ -568,10 +507,10 @@ void main() {
             float cos_i = dot(rd, n);
 
             // Spectral material color: modulates albedo by wavelength
-            float response = spectral_response(wavelength, mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
+            float response = spectral_response(wavelength, h.spectral_c0, h.spectral_c1, h.spectral_c2);
 
             // Cauchy dispersion: ior(λ) = A + B/λ² (wavelength in nm, cauchy_b in nm²)
-            float ior = mat.ior + mat.cauchy_b / (wavelength * wavelength);
+            float ior = h.ior + h.cauchy_b / (wavelength * wavelength);
 
             // Orient normal toward incoming ray, determine n1/n2
             float n1, n2;
@@ -604,17 +543,17 @@ void main() {
             }
 
             // Metallic blend: metals use albedo as flat reflectance (spectrally modulated)
-            float F_eff = mix(F_dielectric, mat.albedo * response, mat.metallic);
+            float F_eff = mix(F_dielectric, h.albedo * response, h.metallic);
             if (tir) F_eff = 1.0;
 
             if (rand01() < F_eff) {
                 // ── REFLECT ──
-                if (mat.roughness >= 1.0) {
+                if (h.roughness >= 1.0) {
                     rd = cosine_scatter_2d(n);
                 } else {
                     rd = reflect(rd, n);
-                    if (mat.roughness > 0.0) {
-                        rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * mat.roughness);
+                    if (h.roughness > 0.0) {
+                        rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness);
                         if (dot(rd, n) <= 0.0)
                             rd = rd - 2.0 * dot(rd, n) * n;
                     }
@@ -622,24 +561,24 @@ void main() {
                 ro = h.point + n * SCATTER_EPS;
             } else {
                 // ── NON-REFLECTED ──
-                if (mat.transmission > 0.0 && rand01() < mat.transmission) {
+                if (h.transmission > 0.0 && rand01() < h.transmission) {
                     // Refract (Snell's law)
-                    if (mat.roughness >= 1.0) {
+                    if (h.roughness >= 1.0) {
                         rd = cosine_scatter_2d(-n);
                     } else {
                         rd = normalize(rd * ratio + n * (ratio * cos_i - cos_t));
-                        if (mat.roughness > 0.0) {
-                            rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * mat.roughness * 0.5);
+                        if (h.roughness > 0.0) {
+                            rd = rotate_2d(rd, (rand01() + rand01() - 1.0) * PI * h.roughness * 0.5);
                             if (dot(rd, n) >= 0.0)
                                 rd = rd - 2.0 * dot(rd, n) * n;
                         }
                     }
                     ro = h.point - n * SCATTER_EPS;
                     if (entering) {
-                        current_absorption = mat.absorption;
-                        current_sc0 = mat.spectral_c0;
-                        current_sc1 = mat.spectral_c1;
-                        current_sc2 = mat.spectral_c2;
+                        current_absorption = h.absorption;
+                        current_sc0 = h.spectral_c0;
+                        current_sc1 = h.spectral_c1;
+                        current_sc2 = h.spectral_c2;
                     } else {
                         current_absorption = 0.0;
                         current_sc0 = 0.0;
@@ -649,7 +588,7 @@ void main() {
                 } else {
                     // Diffuse or absorb: metals absorb non-reflected energy,
                     // dielectrics scatter with probability albedo (spectrally modulated)
-                    float diffuse_p = (1.0 - mat.metallic) * mat.albedo * response;
+                    float diffuse_p = (1.0 - h.metallic) * h.albedo * response;
                     if (rand01() < diffuse_p) {
                         rd = cosine_scatter_2d(n);
                         ro = h.point + n * SCATTER_EPS;
