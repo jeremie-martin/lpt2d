@@ -47,6 +47,9 @@ static const SpecLUT& get_spec_lut() {
 // ─── Forward: spectral coefficients → perceived RGB ────────────────────
 
 Vec3 spectral_to_rgb(float c0, float c1, float c2) {
+    // Match shader convention: (0,0,0) = neutral white
+    if (c0 == 0.0f && c1 == 0.0f && c2 == 0.0f) return {1.0f, 1.0f, 1.0f};
+
     const auto& lut = get_spec_lut();
     float sr = 0, sg = 0, sb = 0;
     for (int i = 0; i < SPEC_N; ++i) {
