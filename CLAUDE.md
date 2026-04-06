@@ -16,6 +16,8 @@ Install the Python package (builds the C++ extension via CMake):
 uv pip install -e .
 ```
 
+Important: Python examples import `_lpt2d` from the editable install in `.venv/site-packages`, not from `build/_lpt2d...so`. After any C++ or nanobind change, rebuild and rerun `uv pip install -e .` before trusting Python renders or tests.
+
 ## Static Analysis
 
 Normal development loop:
@@ -60,6 +62,13 @@ cmake --build build --target static-analysis
 
 # Canonical Python animation
 python examples/python/beam_chamber_starter.py
+```
+
+If a Python example still behaves like old code after a C++ change, the usual fix is:
+
+```bash
+cmake --build build -j$(nproc)
+uv pip install -e .
 ```
 
 Key CLI flags: `--scene` (builtin name or path to `.json` file), `--rays`, `--width/height`, `--depth`, `--batch`, `--exposure`, `--gamma`, `--tonemap (none|reinhard|reinhardx|aces|log)`, `--white-point`, `--ambient`, `--background`, `--opacity`, `--intensity`. All flags override the shot file's saved values.
