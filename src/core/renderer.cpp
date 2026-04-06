@@ -378,6 +378,7 @@ bool Renderer::create_trace_shader() {
     trace_loc_max_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
     trace_loc_intensity_ = glGetUniformLocation(trace_program_, "uIntensity");
+    trace_loc_batch_rays_ = glGetUniformLocation(trace_program_, "uBatchRays");
     trace_loc_max_segments_ = glGetUniformLocation(trace_program_, "uMaxSegments");
     trace_loc_bounds_min_ = glGetUniformLocation(trace_program_, "uBoundsMin");
     trace_loc_view_scale_ = glGetUniformLocation(trace_program_, "uViewScale");
@@ -956,7 +957,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 
     // ── Dispatch N compute batches ──
     glUseProgram(trace_program_);
-    glUniform1ui(glGetUniformLocation(trace_program_, "uBatchRays"), (GLuint)cfg.batch_size);
+    glUniform1ui(trace_loc_batch_rays_, (GLuint)cfg.batch_size);
     glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
     glUniform1f(trace_loc_intensity_, cfg.intensity);
     glUniform1ui(trace_loc_max_segments_, max_segs);

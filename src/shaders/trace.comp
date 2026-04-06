@@ -211,15 +211,16 @@ const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
-    float a = dot(rd, rd);
-    float b = 2.0 * dot(oc, rd);
+    // All ray directions are normalized before tracing, so this quadratic
+    // can use the cheaper unit-length form.
+    float b = dot(oc, rd);
     float cc = dot(oc, oc) - c.radius * c.radius;
-    float disc = b * b - 4.0 * a * cc;
+    float disc = b * b - cc;
     if (disc < 0.0) return NO_HIT;
 
     float sq = sqrt(disc);
-    float t1 = (-b - sq) / (2.0 * a);
-    float t2 = (-b + sq) / (2.0 * a);
+    float t1 = -b - sq;
+    float t2 = -b + sq;
     float t = (t1 > INTERSECT_EPS) ? t1 : t2;
     if (t < INTERSECT_EPS) return NO_HIT;
 
@@ -253,15 +254,14 @@ bool in_arc(float angle, float start, float sweep) {
 
 Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
     vec2 oc = ro - a.center;
-    float qa = dot(rd, rd);
-    float qb = 2.0 * dot(oc, rd);
+    float qb = dot(oc, rd);
     float qc = dot(oc, oc) - a.radius * a.radius;
-    float disc = qb * qb - 4.0 * qa * qc;
+    float disc = qb * qb - qc;
     if (disc < 0.0) return NO_HIT;
 
     float sq = sqrt(disc);
-    float t1 = (-qb - sq) / (2.0 * qa);
-    float t2 = (-qb + sq) / (2.0 * qa);
+    float t1 = -qb - sq;
+    float t2 = -qb + sq;
 
     for (int i = 0; i < 2; i++) {
         float t = (i == 0) ? t1 : t2;
@@ -433,7 +433,7 @@ void main() {
     } else {
         // Projector light: finite aperture with a normalized angular profile
         ro = lt.pos_a;
-        vec2 dir = normalize(lt.dir);
+        vec2 dir = lt.dir;
         if (lt.source_radius > 0.0) {
             vec2 tangent = vec2(-dir.y, dir.x);
             float offset = (rand01() - 0.5) * 2.0 * lt.source_radius;
