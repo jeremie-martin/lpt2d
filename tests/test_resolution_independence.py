@@ -12,7 +12,6 @@ carry the same 1/scale factor).
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -27,7 +26,6 @@ from anim.types import Look
 
 CLI = Path("./build/lpt2d-cli")
 SCENE_PATH = Path("scenes/three_spheres.json")
-BENCH_METRICS_PATH = Path(__file__).resolve().parents[1] / "bench" / "metrics.py"
 
 ASPECT = 16.0 / 9.0
 RESOLUTION_HEIGHTS = (240, 360, 420, 480, 720, 1080)
@@ -52,19 +50,7 @@ MAX_REFERENCE_MEAN = 230.0  # reject near-white images
 MAX_WHITE_FRACTION = 0.10  # at most 10% of pixels may be clipped white
 
 
-def _load_bench_metrics():
-    spec = importlib.util.spec_from_file_location("bench_metrics", BENCH_METRICS_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load metrics module from {BENCH_METRICS_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-_BENCH_METRICS = _load_bench_metrics()
-compute_mse = _BENCH_METRICS.compute_mse
-compute_psnr = _BENCH_METRICS.compute_psnr
-compute_ssim = _BENCH_METRICS.compute_ssim
+from evaluation import compute_psnr, compute_ssim
 
 
 @dataclass(frozen=True)
@@ -208,7 +194,9 @@ def collect_metrics(
             round(height * ASPECT),
             height,
             scene_json,
-            rays=max(int(round(round(height * ASPECT) * height * RAYS_PER_PIXEL)), MIN_COMPARE_RAYS),
+            rays=max(
+                int(round(round(height * ASPECT) * height * RAYS_PER_PIXEL)), MIN_COMPARE_RAYS
+            ),
             normalize=normalize,
             exposure=exp,
             tonemap=tonemap,
@@ -243,7 +231,6 @@ def collect_metrics(
     metrics: list[ResolutionMetric] = []
     for frame in frames:
         compare_image = _downsample(frame)
-        mse = compute_mse(reference_image, compare_image)
         metrics.append(
             ResolutionMetric(
                 label=frame.label,
@@ -251,7 +238,7 @@ def collect_metrics(
                 height=frame.height,
                 mean_ratio=float(compare_image.mean() / reference_mean),
                 p95_ratio=_luma_p95(compare_image) / reference_p95,
-                psnr=compute_psnr(mse["combined"]),
+                psnr=compute_psnr(reference_image, compare_image),
                 ssim=compute_ssim(reference_image, compare_image),
                 total_rays=frame.total_rays,
             )

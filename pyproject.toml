@@ -23,7 +23,7 @@ dev = [
 
 [tool.scikit-build]
 cmake.build-type = "Release"
-wheel.packages = ["anim"]
+wheel.packages = ["anim", "evaluation"]
 
 [tool.ruff]
 exclude = ["external"]
@@ -42,6 +42,6 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pyright]
-include = ["anim", "bench"]
+include = ["anim", "evaluation"]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"

@@ -46,20 +46,25 @@ cmake --build build --target static-analysis-iwyu
 python examples/python/beam_chamber_starter.py --frame 0
 ```
 
-## Benchmarking
+## Evaluation
 
-```bash
-# General benchmark/gallery snapshot
-bash benchmark.sh
+The `evaluation/` Python package provides fidelity comparison and timing
+measurement for optimization work:
 
-# Focused optimization harness
-bench/bench.sh
-bench/bench.sh --quick
+```python
+from evaluation import compare_render_results, save_baseline, load_baseline
+
+# Compare two render results (pixels + FrameMetrics + timing)
+result = compare_render_results(result_a, result_b)
+print(result.verdict, result.psnr, result.time_a_ms, result.time_b_ms)
+
+# Save/load baselines
+save_baseline("baselines/scene_name", result)
+baseline = load_baseline("baselines/scene_name")
 ```
 
-`benchmark.sh` is the broad built-in-scene snapshot. `bench/bench.sh` is the
-purpose-built optimization harness with fidelity comparison against a local
-baseline.
+`RenderResult.time_ms` gives wall-clock frame time measured inside C++
+`render_frame()` (excludes session creation / cold start).
 
 ## Current Repo Truth
 
@@ -101,7 +106,7 @@ Main runtime layers:
 - `examples/` - canonical public example pack
 - `anim/examples/secondary/` - exploratory or superseded examples
 - `scenes/` - built-in authored shots
-- `bench/scenes/` - benchmark-only shots
+- `evaluation/` - fidelity comparison and timing measurement
 - `tests/` - workflow, physics, and regression coverage
 - `docs/` - small stable documentation set
 - `renders/` - curated render outputs
@@ -109,7 +114,7 @@ Main runtime layers:
 ## Practical Notes
 
 - Edit GLSL in `src/shaders/`; the build regenerates embedded shader headers.
-- Edit scene JSON under `scenes/` or `bench/scenes/`; no rebuild is required.
+- Edit scene JSON under `scenes/`; no rebuild is required.
 - Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` instead of
   duplicating enum parsing logic.
 - Keep docs aligned with the code. Delete superseded design notes instead of

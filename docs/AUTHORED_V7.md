@@ -12,9 +12,8 @@ This repo treats authored shot JSON as a strict `version: 7` format.
 
 ## Committed Scene Conventions
 
-Committed files in [`scenes/`](/home/holo/prog/lpt2d/scenes) and
-[`bench/scenes/`](/home/holo/prog/lpt2d/bench/scenes) follow one normalized
-authored model:
+Committed files in [`scenes/`](/home/holo/prog/lpt2d/scenes) follow one
+normalized authored model:
 
 - every persisted shape, light, and group has a stable non-empty authored `id`
 - committed ids do not use legacy generated names such as `root_*`

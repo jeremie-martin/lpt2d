@@ -66,7 +66,7 @@ cmake --build build --target static-analysis-iwyu
 - `anim/` - Python authoring and rendering library
 - `examples/` - canonical public example pack
 - `scenes/` - built-in authored shots
-- `bench/` - focused benchmark harness and benchmark scenes
+- `evaluation/` - fidelity comparison and timing measurement
 - `tests/` - workflow, physics, and regression tests
 - `docs/` - compact project documentation
 - `renders/` - curated outputs and render notes
@@ -83,8 +83,8 @@ cmake --build build --target static-analysis-iwyu
   Shared seed semantics across Python, CLI, GUI, and renderer.
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
   Canonical examples and how to run them.
-- [bench/README.md](/home/holo/prog/lpt2d/bench/README.md)
-  Benchmark harnesses and performance workflow.
+- [evaluation/](/home/holo/prog/lpt2d/evaluation/)
+  Fidelity comparison and timing measurement.
 - [IDEAS.md](/home/holo/prog/lpt2d/IDEAS.md)
   Centralized unscheduled ideas and follow-up work.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)

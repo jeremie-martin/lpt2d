@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 SCENE_DIR = Path("scenes")
-BENCH_DIR = Path("bench/scenes")
 ROOM_WALL_IDS = ("wall_floor", "wall_ceiling", "wall_left", "wall_right")
 EXACT_ROOM_CAMERA_SCENES = {
     "crystal_field.json",
@@ -50,7 +49,7 @@ DEFAULT_TRACE = {
 
 
 def _iter_scene_paths() -> list[Path]:
-    return sorted(SCENE_DIR.glob("*.json")) + sorted(BENCH_DIR.glob("bench_*.json"))
+    return sorted(SCENE_DIR.glob("*.json"))
 
 
 def _load(path: Path) -> dict:

@@ -19,6 +19,7 @@ struct RenderResult {
     int64_t total_rays = 0;
     float max_hdr = 0.0f;
     FrameMetrics metrics;
+    double time_ms = 0.0; // wall-clock milliseconds for render_frame
 };
 
 class RenderSession {

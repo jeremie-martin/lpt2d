@@ -7,6 +7,8 @@ useful over time.
 
 - [README.md](/home/holo/prog/lpt2d/README.md)
   Project overview, build, run, and doc entry points.
+- [AUTONOMOUS_OPTIMIZATION_SCOPE.md](/home/holo/prog/lpt2d/docs/AUTONOMOUS_OPTIMIZATION_SCOPE.md)
+  Problem statement and scope for future autonomous optimization work.
 - [AUTHORED_V7.md](/home/holo/prog/lpt2d/docs/AUTHORED_V7.md)
   The authored JSON contract used by committed scenes and benchmark shots.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
@@ -20,8 +22,8 @@ useful over time.
 
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
   Canonical example pack.
-- [bench/README.md](/home/holo/prog/lpt2d/bench/README.md)
-  Benchmark workflow.
+- [evaluation/](/home/holo/prog/lpt2d/evaluation/)
+  Fidelity comparison and timing measurement.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)
   In-tree contributor and agent guide.
 - [OPTIMIZATION_LOG.md](/home/holo/prog/lpt2d/OPTIMIZATION_LOG.md)

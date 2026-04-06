@@ -23,9 +23,9 @@ __pycache__/
 /twin_prisms.json
 /renders/archive/
 
-# Local benchmark outputs
-/bench/baseline/
+# Local benchmark/evaluation outputs
 /benchmarks/
+/baselines/
 
 # Local editor / profiling artifacts
 /imgui.ini

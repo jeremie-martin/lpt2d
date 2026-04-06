@@ -1,0 +1,740 @@
+{
+  "version": 8,
+  "name": "solid_surface_gallery",
+  "camera": {
+    "bounds": [
+      -1.2999999523162842,
+      -0.7799999713897705,
+      1.2999999523162842,
+      0.7799999713897705
+    ]
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -4.690000057220459,
+    "contrast": 1.0,
+    "gamma": 2.0999999046325684,
+    "tonemap": "reinhardx",
+    "white_point": 0.5600000023841858,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.699999988079071,
+    "temperature": 0.0,
+    "highlights": 0.0,
+    "shadows": 0.0,
+    "hue_shift": 0.0,
+    "grain": 0.0,
+    "grain_seed": 0,
+    "chromatic_aberration": 0.0
+  },
+  "trace": {
+    "rays": 1600000,
+    "batch": 200000,
+    "depth": 12,
+    "intensity": 1.0,
+    "seed_mode": "deterministic"
+  },
+  "materials": {
+    "bezier_surface": {
+      "ior": 1.5,
+      "roughness": 0.03500000014901161,
+      "metallic": 0.7160000205039978,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 50000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "circle_arc_glass": {
+      "ior": 1.5,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "dense_ellipse_glass": {
+      "ior": 2.1600000858306885,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 50000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "ellipse_glass": {
+      "ior": 1.215999960899353,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 50000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "pentagon_mirror": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.8980000019073486,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 2.350858688354492,
+      "spectral_c1": -27.22650909423828,
+      "spectral_c2": 45.58510208129883,
+      "fill": 0.0
+    },
+    "room_prism_surface": {
+      "ior": 1.0,
+      "roughness": 0.699999988079071,
+      "metallic": 0.8999999761581421,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "segment_reflector": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "wheel": {
+      "ior": 1.809999942779541,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    }
+  },
+  "shapes": [
+    {
+      "id": "room_bottom",
+      "type": "segment",
+      "a": [
+        -1.2999999523162842,
+        -0.7799999713897705
+      ],
+      "b": [
+        1.2999999523162842,
+        -0.7799999713897705
+      ],
+      "material_id": "room_prism_surface"
+    },
+    {
+      "id": "room_top",
+      "type": "segment",
+      "a": [
+        1.2999999523162842,
+        0.7799999713897705
+      ],
+      "b": [
+        -1.2999999523162842,
+        0.7799999713897705
+      ],
+      "material_id": "room_prism_surface"
+    },
+    {
+      "id": "room_left",
+      "type": "segment",
+      "a": [
+        -1.2999999523162842,
+        0.7799999713897705
+      ],
+      "b": [
+        -1.2999999523162842,
+        -0.7799999713897705
+      ],
+      "material_id": "room_prism_surface"
+    },
+    {
+      "id": "room_right",
+      "type": "segment",
+      "a": [
+        1.2999999523162842,
+        -0.7799999713897705
+      ],
+      "b": [
+        1.2999999523162842,
+        0.7799999713897705
+      ],
+      "material_id": "room_prism_surface"
+    },
+    {
+      "id": "ellipse_0",
+      "type": "ellipse",
+      "center": [
+        0.3629821538925171,
+        0.2998276352882385
+      ],
+      "semi_a": 0.06900674104690552,
+      "semi_b": 0.17282769083976746,
+      "rotation": 0.22447225451469421,
+      "material_id": "dense_ellipse_glass"
+    },
+    {
+      "id": "segment_0",
+      "type": "segment",
+      "a": [
+        0.5432699918746948,
+        -0.4424610733985901
+      ],
+      "b": [
+        0.5656505823135376,
+        -0.627722442150116
+      ],
+      "material_id": "segment_reflector"
+    },
+    {
+      "id": "segment_1",
+      "type": "segment",
+      "a": [
+        0.5022389888763428,
+        -0.4834921360015869
+      ],
+      "b": [
+        0.811836838722229,
+        -0.43002742528915405
+      ],
+      "material_id": "segment_reflector"
+    },
+    {
+      "id": "segment_2",
+      "type": "segment",
+      "a": [
+        0.7359915971755981,
+        -0.382779598236084
+      ],
+      "b": [
+        0.7621022462844849,
+        -0.5866913795471191
+      ],
+      "material_id": "segment_reflector"
+    },
+    {
+      "id": "segment_3",
+      "type": "segment",
+      "a": [
+        0.9137927293777466,
+        -0.5257665514945984
+      ],
+      "b": [
+        0.4748849868774414,
+        -0.6152887940406799
+      ],
+      "material_id": "segment_reflector"
+    },
+    {
+      "id": "bezier_0",
+      "type": "bezier",
+      "p0": [
+        0.6107993721961975,
+        -0.09764376282691956
+      ],
+      "p1": [
+        -0.1616630256175995,
+        -0.8178631067276001
+      ],
+      "p2": [
+        -1.034484624862671,
+        -0.6907349824905396
+      ],
+      "material_id": "bezier_surface"
+    },
+    {
+      "id": "circle_0",
+      "type": "circle",
+      "center": [
+        0.40509727597236633,
+        -0.6811819076538086
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "circle_1",
+      "type": "circle",
+      "center": [
+        0.3151332437992096,
+        -0.41958436369895935
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "circle_2",
+      "type": "circle",
+      "center": [
+        0.28323107957839966,
+        -0.5146527290344238
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "circle_3",
+      "type": "circle",
+      "center": [
+        0.3113049864768982,
+        -0.6058928966522217
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "circle_5",
+      "type": "circle",
+      "center": [
+        0.5371721386909485,
+        -0.7130841016769409
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "circle_6",
+      "type": "circle",
+      "center": [
+        0.6775415539741516,
+        -0.6856482625007629
+      ],
+      "radius": 0.03566841408610344,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "arc_0",
+      "type": "arc",
+      "center": [
+        -1.1030051708221436,
+        -0.5581963062286377
+      ],
+      "radius": 0.13650840520858765,
+      "angle_start": 1.1839470863342285,
+      "sweep": 3.1415927410125732,
+      "material_id": "circle_arc_glass"
+    },
+    {
+      "id": "ellipse_1",
+      "type": "ellipse",
+      "center": [
+        -0.8490262031555176,
+        0.4967638850212097
+      ],
+      "semi_a": 0.13062570989131927,
+      "semi_b": 0.08804662525653839,
+      "rotation": -1.1931096315383911,
+      "material_id": "ellipse_glass"
+    },
+    {
+      "id": "segment_4",
+      "type": "segment",
+      "a": [
+        -0.6701496839523315,
+        0.619276762008667
+      ],
+      "b": [
+        -0.5949397683143616,
+        0.5628693103790283
+      ],
+      "material": {
+        "ior": 1.0,
+        "roughness": 0.0,
+        "metallic": 1.0,
+        "transmission": 1.0,
+        "absorption": 0.0,
+        "cauchy_b": 0.0,
+        "albedo": 1.0,
+        "emission": 0.0,
+        "spectral_c0": 0.0,
+        "spectral_c1": 0.0,
+        "spectral_c2": 0.0,
+        "fill": 0.0
+      }
+    },
+    {
+      "id": "ellipse_2",
+      "type": "ellipse",
+      "center": [
+        1.1052703857421875,
+        -0.24756817519664764
+      ],
+      "semi_a": 0.0968085527420044,
+      "semi_b": 0.16411752998828888,
+      "rotation": -0.3888113498687744,
+      "material": {
+        "ior": 1.5,
+        "roughness": 0.0,
+        "metallic": 0.0,
+        "transmission": 0.0,
+        "absorption": 1.9220000505447388,
+        "cauchy_b": 20000.0,
+        "albedo": 1.0,
+        "emission": 0.0,
+        "spectral_c0": -20.846515655517578,
+        "spectral_c1": 120.86748504638672,
+        "spectral_c2": -157.97470092773438,
+        "fill": 1.0
+      }
+    }
+  ],
+  "lights": [
+    {
+      "id": "point_light_0",
+      "type": "point",
+      "pos": [
+        -0.6245858073234558,
+        -0.4020330309867859
+      ],
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "projector_light_0",
+      "type": "projector",
+      "position": [
+        0.9506310820579529,
+        0.4651333689689636
+      ],
+      "direction": [
+        -0.9667812585830688,
+        -0.2556053102016449
+      ],
+      "source_radius": 0.029999999329447746,
+      "spread": 0.10000000149011612,
+      "profile": "uniform",
+      "softness": 0.0,
+      "intensity": 1.0,
+      "wavelength_min": 543.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "point_light_1",
+      "type": "point",
+      "pos": [
+        0.6787967681884766,
+        -0.5282532572746277
+      ],
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "projector_light_1",
+      "type": "projector",
+      "position": [
+        1.1191843748092651,
+        0.3938780426979065
+      ],
+      "direction": [
+        -0.7221038341522217,
+        -0.6917847394943237
+      ],
+      "source_radius": 0.009325258433818817,
+      "spread": 0.031084194779396057,
+      "profile": "uniform",
+      "softness": 0.0,
+      "intensity": 1.0789999961853027,
+      "wavelength_min": 643.0,
+      "wavelength_max": 780.0
+    }
+  ],
+  "groups": [
+    {
+      "id": "prism",
+      "transform": {
+        "translate": [
+          -0.007540583610534668,
+          0.16430088877677917
+        ],
+        "rotate": 0.05049581453204155,
+        "scale": [
+          1.0,
+          1.0
+        ]
+      },
+      "shapes": [
+        {
+          "id": "prism_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              1.775737903161269e-17,
+              0.28999999165534973
+            ],
+            [
+              0.2511473596096039,
+              -0.14499999582767487
+            ],
+            [
+              -0.2511473596096039,
+              -0.14499999582767487
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material": {
+            "ior": 1.0,
+            "roughness": 0.699999988079071,
+            "metallic": 0.8999999761581421,
+            "transmission": 0.9959999918937683,
+            "absorption": 0.0,
+            "cauchy_b": 0.0,
+            "albedo": 1.0,
+            "emission": 0.0,
+            "spectral_c0": 0.0,
+            "spectral_c1": 0.0,
+            "spectral_c2": 0.0,
+            "fill": 0.0
+          }
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "wheel",
+      "transform": {
+        "translate": [
+          -0.6242244243621826,
+          -0.26916563510894775
+        ],
+        "rotate": 0.025973008945584297,
+        "scale": [
+          1.0,
+          1.0
+        ]
+      },
+      "shapes": [
+        {
+          "id": "wheel_hub",
+          "type": "circle",
+          "center": [
+            0.0,
+            0.0
+          ],
+          "radius": 0.10000000149011612,
+          "material_id": "wheel"
+        },
+        {
+          "id": "wheel_spoke_0_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              0.03500000014901161,
+              -0.1599999964237213
+            ],
+            [
+              0.03500000014901161,
+              -0.36000001430511475
+            ],
+            [
+              -0.03500000014901161,
+              -0.36000001430511475
+            ],
+            [
+              -0.03500000014901161,
+              -0.1599999964237213
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material_id": "wheel"
+        },
+        {
+          "id": "wheel_spoke_1_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              0.16298463940620422,
+              -0.01615574024617672
+            ],
+            [
+              0.3531959354877472,
+              -0.07795914262533188
+            ],
+            [
+              0.3315647542476654,
+              -0.14453309774398804
+            ],
+            [
+              0.14135344326496124,
+              -0.08272969722747803
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material_id": "wheel"
+        },
+        {
+          "id": "wheel_spoke_2_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              0.06573004275560379,
+              0.1500152051448822
+            ],
+            [
+              0.1832870990037918,
+              0.31181859970092773
+            ],
+            [
+              0.2399182915687561,
+              0.27067363262176514
+            ],
+            [
+              0.12236123532056808,
+              0.1088702380657196
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material_id": "wheel"
+        },
+        {
+          "id": "wheel_spoke_3_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              -0.12236123532056808,
+              0.1088702380657196
+            ],
+            [
+              -0.2399182915687561,
+              0.27067363262176514
+            ],
+            [
+              -0.1832870990037918,
+              0.31181859970092773
+            ],
+            [
+              -0.06573004275560379,
+              0.1500152051448822
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material_id": "wheel"
+        },
+        {
+          "id": "wheel_spoke_4_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              -0.14135344326496124,
+              -0.08272969722747803
+            ],
+            [
+              -0.3315647542476654,
+              -0.14453309774398804
+            ],
+            [
+              -0.3531959354877472,
+              -0.07795914262533188
+            ],
+            [
+              -0.16298463940620422,
+              -0.01615574024617672
+            ]
+          ],
+          "corner_radius": 0.009999999776482582,
+          "material_id": "wheel"
+        }
+      ],
+      "lights": []
+    },
+    {
+      "id": "pentagon",
+      "transform": {
+        "translate": [
+          -0.5026582479476929,
+          0.3749459385871887
+        ],
+        "rotate": 0.03316125646233559,
+        "scale": [
+          1.0,
+          1.0
+        ]
+      },
+      "shapes": [
+        {
+          "id": "pentagon_body",
+          "type": "polygon",
+          "vertices": [
+            [
+              1.469576190014977e-17,
+              0.23999999463558197
+            ],
+            [
+              0.2282535582780838,
+              0.07416407763957977
+            ],
+            [
+              0.1410684585571289,
+              -0.19416408240795135
+            ],
+            [
+              -0.1410684585571289,
+              -0.19416408240795135
+            ],
+            [
+              -0.2282535582780838,
+              0.07416407763957977
+            ]
+          ],
+          "corner_radius": 0.05000000074505806,
+          "material_id": "pentagon_mirror"
+        }
+      ],
+      "lights": []
+    }
+  ]
+}
