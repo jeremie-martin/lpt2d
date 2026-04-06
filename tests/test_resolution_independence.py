@@ -37,6 +37,8 @@ COMPARE_SIZE = (round(COMPARE_HEIGHT * ASPECT), COMPARE_HEIGHT)
 
 RAYS_PER_PIXEL = 2.0
 BATCH_SIZE = 64_000
+# Keep the lowest compared resolution from being dominated by Monte Carlo noise.
+MIN_COMPARE_RAYS = int(round(COMPARE_SIZE[0] * COMPARE_SIZE[1] * 8.0))
 
 MAX_MEAN_DRIFT = 0.10
 MAX_P95_DRIFT = 0.12
@@ -206,6 +208,7 @@ def collect_metrics(
             round(height * ASPECT),
             height,
             scene_json,
+            rays=max(int(round(round(height * ASPECT) * height * RAYS_PER_PIXEL)), MIN_COMPARE_RAYS),
             normalize=normalize,
             exposure=exp,
             tonemap=tonemap,
@@ -260,7 +263,8 @@ def _format_metrics(metrics: list[ResolutionMetric]) -> str:
     lines = [
         (
             f"Reference: {REFERENCE_HEIGHT}p -> {COMPARE_SIZE[0]}x{COMPARE_SIZE[1]} "
-            f"(normalize=rays, {RAYS_PER_PIXEL:.1f} rays/pixel, batch={BATCH_SIZE})"
+            f"(normalize=rays, base={RAYS_PER_PIXEL:.1f} rays/pixel, "
+            f"min total_rays={MIN_COMPARE_RAYS}, batch={BATCH_SIZE})"
         ),
         (
             "Thresholds: "

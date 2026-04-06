@@ -615,8 +615,14 @@ def test_dispersion():
         total = row_energy.sum()
         if total < 100.0:
             raise AssertionError(f"screen too dark to measure at {wavelength_nm:.0f} nm: total={total:.1f}")
-        rows = np.arange(height, dtype=np.float64)
-        return float(np.dot(row_energy, rows) / total)
+        peak = int(np.argmax(row_energy))
+        # Escape-path overlays can add low-level energy outside the main screen hit.
+        # Measure a local centroid around the dominant lobe instead of the whole strip.
+        row_lo = max(0, peak - 16)
+        row_hi = min(height, peak + 17)
+        local_energy = row_energy[row_lo:row_hi]
+        rows = np.arange(row_lo, row_hi, dtype=np.float64)
+        return float(np.dot(local_energy, rows) / local_energy.sum())
 
     measured_rows = {}
     expected_rows = {}
