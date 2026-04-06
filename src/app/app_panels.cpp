@@ -783,9 +783,7 @@ void draw_controls_panel(
                     if (l.profile == ProjectorProfile::Uniform) ImGui::BeginDisabled();
                     changed |= ImGui::SliderFloat("Softness", &l.softness, 0.0f, 1.0f);
                     if (l.profile == ProjectorProfile::Uniform) ImGui::EndDisabled();
-                    l.source_radius = std::max(l.source_radius, 0.0f);
-                    l.spread = std::clamp(l.spread, 0.0f, PI);
-                    l.softness = std::clamp(l.softness, 0.0f, 1.0f);
+                    sanitize_projector_light(l);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
                     edit_wavelength(l.wavelength_min, l.wavelength_max);
                 },

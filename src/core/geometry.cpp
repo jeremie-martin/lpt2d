@@ -724,12 +724,11 @@ Light transform_light(const Light& l, const Transform2D& t) {
         [&](const ProjectorLight& pl) -> Light {
             ProjectorLight r = pl;
             r.position = t.apply(pl.position);
-            Vec2 d = t.apply_direction(pl.direction);
-            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1.0f, 0.0f};
+            r.direction = t.apply_direction(pl.direction);
             float uniform_scale = std::sqrt(std::abs(t.scale.x * t.scale.y));
-            r.source_radius = std::max(pl.source_radius * uniform_scale, 0.0f);
-            r.spread = std::clamp(pl.spread * uniform_scale, 0.0f, PI);
-            r.softness = std::clamp(pl.softness, 0.0f, 1.0f);
+            r.source_radius = pl.source_radius * uniform_scale;
+            r.spread = pl.spread * uniform_scale;
+            sanitize_projector_light(r);
             return r;
         },
     }, l);

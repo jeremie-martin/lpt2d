@@ -377,8 +377,9 @@ static void scale_light(Light& l, Vec2 pivot, float fx, float fy) {
         [&](ProjectorLight& pl) {
             float uniform = std::sqrt(fx * fy);
             pl.position = scale_around(pl.position, pivot, fx, fy);
-            pl.source_radius = std::max(pl.source_radius * uniform, 0.0f);
-            pl.spread = std::clamp(pl.spread * uniform, 0.0f, PI);
+            pl.source_radius *= uniform;
+            pl.spread *= uniform;
+            sanitize_projector_light(pl);
         },
     }, l);
 }

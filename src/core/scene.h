@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -280,6 +281,13 @@ struct ProjectorLight {
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
 };
+
+inline void sanitize_projector_light(ProjectorLight& light) {
+    light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1.0f, 0.0f};
+    light.source_radius = std::max(light.source_radius, 0.0f);
+    light.spread = std::clamp(light.spread, 0.0f, PI);
+    light.softness = std::clamp(light.softness, 0.0f, 1.0f);
+}
 
 using Light = std::variant<PointLight, SegmentLight, ProjectorLight>;
 
