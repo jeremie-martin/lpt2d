@@ -1,45 +1,36 @@
 # Documentation
 
-This directory holds project documentation that should remain useful over time
-and should not be buried inside implementation-specific files.
+This directory holds the small set of first-party docs that are meant to stay
+useful over time.
 
-## Core Documents
-
-- [AUTHORED_V6.md](/home/holo/prog/lpt2d/docs/AUTHORED_V6.md)
-  The strict authored-scene v6 policy and committed scene conventions.
-- [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
-  Shared frame-seed semantics and the authored/runtime split for seed control.
-- [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
-  The current Phase 2 visual-iteration surface across Python and the GUI.
-- [PHASE2_REVIEW_INVENTORY.md](/home/holo/prog/lpt2d/docs/PHASE2_REVIEW_INVENTORY.md)
-  Feature-sliced review plan for auditing the current Phase 2 implementation.
-- [ROADMAP.md](/home/holo/prog/lpt2d/ROADMAP.md)
-  The current strategic roadmap for the project.
-- [ROADMAP_GUIDELINES.md](/home/holo/prog/lpt2d/docs/ROADMAP_GUIDELINES.md)
-  Guidance for what a roadmap should be in this repo: what it is for, how it
-  should be structured, and what it should avoid becoming.
-
-## Related Project Docs
+## Core Docs
 
 - [README.md](/home/holo/prog/lpt2d/README.md)
-  Project overview, build/run entry points, and key links.
+  Project overview, build, run, and doc entry points.
+- [AUTHORED_V6.md](/home/holo/prog/lpt2d/docs/AUTHORED_V6.md)
+  The authored JSON contract used by committed scenes and benchmark shots.
+- [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
+  Current Python and GUI workflow for look development and diagnostics.
+- [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
+  Shared semantics for deterministic and decorrelated rendering.
+- [IDEAS.md](/home/holo/prog/lpt2d/IDEAS.md)
+  Centralized unscheduled ideas and follow-up work.
+
+## Related Docs
+
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
-  Canonical example pack and workflow-oriented entry points.
+  Canonical example pack.
+- [bench/README.md](/home/holo/prog/lpt2d/bench/README.md)
+  Benchmark workflow.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)
-  Technical guide for coding agents and contributors working directly in the
-  codebase.
+  In-tree contributor and agent guide.
 - [OPTIMIZATION_LOG.md](/home/holo/prog/lpt2d/OPTIMIZATION_LOG.md)
-  Performance history and benchmark findings.
+  Performance history.
 
-## Documentation Principles
+## Documentation Rules
 
-Documentation in this repo should be:
-
-- current
-- concise
-- explicit about scope
-- easy to navigate
-- aligned with the actual state of the project
-
-The goal is not to produce a large pile of prose. The goal is to make it easy
-to understand what the project is, where it is going, and where to look next.
+- Keep it current.
+- Prefer durable facts over planning prose.
+- Delete superseded docs instead of letting them rot.
+- Put unscheduled future work in one place instead of spreading it across
+  multiple roadmaps, prompts, or review checklists.

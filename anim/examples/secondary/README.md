@@ -1,13 +1,10 @@
 # Secondary Examples
 
-This directory holds exploratory, older, or otherwise non-canonical animation
-scripts.
+This directory holds exploratory or non-canonical Python example scripts.
 
-These files remain useful as reference material and for comparison against
-earlier authoring patterns, but they are **not** the public example pack for
-the current project baseline.
-
-The canonical examples now live in [`examples/`](/home/holo/prog/lpt2d/examples).
+They are still useful reference material, but they are not the main public
+example surface for the repo. The canonical pack lives in
+[examples/](/home/holo/prog/lpt2d/examples).
 
 Current secondary scripts:
 

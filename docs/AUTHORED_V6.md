@@ -1,50 +1,44 @@
 # Authored V6
 
-This project now treats authored shot JSON as a strict `version: 6` format.
+This repo treats authored shot JSON as a strict `version: 6` format.
 
 ## Policy
 
-- The repo does not carry fallback support for older authored shot versions.
 - Python and C++ loaders reject authored JSON whose `version` is not `6`.
-- Future format changes should land as explicit repo-wide migrations, not as
-  indefinite backward-compatibility baggage.
+- The repo does not keep fallback readers or compatibility branches for older
+  authored shot versions.
+- Format changes should land as explicit repo-wide migrations across scenes,
+  tests, examples, and docs.
 
 ## Committed Scene Conventions
 
 Committed files in [`scenes/`](/home/holo/prog/lpt2d/scenes) and
-[`bench/scenes/`](/home/holo/prog/lpt2d/bench/scenes) are normalized to one
+[`bench/scenes/`](/home/holo/prog/lpt2d/bench/scenes) follow one normalized
 authored model:
 
 - every persisted shape, light, and group has a stable non-empty authored `id`
-- committed ids do not use legacy generated `root_*` names
+- committed ids do not use legacy generated names such as `root_*`
 - scenes define a top-level `materials` library
-- committed shapes use `material_id` bindings rather than inline `material`
+- committed shapes use `material_id` bindings instead of inline `material`
   payloads
-- authored JSON is fully explicit: `camera`, `canvas`, `look`, `trace`,
-  `materials`, `shapes`, `lights`, and `groups` are always present
-- the `camera` block may be `{}` for auto-fit, but the block itself is still
-  present
-- `look`, `trace`, and material objects use canonical field names only and
-  always include their full field sets; material objects include `emission`
-- authored `trace` now includes `seed_mode`; runtime frame numbering remains
-  separate render state and is not persisted in shot JSON
+- authored JSON keeps explicit `camera`, `canvas`, `look`, `trace`,
+  `materials`, `shapes`, `lights`, and `groups` blocks
+- `look`, `trace`, and material objects store their full canonical field sets
+- authored `trace` includes `seed_mode`
 
-Inline shape materials remain supported by the format for one-off or transient
-data, but authored files are machine-written and strict: there is no fallback
-support for sparse authored JSON, legacy aliases, or older on-disk variants.
-Sparse per-frame overrides belong to stream `render` payloads, not persisted
-authored shots.
+Inline shape materials are still supported for transient or one-off data, but
+the committed repo baseline uses named materials and explicit bindings.
 
 ## Surface Alignment
 
-The same authored concepts should mean the same thing everywhere:
+The same authored concepts should mean the same thing in:
 
-- Python `Shot` / `Scene`
-- C++ `Shot` / `Scene`
-- GUI save/load
-- CLI load/save
+- Python `Shot` and `Scene`
+- C++ `Shot` and `Scene`
+- GUI save and load
+- CLI load and save
 - built-in JSON scenes
 - benchmark scenes
 
-Phase 1 closed only because those surfaces now agree on stable ids, shared
-material bindings, and strict v6-only authored assets.
+Frame-specific render choices such as the runtime `frame_index` stay outside
+the authored document. They are render context, not saved shot state.

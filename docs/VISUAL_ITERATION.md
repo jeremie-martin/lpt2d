@@ -1,99 +1,67 @@
 # Visual Iteration
 
-This document describes the current Phase 2 workflow surface for look
-development, clutter diagnostics, and fast comparison.
-
-Static `Scene` and `Shot` subjects are analyzed once by default. Animated
-callbacks are the shot-aware path that samples representative frames across
-time.
+This document describes the current look-development, comparison, and
+diagnostic workflow across Python and the GUI.
 
 ## Python
 
-Shot-aware analysis works best when you pass a full [`Shot`](/home/holo/prog/lpt2d/anim/types.py)
-or an animation callback plus `settings=shot`.
+Shot-aware helpers work best when you pass a full `Shot` or an animation
+callback plus authored settings.
 
-Key helpers:
+Top-level helpers:
 
 - `auto_look(...)`
-  Sample representative frames and suggest one stable look.
+  Suggest one stable look from representative frames.
 - `compare_looks(...)`
   Compare candidate looks across the same sampled frames.
 - `look_report(...)`
-  Flag dark, bright, clipped, or low-contrast frames across a shot.
+  Flag dark, bright, clipped, or low-contrast frames.
 - `diagnose_scene(scene)`
-  Fast structural warnings for dense or clutter-prone scenes.
+  Report structural warnings for dense or clutter-prone scenes.
 - `light_contributions(...)`
   Measure authored source share with one neutral linear reference.
 - `scene_light_report(...)`
-  Human-readable light contribution summary.
+  Summarize source contribution results.
 - `structure_contribution(...)`
-  Measure whether removing one shape brightens, dims, or barely changes the frame.
+  Estimate whether removing one structure brightens, dims, or barely changes
+  the frame.
 
-These workflow helpers remain top-level on `anim`. The heavier report and
-statistics types they return or build on such as `LookProfile`,
-`LookComparison`, `LookReport`, `FrameStats`, `LightContribution`, and
-`StructureReport` now live under `anim.stats`.
-
-Example:
-
-```python
-from anim import Shot, compare_looks, look_report, scene_light_report
-
-shot = Shot.load("scenes/prism.json")
-
-comparison = compare_looks(
-    shot,
-    looks=[
-        shot.look,
-        shot.look.with_overrides(exposure=shot.look.exposure + 0.75),
-    ],
-)
-print(comparison.summary())
-print(look_report(shot, shot.look).summary())
-print(scene_light_report(shot))
-```
+The heavier report types live under `anim.stats`.
 
 ## GUI
 
-The GUI now supports three complementary iteration loops:
+The GUI supports three related iteration loops:
 
-- Full-shot A/B comparison.
-  `Snapshot A` captures a frozen viewport image, its metrics, the authored shot
-  state at capture time, and the current comparison framing. `Show A` displays
-  that frozen capture; `Show B` returns to the live shot inside the same
-  captured framing.
-- Diagnostic comparison.
-  The `Stats` panel shows the current histogram and luminance metrics, and when
-  a snapshot is active it also shows the delta versus snapshot A.
-- Clutter inspection.
-  `Analyze Contributions` reports authored source share using the same neutral
-  linear reference, authored shot framing, and authored source set as the
-  Python helper. The scene panel surfaces structural warnings from
-  `diagnose_scene` on that same authored scene.
+- frozen A/B comparison
+  `Snapshot A` captures the current authored shot, frame index, framing, and
+  metrics; `Show A` and `Show B (live)` toggle between the frozen capture and
+  the live shot
+- live stats inspection
+  the `Stats` panel shows histogram and luminance metrics, plus deltas against
+  snapshot A when comparison is active
+- authored-scene diagnostics
+  scene warnings come from `diagnose_scene`, and `Analyze Contributions` uses
+  the authored shot framing plus a neutral fixed-reference look
 
 Useful shortcuts:
 
-- `Alt+scroll`
-  Exposure scrub.
-- `[` / `]`
-  Exposure nudge.
-- `` ` ``
-  Toggle snapshot A/B when a snapshot exists.
+- `Alt+scroll` - exposure scrub
+- `[` / `]` - exposure nudge
+- `` ` `` - toggle snapshot A/B when a snapshot exists
 
-## Semantics
+## Shared Semantics
 
-The contribution report is intentionally *not* a post-tonemap “energy” claim.
-It is a linear frame-share diagnostic measured with:
+Contribution analysis is intentionally a diagnostic, not a claim about
+post-tonemap "energy". Python and GUI both use:
 
 - one neutral linear look
 - one shared fixed normalization reference captured from the full scene
 - the same authored framing for every compared render
 
-That keeps source shares additive and makes GUI/Python diagnostics tell the
-same story.
+That keeps the reported source shares additive and comparable.
 
 ## Output
 
 `Export PNG` renders the active authored shot at its authored canvas size.
-When snapshot A is showing, export uses the captured authored shot state rather
-than the live viewport buffer.
+When snapshot A is showing, export uses the captured authored shot state
+rather than the live viewport buffer.
