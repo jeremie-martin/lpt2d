@@ -18,7 +18,7 @@ struct GPUSeg {
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad;
+    float inv_len;
 };
 
 struct GPULight {
@@ -82,9 +82,9 @@ layout(std430, binding = 7) readonly buffer BezierBuf { GPUBezier beziers[]; };
 
 struct GPUEllipse {
     vec2 center;
-    float semi_a, semi_b;
-    float rotation;
-    float _pad;
+    float inv_a2, inv_b2;
+    float rot_cos;
+    float rot_sin;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
     float spectral_c0, spectral_c1, spectral_c2;
@@ -239,7 +239,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
     if (t < INTERSECT_EPS || u < 0.0 || u > 1.0) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    vec2 n = normalize(vec2(-d.y, d.x));
+    vec2 n = vec2(-d.y, d.x) * s.inv_len;
     return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.spectral_c0, s.spectral_c1, s.spectral_c2);
 }
 
@@ -323,18 +323,14 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
 }
 
 Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
-    // cos/sin computed once; inverse rotation uses (cr, -sr)
-    float cr = cos(e.rotation), sr = sin(e.rotation);
+    float cr = e.rot_cos, sr = e.rot_sin;
     vec2 oc = ro - e.center;
     vec2 lo = vec2(oc.x*cr + oc.y*sr, -oc.x*sr + oc.y*cr);
     vec2 ld = vec2(rd.x*cr + rd.y*sr, -rd.x*sr + rd.y*cr);
 
-    float a2 = e.semi_a * e.semi_a;
-    float b2 = e.semi_b * e.semi_b;
-
-    float A = ld.x*ld.x/a2 + ld.y*ld.y/b2;
-    float B = 2.0*(lo.x*ld.x/a2 + lo.y*ld.y/b2);
-    float C = lo.x*lo.x/a2 + lo.y*lo.y/b2 - 1.0;
+    float A = ld.x*ld.x*e.inv_a2 + ld.y*ld.y*e.inv_b2;
+    float B = 2.0*(lo.x*ld.x*e.inv_a2 + lo.y*ld.y*e.inv_b2);
+    float C = lo.x*lo.x*e.inv_a2 + lo.y*lo.y*e.inv_b2 - 1.0;
     float disc = B*B - 4.0*A*C;
     if (disc < 0.0) return NO_HIT;
 
@@ -347,7 +343,7 @@ Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
     // Hit point in local coords
     vec2 lp = lo + ld * t;
     // Normal: gradient of ellipse equation
-    vec2 ln = normalize(vec2(2.0*lp.x/a2, 2.0*lp.y/b2));
+    vec2 ln = normalize(vec2(2.0*lp.x*e.inv_a2, 2.0*lp.y*e.inv_b2));
     // Rotate normal back to world coords (forward rotation: cr, sr)
     vec2 n = vec2(ln.x*cr - ln.y*sr, ln.x*sr + ln.y*cr);
 

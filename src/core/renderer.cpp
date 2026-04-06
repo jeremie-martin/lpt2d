@@ -123,7 +123,7 @@ struct GPUSegment {
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad;
+    float inv_len;
 };
 static_assert(sizeof(GPUSegment) == 64);
 
@@ -170,9 +170,9 @@ static_assert(sizeof(GPUBezier) == 72);
 
 struct GPUEllipse {
     float center[2];
-    float semi_a, semi_b;
-    float rotation;
-    float _pad0;
+    float inv_a2, inv_b2;
+    float rot_cos;
+    float rot_sin;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
     float spectral_c0, spectral_c1, spectral_c2;
@@ -573,6 +573,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 GPUSegment gs{};
                 gs.a[0] = s.a.x; gs.a[1] = s.a.y;
                 gs.b[0] = s.b.x; gs.b[1] = s.b.y;
+                Vec2 d = s.b - s.a;
+                float len_sq = d.length_sq();
+                gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
                 fill_material(gs, resolve_binding(s.binding, scene.materials));
                 segs.push_back(gs);
             },
@@ -605,6 +608,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                             GPUSegment gs{};
                             gs.a[0] = e.a.x; gs.a[1] = e.a.y;
                             gs.b[0] = e.b.x; gs.b[1] = e.b.y;
+                            Vec2 d = e.b - e.a;
+                            float len_sq = d.length_sq();
+                            gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
                             fill_material(gs, mat);
                             segs.push_back(gs);
                         }
@@ -631,6 +637,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                     Vec2 edge_b = clockwise ? b : a;
                     gs.a[0] = edge_a.x; gs.a[1] = edge_a.y;
                     gs.b[0] = edge_b.x; gs.b[1] = edge_b.y;
+                    Vec2 d = edge_b - edge_a;
+                    float len_sq = d.length_sq();
+                    gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
                     fill_material(gs, mat);
                     segs.push_back(gs);
                 }
@@ -638,9 +647,12 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
             [&](const Ellipse& e) {
                 GPUEllipse ge{};
                 ge.center[0] = e.center.x; ge.center[1] = e.center.y;
-                ge.semi_a = e.semi_a;
-                ge.semi_b = e.semi_b;
-                ge.rotation = e.rotation;
+                float a2 = e.semi_a * e.semi_a;
+                float b2 = e.semi_b * e.semi_b;
+                ge.inv_a2 = a2 > 0.0f ? 1.0f / a2 : 0.0f;
+                ge.inv_b2 = b2 > 0.0f ? 1.0f / b2 : 0.0f;
+                ge.rot_cos = std::cos(e.rotation);
+                ge.rot_sin = std::sin(e.rotation);
                 fill_material(ge, resolve_binding(e.binding, scene.materials));
                 gpu_ellipses.push_back(ge);
             },
