@@ -182,6 +182,13 @@ src/
 - **Scene editing**: Edit `.json` files in `scenes/`. Scenes are loaded from disk at runtime — no rebuild needed.
 - **String-to-enum parsing**: Use `parse_tonemap()` and `parse_normalize_mode()` from `scene.h` — do not duplicate the string-matching logic.
 
+## Code evolution policy
+
+- No legacy code, no fallbacks, no backward compatibility layers.
+- Prefer clean breaks when refactoring or redesigning systems.
+- Keep a single canonical implementation; remove superseded paths.
+- Optimize for simplicity and iteration speed over stability of old behavior.
+
 ### JSON shot format (version 5)
 
 ```json
