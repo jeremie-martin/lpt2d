@@ -692,6 +692,7 @@ void draw_controls_panel(
                 },
                 [&](Polygon& p) {
                     ImGui::Text("Vertices: %d", (int)p.vertices.size());
+                    changed |= ImGui::DragFloat("Corner radius", &p.corner_radius, 0.001f, 0.0f, 1.0f);
                     for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
                         char vlbl[16];
                         std::snprintf(vlbl, sizeof(vlbl), "V%d", vi);

@@ -20,6 +20,17 @@ bool angle_in_arc(float angle, const Arc& arc);
 Bounds arc_bounds(const Arc& arc);
 float point_arc_distance(Vec2 p, const Arc& arc);
 
+// ─── Rounded-polygon decomposition ──────────────────────────────
+
+struct RoundedPolygonParts {
+    struct Edge { Vec2 a, b; };
+    struct Corner { Vec2 center; float radius; float angle_start; float sweep; };
+    std::vector<Edge> edges;
+    std::vector<Corner> corners;
+};
+
+RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly);
+
 // ─── Primitive bounds ─────────────────────────────────────────────
 
 Bounds shape_bounds(const Shape& s);

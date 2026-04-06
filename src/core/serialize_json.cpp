@@ -242,7 +242,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         return bezier;
     }
     if (type == "polygon") {
-        reject_unknown_keys(json, {"id", "type", "vertices", "material", "material_id"}, context);
+        reject_unknown_keys(json, {"id", "type", "vertices", "corner_radius", "material", "material_id"}, context);
         Polygon polygon;
         polygon.id = id;
         if (schema == Schema::Authored || json.contains("vertices")) {
@@ -251,6 +251,8 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                 polygon.vertices.push_back(read_vec2(json["vertices"][i],
                                                      std::string(context) + ".vertices[" + std::to_string(i) + "]"));
         }
+        if (json.contains("corner_radius"))
+            polygon.corner_radius = json["corner_radius"].get<float>();
         polygon.binding = std::move(binding);
         return polygon;
     }
@@ -308,6 +310,8 @@ Json write_shape(const Shape& shape) {
             Json vertices = Json::array();
             for (Vec2 vertex : value.vertices) vertices.push_back(vec2_json(vertex));
             Json json = {{"id", value.id}, {"type", "polygon"}, {"vertices", std::move(vertices)}};
+            if (value.corner_radius > 0.0f)
+                json["corner_radius"] = value.corner_radius;
             write_binding(json, value.binding);
             return json;
         },

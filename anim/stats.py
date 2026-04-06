@@ -7,7 +7,7 @@ image file I/O or visual inspection.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import _lpt2d
 
@@ -381,12 +381,12 @@ def _arc_bounds(arc: Arc) -> tuple[float, float, float, float]:
             points.append(_arc_point(arc, angle))
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
-    return (min(xs), min(ys), max(xs), max(ys))
+    bounds = (min(xs), min(ys), max(xs), max(ys))
+    return tuple(0.0 if abs(value) < 1e-6 else value for value in bounds)
 
 
 def _transform_ellipse_affine(ellipse: Ellipse, t: Transform2D) -> Ellipse:
-    out = replace(ellipse)
-    out.center = _transform_point(ellipse.center, t)
+    out = _copy_shape(ellipse, center=_transform_point(ellipse.center, t))
 
     cr, sr = math.cos(ellipse.rotation), math.sin(ellipse.rotation)
     tc, ts = math.cos(t.rotate), math.sin(t.rotate)
@@ -425,21 +425,79 @@ def _transform_ellipse_affine(ellipse: Ellipse, t: Transform2D) -> Ellipse:
     return out
 
 
+def _shape_binding_kwargs(shape: Shape) -> dict[str, object]:
+    material_id = getattr(shape, "material_id", "")
+    if material_id:
+        return {"material_id": material_id}
+    return {"material": shape.material}
+
+
+def _copy_shape(shape: Shape, **overrides) -> Shape:
+    if isinstance(shape, Circle):
+        return Circle(
+            id=overrides.get("id", shape.id),
+            center=overrides.get("center", shape.center),
+            radius=overrides.get("radius", shape.radius),
+            **_shape_binding_kwargs(shape),
+        )
+    if isinstance(shape, Segment):
+        return Segment(
+            id=overrides.get("id", shape.id),
+            a=overrides.get("a", shape.a),
+            b=overrides.get("b", shape.b),
+            **_shape_binding_kwargs(shape),
+        )
+    if isinstance(shape, Arc):
+        return Arc(
+            id=overrides.get("id", shape.id),
+            center=overrides.get("center", shape.center),
+            radius=overrides.get("radius", shape.radius),
+            angle_start=overrides.get("angle_start", shape.angle_start),
+            sweep=overrides.get("sweep", shape.sweep),
+            **_shape_binding_kwargs(shape),
+        )
+    if isinstance(shape, Bezier):
+        return Bezier(
+            id=overrides.get("id", shape.id),
+            p0=overrides.get("p0", shape.p0),
+            p1=overrides.get("p1", shape.p1),
+            p2=overrides.get("p2", shape.p2),
+            **_shape_binding_kwargs(shape),
+        )
+    if isinstance(shape, Polygon):
+        return Polygon(
+            id=overrides.get("id", shape.id),
+            vertices=overrides.get("vertices", shape.vertices),
+            corner_radius=overrides.get("corner_radius", shape.corner_radius),
+            **_shape_binding_kwargs(shape),
+        )
+    if isinstance(shape, Ellipse):
+        return Ellipse(
+            id=overrides.get("id", shape.id),
+            center=overrides.get("center", shape.center),
+            semi_a=overrides.get("semi_a", shape.semi_a),
+            semi_b=overrides.get("semi_b", shape.semi_b),
+            rotation=overrides.get("rotation", shape.rotation),
+            **_shape_binding_kwargs(shape),
+        )
+    return shape
+
+
 def _transform_shape(shape: Shape, t: Transform2D) -> Shape:
-    if t.translate == [0.0, 0.0] and t.rotate == 0.0 and t.scale == [1.0, 1.0]:
+    if tuple(t.translate) == (0.0, 0.0) and t.rotate == 0.0 and tuple(t.scale) == (1.0, 1.0):
         return shape
     uniform_scale = math.sqrt(abs(t.scale[0] * t.scale[1]))
 
     if isinstance(shape, Circle):
-        return replace(
+        return _copy_shape(
             shape,
             center=_transform_point(shape.center, t),
             radius=max(shape.radius * uniform_scale, 0.01),
         )
     if isinstance(shape, Segment):
-        return replace(shape, a=_transform_point(shape.a, t), b=_transform_point(shape.b, t))
+        return _copy_shape(shape, a=_transform_point(shape.a, t), b=_transform_point(shape.b, t))
     if isinstance(shape, Arc):
-        return replace(
+        return _copy_shape(
             shape,
             center=_transform_point(shape.center, t),
             radius=max(shape.radius * uniform_scale, 0.01),
@@ -447,14 +505,14 @@ def _transform_shape(shape: Shape, t: Transform2D) -> Shape:
             sweep=clamp_arc_sweep(shape.sweep),
         )
     if isinstance(shape, Bezier):
-        return replace(
+        return _copy_shape(
             shape,
             p0=_transform_point(shape.p0, t),
             p1=_transform_point(shape.p1, t),
             p2=_transform_point(shape.p2, t),
         )
     if isinstance(shape, Polygon):
-        return replace(shape, vertices=[_transform_point(v, t) for v in shape.vertices])
+        return _copy_shape(shape, vertices=[_transform_point(v, t) for v in shape.vertices])
     if isinstance(shape, Ellipse):
         return _transform_ellipse_affine(shape, t)
     return shape

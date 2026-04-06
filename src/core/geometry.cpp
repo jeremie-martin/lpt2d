@@ -434,7 +434,157 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMa
     return best;
 }
 
+// ─── Rounded-polygon decomposition ──────────────────────────────
+
+RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
+    RoundedPolygonParts parts;
+    int n = (int)poly.vertices.size();
+    if (n < 3 || poly.corner_radius <= 0.0f) return parts;
+
+    bool cw = polygon_is_clockwise(poly);
+
+    // Per-vertex cut distance and arc info
+    std::vector<float> cuts(n, 0.0f);
+    std::vector<bool> has_fillet(n, false);
+
+    struct CornerCalc {
+        Vec2 center;
+        float radius;
+        float angle_start;
+        float sweep;
+    };
+    std::vector<CornerCalc> corner_calc(n);
+
+    for (int i = 0; i < n; ++i) {
+        Vec2 prev = poly.vertices[(i - 1 + n) % n];
+        Vec2 curr = poly.vertices[i];
+        Vec2 next = poly.vertices[(i + 1) % n];
+
+        Vec2 to_prev = prev - curr;
+        Vec2 to_next = next - curr;
+        float len_prev = to_prev.length();
+        float len_next = to_next.length();
+        if (len_prev < 1e-6f || len_next < 1e-6f) continue;
+
+        Vec2 dp = to_prev * (1.0f / len_prev);
+        Vec2 dn = to_next * (1.0f / len_next);
+
+        float cos_a = std::clamp(dp.dot(dn), -1.0f, 1.0f);
+        if (cos_a > 0.999f || cos_a < -0.999f) continue; // ~straight or ~reflex
+
+        // Skip concave vertices
+        float cross = dp.x * dn.y - dp.y * dn.x;
+        bool convex = cw ? (cross > 0.0f) : (cross < 0.0f);
+        if (!convex) continue;
+
+        float half_a = std::acos(cos_a) * 0.5f;
+        float tan_ha = std::tan(half_a);
+        float sin_ha = std::sin(half_a);
+        if (tan_ha < 1e-6f || sin_ha < 1e-6f) continue;
+
+        float max_cut = std::min(len_prev * 0.5f, len_next * 0.5f);
+        float cut = std::min(poly.corner_radius / tan_ha, max_cut);
+        float eff_r = cut * tan_ha;
+        if (eff_r < 1e-6f) continue;
+
+        // Arc center on the bisector, inward
+        Vec2 bisect = dp + dn;
+        float bl = bisect.length();
+        if (bl < 1e-6f) continue;
+        bisect = bisect * (1.0f / bl);
+        Vec2 center = curr + bisect * (eff_r / sin_ha);
+
+        // Tangent points on each edge
+        Vec2 tp_prev = curr + dp * cut;
+        Vec2 tp_next = curr + dn * cut;
+
+        float a_p = std::atan2(tp_prev.y - center.y, tp_prev.x - center.x);
+        float a_n = std::atan2(tp_next.y - center.y, tp_next.x - center.x);
+
+        // CW polygon: arc goes CCW from a_next to a_prev
+        // CCW polygon: arc goes CCW from a_prev to a_next
+        float as, sw;
+        if (cw) {
+            as = normalize_angle(a_n);
+            sw = normalize_angle(a_p - a_n);
+        } else {
+            as = normalize_angle(a_p);
+            sw = normalize_angle(a_n - a_p);
+        }
+
+        cuts[i] = cut;
+        has_fillet[i] = true;
+        corner_calc[i] = {center, eff_r, as, sw};
+    }
+
+    // Emit shortened edges
+    for (int i = 0; i < n; ++i) {
+        int j = (i + 1) % n;
+        Vec2 a = poly.vertices[i];
+        Vec2 b = poly.vertices[j];
+        Vec2 d = b - a;
+        float len = d.length();
+        if (len < 1e-6f) continue;
+        Vec2 dir = d * (1.0f / len);
+
+        float trim_a = has_fillet[i] ? cuts[i] : 0.0f;
+        float trim_b = has_fillet[j] ? cuts[j] : 0.0f;
+        if (trim_a + trim_b >= len - 1e-6f) continue; // edge consumed
+
+        Vec2 ea = a + dir * trim_a;
+        Vec2 eb = b - dir * trim_b;
+        parts.edges.push_back(cw ? RoundedPolygonParts::Edge{ea, eb}
+                                 : RoundedPolygonParts::Edge{eb, ea});
+    }
+
+    // Emit corner arcs
+    for (int i = 0; i < n; ++i) {
+        if (!has_fillet[i]) continue;
+        auto& c = corner_calc[i];
+        parts.corners.push_back({c.center, c.radius, c.angle_start, c.sweep});
+    }
+
+    return parts;
+}
+
+// ─── Polygon intersection ───────────────────────────────────────
+
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials) {
+    // Rounded polygon: decompose into edges + arcs
+    if (poly.corner_radius > 0.0f && (int)poly.vertices.size() >= 3) {
+        auto parts = decompose_rounded_polygon(poly);
+        if (!parts.edges.empty() || !parts.corners.empty()) {
+            std::optional<Hit> best;
+            const Material* mat = &resolve_binding(poly.binding, materials);
+            for (auto& e : parts.edges) {
+                Segment seg;
+                seg.a = e.a;
+                seg.b = e.b;
+                seg.binding = poly.binding;
+                auto hit = intersect(ray, seg, materials);
+                if (hit && (!best || hit->t < best->t)) {
+                    best = hit;
+                    best->material = mat;
+                }
+            }
+            for (auto& c : parts.corners) {
+                Arc arc;
+                arc.center = c.center;
+                arc.radius = c.radius;
+                arc.angle_start = c.angle_start;
+                arc.sweep = c.sweep;
+                arc.binding = poly.binding;
+                auto hit = intersect(ray, arc, materials);
+                if (hit && (!best || hit->t < best->t)) {
+                    best = hit;
+                    best->material = mat;
+                }
+            }
+            return best;
+        }
+    }
+
+    // Sharp polygon: existing path
     std::optional<Hit> best;
     int n = (int)poly.vertices.size();
     bool clockwise = polygon_is_clockwise(poly);
@@ -547,6 +697,8 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
         [&](const Polygon& p) -> Shape {
             Polygon r = p;
             for (auto& v : r.vertices) v = t.apply(v);
+            if (r.corner_radius > 0.0f)
+                r.corner_radius = std::max(r.corner_radius * uniform_scale, 0.0f);
             return r;
         },
         [&](const Ellipse& e) -> Shape {

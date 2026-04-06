@@ -513,6 +513,31 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 int n = (int)p.vertices.size();
                 if (n < 2) return;
                 const Material& mat = resolve_binding(p.binding, scene.materials);
+
+                if (p.corner_radius > 0.0f && n >= 3) {
+                    auto parts = decompose_rounded_polygon(p);
+                    if (!parts.edges.empty() || !parts.corners.empty()) {
+                        for (auto& e : parts.edges) {
+                            GPUSegment gs{};
+                            gs.a[0] = e.a.x; gs.a[1] = e.a.y;
+                            gs.b[0] = e.b.x; gs.b[1] = e.b.y;
+                            fill_material(gs, mat);
+                            segs.push_back(gs);
+                        }
+                        for (auto& c : parts.corners) {
+                            GPUArc ga{};
+                            ga.center[0] = c.center.x; ga.center[1] = c.center.y;
+                            ga.radius = c.radius;
+                            ga.angle_start = c.angle_start;
+                            ga.sweep = c.sweep;
+                            fill_material(ga, mat);
+                            gpu_arcs.push_back(ga);
+                        }
+                        return;
+                    }
+                }
+
+                // Sharp polygon fallback
                 bool clockwise = polygon_is_clockwise(p);
                 for (int i = 0; i < n; ++i) {
                     Vec2 a = p.vertices[i];

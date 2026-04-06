@@ -72,7 +72,8 @@ def _copy_shape_with_material(shape, mat: Material):
         return _lpt2d.Arc(id=shape.id, center=shape.center, radius=shape.radius,
                           angle_start=shape.angle_start, sweep=shape.sweep, material=mat)
     if t is _lpt2d.Polygon:
-        return _lpt2d.Polygon(id=shape.id, vertices=list(shape.vertices), material=mat)
+        return _lpt2d.Polygon(id=shape.id, vertices=list(shape.vertices),
+                              material=mat, corner_radius=shape.corner_radius)
     if t is _lpt2d.Ellipse:
         return _lpt2d.Ellipse(id=shape.id, center=shape.center,
                               semi_a=shape.semi_a, semi_b=shape.semi_b,

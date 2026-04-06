@@ -189,6 +189,7 @@ struct Polygon {
     std::string id;
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
     MaterialBinding binding;
+    float corner_radius = 0.0f; // fillet radius; 0 = sharp corners
 
     Vec2 centroid() const {
         if (vertices.empty()) return {0, 0};

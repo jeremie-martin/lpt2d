@@ -18,11 +18,13 @@ def polygon(
     vertices: list[list[float]],
     material: Material,
     *,
+    corner_radius: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
     return Polygon(
-        id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices], material=material
+        id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices],
+        material=material, corner_radius=corner_radius,
     )
 
 
@@ -33,6 +35,7 @@ def regular_polygon(
     material: Material,
     rotation: float = 0.0,
     *,
+    corner_radius: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Regular *n*-sided polygon inscribed in a circle.
@@ -47,7 +50,7 @@ def regular_polygon(
         ]
         for i in range(n)
     ]
-    return polygon(verts, material, id_prefix=id_prefix)
+    return polygon(verts, material, corner_radius=corner_radius, id_prefix=id_prefix)
 
 
 def rectangle(
@@ -56,6 +59,7 @@ def rectangle(
     height: float,
     material: Material,
     *,
+    corner_radius: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Axis-aligned rectangle centered at *center*."""
@@ -64,6 +68,7 @@ def rectangle(
     return polygon(
         [[cx - hw, cy - hh], [cx - hw, cy + hh], [cx + hw, cy + hh], [cx + hw, cy - hh]],
         material,
+        corner_radius=corner_radius,
         id_prefix=id_prefix,
     )
 
@@ -363,6 +368,7 @@ def thick_segment(
     thickness: float,
     material: Material,
     *,
+    corner_radius: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Segment with physical width — creates a rectangle Polygon.
@@ -386,6 +392,7 @@ def thick_segment(
             [ax - nx, ay - ny],
         ],
         material=material,
+        corner_radius=corner_radius,
     )
 
 
@@ -398,13 +405,15 @@ def prism(
     material: Material,
     rotation: float = math.pi / 2,
     *,
+    corner_radius: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Equilateral triangular prism (2D cross-section).
 
     Convenience wrapper around :func:`regular_polygon` with *n=3*.
     """
-    return regular_polygon(center, size, 3, material, rotation=rotation, id_prefix=id_prefix)
+    return regular_polygon(center, size, 3, material, rotation=rotation,
+                           corner_radius=corner_radius, id_prefix=id_prefix)
 
 
 def mirror_block(
