@@ -349,7 +349,7 @@ float spectral_response(float lambda_nm, float c0, float c1, float c2) {
     if (c0 == 0.0 && c1 == 0.0 && c2 == 0.0) return 1.0;
     float t = (lambda_nm - 380.0) / 400.0;
     float x = c0 + c1 * t + c2 * t * t;
-    return 0.5 + x / (2.0 * sqrt(1.0 + x * x));
+    return 0.5 + x * 0.5 * inversesqrt(1.0 + x * x);
 }
 
 // hit_scene: find closest hit, track primitive type+index for deferred material
