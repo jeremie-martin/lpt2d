@@ -1,10 +1,13 @@
 #pragma once
 
-#include "editor.h"
+#include "scene.h"
 
 #include <imgui.h>
 
 #include <vector>
+
+struct CameraView;
+struct Handle;
 
 // Material UI
 bool edit_material(Material& mat);

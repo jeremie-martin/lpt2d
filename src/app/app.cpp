@@ -5,6 +5,7 @@
 #include "editor.h"
 #include "geometry.h"
 #include "renderer.h"
+#include "scene.h"
 #include "scenes.h"
 #include "ui.h"
 
@@ -14,12 +15,20 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#include <stdint.h>
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
-#include <cstring>
+#include <deque>
 #include <iostream>
+#include <map>
+#include <optional>
+#include <ratio>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace {
 

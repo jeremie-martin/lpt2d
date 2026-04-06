@@ -1,11 +1,15 @@
 #pragma once
 
-#include "scene.h"
-
 #include <GL/glew.h>
+#include <stddef.h>
 #include <array>
 #include <cstdint>
 #include <vector>
+
+struct Bounds;
+struct PostProcess;
+struct Scene;
+struct TraceConfig;
 
 struct FrameMetrics {
     float mean_lum;    // mean BT.709 luminance (0-255 scale)

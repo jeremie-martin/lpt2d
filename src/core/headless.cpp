@@ -1,5 +1,6 @@
 #include "headless.h"
 
+#include <EGL/eglplatform.h>
 #include <iostream>
 
 HeadlessGL::~HeadlessGL() { shutdown(); }

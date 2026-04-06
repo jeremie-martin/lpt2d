@@ -1,14 +1,26 @@
 #include "serialize.h"
 
 #include "geometry.h"
+#include "scene.h"
 
 #include <nlohmann/json.hpp>
 
+#include <stddef.h>
+#include <stdint.h>
 #include <array>
+#include <exception>
 #include <fstream>
+#include <initializer_list>
 #include <iostream>
+#include <iterator>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace {
 

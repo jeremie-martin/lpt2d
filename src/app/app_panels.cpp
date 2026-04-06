@@ -1,16 +1,24 @@
 #include "app_panels.h"
 
 #include "geometry.h"
+#include "renderer.h"
+#include "scene.h"
+#include "scenes.h"
 #include "serialize.h"
 #include "ui.h"
 
+#include <imgui.h>
+#include <stdint.h>
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 #include <iostream>
-#include <set>
+#include <map>
+#include <optional>
+#include <string_view>
+#include <utility>
+#include <variant>
 
 namespace {
 

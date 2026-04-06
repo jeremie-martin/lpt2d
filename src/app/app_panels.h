@@ -2,15 +2,14 @@
 
 #include "app_actions.h"
 #include "editor.h"
-#include "renderer.h"
-#include "scene.h"
-#include "scenes.h"
-
-#include <imgui.h>
 
 #include <array>
 #include <string>
 #include <vector>
+
+class Renderer;
+struct FrameMetrics;
+struct ImGuiIO;
 
 // ─── Panel-local UI state ────────────────────────────────────────────
 

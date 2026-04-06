@@ -2,6 +2,7 @@
 #include "serialize.h"
 
 #include <algorithm>
+#include <compare>
 #include <filesystem>
 #include <iostream>
 

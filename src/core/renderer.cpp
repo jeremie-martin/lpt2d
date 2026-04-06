@@ -1,13 +1,15 @@
 #include "renderer.h"
 
 #include "geometry.h"
+#include "scene.h"
 #include "shaders.h"
 #include "spectrum.h"
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <iostream>
+#include <iterator>
+#include <variant>
 
 // ─── Shader compilation helpers ──────────────────────────────────────
 

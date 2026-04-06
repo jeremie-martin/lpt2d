@@ -3,6 +3,7 @@
 #include "geometry.h"
 #include "headless.h"
 #include "renderer.h"
+#include "scene.h"
 
 #include <algorithm>
 #include <stdexcept>

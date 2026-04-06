@@ -1,14 +1,19 @@
 #include "export.h"
+#include "scene.h"
 #include "scenes.h"
 #include "serialize.h"
 #include "session.h"
 
+#include <stdint.h>
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
+#include <vector>
 
 static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"

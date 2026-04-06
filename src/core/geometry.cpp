@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <variant>
 
 // ─── Arc geometry helpers ─────────────────────────────────────────
 

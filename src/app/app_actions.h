@@ -1,5 +1,8 @@
 #pragma once
 
+#include <GL/glew.h>
+#include <stdint.h>
+
 #include "editor.h"
 #include "renderer.h"
 #include "scene.h"

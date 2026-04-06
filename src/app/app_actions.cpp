@@ -2,12 +2,12 @@
 
 #include "export.h"
 #include "geometry.h"
-#include "scenes.h"
 #include "serialize.h"
 
 #include <algorithm>
-#include <cmath>
 #include <iostream>
+#include <utility>
+#include <variant>
 
 // ─── Render filter snapshot ──────────────────────────────────────────
 

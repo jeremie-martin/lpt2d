@@ -1,11 +1,16 @@
 #pragma once
 
 #include "renderer.h"
-#include "scene.h"
 
 #include <cstdint>
 #include <memory>
 #include <vector>
+
+struct Bounds;
+struct PostProcess;
+struct Scene;
+struct Shot;
+struct TraceConfig;
 
 struct RenderResult {
     std::vector<uint8_t> pixels; // RGB8, width * height * 3 bytes

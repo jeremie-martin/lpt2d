@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -216,19 +217,19 @@ struct EditorState {
 
     // ── Selection helpers (delegate to interaction) ────────────────
 
-    bool is_selected(SelectionRef id) const {
+    bool is_selected(const SelectionRef& id) const {
         return std::find(interaction.selection.begin(), interaction.selection.end(), id) != interaction.selection.end();
     }
 
-    void select(SelectionRef id) {
+    void select(const SelectionRef& id) {
         if (!is_selected(id)) interaction.selection.push_back(id);
     }
 
-    void deselect(SelectionRef id) {
+    void deselect(const SelectionRef& id) {
         interaction.selection.erase(std::remove(interaction.selection.begin(), interaction.selection.end(), id), interaction.selection.end());
     }
 
-    void toggle_select(SelectionRef id) {
+    void toggle_select(const SelectionRef& id) {
         if (is_selected(id)) deselect(id);
         else select(id);
     }
@@ -305,11 +306,11 @@ SelectionRef hit_test(Vec2 wp, const Scene& scene, float threshold, const std::s
 bool object_in_rect(const Scene& scene, SelectionRef id, Vec2 rect_min, Vec2 rect_max);
 
 // Resolve top-level or group-member objects from an SelectionRef.
-Shape* resolve_shape(Scene& scene, SelectionRef id);
-const Shape* resolve_shape(const Scene& scene, SelectionRef id);
-Light* resolve_light(Scene& scene, SelectionRef id);
-const Light* resolve_light(const Scene& scene, SelectionRef id);
-std::optional<Bounds> object_bounds(const Scene& scene, SelectionRef id);
+Shape* resolve_shape(Scene& scene, const SelectionRef& id);
+const Shape* resolve_shape(const Scene& scene, const SelectionRef& id);
+Light* resolve_light(Scene& scene, const SelectionRef& id);
+const Light* resolve_light(const Scene& scene, const SelectionRef& id);
+std::optional<Bounds> object_bounds(const Scene& scene, const SelectionRef& id);
 
 // ─── Transform application ─────────────────────────────────────────────
 
@@ -322,7 +323,7 @@ void translate_shape(Shape& s, Vec2 delta);
 void translate_light(Light& l, Vec2 delta);
 
 // Compute the centroid of a shape or light
-Vec2 object_centroid(const Scene& scene, SelectionRef id);
+Vec2 object_centroid(const Scene& scene, const SelectionRef& id);
 
 // ─── Handle generation ─────────────────────────────────────────────────
 

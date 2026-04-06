@@ -3,6 +3,7 @@
 #include "geometry.h"
 
 #include <cmath>
+#include <variant>
 
 namespace {
 
@@ -20,7 +21,7 @@ void expand_bounds(Bounds& combined, bool& initialized, const Bounds& b) {
 
 } // namespace
 
-Shape* resolve_shape(Scene& scene, SelectionRef id) {
+Shape* resolve_shape(Scene& scene, const SelectionRef& id) {
     if (id.type != SelectionRef::Shape || id.id.empty()) return nullptr;
     if (!id.group_id.empty()) {
         if (Group* g = find_group(scene, id.group_id))
@@ -30,11 +31,11 @@ Shape* resolve_shape(Scene& scene, SelectionRef id) {
     return find_shape_in(scene.shapes, id.id);
 }
 
-const Shape* resolve_shape(const Scene& scene, SelectionRef id) {
+const Shape* resolve_shape(const Scene& scene, const SelectionRef& id) {
     return resolve_shape(const_cast<Scene&>(scene), id);
 }
 
-Light* resolve_light(Scene& scene, SelectionRef id) {
+Light* resolve_light(Scene& scene, const SelectionRef& id) {
     if (id.type != SelectionRef::Light || id.id.empty()) return nullptr;
     if (!id.group_id.empty()) {
         if (Group* g = find_group(scene, id.group_id))
@@ -44,13 +45,13 @@ Light* resolve_light(Scene& scene, SelectionRef id) {
     return find_light_in(scene.lights, id.id);
 }
 
-const Light* resolve_light(const Scene& scene, SelectionRef id) {
+const Light* resolve_light(const Scene& scene, const SelectionRef& id) {
     return resolve_light(const_cast<Scene&>(scene), id);
 }
 
 // ─── Object centroid ───────────────────────────────────────────────────
 
-Vec2 object_centroid(const Scene& scene, SelectionRef id) {
+Vec2 object_centroid(const Scene& scene, const SelectionRef& id) {
     if (const Shape* shape = resolve_shape(scene, id))
         return shape_centroid(*shape);
     if (const Light* light = resolve_light(scene, id))
@@ -69,7 +70,7 @@ Vec2 EditorState::selection_centroid() const {
     return sum * (1.0f / interaction.selection.size());
 }
 
-std::optional<Bounds> object_bounds(const Scene& scene, SelectionRef id) {
+std::optional<Bounds> object_bounds(const Scene& scene, const SelectionRef& id) {
     if (const Shape* shape = resolve_shape(scene, id))
         return shape_bounds(*shape);
     if (const Light* light = resolve_light(scene, id))

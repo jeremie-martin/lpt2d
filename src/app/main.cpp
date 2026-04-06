@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <vector>
 
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";

@@ -1,9 +1,11 @@
 #include "ui.h"
 
+#include "editor.h"
 #include "geometry.h"
 
 #include <algorithm>
 #include <cmath>
+#include <variant>
 
 ImVec4 material_color(const Material& m) {
     if (m.emission > 0.0f) return {1.0f, 0.95f, 0.3f, 1.0f};

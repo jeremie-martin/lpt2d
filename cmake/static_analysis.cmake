@@ -102,6 +102,7 @@ function(lpt2d_add_static_analysis_targets)
             "--file-filter=${PROJECT_SOURCE_DIR}/src/**"
             "--quiet"
             "-i${PROJECT_SOURCE_DIR}/external"
+            "-i${PROJECT_SOURCE_DIR}/src/bindings"
             "-i${PROJECT_BINARY_DIR}"
         )
         if(LPT2D_CPPCHECK_INCONCLUSIVE)
@@ -109,6 +110,7 @@ function(lpt2d_add_static_analysis_targets)
         endif()
 
         add_custom_target(static-analysis-cppcheck
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/cppcheck"
             COMMAND "${LPT2D_CPPCHECK_EXECUTABLE}"
                 ${cppcheck_args}
             DEPENDS ${static_analysis_deps}
@@ -125,7 +127,7 @@ function(lpt2d_add_static_analysis_targets)
     endif()
 
     find_program(LPT2D_IWYU_EXECUTABLE NAMES include-what-you-use iwyu)
-    find_program(LPT2D_IWYU_TOOL_EXECUTABLE NAMES iwyu_tool iwyu_tool.py)
+    find_program(LPT2D_IWYU_TOOL_EXECUTABLE NAMES iwyu-tool iwyu_tool iwyu_tool.py)
 
     if(LPT2D_IWYU_EXECUTABLE AND LPT2D_IWYU_TOOL_EXECUTABLE AND iwyu_sources)
         set(iwyu_args

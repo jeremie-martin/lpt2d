@@ -1,5 +1,9 @@
 #pragma once
 
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "scene.h"
 
 // ─── Arc geometry helpers ─────────────────────────────────────────
