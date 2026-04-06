@@ -24,15 +24,16 @@ void main() {
 
     vec2 n = vec2(-dir.y, dir.x) / len * uThickness;
 
-    // 4 vertices for triangle strip: forms a quad
-    // Strip order: 0-1-2-3 → triangles (0,1,2) and (1,2,3)
+    // 6 vertices per quad: 0,1,2 = tri1; 3,4,5 = tri2
     vec2 pos;
     float dist;
     int vid = gl_VertexID;
     if      (vid == 0) { pos = s.p0 - n; dist = -1.0; }
     else if (vid == 1) { pos = s.p0 + n; dist =  1.0; }
     else if (vid == 2) { pos = s.p1 - n; dist = -1.0; }
-    else               { pos = s.p1 + n; dist =  1.0; }
+    else if (vid == 3) { pos = s.p0 + n; dist =  1.0; }
+    else if (vid == 4) { pos = s.p1 + n; dist =  1.0; }
+    else               { pos = s.p1 - n; dist = -1.0; }
 
     vec2 ndc = (pos / uResolution) * 2.0 - 1.0;
     ndc.y = -ndc.y;
