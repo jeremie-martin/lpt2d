@@ -20,12 +20,18 @@ authored model:
 - scenes define a top-level `materials` library
 - committed shapes use `material_id` bindings rather than inline `material`
   payloads
-- default-only `look` and `trace` blocks are omitted
+- authored JSON is fully explicit: `camera`, `canvas`, `look`, `trace`,
+  `materials`, `shapes`, `lights`, and `groups` are always present
+- the `camera` block may be `{}` for auto-fit, but the block itself is still
+  present
+- `look`, `trace`, and material objects use canonical field names only and
+  always include their full field sets; material objects include `emission`
 
 Inline shape materials remain supported by the format for one-off or transient
-data, but the committed repo corpus is intentionally normalized to named
-materials so the GUI, Python API, CLI, and docs all tell the same authored
-story.
+data, but authored files are machine-written and strict: there is no fallback
+support for sparse authored JSON, legacy aliases, or older on-disk variants.
+Sparse per-frame overrides belong to stream `render` payloads, not persisted
+authored shots.
 
 ## Surface Alignment
 

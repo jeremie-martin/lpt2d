@@ -28,8 +28,6 @@ and should not be buried inside implementation-specific files.
   codebase.
 - [OPTIMIZATION_LOG.md](/home/holo/prog/lpt2d/OPTIMIZATION_LOG.md)
   Performance history and benchmark findings.
-- [pre-phase1-plan-transcript.md](/home/holo/prog/lpt2d/pre-phase1-plan-transcript.md)
-  Historical planning transcript that led to the first major roadmap reset.
 
 ## Documentation Principles
 

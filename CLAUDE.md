@@ -120,12 +120,16 @@ CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lp
 examples/                   — canonical public example pack
   python/                   — workflow-first canonical Python animations
 anim/                       — Python animation library (pip install -e .)
+  __init__.py               — compact author-facing package surface; advanced APIs use explicit submodules
   types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
-  renderer.py               — C++ subprocess wrapper, render/render_still/render_contact_sheet, auto_look, compare_looks, look_report, light_contributions
+  renderer.py               — C++ subprocess wrapper plus render/render_still/render_contact_sheet/render_stats
+  analysis.py               — auto_look, calibrate_normalize_ref, compare_looks, look_report
+  light_analysis.py         — light_contributions, scene_light_report, structure_contribution
+  diagnostics.py            — diagnose_scene
   builders.py               — Shape composition: polygon, regular_polygon, mirror_box/mirror_block, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
-  stats.py                  — Frame statistics, LookProfile/LookComparison/LookReport, LightContribution, diagnose_scene
+  stats.py                  — Frame statistics, QualityGate, StatsDiff, LookProfile/LookComparison/LookReport, LightContribution, StructureReport
   examples/secondary/       — exploratory or superseded Python examples
 scenes/                     — JSON shot files (v5 authored format, built-in runtime and benchmark scene set)
 src/
@@ -186,10 +190,27 @@ src/
   "name": "scene_name",
   "camera": { "bounds": [-1.2, -0.675, 1.2, 0.675] },
   "canvas": { "width": 1920, "height": 1080 },
+  "look": {
+    "exposure": -5.0,
+    "contrast": 1.0,
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [0.0, 0.0, 0.0],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.7
+  },
+  "trace": { "rays": 10000000, "batch": 200000, "depth": 12, "intensity": 1.0 },
   "materials": {
-    "glass": {"ior": 1.5, "transmission": 1, "cauchy_b": 20000},
-    "floor_absorber": {"albedo": 0},
-    "mirror": {"metallic": 1, "roughness": 0.1, "albedo": 0.95, "transmission": 1}
+    "glass": {"ior": 1.5, "roughness": 0.0, "metallic": 0.0, "transmission": 1.0, "absorption": 0.0, "cauchy_b": 20000.0, "albedo": 1.0, "emission": 0.0},
+    "floor_absorber": {"ior": 1.0, "roughness": 0.0, "metallic": 0.0, "transmission": 0.0, "absorption": 0.0, "cauchy_b": 0.0, "albedo": 0.0, "emission": 0.0},
+    "mirror": {"ior": 1.0, "roughness": 0.1, "metallic": 1.0, "transmission": 1.0, "absorption": 0.0, "cauchy_b": 0.0, "albedo": 0.95, "emission": 0.0}
   },
   "shapes": [
     {"id": "lens", "type": "circle", "center": [0, 0], "radius": 0.2, "material_id": "glass"},
@@ -197,9 +218,9 @@ src/
     {"id": "collector", "type": "ellipse", "center": [0, 0], "semi_a": 0.3, "semi_b": 0.15, "rotation": 0.5, "material_id": "glass"}
   ],
   "lights": [
-    {"id": "spark", "type": "point", "pos": [0, 0.5], "intensity": 1},
-    {"id": "wash", "type": "parallel_beam", "a": [-0.5, 0.8], "b": [0.5, 0.8], "direction": [0, -1], "angular_width": 0, "intensity": 1},
-    {"id": "spot", "type": "spot", "pos": [0, 1], "direction": [0, -1], "angular_width": 0.5, "falloff": 2, "intensity": 1}
+    {"id": "spark", "type": "point", "pos": [0, 0.5], "intensity": 1.0, "wavelength_min": 380.0, "wavelength_max": 780.0},
+    {"id": "wash", "type": "parallel_beam", "a": [-0.5, 0.8], "b": [0.5, 0.8], "direction": [0, -1], "angular_width": 0.0, "intensity": 1.0, "wavelength_min": 380.0, "wavelength_max": 780.0},
+    {"id": "spot", "type": "spot", "pos": [0, 1], "direction": [0, -1], "angular_width": 0.5, "falloff": 2.0, "intensity": 1.0, "wavelength_min": 380.0, "wavelength_max": 780.0}
   ],
   "groups": [
     {
@@ -212,16 +233,28 @@ src/
 }
 ```
 
-Camera, canvas, look, and trace blocks are at the root level alongside scene
-content. Persisted shapes, lights, and groups all carry authored `id` values
-that are globally unique within a scene. Committed repo scenes use named
-materials plus `material_id` bindings throughout.
+Authored v5 shots use an explicit root schema: `camera`, `canvas`, `look`,
+`trace`, `materials`, `shapes`, `lights`, and `groups` are always present
+alongside `version` and `name`. Persisted shapes, lights, and groups all carry
+authored `id` values that are globally unique within a scene. Committed repo
+scenes use named materials plus `material_id` bindings throughout.
 
-**Camera** can specify `bounds` (explicit viewport) or `center` + `width` (height derived from canvas aspect). Omit for auto-fit from scene geometry.
+**Camera** can specify `bounds` (explicit viewport) or `center` + `width`
+(height derived from canvas aspect). Use `{}` for auto-fit from scene
+geometry; the block itself still exists in authored JSON.
 
-**Look** only needs to include non-default values. Defaults: exposure=-5, contrast=1, gamma=2, tonemap=reinhardx, white_point=0.5, normalize=rays, ambient=0, background=[0,0,0], opacity=1, saturation=1, vignette=0, vignette_radius=0.7.
+**Look** authored blocks are explicit, not sparse. Fields: `exposure`,
+`contrast`, `gamma`, `tonemap`, `white_point`, `normalize`,
+`normalize_ref`, `normalize_pct`, `ambient`, `background`, `opacity`,
+`saturation`, `vignette`, `vignette_radius`. Sparse look overrides only exist
+in transient stream `render` payloads and `Frame.look`.
 
-**Trace** only needs to include non-default values. Defaults: rays=10M, batch=200K, depth=12, intensity=1. The GUI does not persist `trace.batch`: it always uses `20_000` as an interactive session default.
+**Trace** authored blocks are explicit, not sparse. Fields: `rays`, `batch`,
+`depth`, `intensity`.
+
+**Materials** in authored JSON also use the full explicit field set:
+`ior`, `roughness`, `metallic`, `transmission`, `absorption`, `cauchy_b`,
+`albedo`, `emission`.
 
 ### Python animation API
 
@@ -245,10 +278,29 @@ def animate(ctx):
 render(animate, Timeline(10.0), "output.mp4", settings="preview")
 ```
 
-Key types: `Shot` (authored document), `Scene` (content only), `Canvas`, `Look`, `TraceDefaults`, `Camera2D`, `Frame` (per-frame return from animate callback), `Quality` presets (draft/preview/production/final).
+Top-level `anim` is intentionally compact now. Advanced APIs should be
+imported from explicit submodules such as `anim.types`, `anim.builders`,
+`anim.stats`, `anim.renderer`, and `anim.analysis`.
 
-**Shape types**: `Circle`, `Segment`, `Arc`, `Bezier`, `Polygon`, `Ellipse` (center + semi_a/semi_b + rotation).
+Key top-level types: `Shot` (authored document), `Scene` (content only),
+`Canvas`, `Look`, `TraceDefaults`, `Camera2D`, `Frame` (per-frame return from
+animate callback).
 
-**Light types**: `PointLight`, `SegmentLight`, `BeamLight`, `ParallelBeamLight` (segment origin + direction + spread), `SpotLight` (point + direction + cone + cosine-power falloff).
+Additional authored-model types from `anim.types`: `Quality` presets
+(`draft`/`preview`/`production`/`final`), `PointLight`, `SpotLight`,
+`Bezier`, `Polygon`, `Ellipse`, `FrameReport`, and material helpers such as
+`absorber`, `diffuse`, `emissive`, `opaque_mirror`.
 
-**Builder functions** (`anim/builders.py`): `polygon`, `regular_polygon`, `rectangle`, `mirror_box`, `mirror_block`, `thick_arc`, `thick_segment`, `prism`, `slit`, `double_slit`, `grating`, `waveguide`, `elliptical_lens`, `biconvex_lens`, `plano_convex_lens`, `hemispherical_lens`, `ball_lens`.
+**Shape types**: top-level `anim` keeps the most common ones
+(`Circle`, `Segment`, `Arc`). Additional authored shapes such as `Bezier`,
+`Polygon`, and `Ellipse` live in `anim.types`.
+
+**Light types**: top-level `anim` keeps `BeamLight`, `ParallelBeamLight`, and
+`SegmentLight`. `PointLight` and `SpotLight` live in `anim.types`.
+
+**Builder functions**: top-level `anim` keeps `mirror_box`, `prism`,
+`elliptical_lens`, and `thick_segment`. The full builder set lives in
+`anim/builders.py`: `polygon`, `regular_polygon`, `rectangle`, `mirror_box`,
+`mirror_block`, `thick_arc`, `thick_segment`, `prism`, `slit`,
+`double_slit`, `grating`, `waveguide`, `elliptical_lens`, `biconvex_lens`,
+`plano_convex_lens`, `hemispherical_lens`, `ball_lens`.

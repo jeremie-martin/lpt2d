@@ -47,7 +47,7 @@ The canonical examples are authored scenes and animations first, but the Phase
 diagnostic helpers:
 
 ```python
-from anim import Look, Shot, compare_looks, look_report, scene_light_report
+from anim import Shot, compare_looks, look_report, scene_light_report
 
 shot = Shot.load("scenes/prism.json")
 looks = [

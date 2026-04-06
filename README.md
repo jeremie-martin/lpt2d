@@ -77,8 +77,6 @@ python examples/python/beam_chamber_starter.py
   Technical repo guide for coding agents and contributors.
 - [OPTIMIZATION_LOG.md](/home/holo/prog/lpt2d/OPTIMIZATION_LOG.md)
   Benchmark-driven performance work and findings.
-- [pre-phase1-plan-transcript.md](/home/holo/prog/lpt2d/pre-phase1-plan-transcript.md)
-  Historical planning transcript that led to the first major roadmap reset.
 
 ## Examples And Scenes
 
