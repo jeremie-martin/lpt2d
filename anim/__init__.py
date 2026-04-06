@@ -27,7 +27,6 @@ from .light_analysis import light_contributions as light_contributions
 from .light_analysis import scene_light_report as scene_light_report
 from .light_analysis import structure_contribution as structure_contribution
 from .renderer import FFmpegOutput as FFmpegOutput
-from .renderer import Renderer as Renderer
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
@@ -106,7 +105,6 @@ __all__ = [
     "PointLight",
     "Polygon",
     "Quality",
-    "Renderer",
     "Scene",
     "Segment",
     "SegmentLight",

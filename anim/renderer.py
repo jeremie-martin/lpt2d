@@ -1,13 +1,12 @@
-"""Subprocess wrapper for lpt2d-cli --stream and output backends."""
+"""In-process rendering via C++ RenderSession and output backends."""
 
 from __future__ import annotations
 
-import json
 import math
 import subprocess
 import sys
+import time
 from pathlib import Path
-from typing import Callable
 
 from .stats import (
     FrameStats,
@@ -16,162 +15,25 @@ from .stats import (
     frame_stats_from_report,
 )
 from .types import (
+    AnimateFn,
     Camera2D,
     Frame,
     FrameContext,
     FrameReport,
     Quality,
+    RenderSession,
     Scene,
     Shot,
     Timeline,
+    _apply_look_override,
+    _apply_trace_override,
+    _report_from_result,
 )
 
-DEFAULT_BINARY = "./build/lpt2d-cli"
+import _lpt2d
 
 
-def _require_pipe(pipe, name: str):
-    if pipe is None:
-        raise RuntimeError(f"Subprocess {name} pipe is unavailable")
-    return pipe
-
-
-class Renderer:
-    """Manages a persistent lpt2d-cli --stream subprocess."""
-
-    last_report: FrameReport | None = None
-
-    def __init__(
-        self,
-        shot: Shot | None = None,
-        binary: str = DEFAULT_BINARY,
-        fast: bool = False,
-        histogram: bool = False,
-    ):
-        if shot is None:
-            shot = Shot()
-        canvas = shot.canvas
-        look = shot.look
-        trace = shot.trace
-        self.width = canvas.width
-        self.height = canvas.height
-        self.frame_bytes = canvas.width * canvas.height * 3
-        cmd = [
-            binary,
-            "--stream",
-            "--width",
-            str(canvas.width),
-            "--height",
-            str(canvas.height),
-            "--rays",
-            str(trace.rays),
-            "--batch",
-            str(trace.batch),
-            "--depth",
-            str(trace.depth),
-            "--exposure",
-            str(look.exposure),
-            "--contrast",
-            str(look.contrast),
-            "--gamma",
-            str(look.gamma),
-            "--tonemap",
-            look.tonemap,
-            "--white-point",
-            str(look.white_point),
-        ]
-        if histogram:
-            cmd.append("--histogram")
-        cmd.extend(["--normalize", look.normalize])
-        if look.normalize_ref > 0:
-            cmd.extend(["--normalize-ref", str(look.normalize_ref)])
-        if look.normalize_pct < 1.0:
-            cmd.extend(["--normalize-pct", str(look.normalize_pct)])
-        if look.ambient != 0:
-            cmd.extend(["--ambient", str(look.ambient)])
-        bg = look.background
-        if any(v != 0 for v in bg):
-            cmd.extend(["--background", f"{bg[0]},{bg[1]},{bg[2]}"])
-        if look.opacity < 1.0:
-            cmd.extend(["--opacity", str(look.opacity)])
-        if look.saturation != 1.0:
-            cmd.extend(["--saturation", str(look.saturation)])
-        if look.vignette > 0:
-            cmd.extend(["--vignette", str(look.vignette)])
-        if look.vignette_radius != 0.7:
-            cmd.extend(["--vignette-radius", str(look.vignette_radius)])
-        if trace.intensity != 1.0:
-            cmd.extend(["--intensity", str(trace.intensity)])
-        if fast:
-            cmd.append("--fast")
-        self._proc: subprocess.Popen[bytes] | None = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-
-    def render_frame(self, wire_json: str) -> bytes:
-        """Send wire-format JSON, receive raw RGB8 pixels.
-
-        After each call, ``self.last_report`` holds the structured
-        :class:`FrameReport` parsed from the C++ renderer's stderr.
-        """
-        proc = self._proc
-        if proc is None:
-            raise RuntimeError("Renderer process is not running")
-        stdin = _require_pipe(proc.stdin, "stdin")
-        stdout = _require_pipe(proc.stdout, "stdout")
-        stderr = _require_pipe(proc.stderr, "stderr")
-        stdin.write((wire_json + "\n").encode())
-        stdin.flush()
-
-        data = stdout.read(self.frame_bytes)
-        if len(data) != self.frame_bytes:
-            raise RuntimeError(f"Renderer died after {len(data)}/{self.frame_bytes} bytes")
-
-        # Parse structured metadata from stderr (one line per frame).
-        # Format: "frame N: {JSON}\n"
-        self.last_report = None
-        line = stderr.readline().decode(errors="replace").strip()
-        if line:
-            colon_pos = line.find(": {")
-            if colon_pos >= 0:
-                try:
-                    meta = json.loads(line[colon_pos + 2 :])
-                    # Extract frame index from "frame N:" prefix
-                    prefix = line[:colon_pos]
-                    frame_idx = int(prefix.split()[-1]) if prefix.split() else 0
-                    self.last_report = FrameReport(
-                        frame=frame_idx,
-                        rays=meta.get("rays", 0),
-                        time_ms=meta.get("time_ms", 0),
-                        time_ms_exact=meta.get("time_ms_exact"),
-                        max_hdr=meta.get("max_hdr", 0.0),
-                        total_rays=meta.get("total_rays", 0),
-                        mean=meta.get("mean"),
-                        pct_black=meta.get("pct_black"),
-                        pct_clipped=meta.get("pct_clipped"),
-                        p50=meta.get("p50"),
-                        p95=meta.get("p95"),
-                        stats_ms=meta.get("stats_ms"),
-                        histogram=meta.get("histogram"),
-                    )
-                except (json.JSONDecodeError, ValueError):
-                    pass
-
-        return data
-
-    def close(self):
-        if self._proc and self._proc.poll() is None:
-            _require_pipe(self._proc.stdin, "stdin").close()
-            self._proc.wait()
-        self._proc = None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        self.close()
+# ─── Output backends ─────────────────────────────────────────────
 
 
 class FFmpegOutput:
@@ -216,14 +78,14 @@ class FFmpegOutput:
         proc = self._proc
         if proc is None:
             raise RuntimeError("FFmpeg process is not running")
-        _require_pipe(proc.stdin, "stdin").write(rgb_data)
+        if proc.stdin is None:
+            raise RuntimeError("FFmpeg stdin pipe is unavailable")
+        proc.stdin.write(rgb_data)
 
     def close(self):
         if self._proc and self._proc.poll() is None:
-            stdin = _require_pipe(self._proc.stdin, "stdin")
-            stdin.close()
-            # communicate() flushes stdin when the handle is still attached.
-            # Detach it after closing so final stderr draining works on Python 3.13.
+            if self._proc.stdin:
+                self._proc.stdin.close()
             self._proc.stdin = None
             _, err = self._proc.communicate()
             if self._proc.returncode != 0 and err:
@@ -237,22 +99,6 @@ class FFmpegOutput:
 
     def __exit__(self, *exc):
         self.close()
-
-
-def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
-    """Save raw RGB8 pixels to an image file.  Format inferred from extension.
-
-    ``.ppm`` uses the fast built-in writer (no dependencies).
-    Everything else (``.png``, ``.jpg``, ...) uses Pillow.
-    """
-    if path.lower().endswith(".ppm"):
-        with open(path, "wb") as f:
-            f.write(f"P6\n{width} {height}\n255\n".encode())
-            f.write(rgb)
-    else:
-        from PIL import Image
-
-        Image.frombytes("RGB", (width, height), rgb).save(path)
 
 
 class PpmOutput:
@@ -280,63 +126,18 @@ class PpmOutput:
         self.close()
 
 
-# --- Wire format bridge ---
+def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
+    if path.lower().endswith(".ppm"):
+        with open(path, "wb") as f:
+            f.write(f"P6\n{width} {height}\n255\n".encode())
+            f.write(rgb)
+    else:
+        from PIL import Image
+
+        Image.frombytes("RGB", (width, height), rgb).save(path)
 
 
-def _resolve_frame_camera(
-    frame: Frame,
-    camera: Camera2D | None,
-    shot_camera: Camera2D | None,
-) -> Camera2D | None:
-    """Resolve camera precedence for Python render helpers.
-
-    Per-frame camera overrides the explicit helper argument, which overrides the
-    authored Shot camera. If all are absent, the renderer auto-fits bounds.
-    """
-    if frame.camera is not None:
-        return frame.camera
-    if camera is not None:
-        return camera
-    return shot_camera
-
-
-def _build_wire_json(
-    frame: Frame,
-    camera: Camera2D | None,
-    shot_camera: Camera2D | None,
-    aspect: float,
-) -> str:
-    """Serialize a Frame into the v5 wire-format JSON that C++ expects."""
-    d = frame.scene.to_wire_dict()
-    d["version"] = 5
-
-    render_block: dict = {}
-
-    # Camera precedence: per-frame override > explicit helper argument > authored Shot
-    effective_camera = _resolve_frame_camera(frame, camera, shot_camera)
-    if effective_camera is not None:
-        bounds = effective_camera.resolve(aspect)
-        if bounds is not None:
-            render_block["bounds"] = bounds
-
-    # Per-frame look overrides
-    if frame.look is not None:
-        render_block.update(frame.look.to_override_dict())
-
-    # Per-frame trace overrides
-    if frame.trace is not None:
-        render_block.update(frame.trace.to_dict())
-
-    if render_block:
-        d["render"] = render_block
-
-    return json.dumps(d, separators=(",", ":"))
-
-
-# --- Helpers ---
-
-AnimateFn = Callable[[FrameContext], Scene | Frame]
-
+# ─── Core rendering ──────────────────────────────────────────────
 
 def _resolve_args(
     timeline: Timeline | float, settings: Shot | Quality | str | None
@@ -361,6 +162,31 @@ def _sample_frame_indices(timeline: Timeline, frame: int | None, sample_count: i
     return sorted({round(i * (total - 1) / (sample_count - 1)) for i in range(sample_count)})
 
 
+def _resolve_frame_shot(
+    shot: Shot,
+    result: Scene | Frame,
+    camera: Camera2D | None,
+) -> _lpt2d.Shot:
+    """Resolve animate callback result + base shot into a C++ Shot for rendering."""
+    f = result if isinstance(result, Frame) else Frame(scene=result)
+
+    look = _apply_look_override(shot.look, f.look)
+    trace = _apply_trace_override(shot.trace, f.trace)
+
+    # Camera precedence: per-frame > explicit arg > shot camera > auto-fit
+    effective_camera = f.camera or camera or shot.camera
+    cpp_camera = effective_camera if effective_camera is not None else Camera2D()
+
+    return _lpt2d.Shot(
+        name=shot.name,
+        scene=f.scene,
+        camera=cpp_camera,
+        canvas=shot.canvas,
+        look=look,
+        trace=trace,
+    )
+
+
 def render(
     animate: AnimateFn,
     timeline: Timeline | float,
@@ -368,7 +194,6 @@ def render(
     *,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = DEFAULT_BINARY,
     fast: bool = False,
     codec: str = "libx264",
     crf: int = 18,
@@ -378,51 +203,34 @@ def render(
     frame: int | None = None,
     gate: QualityGate | None = None,
 ) -> None:
-    """Render an animation to video or image sequence.
-
-    Args:
-        animate: Callback receiving FrameContext, returning Scene or Frame.
-        timeline: Timeline object, or duration in seconds (uses fps=30).
-        output: Output path. .mp4/.webm/.mkv -> video via ffmpeg.
-                Trailing / or directory -> PPM sequence.
-        settings: Shot, Quality preset, preset name (str), or None for defaults.
-        camera: Explicit helper camera. Per-frame Frame.camera overrides this,
-                and this overrides ``settings.camera`` when present.
-        binary: Path to lpt2d-cli executable.
-        codec: Video codec (default: libx264).
-        crf: Video quality (default: 18, visually lossless).
-        start: Start time in seconds (skip earlier frames).
-        end: End time in seconds (default: full duration).
-        stride: Render every Nth frame (default: 1 = all frames).
-        frame: Render a single frame by index. Overrides start/end/stride.
-        gate: Optional quality gate — prints warnings when thresholds are exceeded.
-    """
+    """Render an animation to video or image sequence."""
     timeline, shot = _resolve_args(timeline, settings)
-    width, height, aspect = shot.canvas.width, shot.canvas.height, shot.canvas.aspect
+    width, height = shot.canvas.width, shot.canvas.height
 
-    # Choose output backend
     if output.endswith("/") or (Path(output).exists() and Path(output).is_dir()):
         out: FFmpegOutput | PpmOutput = PpmOutput(output, width, height)
     else:
         out = FFmpegOutput(output, width, height, timeline.fps, codec, crf)
 
-    renderer = Renderer(shot, binary=binary, fast=fast)
+    session = RenderSession(width, height, fast)
     gate_warnings: list[str] = []
+    last_report: FrameReport | None = None
 
     def _render_frame(i: int) -> bytes:
+        nonlocal last_report
         ctx = timeline.context_at(i)
         result = animate(ctx)
-        f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, shot.camera, aspect)
-        return renderer.render_frame(wire)
+        cpp_shot = _resolve_frame_shot(shot, result, camera)
+        t0 = time.monotonic()
+        render_result = session.render_shot(cpp_shot)
+        ms = (time.monotonic() - t0) * 1000
+        last_report = _report_from_result(render_result, i, ms)
+        return render_result.pixels
 
     def _check_gate(frame_idx: int) -> None:
-        if gate is None:
+        if gate is None or last_report is None:
             return
-        rpt = renderer.last_report
-        if rpt is None:
-            return
-        warns = check_quality(rpt, gate)
+        warns = check_quality(last_report, gate)
         for w in warns:
             msg = f"frame {frame_idx}: WARN: {w}"
             gate_warnings.append(msg)
@@ -430,26 +238,21 @@ def render(
 
     try:
         if frame is not None:
-            # Single-frame mode
             out.write_frame(_render_frame(frame))
             _check_gate(frame)
-            rpt = renderer.last_report
-            ms = f", {rpt.time_ms}ms" if rpt else ""
+            ms = f", {last_report.time_ms}ms" if last_report else ""
             sys.stderr.write(f"frame {frame} ({timeline.time_at(frame):.2f}s{ms})\n")
         else:
-            # Range mode
             start_frame = int(start * timeline.fps)
             end_frame = int(end * timeline.fps) if end is not None else timeline.total_frames
             end_frame = min(end_frame, timeline.total_frames)
-
             frames = range(start_frame, end_frame, stride)
             total = len(frames)
 
             for idx, i in enumerate(frames):
                 out.write_frame(_render_frame(i))
                 _check_gate(i)
-                rpt = renderer.last_report
-                ms = f" {rpt.time_ms}ms" if rpt else ""
+                ms = f" {last_report.time_ms}ms" if last_report else ""
                 sys.stderr.write(f"\rframe {idx + 1}/{total} ({timeline.time_at(i):.2f}s{ms})")
                 sys.stderr.flush()
             sys.stderr.write("\n")
@@ -458,10 +261,6 @@ def render(
             sys.stderr.write(f"Quality gate: {len(gate_warnings)} warning(s)\n")
     finally:
         out.close()
-        renderer.close()
-
-
-# --- Convenience functions ---
 
 
 def render_still(
@@ -472,29 +271,20 @@ def render_still(
     frame: int = 0,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> None:
-    """Render a single frame to an image file.
-
-    Camera precedence matches :func:`render`: per-frame camera override,
-    then explicit ``camera=``, then ``settings.camera``.
-    """
+    """Render a single frame to an image file."""
     timeline, shot = _resolve_args(timeline, settings)
+    session = RenderSession(shot.canvas.width, shot.canvas.height, fast)
 
-    renderer = Renderer(shot, binary=binary, fast=fast)
-    try:
-        ctx = timeline.context_at(frame)
-        result = animate(ctx)
-        f = result if isinstance(result, Frame) else Frame(scene=result)
-        wire = _build_wire_json(f, camera, shot.camera, shot.canvas.aspect)
-        rgb = renderer.render_frame(wire)
-        _save_image(output, rgb, shot.canvas.width, shot.canvas.height)
-        sys.stderr.write(
-            f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n"
-        )
-    finally:
-        renderer.close()
+    ctx = timeline.context_at(frame)
+    result = animate(ctx)
+    cpp_shot = _resolve_frame_shot(shot, result, camera)
+    render_result = session.render_shot(cpp_shot)
+    _save_image(output, render_result.pixels, shot.canvas.width, shot.canvas.height)
+    sys.stderr.write(
+        f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n"
+    )
 
 
 def render_contact_sheet(
@@ -506,40 +296,29 @@ def render_contact_sheet(
     count: int = 16,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> None:
-    """Render a grid of frames spread across the timeline.
-
-    Camera precedence matches :func:`render`: per-frame camera override,
-    then explicit ``camera=``, then ``settings.camera``.
-    """
+    """Render a grid of frames spread across the timeline."""
     timeline, shot = _resolve_args(timeline, settings)
-
     w, h = shot.canvas.width, shot.canvas.height
     rows = math.ceil(count / cols)
     sheet_w = w * cols
     sheet_h = h * rows
 
-    # Sample frames evenly across timeline
     indices = _sample_frame_indices(timeline, None, count)
+    session = RenderSession(w, h, fast)
+    frames_rgb: list[bytes] = []
 
-    renderer = Renderer(shot, binary=binary, fast=fast)
-    try:
-        frames_rgb: list[bytes] = []
-        for idx, fi in enumerate(indices):
-            ctx = timeline.context_at(fi)
-            result = animate(ctx)
-            f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, shot.camera, shot.canvas.aspect)
-            frames_rgb.append(renderer.render_frame(wire))
-            sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
-            sys.stderr.flush()
-        sys.stderr.write("\n")
-    finally:
-        renderer.close()
+    for idx, fi in enumerate(indices):
+        ctx = timeline.context_at(fi)
+        result = animate(ctx)
+        cpp_shot = _resolve_frame_shot(shot, result, camera)
+        render_result = session.render_shot(cpp_shot)
+        frames_rgb.append(render_result.pixels)
+        sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
+        sys.stderr.flush()
+    sys.stderr.write("\n")
 
-    # Assemble grid
     sheet = bytearray(sheet_w * sheet_h * 3)
     for idx, rgb in enumerate(frames_rgb):
         col = idx % cols
@@ -561,17 +340,12 @@ def render_stats(
     count: int = 8,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = DEFAULT_BINARY,
     fast: bool = False,
 ) -> list[tuple[int, float, FrameStats]]:
-    """Render frames and return their statistics. No file output.
-
-    Camera precedence matches :func:`render`: per-frame camera override,
-    then explicit ``camera=``, then ``settings.camera``.
-    """
+    """Render frames and return their statistics."""
     timeline, shot = _resolve_args(timeline, settings)
+    w, h = shot.canvas.width, shot.canvas.height
 
-    # Resolve frame indices
     if frames is None:
         indices = _sample_frame_indices(timeline, None, count)
     elif isinstance(frames, int):
@@ -579,25 +353,20 @@ def render_stats(
     else:
         indices = list(frames)
 
-    w, h = shot.canvas.width, shot.canvas.height
-    aspect = shot.canvas.aspect
-
-    renderer = Renderer(shot, binary=binary, fast=fast, histogram=True)
+    session = RenderSession(w, h, fast)
     results: list[tuple[int, float, FrameStats]] = []
-    try:
-        for fi in indices:
-            ctx = timeline.context_at(fi)
-            result = animate(ctx)
-            f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, shot.camera, aspect)
-            renderer.render_frame(wire)
-            stats = None
-            if renderer.last_report is not None:
-                stats = frame_stats_from_report(renderer.last_report, w, h)
-            if stats is None:
-                raise RuntimeError("No stats report from renderer")
-            results.append((fi, ctx.time, stats))
-    finally:
-        renderer.close()
-    return results
 
+    for fi in indices:
+        ctx = timeline.context_at(fi)
+        result = animate(ctx)
+        cpp_shot = _resolve_frame_shot(shot, result, camera)
+        t0 = time.monotonic()
+        render_result = session.render_shot(cpp_shot)
+        ms = (time.monotonic() - t0) * 1000
+        report = _report_from_result(render_result, fi, ms)
+        stats = frame_stats_from_report(report, w, h)
+        if stats is None:
+            raise RuntimeError("No stats report from renderer")
+        results.append((fi, ctx.time, stats))
+
+    return results

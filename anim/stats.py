@@ -306,12 +306,10 @@ def _shape_bounds(shape: Shape) -> tuple[float, float, float, float] | None:
         cx, cy = shape.center
         cr, sr = math.cos(shape.rotation), math.sin(shape.rotation)
         hx = math.sqrt(
-            shape.semi_a * shape.semi_a * cr * cr
-            + shape.semi_b * shape.semi_b * sr * sr
+            shape.semi_a * shape.semi_a * cr * cr + shape.semi_b * shape.semi_b * sr * sr
         )
         hy = math.sqrt(
-            shape.semi_a * shape.semi_a * sr * sr
-            + shape.semi_b * shape.semi_b * cr * cr
+            shape.semi_a * shape.semi_a * sr * sr + shape.semi_b * shape.semi_b * cr * cr
         )
         return (cx - hx, cy - hy, cx + hx, cy + hy)
     if isinstance(shape, Segment):

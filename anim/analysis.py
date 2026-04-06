@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import replace as dc_replace
-from typing import Callable, cast
+from typing import cast
 
 from . import renderer as renderer_mod
 from .stats import (
@@ -14,27 +13,26 @@ from .stats import (
     LookReport,
 )
 from .types import (
+    AnimateFn,
     Camera2D,
     Canvas,
     Frame,
     FrameContext,
     Look,
     Quality,
+    RenderSession,
     Scene,
     Shot,
     Timeline,
     TraceDefaults,
+    _apply_look_override,
 )
 
-AnimateFn = Callable[[FrameContext], Scene | Frame]
-
-# Draft quality for analysis functions (auto_look, compare_looks, look_report, etc.)
 _ANALYSIS_CANVAS = Canvas(width=480, height=480)
 _ANALYSIS_TRACE = TraceDefaults(rays=500_000, batch=100_000, depth=12)
 
 
 def _analysis_canvas(base: Canvas | None) -> Canvas:
-    """Analysis renders keep authored framing while capping resolution."""
     if base is None:
         return _ANALYSIS_CANVAS
     longest = max(base.width, base.height)
@@ -48,7 +46,6 @@ def _analysis_canvas(base: Canvas | None) -> Canvas:
 
 
 def _analysis_trace(base: TraceDefaults | None, *, rays: int | None = None) -> TraceDefaults:
-    """Analysis renders reuse authored intent while staying cheap."""
     ref = base or TraceDefaults()
     chosen_rays = ref.rays if rays is None else rays
     return TraceDefaults(
@@ -66,9 +63,9 @@ def _analysis_result_look(
     normalize: str,
     normalize_ref: float = 0.0,
 ) -> Look:
-    look = authored.with_overrides(tonemap=tonemap, normalize=normalize)
+    look = _apply_look_override(authored, {"tonemap": tonemap, "normalize": normalize})
     if normalize_ref > 0.0:
-        look = look.with_overrides(normalize_ref=normalize_ref)
+        look = _apply_look_override(look, {"normalize_ref": normalize_ref})
     return look
 
 
@@ -123,13 +120,17 @@ def _resolve_static_scene_subject(
         shot = Shot(scene=subject)
         scene = subject
     if camera is not None:
-        shot = dc_replace(shot, camera=camera)
+        shot = Shot(name=shot.name, scene=shot.scene, camera=camera, canvas=shot.canvas,
+                    look=shot.look, trace=shot.trace)
     if canvas is not None:
-        shot = dc_replace(shot, canvas=canvas)
+        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=canvas,
+                    look=shot.look, trace=shot.trace)
     if look is not None:
-        shot = dc_replace(shot, look=look)
+        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=shot.canvas,
+                    look=look, trace=shot.trace)
     if trace is not None:
-        shot = dc_replace(shot, trace=trace)
+        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=shot.canvas,
+                    look=shot.look, trace=trace)
     return scene, shot
 
 
@@ -144,21 +145,10 @@ def auto_look(
     max_clipping: float = 0.02,
     tonemap: str | None = None,
     normalize: str | None = None,
-    binary: str = renderer_mod.DEFAULT_BINARY,
     frame: int | None = None,
     sample_count: int = 8,
 ) -> Look:
-    """Analyze a scene and return a Look with good exposure settings.
-
-    Works with a static Scene or an (animate, timeline) pair. Renders a
-    low-quality draft pass over sampled frames, measures brightness, and
-    computes exposure to hit *target_mean* (0-1 scale) without exceeding
-    *max_clipping*.
-
-    When passed a :class:`Shot`, authored camera/canvas/trace defaults are used
-    automatically. For animated callbacks, pass ``settings=shot`` to make the
-    analysis match the authored shot instead of the generic draft defaults.
-    """
+    """Analyze a scene and return a Look with good exposure settings."""
     animate, timeline, shot = _resolve_analysis_subject(
         scene_or_animate, timeline_or_none, settings
     )
@@ -170,18 +160,16 @@ def auto_look(
     chosen_normalize = shot.look.normalize if normalize is None else normalize
 
     def measure_per_frame(look: Look) -> list[tuple[int, float, FrameStats]]:
-        draft_shot = dc_replace(shot, canvas=draft_canvas, look=look, trace=draft_trace)
+        draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
         return renderer_mod.render_stats(
             animate,
             timeline,
             frames=analysis_frames,
             settings=draft_shot,
             camera=camera or shot.camera,
-            binary=binary,
             fast=True,
         )
 
-    # Calibrate normalize_ref if using fixed mode
     chosen_normalize_ref = 0.0
     if chosen_normalize == "fixed":
         chosen_normalize_ref = calibrate_normalize_ref(
@@ -189,7 +177,6 @@ def auto_look(
             timeline,
             settings=Shot(canvas=draft_canvas, trace=draft_trace),
             camera=camera or shot.camera,
-            binary=binary,
             frame=analysis_frames,
         )
 
@@ -200,26 +187,21 @@ def auto_look(
         normalize_ref=chosen_normalize_ref,
     )
 
-    # Measure at baseline exposure
-    baseline_look = result_base.with_overrides(exposure=-5.0)
-
+    baseline_look = _apply_look_override(result_base, {"exposure": -5.0})
     per_frame = measure_per_frame(baseline_look)
     if not per_frame:
         return result_base
 
-    # Compute per-frame brightness
     brightnesses = [s.mean / 255.0 for _, _, s in per_frame]
     measured_mean = sum(brightnesses) / len(brightnesses)
 
-    # Stability check: if brightness varies a lot, target the dimmer frames
-    # to prevent clipping on bright frames while keeping dark frames visible.
     if len(brightnesses) > 1:
         std_b = (
             sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)
         ) ** 0.5
         if std_b > 0.05:
             sorted_b = sorted(brightnesses)
-            measured_mean = sorted_b[len(sorted_b) // 4]  # 25th percentile
+            measured_mean = sorted_b[len(sorted_b) // 4]
 
     if measured_mean > 0.001:
         exposure = -5.0 + math.log2(target_mean / measured_mean)
@@ -229,7 +211,7 @@ def auto_look(
     exposure = max(-15.0, min(exposure, 10.0))
     best_exposure = exposure
 
-    candidate_stats = measure_per_frame(result_base.with_overrides(exposure=exposure))
+    candidate_stats = measure_per_frame(_apply_look_override(result_base, {"exposure": exposure}))
     if candidate_stats:
         candidate_clipping = max(s.pct_clipped for _, _, s in candidate_stats)
         if candidate_clipping > max_clipping:
@@ -238,7 +220,9 @@ def auto_look(
             best_exposure = low
             for _ in range(8):
                 mid = (low + high) * 0.5
-                mid_stats = measure_per_frame(result_base.with_overrides(exposure=mid))
+                mid_stats = measure_per_frame(
+                    _apply_look_override(result_base, {"exposure": mid})
+                )
                 if not mid_stats:
                     high = mid
                     continue
@@ -249,7 +233,7 @@ def auto_look(
                 else:
                     high = mid
 
-    return result_base.with_overrides(exposure=round(best_exposure, 2))
+    return _apply_look_override(result_base, {"exposure": round(best_exposure, 2)})
 
 
 def calibrate_normalize_ref(
@@ -258,44 +242,27 @@ def calibrate_normalize_ref(
     *,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = renderer_mod.DEFAULT_BINARY,
     fast: bool = False,
     frame: int | list[int] | None = 0,
 ) -> float:
-    """Render one or more frames with max-normalize to determine a good normalize_ref.
-
-    Returns the HDR max value suitable for use as ``Look(normalize="fixed",
-    normalize_ref=...)``.
-
-    Camera precedence matches :func:`render`: per-frame camera override,
-    then explicit ``camera=``, then ``settings.camera``.
-    """
+    """Render frames with max-normalize to determine a good normalize_ref."""
     timeline, shot = renderer_mod._resolve_args(timeline, settings)
     frames = [frame] if isinstance(frame, int) else frame
     frame_indices = [0] if frames is None else list(frames)
 
-    # Force max mode so the C++ renderer computes and reports true HDR peak.
     cal_shot = shot.with_look(normalize="max", normalize_pct=1.0)
+    session = RenderSession(cal_shot.canvas.width, cal_shot.canvas.height, fast)
 
-    renderer = renderer_mod.Renderer(cal_shot, binary=binary, fast=fast)
-    try:
-        max_hdr = 0.0
-        for fi in frame_indices:
-            ctx = timeline.context_at(fi)
-            result = animate(ctx)
-            f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = renderer_mod._build_wire_json(
-                f, camera, cal_shot.camera, cal_shot.canvas.aspect
-            )
-            renderer.render_frame(wire)  # discard pixels, we want the report
-
-            rpt = renderer.last_report
-            if rpt is None or rpt.max_hdr <= 0:
-                raise RuntimeError("Calibration failed: no max_hdr in renderer report")
-            max_hdr = max(max_hdr, rpt.max_hdr)
-        return max_hdr
-    finally:
-        renderer.close()
+    max_hdr = 0.0
+    for fi in frame_indices:
+        ctx = timeline.context_at(fi)
+        result = animate(ctx)
+        cpp_shot = renderer_mod._resolve_frame_shot(cal_shot, result, camera)
+        render_result = session.render_shot(cpp_shot)
+        if render_result.max_hdr <= 0:
+            raise RuntimeError("Calibration failed: no max_hdr")
+        max_hdr = max(max_hdr, render_result.max_hdr)
+    return max_hdr
 
 
 def compare_looks(
@@ -306,16 +273,10 @@ def compare_looks(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
-    binary: str = renderer_mod.DEFAULT_BINARY,
     count: int = 8,
     frames: list[int] | None = None,
 ) -> LookComparison:
-    """Render candidate Looks against the same frames and compare.
-
-    All candidates are evaluated on the same frame set for fair comparison.
-    Uses draft quality for speed while preserving the authored shot aspect when
-    enough shot context is available.
-    """
+    """Render candidate Looks against the same frames and compare."""
     if looks is None:
         if not isinstance(timeline_or_looks, list):
             raise ValueError("looks are required")
@@ -345,7 +306,6 @@ def compare_looks(
             frames=frame_indices,
             settings=draft_shot,
             camera=camera or shot.camera,
-            binary=binary,
             fast=True,
         )
         profiles.append(LookProfile.from_stats(look, stats))
@@ -360,7 +320,6 @@ def look_report(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
-    binary: str = renderer_mod.DEFAULT_BINARY,
     count: int = 12,
     frames: list[int] | None = None,
     dark_threshold: float = 0.15,
@@ -368,10 +327,7 @@ def look_report(
     clip_threshold: float = 0.05,
     contrast_threshold: float = 30.0,
 ) -> LookReport:
-    """Diagnose how a Look performs across an animation's timeline.
-
-    Renders at sampled frames and identifies problem regions.
-    """
+    """Diagnose how a Look performs across an animation's timeline."""
     if look is None:
         if not isinstance(timeline_or_look, Look):
             raise ValueError("look is required")
@@ -399,7 +355,6 @@ def look_report(
         frames=frame_indices,
         settings=draft_shot,
         camera=camera or shot.camera,
-        binary=binary,
         fast=True,
     )
     profile = LookProfile.from_stats(candidate_look, stats)

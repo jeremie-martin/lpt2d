@@ -67,6 +67,10 @@ static NormalizeMode parse_normalize_arg(nb::object obj) {
 NB_MODULE(_lpt2d, m) {
     m.doc() = "lpt2d core C++ bindings";
 
+    // Suppress leak warnings at interpreter shutdown — these are false positives
+    // caused by Python module cleanup ordering, not actual memory leaks.
+    nb::set_leak_warnings(false);
+
     // ── Enums ────────────────────────────────────────────────────
     nb::enum_<ToneMap>(m, "ToneMap")
         .value("none", ToneMap::None)
@@ -321,8 +325,20 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("max", &Bounds::max);
 
     nb::class_<Camera2D>(m, "Camera2D")
-        .def("__init__", [](Camera2D* c, std::optional<Bounds> bounds,
+        .def("__init__", [](Camera2D* c, nb::object bounds_obj,
                             std::optional<Vec2> center, std::optional<float> width) {
+            std::optional<Bounds> bounds;
+            if (!bounds_obj.is_none()) {
+                // Accept Bounds object or [xmin, ymin, xmax, ymax] list
+                if (nb::isinstance<Bounds>(bounds_obj)) {
+                    bounds = nb::cast<Bounds>(bounds_obj);
+                } else {
+                    nb::list lst = nb::cast<nb::list>(bounds_obj);
+                    if (nb::len(lst) != 4) throw nb::value_error("bounds must have 4 elements");
+                    bounds = Bounds{{nb::cast<float>(lst[0]), nb::cast<float>(lst[1])},
+                                   {nb::cast<float>(lst[2]), nb::cast<float>(lst[3])}};
+                }
+            }
             new (c) Camera2D{bounds, center, width};
         }, "bounds"_a = nb::none(), "center"_a = nb::none(), "width"_a = nb::none())
         .def_rw("bounds", &Camera2D::bounds)
