@@ -1139,7 +1139,6 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     update_display(pp, display_aspect, vignette_frame);
 
     out_rgb.resize(width_ * height_ * 3);
-    glFinish();
     glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
     glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, out_rgb.data());
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
