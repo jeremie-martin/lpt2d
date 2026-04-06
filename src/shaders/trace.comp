@@ -357,10 +357,7 @@ HitGeo hit_scene(vec2 ro, vec2 rd, out uint out_type, out uint out_index) {
     HitGeo best = NO_HIT;
     out_type = 0u;
     out_index = 0u;
-    for (uint i = 0u; i < uNumCircles; i++) {
-        HitGeo h = hit_circle(ro, rd, circles[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_CIRCLE; out_index = i; }
-    }
+    // Test densest types first for tighter best.t early pruning
     for (uint i = 0u; i < uNumSegments; i++) {
         HitGeo h = hit_segment(ro, rd, segments[i], best.t);
         if (h.t < best.t) { best = h; out_type = PRIM_SEGMENT; out_index = i; }
@@ -369,13 +366,17 @@ HitGeo hit_scene(vec2 ro, vec2 rd, out uint out_type, out uint out_index) {
         HitGeo h = hit_arc(ro, rd, arcs[i], best.t);
         if (h.t < best.t) { best = h; out_type = PRIM_ARC; out_index = i; }
     }
-    for (uint i = 0u; i < uNumBeziers; i++) {
-        HitGeo h = hit_bezier(ro, rd, beziers[i], best.t);
-        if (h.t < best.t) { best = h; out_type = PRIM_BEZIER; out_index = i; }
+    for (uint i = 0u; i < uNumCircles; i++) {
+        HitGeo h = hit_circle(ro, rd, circles[i], best.t);
+        if (h.t < best.t) { best = h; out_type = PRIM_CIRCLE; out_index = i; }
     }
     for (uint i = 0u; i < uNumEllipses; i++) {
         HitGeo h = hit_ellipse(ro, rd, ellipses[i], best.t);
         if (h.t < best.t) { best = h; out_type = PRIM_ELLIPSE; out_index = i; }
+    }
+    for (uint i = 0u; i < uNumBeziers; i++) {
+        HitGeo h = hit_bezier(ro, rd, beziers[i], best.t);
+        if (h.t < best.t) { best = h; out_type = PRIM_BEZIER; out_index = i; }
     }
     return best;
 }
