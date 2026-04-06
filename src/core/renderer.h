@@ -74,7 +74,7 @@ public:
     float compute_current_max();
 
     // Compute per-frame stats from the post-processed RGBA8 buffer.
-    // Must be called after read_pixels() (which populates rgba_buffer_).
+    // Must be called after read_display_rgba() (which populates rgba_buffer_).
     FrameMetrics compute_frame_metrics() const;
 
     // Compute metrics from the current display FBO (reads back RGBA8 pixels).
@@ -91,7 +91,7 @@ private:
 
     // Display FBO (8-bit for ImGui / export)
     GLuint display_fbo_ = 0;
-    GLuint display_texture_ = 0; // GL_RGBA8
+    GLuint display_texture_ = 0; // GL_RGB8
 
     // --- GPU tracing ---
     GLuint trace_program_ = 0;
@@ -172,6 +172,7 @@ private:
     float last_max_ = 0.0f;
     float viewport_scale_ = 1.0f;
     std::vector<uint8_t> rgba_buffer_;
+    std::vector<uint8_t> rgb_row_buffer_;
 
     // Cached PP uniform locations
     GLint loc_max_val_ = -1;

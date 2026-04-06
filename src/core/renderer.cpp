@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <iterator>
 #include <variant>
@@ -302,7 +303,7 @@ bool Renderer::create_framebuffers() {
     // Display texture (8-bit)
     glGenTextures(1, &display_texture_);
     glBindTexture(GL_TEXTURE_2D, display_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width_, height_, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, width_, height_, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
@@ -1116,38 +1117,41 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
                            const VignetteFrame* vignette_frame, FrameMetrics* out_metrics) {
     update_display(pp, display_aspect, vignette_frame);
 
-    read_display_rgba(rgba_buffer_);
-
     out_rgb.resize(width_ * height_ * 3);
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
+    glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, out_rgb.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
     int histogram[256] = {};
     size_t clipped = 0;
+    const size_t row_bytes = (size_t)width_ * 3;
+    rgb_row_buffer_.resize(row_bytes);
 
     // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
     // match the world-space orientation seen in the interactive viewport.
-    for (int y = 0; y < height_; ++y) {
-        int src_y = height_ - 1 - y;
-        const uint8_t* src = rgba_buffer_.data() + (size_t)src_y * width_ * 4;
-        uint8_t* dst = out_rgb.data() + (size_t)y * width_ * 3;
-        for (int x = 0; x < width_; ++x) {
-            uint8_t r = src[x * 4 + 0];
-            uint8_t g = src[x * 4 + 1];
-            uint8_t b = src[x * 4 + 2];
-            dst[x * 3 + 0] = r;
-            dst[x * 3 + 1] = g;
-            dst[x * 3 + 2] = b;
-
-            if (out_metrics) {
-                uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
-                if (lum > 255) lum = 255;
-                histogram[lum]++;
-                if (r == 255 || g == 255 || b == 255) ++clipped;
-            }
-        }
+    for (int y = 0; y < height_ / 2; ++y) {
+        uint8_t* top = out_rgb.data() + (size_t)y * row_bytes;
+        uint8_t* bottom = out_rgb.data() + (size_t)(height_ - 1 - y) * row_bytes;
+        std::memcpy(rgb_row_buffer_.data(), top, row_bytes);
+        std::memcpy(top, bottom, row_bytes);
+        std::memcpy(bottom, rgb_row_buffer_.data(), row_bytes);
     }
 
     if (!out_metrics)
         return;
+
+    for (size_t i = 0, n = (size_t)width_ * height_; i < n; ++i) {
+        size_t off = i * 3;
+        uint8_t r = out_rgb[off];
+        uint8_t g = out_rgb[off + 1];
+        uint8_t b = out_rgb[off + 2];
+        uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
+        if (lum > 255) lum = 255;
+        histogram[lum]++;
+        if (r == 255 || g == 255 || b == 255) ++clipped;
+    }
 
     const size_t n_pixels = (size_t)width_ * height_;
     if (n_pixels == 0) {
@@ -1198,7 +1202,7 @@ FrameMetrics Renderer::compute_display_metrics() {
 }
 
 FrameMetrics Renderer::compute_frame_metrics() const {
-    // Single pass over rgba_buffer_ (already populated by read_pixels).
+    // Single pass over rgba_buffer_ (already populated by read_display_rgba).
     // BT.709 luminance: integer approximation (>>10) of 0.2126/0.7152/0.0722.
     // Must match Python stats.py and GLSL postprocess.frag.
     static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
