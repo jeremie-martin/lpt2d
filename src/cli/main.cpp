@@ -19,6 +19,60 @@
 #include <string>
 #include <vector>
 
+using Json = nlohmann::ordered_json;
+
+struct CliOverrides {
+    std::optional<int> width, height;
+    std::optional<int64_t> rays;
+    std::optional<int> batch, depth;
+    std::optional<float> exposure, contrast, gamma, white_point;
+    std::optional<SeedMode> seed_mode;
+    std::optional<ToneMap> tonemap;
+    std::optional<NormalizeMode> normalize;
+    std::optional<float> normalize_ref, normalize_pct;
+    std::optional<float> ambient, opacity, saturation, intensity;
+    std::optional<float> vignette, vignette_radius;
+    std::optional<float> temperature, highlights, shadows, hue_shift;
+    std::optional<float> grain, chromatic_aberration;
+    std::optional<int> grain_seed;
+    std::optional<std::array<float, 3>> background;
+
+    void apply_to(Shot& shot) const {
+        if (width) shot.canvas.width = *width;
+        if (height) shot.canvas.height = *height;
+        if (rays) shot.trace.rays = *rays;
+        if (batch) shot.trace.batch = *batch;
+        if (depth) shot.trace.depth = *depth;
+        if (intensity) shot.trace.intensity = *intensity;
+        if (seed_mode) shot.trace.seed_mode = *seed_mode;
+        if (exposure) shot.look.exposure = *exposure;
+        if (contrast) shot.look.contrast = *contrast;
+        if (gamma) shot.look.gamma = *gamma;
+        if (white_point) shot.look.white_point = *white_point;
+        if (tonemap) shot.look.tone_map = *tonemap;
+        if (normalize) shot.look.normalize = *normalize;
+        if (normalize_ref) shot.look.normalize_ref = *normalize_ref;
+        if (normalize_pct) shot.look.normalize_pct = *normalize_pct;
+        if (ambient) shot.look.ambient = *ambient;
+        if (opacity) shot.look.opacity = *opacity;
+        if (saturation) shot.look.saturation = *saturation;
+        if (vignette) shot.look.vignette = *vignette;
+        if (vignette_radius) shot.look.vignette_radius = *vignette_radius;
+        if (temperature) shot.look.temperature = *temperature;
+        if (highlights) shot.look.highlights = *highlights;
+        if (shadows) shot.look.shadows = *shadows;
+        if (hue_shift) shot.look.hue_shift = *hue_shift;
+        if (grain) shot.look.grain = *grain;
+        if (grain_seed) shot.look.grain_seed = *grain_seed;
+        if (chromatic_aberration) shot.look.chromatic_aberration = *chromatic_aberration;
+        if (background) {
+            shot.look.background[0] = (*background)[0];
+            shot.look.background[1] = (*background)[1];
+            shot.look.background[2] = (*background)[2];
+        }
+    }
+};
+
 static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
@@ -88,9 +142,57 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
-int main(int argc, char** argv) {
-    using Json = nlohmann::ordered_json;
+static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool include_histogram, int frame_index) {
+    std::string input((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
+    if (input.empty()) {
+        std::cerr << "No JSON received on stdin\n";
+        return 1;
+    }
 
+    std::string error;
+    auto shot = try_load_stream_shot_json_string(input, &error);
+    if (!shot) {
+        std::cerr << error << "\n";
+        return 1;
+    }
+    overrides.apply_to(*shot);
+
+    try {
+        RenderSession session(shot->canvas.width, shot->canvas.height, fast_mode);
+        auto t0 = std::chrono::steady_clock::now();
+        auto result = session.render_shot(*shot, frame_index);
+        auto t1 = std::chrono::steady_clock::now();
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        std::cout.write(reinterpret_cast<const char*>(result.pixels.data()),
+                        static_cast<std::streamsize>(result.pixels.size()));
+        std::cout.flush();
+
+        Json report = {
+            {"frame", frame_index},
+            {"rays", result.total_rays},
+            {"time_ms", static_cast<int>(elapsed_ms + 0.5)},
+            {"time_ms_exact", elapsed_ms},
+            {"max_hdr", result.max_hdr},
+            {"total_rays", result.total_rays},
+            {"mean", result.metrics.mean_lum},
+            {"pct_black", result.metrics.pct_black},
+            {"pct_clipped", result.metrics.pct_clipped},
+            {"p50", result.metrics.p50},
+            {"p95", result.metrics.p95},
+        };
+        if (include_histogram)
+            report["histogram"] = result.metrics.histogram;
+
+        std::cerr << "frame " << frame_index << ": " << report.dump() << "\n";
+        return 0;
+    } catch (const std::exception& ex) {
+        std::cerr << ex.what() << "\n";
+        return 1;
+    }
+}
+
+int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     std::string save_shot_path;
@@ -99,59 +201,7 @@ int main(int argc, char** argv) {
     bool include_histogram = false;
     int frame_index = 0;
 
-    // Deferred overrides: parse flags first, apply to shot after loading.
-    // Using lambdas to capture the override actions.
-    struct {
-        std::optional<int> width, height;
-        std::optional<int64_t> rays;
-        std::optional<int> batch, depth;
-        std::optional<float> exposure, contrast, gamma, white_point;
-        std::optional<SeedMode> seed_mode;
-        std::optional<ToneMap> tonemap;
-        std::optional<NormalizeMode> normalize;
-        std::optional<float> normalize_ref, normalize_pct;
-        std::optional<float> ambient, opacity, saturation, intensity;
-        std::optional<float> vignette, vignette_radius;
-        std::optional<float> temperature, highlights, shadows, hue_shift;
-        std::optional<float> grain, chromatic_aberration;
-        std::optional<int> grain_seed;
-        std::optional<std::array<float, 3>> background;
-
-        void apply_to(Shot& shot) const {
-            if (width) shot.canvas.width = *width;
-            if (height) shot.canvas.height = *height;
-            if (rays) shot.trace.rays = *rays;
-            if (batch) shot.trace.batch = *batch;
-            if (depth) shot.trace.depth = *depth;
-            if (intensity) shot.trace.intensity = *intensity;
-            if (seed_mode) shot.trace.seed_mode = *seed_mode;
-            if (exposure) shot.look.exposure = *exposure;
-            if (contrast) shot.look.contrast = *contrast;
-            if (gamma) shot.look.gamma = *gamma;
-            if (white_point) shot.look.white_point = *white_point;
-            if (tonemap) shot.look.tone_map = *tonemap;
-            if (normalize) shot.look.normalize = *normalize;
-            if (normalize_ref) shot.look.normalize_ref = *normalize_ref;
-            if (normalize_pct) shot.look.normalize_pct = *normalize_pct;
-            if (ambient) shot.look.ambient = *ambient;
-            if (opacity) shot.look.opacity = *opacity;
-            if (saturation) shot.look.saturation = *saturation;
-            if (vignette) shot.look.vignette = *vignette;
-            if (vignette_radius) shot.look.vignette_radius = *vignette_radius;
-            if (temperature) shot.look.temperature = *temperature;
-            if (highlights) shot.look.highlights = *highlights;
-            if (shadows) shot.look.shadows = *shadows;
-            if (hue_shift) shot.look.hue_shift = *hue_shift;
-            if (grain) shot.look.grain = *grain;
-            if (grain_seed) shot.look.grain_seed = *grain_seed;
-            if (chromatic_aberration) shot.look.chromatic_aberration = *chromatic_aberration;
-            if (background) {
-                shot.look.background[0] = (*background)[0];
-                shot.look.background[1] = (*background)[1];
-                shot.look.background[2] = (*background)[2];
-            }
-        }
-    } overrides;
+    CliOverrides overrides;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
@@ -264,54 +314,7 @@ int main(int argc, char** argv) {
             std::cerr << "--save-shot cannot be combined with --stream\n";
             return 1;
         }
-
-        std::string input((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
-        if (input.empty()) {
-            std::cerr << "No JSON received on stdin\n";
-            return 1;
-        }
-
-        std::string error;
-        auto shot = try_load_stream_shot_json_string(input, &error);
-        if (!shot) {
-            std::cerr << error << "\n";
-            return 1;
-        }
-        overrides.apply_to(*shot);
-
-        try {
-            RenderSession session(shot->canvas.width, shot->canvas.height, fast_mode);
-            auto t0 = std::chrono::steady_clock::now();
-            auto result = session.render_shot(*shot, frame_index);
-            auto t1 = std::chrono::steady_clock::now();
-            const double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-            std::cout.write(reinterpret_cast<const char*>(result.pixels.data()),
-                            static_cast<std::streamsize>(result.pixels.size()));
-            std::cout.flush();
-
-            Json report = {
-                {"frame", frame_index},
-                {"rays", result.total_rays},
-                {"time_ms", static_cast<int>(elapsed_ms + 0.5)},
-                {"time_ms_exact", elapsed_ms},
-                {"max_hdr", result.max_hdr},
-                {"total_rays", result.total_rays},
-                {"mean", result.metrics.mean_lum},
-                {"pct_black", result.metrics.pct_black},
-                {"pct_clipped", result.metrics.pct_clipped},
-                {"p50", result.metrics.p50},
-                {"p95", result.metrics.p95},
-            };
-            if (include_histogram)
-                report["histogram"] = result.metrics.histogram;
-
-            std::cerr << "frame " << frame_index << ": " << report.dump() << "\n";
-            return 0;
-        } catch (const std::exception& ex) {
-            std::cerr << ex.what() << "\n";
-            return 1;
-        }
+        return run_stream_mode(overrides, fast_mode, include_histogram, frame_index);
     }
 
     // Load shot and apply CLI overrides
