@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "fiber",
   "camera": {
     "bounds": [
-      -1.65,
-      -0.27,
-      1.65,
-      0.27
+      -1.649999976158142,
+      -0.27000001072883606,
+      1.649999976158142,
+      0.27000001072883606
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -48,35 +48,44 @@
     "seed_mode": "deterministic"
   },
   "materials": {
-    "guide_wall": {
-      "ior": 1,
-      "roughness": 0,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.98,
-      "emission": 0.0
-    },
     "fiber_glass": {
       "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
       "absorption": 0.5,
-      "cauchy_b": 15000,
-      "albedo": 1,
-      "emission": 0.0
+      "cauchy_b": 15000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
+    },
+    "guide_wall": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.9800000190734863,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "stop_absorber": {
-      "ior": 1,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 0,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -85,11 +94,11 @@
       "type": "segment",
       "a": [
         -1.5,
-        -0.12
+        -0.11999999731779099
       ],
       "b": [
         1.5,
-        -0.12
+        -0.11999999731779099
       ],
       "material_id": "guide_wall"
     },
@@ -98,11 +107,11 @@
       "type": "segment",
       "a": [
         -1.5,
-        0.12
+        0.11999999731779099
       ],
       "b": [
         1.5,
-        0.12
+        0.11999999731779099
       ],
       "material_id": "guide_wall"
     },
@@ -110,10 +119,10 @@
       "id": "fiber_core_center",
       "type": "circle",
       "center": [
-        0,
-        0
+        0.0,
+        0.0
       ],
-      "radius": 0.06,
+      "radius": 0.05999999865889549,
       "material_id": "fiber_glass"
     },
     {
@@ -121,9 +130,9 @@
       "type": "circle",
       "center": [
         0.5,
-        0
+        0.0
       ],
-      "radius": 0.06,
+      "radius": 0.05999999865889549,
       "material_id": "fiber_glass"
     },
     {
@@ -131,9 +140,9 @@
       "type": "circle",
       "center": [
         -0.5,
-        0
+        0.0
       ],
-      "radius": 0.06,
+      "radius": 0.05999999865889549,
       "material_id": "fiber_glass"
     },
     {
@@ -141,11 +150,11 @@
       "type": "segment",
       "a": [
         1.5,
-        -0.12
+        -0.11999999731779099
       ],
       "b": [
         1.5,
-        0.12
+        0.11999999731779099
       ],
       "material_id": "stop_absorber"
     }
@@ -156,15 +165,15 @@
       "type": "segment",
       "a": [
         -1.5,
-        0.12
+        0.11999999731779099
       ],
       "b": [
         -1.5,
-        -0.12
+        -0.11999999731779099
       ],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ],
   "groups": []

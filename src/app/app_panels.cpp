@@ -545,6 +545,7 @@ void draw_controls_panel(
                         std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
 
                     renderer.upload_scene(diagnostic_copy.scene, view);
+                    renderer.upload_fills(diagnostic_copy.scene, view);
                     renderer.clear();
                     if (renderer.num_lights() > 0)
                         renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
@@ -570,6 +571,7 @@ void draw_controls_panel(
                     for (const auto& source : authored_sources) {
                         Scene solo = scene_with_solo_source(diagnostic_copy.scene, source);
                         renderer.upload_scene(solo, view);
+                        renderer.upload_fills(solo, view);
                         renderer.clear();
                         if (renderer.num_lights() > 0)
                             renderer.trace_and_draw_multi(tcfg, analysis_dispatches);

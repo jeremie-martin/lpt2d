@@ -19,6 +19,8 @@ set(SHADER_FILES
     ${SHADER_DIR}/trace.comp
     ${SHADER_DIR}/line.vert
     ${SHADER_DIR}/line.frag
+    ${SHADER_DIR}/fill.vert
+    ${SHADER_DIR}/fill.frag
     ${SHADER_DIR}/postprocess.vert
     ${SHADER_DIR}/postprocess.frag
     ${SHADER_DIR}/max_reduce.comp
@@ -42,6 +44,7 @@ add_library(lpt2d-core STATIC
     src/core/scenes.cpp
     src/core/renderer.cpp
     src/core/spectrum.cpp
+    src/core/color.cpp
     src/core/export.cpp
     src/core/serialize.cpp
     src/core/serialize_json.cpp

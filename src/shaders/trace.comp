@@ -61,6 +61,7 @@ struct GPUArc {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
 
 struct GPUBezier {
@@ -70,6 +71,7 @@ struct GPUBezier {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
 
 layout(std430, binding = 6) readonly buffer ArcBuf    { GPUArc arcs[]; };
@@ -82,6 +84,7 @@ struct GPUEllipse {
     float _pad;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
+    float color_wavelength, color_bandwidth;
 };
 
 layout(std430, binding = 8) readonly buffer EllipseBuf { GPUEllipse ellipses[]; };
@@ -195,9 +198,11 @@ struct Hit {
     float cauchy_b;
     float albedo;
     float emission;
+    float color_wavelength;
+    float color_bandwidth;
 };
 
-const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 50.0);
 
 Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     vec2 oc = ro - c.center;
@@ -214,7 +219,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission);
+    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.color_wavelength, c.color_bandwidth);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -229,7 +234,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
 
     vec2 p = ro + rd * t;
     vec2 n = normalize(vec2(-d.y, d.x));
-    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission);
+    return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.color_wavelength, s.color_bandwidth);
 }
 
 bool in_arc(float angle, float start, float sweep) {
@@ -262,7 +267,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.sweep)) {
             return Hit(t, p, normalize(p - a.center),
-                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission);
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.color_wavelength, a.color_bandwidth);
         }
     }
     return NO_HIT;
@@ -307,7 +312,7 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         vec2 n = normalize(vec2(-tangent.y, tangent.x));
         if (dot(n, rd) > 0.0) n = -n;
 
-        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission);
+        best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission, b.color_wavelength, b.color_bandwidth);
     }
     return best;
 }
@@ -342,7 +347,16 @@ Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
     vec2 n = vec2(ln.x*cr - ln.y*sr, ln.x*sr + ln.y*cr);
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission);
+    return Hit(t, p, n, e.ior, e.roughness, e.metallic, e.transmission, e.absorption, e.cauchy_b, e.albedo, e.emission, e.color_wavelength, e.color_bandwidth);
+}
+
+// Spectral response: Gaussian passband centered at material's color wavelength.
+// Returns 1.0 for spectrally neutral materials (center <= 0).
+float spectral_response(float lambda, float center, float bw) {
+    if (center <= 0.0) return 1.0;
+    float sigma = max(bw, 1.0);
+    float x = (lambda - center) / sigma;
+    return exp(-0.5 * x * x);
 }
 
 Hit hit_scene(vec2 ro, vec2 rd) {
@@ -435,6 +449,8 @@ void main() {
 
     // Trace
     float current_absorption = 0.0;
+    float current_color_wl = 0.0;
+    float current_color_bw = 50.0;
 
     for (uint depth = 0u; depth < uMaxDepth; depth++) {
         Hit h = hit_scene(ro, rd);
@@ -444,21 +460,27 @@ void main() {
             return;
         }
 
-        // Beer-Lambert attenuation inside absorbing medium
-        color *= exp(-current_absorption * h.t);
+        // Beer-Lambert attenuation inside absorbing medium (wavelength-dependent)
+        float vol_response = spectral_response(wavelength, current_color_wl, current_color_bw);
+        float absorption_eff = current_absorption * (1.0 + 2.0 * (1.0 - vol_response));
+        color *= exp(-absorption_eff * h.t);
 
         emit(ro, h.point, color);
 
-        // Emissive surface: adds energy at the current wavelength
+        // Emissive surface: adds energy at the current wavelength (spectrally selective)
         if (h.emission > 0.0) {
-            color += vec4(rgb * h.emission * uIntensity * total_w,
-                          h.emission * uIntensity * total_w);
+            float emit_resp = spectral_response(wavelength, h.color_wavelength, h.color_bandwidth);
+            color += vec4(rgb * h.emission * emit_resp * uIntensity * total_w,
+                          h.emission * emit_resp * uIntensity * total_w);
         }
 
         // ── Unified Principled BSDF ──
         {
             vec2 n = h.normal;
             float cos_i = dot(rd, n);
+
+            // Spectral material color: modulates albedo by wavelength
+            float response = spectral_response(wavelength, h.color_wavelength, h.color_bandwidth);
 
             // Cauchy dispersion: ior(λ) = A + B/λ² (wavelength in nm, cauchy_b in nm²)
             float ior = h.ior + h.cauchy_b / (wavelength * wavelength);
@@ -493,8 +515,8 @@ void main() {
                 F_dielectric = 0.5 * (rs * rs + rp * rp);
             }
 
-            // Metallic blend: metals use albedo as flat reflectance
-            float F_eff = mix(F_dielectric, h.albedo, h.metallic);
+            // Metallic blend: metals use albedo as flat reflectance (spectrally modulated)
+            float F_eff = mix(F_dielectric, h.albedo * response, h.metallic);
             if (tir) F_eff = 1.0;
 
             if (rand01() < F_eff) {
@@ -525,11 +547,19 @@ void main() {
                         }
                     }
                     ro = h.point - n * SCATTER_EPS;
-                    current_absorption = entering ? h.absorption : 0.0;
+                    if (entering) {
+                        current_absorption = h.absorption;
+                        current_color_wl = h.color_wavelength;
+                        current_color_bw = h.color_bandwidth;
+                    } else {
+                        current_absorption = 0.0;
+                        current_color_wl = 0.0;
+                        current_color_bw = 50.0;
+                    }
                 } else {
                     // Diffuse or absorb: metals absorb non-reflected energy,
-                    // dielectrics scatter with probability albedo
-                    float diffuse_p = (1.0 - h.metallic) * h.albedo;
+                    // dielectrics scatter with probability albedo (spectrally modulated)
+                    float diffuse_p = (1.0 - h.metallic) * h.albedo * response;
                     if (rand01() < diffuse_p) {
                         rd = cosine_scatter_2d(n);
                         ro = h.point + n * SCATTER_EPS;

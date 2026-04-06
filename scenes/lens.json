@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "lens_gallery",
   "camera": {
     "bounds": [
-      -1.55,
-      -0.871875,
-      1.55,
-      0.871875
+      -1.5499999523162842,
+      -0.871874988079071,
+      1.5499999523162842,
+      0.871874988079071
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -48,25 +48,31 @@
     "seed_mode": "deterministic"
   },
   "materials": {
-    "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.95,
-      "emission": 0.0
-    },
     "lens_glass": {
       "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
+    },
+    "wall_mirror": {
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -74,12 +80,12 @@
       "id": "wall_floor",
       "type": "segment",
       "a": [
-        -1.55,
-        -0.871875
+        -1.5499999523162842,
+        -0.871874988079071
       ],
       "b": [
-        1.55,
-        -0.871875
+        1.5499999523162842,
+        -0.871874988079071
       ],
       "material_id": "wall_mirror"
     },
@@ -87,12 +93,12 @@
       "id": "wall_ceiling",
       "type": "segment",
       "a": [
-        1.55,
-        0.871875
+        1.5499999523162842,
+        0.871874988079071
       ],
       "b": [
-        -1.55,
-        0.871875
+        -1.5499999523162842,
+        0.871874988079071
       ],
       "material_id": "wall_mirror"
     },
@@ -100,12 +106,12 @@
       "id": "wall_left",
       "type": "segment",
       "a": [
-        -1.55,
-        0.871875
+        -1.5499999523162842,
+        0.871874988079071
       ],
       "b": [
-        -1.55,
-        -0.871875
+        -1.5499999523162842,
+        -0.871874988079071
       ],
       "material_id": "wall_mirror"
     },
@@ -113,12 +119,12 @@
       "id": "wall_right",
       "type": "segment",
       "a": [
-        1.55,
-        -0.871875
+        1.5499999523162842,
+        -0.871874988079071
       ],
       "b": [
-        1.55,
-        0.871875
+        1.5499999523162842,
+        0.871874988079071
       ],
       "material_id": "wall_mirror"
     }
@@ -128,77 +134,77 @@
       "id": "beam_top",
       "type": "projector",
       "position": [
-        -1.35,
-        0.55
+        -1.350000023841858,
+        0.550000011920929
       ],
       "direction": [
-        1,
-        0
+        1.0,
+        0.0
       ],
       "source_radius": 0.0,
-      "spread": 0.045,
+      "spread": 0.04500000178813934,
       "profile": "uniform",
       "softness": 0.0,
-      "intensity": 0.85,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 0.8500000238418579,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
       "id": "beam_upper_mid",
       "type": "projector",
       "position": [
-        -1.35,
-        0.18
+        -1.350000023841858,
+        0.18000000715255737
       ],
       "direction": [
-        1,
-        0
+        1.0,
+        0.0
       ],
       "source_radius": 0.0,
-      "spread": 0.045,
+      "spread": 0.04500000178813934,
       "profile": "uniform",
       "softness": 0.0,
-      "intensity": 0.85,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 0.8500000238418579,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
       "id": "beam_lower_mid",
       "type": "projector",
       "position": [
-        -1.35,
-        -0.18
+        -1.350000023841858,
+        -0.18000000715255737
       ],
       "direction": [
-        1,
-        0
+        1.0,
+        0.0
       ],
       "source_radius": 0.0,
-      "spread": 0.045,
+      "spread": 0.04500000178813934,
       "profile": "uniform",
       "softness": 0.0,
-      "intensity": 0.85,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 0.8500000238418579,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
       "id": "beam_bottom",
       "type": "projector",
       "position": [
-        -1.35,
-        -0.55
+        -1.350000023841858,
+        -0.550000011920929
       ],
       "direction": [
-        1,
-        0
+        1.0,
+        0.0
       ],
       "source_radius": 0.0,
-      "spread": 0.045,
+      "spread": 0.04500000178813934,
       "profile": "uniform",
       "softness": 0.0,
-      "intensity": 0.85,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 0.8500000238418579,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ],
   "groups": [
@@ -206,13 +212,13 @@
       "id": "biconvex",
       "transform": {
         "translate": [
-          0,
-          0.55
+          0.0,
+          0.550000011920929
         ],
-        "rotate": 0,
+        "rotate": 0.0,
         "scale": [
-          1,
-          1
+          1.0,
+          1.0
         ]
       },
       "shapes": [
@@ -220,24 +226,24 @@
           "id": "biconvex_front_arc",
           "type": "arc",
           "center": [
-            0.28,
-            0
+            0.2800000011920929,
+            0.0
           ],
-          "radius": 0.34,
-          "angle_start": 2.6179939,
-          "sweep": 1.0471976,
+          "radius": 0.3400000035762787,
+          "angle_start": 2.6179938316345215,
+          "sweep": 1.0471975803375244,
           "material_id": "lens_glass"
         },
         {
           "id": "biconvex_top_cap",
           "type": "segment",
           "a": [
-            -0.0144486,
-            0.17
+            -0.014448599889874458,
+            0.17000000178813934
           ],
           "b": [
-            0.002486,
-            0.17
+            0.002486000070348382,
+            0.17000000178813934
           ],
           "material_id": "lens_glass"
         },
@@ -245,24 +251,24 @@
           "id": "biconvex_back_arc",
           "type": "arc",
           "center": [
-            -0.22,
-            0
+            -0.2199999988079071,
+            0.0
           ],
-          "radius": 0.28,
-          "angle_start": 5.6307254,
-          "sweep": 1.3049198,
+          "radius": 0.2800000011920929,
+          "angle_start": 5.630725383758545,
+          "sweep": 1.3049198389053345,
           "material_id": "lens_glass"
         },
         {
           "id": "biconvex_bottom_cap",
           "type": "segment",
           "a": [
-            0.002486,
-            -0.17
+            0.002486000070348382,
+            -0.17000000178813934
           ],
           "b": [
-            -0.0144486,
-            -0.17
+            -0.014448599889874458,
+            -0.17000000178813934
           ],
           "material_id": "lens_glass"
         }
@@ -273,13 +279,13 @@
       "id": "plano_convex",
       "transform": {
         "translate": [
-          0,
-          0.18
+          0.0,
+          0.18000000715255737
         ],
-        "rotate": 0,
+        "rotate": 0.0,
         "scale": [
-          1,
-          1
+          1.0,
+          1.0
         ]
       },
       "shapes": [
@@ -287,12 +293,12 @@
           "id": "plano_flat_side",
           "type": "segment",
           "a": [
-            -0.06,
-            -0.17
+            -0.05999999865889549,
+            -0.17000000178813934
           ],
           "b": [
-            -0.06,
-            0.17
+            -0.05999999865889549,
+            0.17000000178813934
           ],
           "material_id": "lens_glass"
         },
@@ -300,12 +306,12 @@
           "id": "plano_top_cap",
           "type": "segment",
           "a": [
-            -0.06,
-            0.17
+            -0.05999999865889549,
+            0.17000000178813934
           ],
           "b": [
-            0.002486,
-            0.17
+            0.002486000070348382,
+            0.17000000178813934
           ],
           "material_id": "lens_glass"
         },
@@ -313,24 +319,24 @@
           "id": "plano_convex_arc",
           "type": "arc",
           "center": [
-            -0.22,
-            0
+            -0.2199999988079071,
+            0.0
           ],
-          "radius": 0.28,
-          "angle_start": 5.6307254,
-          "sweep": 1.3049198,
+          "radius": 0.2800000011920929,
+          "angle_start": 5.630725383758545,
+          "sweep": 1.3049198389053345,
           "material_id": "lens_glass"
         },
         {
           "id": "plano_bottom_cap",
           "type": "segment",
           "a": [
-            0.002486,
-            -0.17
+            0.002486000070348382,
+            -0.17000000178813934
           ],
           "b": [
-            -0.06,
-            -0.17
+            -0.05999999865889549,
+            -0.17000000178813934
           ],
           "material_id": "lens_glass"
         }
@@ -341,13 +347,13 @@
       "id": "hemispherical",
       "transform": {
         "translate": [
-          0,
-          -0.18
+          0.0,
+          -0.18000000715255737
         ],
-        "rotate": 0,
+        "rotate": 0.0,
         "scale": [
-          1,
-          1
+          1.0,
+          1.0
         ]
       },
       "shapes": [
@@ -355,12 +361,12 @@
           "id": "hemisphere_flat_side",
           "type": "segment",
           "a": [
-            -0.085,
-            -0.17
+            -0.08500000089406967,
+            -0.17000000178813934
           ],
           "b": [
-            -0.085,
-            0.17
+            -0.08500000089406967,
+            0.17000000178813934
           ],
           "material_id": "lens_glass"
         },
@@ -368,12 +374,12 @@
           "id": "hemisphere_arc",
           "type": "arc",
           "center": [
-            -0.085,
-            0
+            -0.08500000089406967,
+            0.0
           ],
-          "radius": 0.17,
-          "angle_start": 4.712389,
-          "sweep": 3.1415927,
+          "radius": 0.17000000178813934,
+          "angle_start": 4.71238899230957,
+          "sweep": 3.1415927410125732,
           "material_id": "lens_glass"
         }
       ],
@@ -383,13 +389,13 @@
       "id": "ball",
       "transform": {
         "translate": [
-          0,
-          -0.55
+          0.0,
+          -0.550000011920929
         ],
-        "rotate": 0,
+        "rotate": 0.0,
         "scale": [
-          1,
-          1
+          1.0,
+          1.0
         ]
       },
       "shapes": [
@@ -397,10 +403,10 @@
           "id": "ball_body",
           "type": "circle",
           "center": [
-            0,
-            0
+            0.0,
+            0.0
           ],
-          "radius": 0.17,
+          "radius": 0.17000000178813934,
           "material_id": "lens_glass"
         }
       ],

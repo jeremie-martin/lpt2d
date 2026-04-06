@@ -48,3 +48,32 @@ Vec3 wavelength_to_rgb(float nm) {
     const Vec3& b = lut[i + 1];
     return {a.r + (b.r - a.r) * frac, a.g + (b.g - a.g) * frac, a.b + (b.b - a.b) * frac};
 }
+
+Vec3 spectral_fill_rgb(float wavelength, float bandwidth) {
+    if (wavelength <= 0.0f) return {1.0f, 1.0f, 1.0f};
+
+    float sigma = std::max(bandwidth, 1.0f);
+    constexpr int N = 40;
+    constexpr float lo = 380.0f, hi = 780.0f;
+
+    Vec3 sum{0, 0, 0};
+    float weight_sum = 0.0f;
+    for (int i = 0; i < N; ++i) {
+        float nm = lo + (hi - lo) * (i + 0.5f) / N;
+        float x = (nm - wavelength) / sigma;
+        float w = std::exp(-0.5f * x * x);
+        Vec3 rgb = wavelength_to_rgb(nm);
+        sum.r += rgb.r * w;
+        sum.g += rgb.g * w;
+        sum.b += rgb.b * w;
+        weight_sum += w;
+    }
+    if (weight_sum > 0.0f) {
+        sum.r /= weight_sum;
+        sum.g /= weight_sum;
+        sum.b /= weight_sum;
+    }
+    // Normalize so max channel = 1
+    float m = std::max({sum.r, sum.g, sum.b, 1e-6f});
+    return {sum.r / m, sum.g / m, sum.b / m};
+}

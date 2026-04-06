@@ -31,7 +31,7 @@ DEFAULT_LOOK = {
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -105,7 +105,7 @@ def test_authored_json_uses_explicit_look_trace_and_groups():
 def test_repo_authored_json_is_strict_v6_and_id_coherent():
     for path in _iter_scene_paths():
         data = _load(path)
-        assert data.get("version") == 7, f"{path} must declare version 7"
+        assert data.get("version") == 8, f"{path} must declare version 8"
         assert "camera" in data, f"{path} must include an explicit camera block"
         assert "canvas" in data, f"{path} must include an explicit canvas block"
 

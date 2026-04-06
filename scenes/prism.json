@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "prism",
   "camera": {
     "bounds": [
-      -1.2,
-      -0.675,
-      1.2,
-      0.675
+      -1.2000000476837158,
+      -0.675000011920929,
+      1.2000000476837158,
+      0.675000011920929
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -50,33 +50,42 @@
   "materials": {
     "prism_glass": {
       "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 30000,
-      "albedo": 1,
-      "emission": 0.0
-    },
-    "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.95,
-      "emission": 0.0
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 30000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "slit_absorber": {
-      "ior": 1,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 0,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
+    },
+    "wall_mirror": {
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -84,12 +93,12 @@
       "id": "prism_edge_left",
       "type": "segment",
       "a": [
-        -0.1,
-        -0.2078461
+        -0.10000000149011612,
+        -0.20784610509872437
       ],
       "b": [
         -0.5,
-        0.13856407
+        0.1385640650987625
       ],
       "material_id": "prism_glass"
     },
@@ -98,11 +107,11 @@
       "type": "segment",
       "a": [
         -0.5,
-        0.13856407
+        0.1385640650987625
       ],
       "b": [
-        0.3,
-        0.13856407
+        0.30000001192092896,
+        0.1385640650987625
       ],
       "material_id": "prism_glass"
     },
@@ -110,12 +119,12 @@
       "id": "prism_edge_right",
       "type": "segment",
       "a": [
-        0.3,
-        0.13856407
+        0.30000001192092896,
+        0.1385640650987625
       ],
       "b": [
-        -0.1,
-        -0.2078461
+        -0.10000000149011612,
+        -0.20784610509872437
       ],
       "material_id": "prism_glass"
     },
@@ -123,12 +132,12 @@
       "id": "wall_floor",
       "type": "segment",
       "a": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -136,12 +145,12 @@
       "id": "wall_ceiling",
       "type": "segment",
       "a": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -149,12 +158,12 @@
       "id": "wall_left",
       "type": "segment",
       "a": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -162,12 +171,12 @@
       "id": "wall_right",
       "type": "segment",
       "a": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -175,12 +184,12 @@
       "id": "slit_lower",
       "type": "segment",
       "a": [
-        -0.7,
-        -0.675
+        -0.699999988079071,
+        -0.675000011920929
       ],
       "b": [
-        -0.7,
-        -0.04
+        -0.699999988079071,
+        -0.03999999910593033
       ],
       "material_id": "slit_absorber"
     },
@@ -188,12 +197,12 @@
       "id": "slit_upper",
       "type": "segment",
       "a": [
-        -0.7,
-        0.04
+        -0.699999988079071,
+        0.03999999910593033
       ],
       "b": [
-        -0.7,
-        0.675
+        -0.699999988079071,
+        0.675000011920929
       ],
       "material_id": "slit_absorber"
     }
@@ -203,12 +212,12 @@
       "id": "source_main",
       "type": "point",
       "pos": [
-        -1,
-        0
+        -1.0,
+        0.0
       ],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ],
   "groups": []

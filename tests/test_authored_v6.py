@@ -65,7 +65,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid v6 shot JSON dict."""
     base = {
-        "version": 7,
+        "version": 8,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -252,7 +252,7 @@ def test_v6_rejects_older_shot_version(tmp_path):
 def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 7,
+        "version": 8,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -345,7 +345,7 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 7)" in result.stderr
+    assert "Unsupported shot version (expected 8)" in result.stderr
     assert not output.exists()
 
 

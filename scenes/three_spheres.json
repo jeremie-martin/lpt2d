@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "three_spheres",
   "camera": {
     "bounds": [
-      -1.2,
-      -0.675,
-      1.2,
-      0.675
+      -1.2000000476837158,
+      -0.675000011920929,
+      1.2000000476837158,
+      0.675000011920929
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -52,21 +52,27 @@
       "ior": 1.5,
       "roughness": 0.0,
       "metallic": 0.0,
-      "transmission": 1,
+      "transmission": 1.0,
       "absorption": 0.5,
-      "cauchy_b": 20000,
+      "cauchy_b": 20000.0,
       "albedo": 1.0,
-      "emission": 0.0
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.95,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -75,19 +81,19 @@
       "type": "circle",
       "center": [
         -0.5,
-        0
+        0.0
       ],
-      "radius": 0.2,
+      "radius": 0.20000000298023224,
       "material_id": "sphere_glass"
     },
     {
       "id": "sphere_center",
       "type": "circle",
       "center": [
-        0,
-        0
+        0.0,
+        0.0
       ],
-      "radius": 0.2,
+      "radius": 0.20000000298023224,
       "material_id": "sphere_glass"
     },
     {
@@ -95,21 +101,21 @@
       "type": "circle",
       "center": [
         0.5,
-        0
+        0.0
       ],
-      "radius": 0.2,
+      "radius": 0.20000000298023224,
       "material_id": "sphere_glass"
     },
     {
       "id": "wall_floor",
       "type": "segment",
       "a": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -117,12 +123,12 @@
       "id": "wall_ceiling",
       "type": "segment",
       "a": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -130,12 +136,12 @@
       "id": "wall_left",
       "type": "segment",
       "a": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -143,12 +149,12 @@
       "id": "wall_right",
       "type": "segment",
       "a": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     }
@@ -158,10 +164,10 @@
       "id": "source_left",
       "type": "point",
       "pos": [
-        -0.8,
+        -0.800000011920929,
         0.5
       ],
-      "intensity": 1,
+      "intensity": 1.0,
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
     },
@@ -169,10 +175,10 @@
       "id": "source_right",
       "type": "point",
       "pos": [
-        0.8,
+        0.800000011920929,
         -0.5
       ],
-      "intensity": 1,
+      "intensity": 1.0,
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
     }

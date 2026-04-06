@@ -6,10 +6,12 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "color.h"
 #include "geometry.h"
 #include "scene.h"
 #include "serialize.h"
 #include "session.h"
+#include "spectrum.h"
 
 #include <sstream>
 
@@ -116,10 +118,13 @@ NB_MODULE(_lpt2d, m) {
     nb::class_<Material>(m, "Material")
         .def("__init__", [](Material* mat,
                             float ior, float roughness, float metallic, float transmission,
-                            float absorption, float cauchy_b, float albedo, float emission) {
-            new (mat) Material{ior, roughness, metallic, transmission, absorption, cauchy_b, albedo, emission};
+                            float absorption, float cauchy_b, float albedo, float emission,
+                            float color_wavelength, float color_bandwidth, float fill) {
+            new (mat) Material{ior, roughness, metallic, transmission, absorption, cauchy_b, albedo, emission,
+                               color_wavelength, color_bandwidth, fill};
         }, "ior"_a = 1.0f, "roughness"_a = 0.0f, "metallic"_a = 0.0f, "transmission"_a = 0.0f,
-           "absorption"_a = 0.0f, "cauchy_b"_a = 0.0f, "albedo"_a = 1.0f, "emission"_a = 0.0f)
+           "absorption"_a = 0.0f, "cauchy_b"_a = 0.0f, "albedo"_a = 1.0f, "emission"_a = 0.0f,
+           "color_wavelength"_a = 0.0f, "color_bandwidth"_a = 50.0f, "fill"_a = 0.0f)
         .def_rw("ior", &Material::ior)
         .def_rw("roughness", &Material::roughness)
         .def_rw("metallic", &Material::metallic)
@@ -128,13 +133,19 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("cauchy_b", &Material::cauchy_b)
         .def_rw("albedo", &Material::albedo)
         .def_rw("emission", &Material::emission)
+        .def_rw("color_wavelength", &Material::color_wavelength)
+        .def_rw("color_bandwidth", &Material::color_bandwidth)
+        .def_rw("fill", &Material::fill)
         .def("__eq__", &Material::operator==)
         .def("__repr__", [](const Material& mat) {
             std::ostringstream os;
             os << "Material(ior=" << mat.ior << ", roughness=" << mat.roughness
                << ", metallic=" << mat.metallic << ", transmission=" << mat.transmission
                << ", absorption=" << mat.absorption << ", cauchy_b=" << mat.cauchy_b
-               << ", albedo=" << mat.albedo << ", emission=" << mat.emission << ")";
+               << ", albedo=" << mat.albedo << ", emission=" << mat.emission
+               << ", color_wavelength=" << mat.color_wavelength
+               << ", color_bandwidth=" << mat.color_bandwidth
+               << ", fill=" << mat.fill << ")";
             return os.str();
         });
 
@@ -147,6 +158,23 @@ NB_MODULE(_lpt2d, m) {
     m.def("emissive", &mat_emissive, "emission"_a, "base"_a = Material{});
     // beam_splitter is an alias for mirror
     m.def("beam_splitter", &mat_mirror, "reflectance"_a, "roughness"_a = 0.0f);
+
+    // ── Color convenience ───────────────────────────────────────
+    m.def("named_color", [](const std::string& name) -> nb::tuple {
+        auto result = named_color(name);
+        if (!result) throw nb::value_error(("unknown color name: " + name).c_str());
+        return nb::make_tuple(result->wavelength, result->bandwidth);
+    }, "name"_a);
+    m.def("spectral_fill_rgb", [](float wavelength, float bandwidth) -> nb::tuple {
+        Vec3 rgb = spectral_fill_rgb(wavelength, bandwidth);
+        return nb::make_tuple(rgb.r, rgb.g, rgb.b);
+    }, "wavelength"_a, "bandwidth"_a);
+    m.def("named_color_list", []() -> nb::list {
+        nb::list result;
+        for (const auto* e = named_colors(); e->name; ++e)
+            result.append(nb::make_tuple(e->name, e->params.wavelength, e->params.bandwidth));
+        return result;
+    });
 
     // ── Shape types ──────────────────────────────────────────────
 
@@ -590,7 +618,8 @@ NB_MODULE(_lpt2d, m) {
         .def_ro("height", &RenderResult::height)
         .def_ro("total_rays", &RenderResult::total_rays)
         .def_ro("max_hdr", &RenderResult::max_hdr)
-        .def_ro("metrics", &RenderResult::metrics);
+        .def_ro("metrics", &RenderResult::metrics)
+        .def_ro("time_ms", &RenderResult::time_ms);
 
     // ── RenderSession ────────────────────────────────────────────
     nb::class_<RenderSession>(m, "RenderSession")

@@ -45,15 +45,69 @@ FrameMetrics = _lpt2d.FrameMetrics
 TraceConfig = _lpt2d.TraceConfig
 PostProcess = _lpt2d.PostProcess
 
-# ─── Re-export convenience constructors ──────────────────────────
+# ─── Color-aware material constructors ───────────────────────────
 
-glass = _lpt2d.glass
-mirror = _lpt2d.mirror
-opaque_mirror = _lpt2d.opaque_mirror
-diffuse = _lpt2d.diffuse
-absorber = _lpt2d.absorber
-emissive = _lpt2d.emissive
-beam_splitter = _lpt2d.beam_splitter
+from .colors import resolve_color  # noqa: E402
+
+
+def glass(
+    ior: float = 1.5,
+    cauchy_b: float = 0.0,
+    absorption: float = 0.0,
+    *,
+    color: str | None = None,
+    fill: float = 0.0,
+) -> Material:
+    wl, bw = resolve_color(color)
+    return Material(ior=ior, transmission=1.0, absorption=absorption,
+                    cauchy_b=cauchy_b, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+
+
+def mirror(reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0) -> Material:
+    wl, bw = resolve_color(color)
+    return Material(roughness=roughness, metallic=1.0, transmission=1.0,
+                    albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+
+
+def opaque_mirror(
+    reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0,
+) -> Material:
+    wl, bw = resolve_color(color)
+    return Material(roughness=roughness, metallic=1.0, transmission=0.0,
+                    albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+
+
+def diffuse(reflectance: float, *, color: str | None = None, fill: float = 0.0) -> Material:
+    wl, bw = resolve_color(color)
+    return Material(albedo=reflectance, color_wavelength=wl, color_bandwidth=bw, fill=fill)
+
+
+def absorber() -> Material:
+    return Material(albedo=0.0)
+
+
+def emissive(emission: float, base: Material | None = None, *, color: str | None = None) -> Material:
+    if base is None:
+        base = Material()
+    # Copy to avoid mutating the caller's material
+    m = Material(
+        ior=base.ior, roughness=base.roughness, metallic=base.metallic,
+        transmission=base.transmission, absorption=base.absorption, cauchy_b=base.cauchy_b,
+        albedo=base.albedo, emission=emission,
+        color_wavelength=base.color_wavelength, color_bandwidth=base.color_bandwidth,
+        fill=base.fill,
+    )
+    if color is not None:
+        wl, bw = resolve_color(color)
+        m.color_wavelength = wl
+        m.color_bandwidth = bw
+    return m
+
+
+def beam_splitter(
+    reflectance: float, roughness: float = 0.0, *, color: str | None = None, fill: float = 0.0,
+) -> Material:
+    return mirror(reflectance, roughness, color=color, fill=fill)
 
 # ─── Geometry helpers ────────────────────────────────────────────
 
@@ -443,13 +497,15 @@ class FrameReport:
 def _report_from_result(result: RenderResult, frame_idx: int, time_ms: float) -> FrameReport:
     """Create a FrameReport from a C++ RenderResult."""
     m = result.metrics
+    # Prefer C++-measured timing (inside render_frame); fall back to caller-measured
+    actual_ms = result.time_ms if result.time_ms > 0 else time_ms
     return FrameReport(
         frame=frame_idx,
         rays=result.total_rays,
-        time_ms=int(time_ms),
+        time_ms=int(actual_ms),
         max_hdr=result.max_hdr,
         total_rays=result.total_rays,
-        time_ms_exact=time_ms,
+        time_ms_exact=actual_ms,
         mean=m.mean_lum,
         pct_black=m.pct_black,
         pct_clipped=m.pct_clipped,

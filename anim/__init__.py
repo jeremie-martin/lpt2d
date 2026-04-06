@@ -81,6 +81,8 @@ from .types import emissive as emissive
 from .types import glass as glass
 from .types import mirror as mirror
 from .types import opaque_mirror as opaque_mirror
+from .colors import resolve_color as resolve_color
+from .colors import fill_rgb as fill_rgb
 
 __all__ = [
     "Arc",

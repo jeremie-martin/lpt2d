@@ -131,6 +131,7 @@ int App::run(const AppConfig& config) {
 
     Bounds initial_view = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
     renderer.upload_scene(ed.shot.scene, initial_view);
+    renderer.upload_fills(ed.shot.scene, initial_view);
     renderer.clear();
     ed.session.undo.push(ed.shot.scene); // initial state
 
@@ -705,7 +706,9 @@ int App::run(const AppConfig& config) {
                 ImVec2 delta = io.MouseDelta;
                 ed.view.camera.center.x -= delta.x / ed.view.camera.zoom;
                 ed.view.camera.center.y += delta.y / ed.view.camera.zoom;
-                renderer.update_viewport(ed.view.camera.visible_bounds((float)win_w, (float)win_h));
+                auto view_bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                renderer.update_viewport(view_bounds);
+                renderer.redraw_fills(view_bounds);
                 renderer.clear();
             }
 
@@ -721,7 +724,9 @@ int App::run(const AppConfig& config) {
                     Vec2 world_after = cv2.to_world(io.MousePos);
                     ed.view.camera.center = ed.view.camera.center + (world_before - world_after);
                     cv = CameraView{ed.view.camera, (float)win_w, (float)win_h};
-                    renderer.update_viewport(ed.view.camera.visible_bounds((float)win_w, (float)win_h));
+                    auto zoom_bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                    renderer.update_viewport(zoom_bounds);
+                    renderer.redraw_fills(zoom_bounds);
                     renderer.clear();
                 }
             }
@@ -1244,13 +1249,21 @@ int App::run(const AppConfig& config) {
                     } else {
                         ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
                     }
-                    renderer.update_viewport(ed.view.camera.visible_bounds((float)win_w, (float)win_h));
-                    renderer.clear();
+                    {
+                        auto fit_bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                        renderer.update_viewport(fit_bounds);
+                        renderer.redraw_fills(fit_bounds);
+                        renderer.clear();
+                    }
                 }
                 if (!compare_ab.active && ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
-                    renderer.update_viewport(ed.view.camera.visible_bounds((float)win_w, (float)win_h));
-                    renderer.clear();
+                    {
+                        auto home_bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                        renderer.update_viewport(home_bounds);
+                        renderer.redraw_fills(home_bounds);
+                        renderer.clear();
+                    }
                 }
 
                 // Space: pause

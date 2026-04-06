@@ -144,7 +144,9 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
 
     ed.view.scene_bounds = scene_default_bounds(ed.shot.scene);
     Bounds view = current_display_view(ed, compare_ab, win_w, win_h);
-    renderer.upload_scene(build_render_scene_for(ed.shot, capture_render_filters(ed)), view);
+    auto render_scene = build_render_scene_for(ed.shot, capture_render_filters(ed));
+    renderer.upload_scene(render_scene, view);
+    renderer.upload_fills(render_scene, view);
     renderer.clear();
     if (mark_dirty)
         ed.session.dirty = true;
@@ -163,6 +165,7 @@ bool export_authored_png(const Shot& source_shot, int frame_index) {
     Bounds scene_bounds = scene_default_bounds(output_shot.scene);
     Bounds bounds = output_shot.camera.resolve(output_shot.canvas.aspect(), scene_bounds);
     export_renderer.upload_scene(output_shot.scene, bounds);
+    export_renderer.upload_fills(output_shot.scene, bounds);
     export_renderer.clear();
 
     TraceConfig tcfg = output_shot.trace.to_trace_config(frame_index);

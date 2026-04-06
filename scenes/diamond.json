@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "diamond",
   "camera": {
     "bounds": [
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -49,24 +49,30 @@
   },
   "materials": {
     "diamond_material": {
-      "ior": 2.42,
+      "ior": 2.4200000762939453,
       "roughness": 0.0,
       "metallic": 0.0,
-      "transmission": 1,
-      "absorption": 0.2,
-      "cauchy_b": 30000,
+      "transmission": 1.0,
+      "absorption": 0.20000000298023224,
+      "cauchy_b": 30000.0,
       "albedo": 1.0,
-      "emission": 0.0
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.95,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -74,10 +80,10 @@
       "id": "diamond_core",
       "type": "circle",
       "center": [
-        0,
-        0
+        0.0,
+        0.0
       ],
-      "radius": 0.35,
+      "radius": 0.3499999940395355,
       "material_id": "diamond_material"
     },
     {
@@ -138,10 +144,10 @@
       "id": "source_left",
       "type": "point",
       "pos": [
-        -0.7,
-        0.4
+        -0.699999988079071,
+        0.4000000059604645
       ],
-      "intensity": 1,
+      "intensity": 1.0,
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
     },
@@ -149,10 +155,10 @@
       "id": "source_right",
       "type": "point",
       "pos": [
-        0.7,
-        0.4
+        0.699999988079071,
+        0.4000000059604645
       ],
-      "intensity": 1,
+      "intensity": 1.0,
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
     },
@@ -160,7 +166,7 @@
       "id": "source_bottom",
       "type": "point",
       "pos": [
-        0,
+        0.0,
         -0.5
       ],
       "intensity": 0.5,

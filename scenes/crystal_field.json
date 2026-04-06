@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "crystal_field",
   "camera": {
     "bounds": [
-      -1.2,
-      -0.675,
-      1.2,
-      0.675
+      -1.2000000476837158,
+      -0.675000011920929,
+      1.2000000476837158,
+      0.675000011920929
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -49,54 +49,69 @@
   },
   "materials": {
     "crystal_glass_130": {
-      "ior": 1.3,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "ior": 1.2999999523162842,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "crystal_glass_150": {
       "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "crystal_glass_180": {
-      "ior": 1.8,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "ior": 1.7999999523162842,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "crystal_glass_200": {
-      "ior": 2,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.3,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "ior": 2.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.30000001192092896,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.9,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.8999999761581421,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -104,342 +119,342 @@
       "id": "crystal_r0_c0",
       "type": "circle",
       "center": [
-        -0.71999997,
-        -0.41569218
+        -0.7199999690055847,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r0_c1",
       "type": "circle",
       "center": [
-        -0.48,
-        -0.41569218
+        -0.47999998927116394,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r0_c2",
       "type": "circle",
       "center": [
-        -0.24,
-        -0.41569218
+        -0.23999999463558197,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r0_c3",
       "type": "circle",
       "center": [
-        0,
-        -0.41569218
+        0.0,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r0_c4",
       "type": "circle",
       "center": [
-        0.24,
-        -0.41569218
+        0.23999999463558197,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r0_c5",
       "type": "circle",
       "center": [
-        0.48,
-        -0.41569218
+        0.47999998927116394,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r0_c6",
       "type": "circle",
       "center": [
-        0.71999997,
-        -0.41569218
+        0.7199999690055847,
+        -0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r1_c0",
       "type": "circle",
       "center": [
-        -0.47999996,
-        -0.20784609
+        -0.47999995946884155,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r1_c1",
       "type": "circle",
       "center": [
-        -0.23999998,
-        -0.20784609
+        -0.23999997973442078,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r1_c2",
       "type": "circle",
       "center": [
-        0,
-        -0.20784609
+        0.0,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r1_c3",
       "type": "circle",
       "center": [
-        0.24,
-        -0.20784609
+        0.23999999463558197,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r1_c4",
       "type": "circle",
       "center": [
-        0.48,
-        -0.20784609
+        0.47999998927116394,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r1_c5",
       "type": "circle",
       "center": [
-        0.71999997,
-        -0.20784609
+        0.7199999690055847,
+        -0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r2_c0",
       "type": "circle",
       "center": [
-        -0.71999997,
-        0
+        -0.7199999690055847,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r2_c1",
       "type": "circle",
       "center": [
-        -0.48,
-        0
+        -0.47999998927116394,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r2_c2",
       "type": "circle",
       "center": [
-        -0.24,
-        0
+        -0.23999999463558197,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r2_c3",
       "type": "circle",
       "center": [
-        0,
-        0
+        0.0,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r2_c4",
       "type": "circle",
       "center": [
-        0.24,
-        0
+        0.23999999463558197,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r2_c5",
       "type": "circle",
       "center": [
-        0.48,
-        0
+        0.47999998927116394,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r2_c6",
       "type": "circle",
       "center": [
-        0.71999997,
-        0
+        0.7199999690055847,
+        0.0
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r3_c0",
       "type": "circle",
       "center": [
-        -0.47999996,
-        0.20784609
+        -0.47999995946884155,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r3_c1",
       "type": "circle",
       "center": [
-        -0.23999998,
-        0.20784609
+        -0.23999997973442078,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r3_c2",
       "type": "circle",
       "center": [
-        0,
-        0.20784609
+        0.0,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r3_c3",
       "type": "circle",
       "center": [
-        0.24,
-        0.20784609
+        0.23999999463558197,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r3_c4",
       "type": "circle",
       "center": [
-        0.48,
-        0.20784609
+        0.47999998927116394,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r3_c5",
       "type": "circle",
       "center": [
-        0.71999997,
-        0.20784609
+        0.7199999690055847,
+        0.20784609019756317
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r4_c0",
       "type": "circle",
       "center": [
-        -0.71999997,
-        0.41569218
+        -0.7199999690055847,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r4_c1",
       "type": "circle",
       "center": [
-        -0.48,
-        0.41569218
+        -0.47999998927116394,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r4_c2",
       "type": "circle",
       "center": [
-        -0.24,
-        0.41569218
+        -0.23999999463558197,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "crystal_r4_c3",
       "type": "circle",
       "center": [
-        0,
-        0.41569218
+        0.0,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_200"
     },
     {
       "id": "crystal_r4_c4",
       "type": "circle",
       "center": [
-        0.24,
-        0.41569218
+        0.23999999463558197,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_130"
     },
     {
       "id": "crystal_r4_c5",
       "type": "circle",
       "center": [
-        0.48,
-        0.41569218
+        0.47999998927116394,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_150"
     },
     {
       "id": "crystal_r4_c6",
       "type": "circle",
       "center": [
-        0.71999997,
-        0.41569218
+        0.7199999690055847,
+        0.41569218039512634
       ],
-      "radius": 0.07,
+      "radius": 0.07000000029802322,
       "material_id": "crystal_glass_180"
     },
     {
       "id": "wall_floor",
       "type": "segment",
       "a": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -447,12 +462,12 @@
       "id": "wall_ceiling",
       "type": "segment",
       "a": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -460,12 +475,12 @@
       "id": "wall_left",
       "type": "segment",
       "a": [
-        -1.2,
-        0.675
+        -1.2000000476837158,
+        0.675000011920929
       ],
       "b": [
-        -1.2,
-        -0.675
+        -1.2000000476837158,
+        -0.675000011920929
       ],
       "material_id": "wall_mirror"
     },
@@ -473,12 +488,12 @@
       "id": "wall_right",
       "type": "segment",
       "a": [
-        1.2,
-        -0.675
+        1.2000000476837158,
+        -0.675000011920929
       ],
       "b": [
-        1.2,
-        0.675
+        1.2000000476837158,
+        0.675000011920929
       ],
       "material_id": "wall_mirror"
     }
@@ -488,23 +503,23 @@
       "id": "source_left",
       "type": "point",
       "pos": [
-        -1,
-        0.6
+        -1.0,
+        0.6000000238418579
       ],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     },
     {
       "id": "source_right",
       "type": "point",
       "pos": [
-        0.8,
-        -0.6
+        0.800000011920929,
+        -0.6000000238418579
       ],
-      "intensity": 0.7,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 0.699999988079071,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ],
   "groups": []

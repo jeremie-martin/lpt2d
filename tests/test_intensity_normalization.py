@@ -36,7 +36,7 @@ _LIGHT_IDS = count()
 
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
-        "version": 7,
+        "version": 8,
         "name": name,
         "shapes": [
             {
@@ -44,7 +44,7 @@ def make_scene(lights: list[dict], name: str = "test") -> dict:
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004},
+                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004, "color_wavelength": 0.0, "color_bandwidth": 50.0, "fill": 0.0},
             }
         ],
         "lights": lights,

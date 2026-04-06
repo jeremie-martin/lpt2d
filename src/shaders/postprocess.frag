@@ -3,6 +3,7 @@ in vec2 TexCoord;
 out vec4 FragColor;
 
 uniform sampler2D uFloatTexture;
+uniform sampler2D uFillTexture;
 uniform float uMaxVal;
 uniform float uExposureMult;
 uniform float uContrast;
@@ -65,6 +66,10 @@ void main() {
     }
 
     vec3 color = hdr.rgb / uMaxVal * uExposureMult;
+
+    // Add fill color (shape interiors) — sampled from a separate RGB16F texture
+    vec3 fillColor = texture(uFillTexture, flippedCoord).rgb;
+    color += fillColor;
 
     // Background replaces pixels with negligible light; threshold is in
     // post-exposure space so it works consistently across normalization modes.

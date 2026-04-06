@@ -6,6 +6,7 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <chrono>
 #include <stdexcept>
 
 struct RenderSession::Impl {
@@ -57,9 +58,11 @@ RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
 RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bounds,
                                           const TraceConfig& trace_cfg, const PostProcess& pp,
                                           int64_t total_rays) {
+    auto t0 = std::chrono::steady_clock::now();
     auto& r = impl_->renderer;
 
     r.upload_scene(scene, bounds);
+    r.upload_fills(scene, bounds);
     r.clear();
 
     // Trace rays in batched dispatches (skip if no lights)
@@ -90,6 +93,9 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
     result.total_rays = r.total_rays();
     result.max_hdr = r.last_max();
     result.metrics = r.compute_frame_metrics();
+
+    auto t1 = std::chrono::steady_clock::now();
+    result.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     return result;
 }

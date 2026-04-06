@@ -26,7 +26,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 7;
+constexpr int SHOT_JSON_VERSION = 8;
 enum class Schema { Authored, Stream };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
@@ -148,7 +148,8 @@ ProjectorProfile read_projector_profile(const Json& json, std::string_view conte
 
 Material read_material(const Json& json, Schema schema, std::string_view context) {
     reject_unknown_keys(json, {"ior", "roughness", "metallic", "transmission", "absorption",
-                               "cauchy_b", "albedo", "emission"}, context);
+                               "cauchy_b", "albedo", "emission",
+                               "color_wavelength", "color_bandwidth", "fill"}, context);
     Material material;
     if (schema == Schema::Authored || json.contains("ior"))
         material.ior = read_required_float(json, "ior", context);
@@ -166,6 +167,12 @@ Material read_material(const Json& json, Schema schema, std::string_view context
         material.albedo = read_required_float(json, "albedo", context);
     if (schema == Schema::Authored || json.contains("emission"))
         material.emission = read_required_float(json, "emission", context);
+    if (schema == Schema::Authored || json.contains("color_wavelength"))
+        material.color_wavelength = read_required_float(json, "color_wavelength", context);
+    if (schema == Schema::Authored || json.contains("color_bandwidth"))
+        material.color_bandwidth = read_required_float(json, "color_bandwidth", context);
+    if (schema == Schema::Authored || json.contains("fill"))
+        material.fill = read_required_float(json, "fill", context);
     return material;
 }
 
@@ -179,6 +186,9 @@ Json write_material(const Material& material) {
     json["cauchy_b"] = material.cauchy_b;
     json["albedo"] = material.albedo;
     json["emission"] = material.emission;
+    json["color_wavelength"] = material.color_wavelength;
+    json["color_bandwidth"] = material.color_bandwidth;
+    json["fill"] = material.fill;
     return json;
 }
 

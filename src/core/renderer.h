@@ -41,6 +41,14 @@ public:
     // Update only the viewport transform (for pan/zoom without re-uploading geometry)
     void update_viewport(const Bounds& bounds);
 
+    // Triangulate and render filled shape interiors into the fill texture
+    void upload_fills(const Scene& scene, const Bounds& bounds);
+
+    // Re-render cached fill geometry with updated viewport (for pan/zoom)
+    void redraw_fills(const Bounds& bounds);
+
+    GLuint fill_texture() const { return fill_texture_; }
+
 
     // GPU compute trace + instanced draw (one batch)
     void trace_and_draw(const TraceConfig& cfg);
@@ -136,6 +144,18 @@ private:
     GLint loc_resolution_ = -1;
     GLint loc_thickness_ = -1;
 
+    // --- Fill pass (shape interiors) ---
+    GLuint fill_program_ = 0;
+    GLuint fill_vao_ = 0;
+    GLuint fill_vbo_ = 0;
+    int fill_vertex_count_ = 0;
+    GLuint fill_fbo_ = 0;
+    GLuint fill_texture_ = 0; // GL_RGB16F, same size as accumulation buffer
+    GLint fill_loc_bounds_min_ = -1;
+    GLint fill_loc_view_scale_ = -1;
+    GLint fill_loc_view_offset_ = -1;
+    GLint fill_loc_resolution_ = -1;
+
     // --- Post-processing ---
     GLuint pp_program_ = 0;
     GLuint pp_vao_ = 0;
@@ -158,6 +178,7 @@ private:
     GLint loc_tone_map_ = -1;
     GLint loc_white_point_ = -1;
     GLint loc_float_tex_ = -1;
+    GLint loc_fill_tex_ = -1;
     GLint loc_ambient_ = -1;
     GLint loc_background_ = -1;
     GLint loc_opacity_ = -1;
@@ -179,6 +200,7 @@ private:
     void delete_framebuffers();
     bool create_trace_shader();
     bool create_line_shader();
+    bool create_fill_shader();
     bool create_pp_shader();
     bool create_compute_shader();
     void create_wavelength_lut();

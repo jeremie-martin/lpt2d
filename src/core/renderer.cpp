@@ -87,6 +87,21 @@ static uint32_t trace_dispatch_seed(const TraceConfig& cfg, uint32_t batch_count
     return seed ^ frame_salt;
 }
 
+// ─── Viewport helpers ────────────────────────────────────────────────
+
+struct ViewportXform {
+    float scale;
+    float offset_x, offset_y;
+};
+
+static ViewportXform compute_viewport_xform(const Bounds& bounds, int width, int height) {
+    Vec2 size = bounds.max - bounds.min;
+    float sx = (float)width / size.x;
+    float sy = (float)height / size.y;
+    float s = std::min(sx, sy);
+    return {s, ((float)width - size.x * s) * 0.5f, ((float)height - size.y * s) * 0.5f};
+}
+
 // ─── GPU data structures (must match GLSL layout under std430) ───────
 
 struct GPUCircle {
@@ -190,6 +205,8 @@ bool Renderer::init(int width, int height, bool half_float) {
         return false;
     if (!create_line_shader())
         return false;
+    if (!create_fill_shader())
+        return false;
     if (!create_pp_shader())
         return false;
     if (!create_compute_shader())
@@ -227,6 +244,7 @@ void Renderer::shutdown() {
     };
     del_prog(trace_program_);
     del_prog(line_program_);
+    del_prog(fill_program_);
     del_prog(pp_program_);
     del_prog(max_compute_);
 
@@ -243,11 +261,13 @@ void Renderer::shutdown() {
     del_buf(output_ssbo_);
     del_buf(draw_cmd_buffer_);
     del_buf(max_ssbo_);
+    del_buf(fill_vbo_);
 
     auto del_vao = [](GLuint& v) {
         if (v) { glDeleteVertexArrays(1, &v); v = 0; }
     };
     del_vao(line_vao_);
+    del_vao(fill_vao_);
     del_vao(pp_vao_);
 
     if (wavelength_lut_) {
@@ -294,6 +314,23 @@ bool Renderer::create_framebuffers() {
         return false;
     }
 
+    // Fill texture (RGB16F for shape interior fills)
+    glGenTextures(1, &fill_texture_);
+    glBindTexture(GL_TEXTURE_2D, fill_texture_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width_, height_, 0, GL_RGB, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glGenFramebuffers(1, &fill_fbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_fbo_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fill_texture_, 0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Fill FBO incomplete\n";
+        return false;
+    }
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     return true;
 }
@@ -301,8 +338,10 @@ bool Renderer::create_framebuffers() {
 void Renderer::delete_framebuffers() {
     if (fbo_) { glDeleteFramebuffers(1, &fbo_); fbo_ = 0; }
     if (display_fbo_) { glDeleteFramebuffers(1, &display_fbo_); display_fbo_ = 0; }
+    if (fill_fbo_) { glDeleteFramebuffers(1, &fill_fbo_); fill_fbo_ = 0; }
     if (float_texture_) { glDeleteTextures(1, &float_texture_); float_texture_ = 0; }
     if (display_texture_) { glDeleteTextures(1, &display_texture_); display_texture_ = 0; }
+    if (fill_texture_) { glDeleteTextures(1, &fill_texture_); fill_texture_ = 0; }
 }
 
 bool Renderer::create_trace_shader() {
@@ -339,6 +378,19 @@ bool Renderer::create_line_shader() {
     return true;
 }
 
+bool Renderer::create_fill_shader() {
+    GLuint v = compile_shader(GL_VERTEX_SHADER, fill_vert);
+    GLuint f = compile_shader(GL_FRAGMENT_SHADER, fill_frag);
+    if (!v || !f) return false;
+    fill_program_ = link_program(v, f);
+    if (!fill_program_) return false;
+    fill_loc_bounds_min_ = glGetUniformLocation(fill_program_, "uBoundsMin");
+    fill_loc_view_scale_ = glGetUniformLocation(fill_program_, "uViewScale");
+    fill_loc_view_offset_ = glGetUniformLocation(fill_program_, "uViewOffset");
+    fill_loc_resolution_ = glGetUniformLocation(fill_program_, "uResolution");
+    return true;
+}
+
 bool Renderer::create_pp_shader() {
     GLuint v = compile_shader(GL_VERTEX_SHADER, postprocess_vert);
     GLuint f = compile_shader(GL_FRAGMENT_SHADER, postprocess_frag);
@@ -368,6 +420,7 @@ bool Renderer::create_pp_shader() {
     loc_grain_ = glGetUniformLocation(pp_program_, "uGrain");
     loc_grain_seed_ = glGetUniformLocation(pp_program_, "uGrainSeed");
     loc_chromatic_aberration_ = glGetUniformLocation(pp_program_, "uChromaticAberration");
+    loc_fill_tex_ = glGetUniformLocation(pp_program_, "uFillTexture");
     return true;
 }
 
@@ -661,19 +714,178 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 // ─── Viewport update ────────────────────────────────────────────────
 
 void Renderer::update_viewport(const Bounds& bounds) {
-    Vec2 size = bounds.max - bounds.min;
-    float scale_x = (float)width_ / size.x;
-    float scale_y = (float)height_ / size.y;
-    float scale = std::min(scale_x, scale_y);
-    float offset_x = (width_ - size.x * scale) * 0.5f;
-    float offset_y = (height_ - size.y * scale) * 0.5f;
-
-    viewport_scale_ = scale;
+    auto vp = compute_viewport_xform(bounds, width_, height_);
+    viewport_scale_ = vp.scale;
 
     glUseProgram(trace_program_);
     glUniform2f(trace_loc_bounds_min_, bounds.min.x, bounds.min.y);
-    glUniform2f(trace_loc_view_scale_, scale, scale);
-    glUniform2f(trace_loc_view_offset_, offset_x, offset_y);
+    glUniform2f(trace_loc_view_scale_, vp.scale, vp.scale);
+    glUniform2f(trace_loc_view_offset_, vp.offset_x, vp.offset_y);
+}
+
+// ─── Fill pass (shape interiors) ────────────────────────────────────
+
+void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
+    // CPU-side vertex struct
+    struct FillVertex {
+        float pos[2];
+        float color[3];
+    };
+    std::vector<FillVertex> vertices;
+
+    // Resolve fill color for a material; returns false if shape should not be filled.
+    struct FillColor { float r, g, b; };
+    auto resolve_fill = [&](const MaterialBinding& binding) -> std::optional<FillColor> {
+        const Material& mat = resolve_binding(binding, scene.materials);
+        if (mat.fill <= 0.0f) return std::nullopt;
+        Vec3 rgb = spectral_fill_rgb(mat.color_wavelength, mat.color_bandwidth);
+        return FillColor{rgb.r * mat.fill, rgb.g * mat.fill, rgb.b * mat.fill};
+    };
+
+    std::vector<Shape> all_shapes(scene.shapes.begin(), scene.shapes.end());
+    for (const auto& group : scene.groups)
+        for (const auto& shape : group.shapes)
+            all_shapes.push_back(transform_shape(shape, group.transform));
+
+    for (const auto& shape : all_shapes) {
+        std::visit(overloaded{
+            [&](const Circle& c) {
+                auto fc = resolve_fill(c.binding);
+                if (!fc) return;
+                float fr = fc->r, fg = fc->g, fb = fc->b;
+                // 64-vertex fan from center
+                constexpr int N = 64;
+                for (int i = 0; i < N; ++i) {
+                    float a0 = TWO_PI * i / N;
+                    float a1 = TWO_PI * (i + 1) / N;
+                    vertices.push_back({{c.center.x, c.center.y}, {fr, fg, fb}});
+                    vertices.push_back({{c.center.x + c.radius * cosf(a0), c.center.y + c.radius * sinf(a0)}, {fr, fg, fb}});
+                    vertices.push_back({{c.center.x + c.radius * cosf(a1), c.center.y + c.radius * sinf(a1)}, {fr, fg, fb}});
+                }
+            },
+            [&](const Polygon& p) {
+                if (p.vertices.size() < 3) return;
+                auto fc = resolve_fill(p.binding);
+                if (!fc) return;
+                float fr = fc->r, fg = fc->g, fb = fc->b;
+
+                if (p.corner_radius > 0.0f) {
+                    // Build rounded boundary, then fan-triangulate from centroid
+                    auto parts = decompose_rounded_polygon(p);
+                    std::vector<Vec2> boundary;
+                    // Walk edges and corners in order
+                    int n = (int)p.vertices.size();
+                    for (int i = 0; i < n; ++i) {
+                        // Edge i: straight segment start
+                        if (i < (int)parts.edges.size()) {
+                            boundary.push_back(parts.edges[i].a);
+                        }
+                        // Corner i: arc samples
+                        if (i < (int)parts.corners.size()) {
+                            const auto& arc = parts.corners[i];
+                            constexpr int ARC_SAMPLES = 8;
+                            for (int j = 0; j <= ARC_SAMPLES; ++j) {
+                                float angle = arc.angle_start + arc.sweep * j / ARC_SAMPLES;
+                                boundary.push_back({arc.center.x + arc.radius * cosf(angle),
+                                                    arc.center.y + arc.radius * sinf(angle)});
+                            }
+                        }
+                    }
+                    if (boundary.size() >= 3) {
+                        Vec2 centroid = p.centroid();
+                        for (size_t i = 0; i < boundary.size(); ++i) {
+                            size_t j = (i + 1) % boundary.size();
+                            vertices.push_back({{centroid.x, centroid.y}, {fr, fg, fb}});
+                            vertices.push_back({{boundary[i].x, boundary[i].y}, {fr, fg, fb}});
+                            vertices.push_back({{boundary[j].x, boundary[j].y}, {fr, fg, fb}});
+                        }
+                    }
+                } else {
+                    // Fan triangulation from first vertex (works for convex)
+                    Vec2 v0 = p.vertices[0];
+                    for (size_t i = 1; i + 1 < p.vertices.size(); ++i) {
+                        vertices.push_back({{v0.x, v0.y}, {fr, fg, fb}});
+                        vertices.push_back({{p.vertices[i].x, p.vertices[i].y}, {fr, fg, fb}});
+                        vertices.push_back({{p.vertices[i+1].x, p.vertices[i+1].y}, {fr, fg, fb}});
+                    }
+                }
+            },
+            [&](const Ellipse& e) {
+                auto fc = resolve_fill(e.binding);
+                if (!fc) return;
+                float fr = fc->r, fg = fc->g, fb = fc->b;
+                float cr = cosf(e.rotation), sr = sinf(e.rotation);
+                constexpr int N = 64;
+                for (int i = 0; i < N; ++i) {
+                    float a0 = TWO_PI * i / N;
+                    float a1 = TWO_PI * (i + 1) / N;
+                    auto ellipse_point = [&](float angle) -> Vec2 {
+                        float lx = e.semi_a * cosf(angle), ly = e.semi_b * sinf(angle);
+                        return {e.center.x + lx * cr - ly * sr, e.center.y + lx * sr + ly * cr};
+                    };
+                    Vec2 p0 = ellipse_point(a0), p1 = ellipse_point(a1);
+                    vertices.push_back({{e.center.x, e.center.y}, {fr, fg, fb}});
+                    vertices.push_back({{p0.x, p0.y}, {fr, fg, fb}});
+                    vertices.push_back({{p1.x, p1.y}, {fr, fg, fb}});
+                }
+            },
+            [&](const auto&) {} // Segment, Arc, Bezier: no fillable interior
+        }, shape);
+    }
+
+    fill_vertex_count_ = (int)vertices.size();
+
+    // Upload VBO
+    if (!fill_vbo_) glGenBuffers(1, &fill_vbo_);
+    glBindBuffer(GL_ARRAY_BUFFER, fill_vbo_);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(FillVertex),
+                 vertices.empty() ? nullptr : vertices.data(), GL_STATIC_DRAW);
+
+    // Setup VAO
+    if (!fill_vao_) glGenVertexArrays(1, &fill_vao_);
+    glBindVertexArray(fill_vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, fill_vbo_);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(FillVertex), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(FillVertex), (void*)(2 * sizeof(float)));
+    glBindVertexArray(0);
+
+    // Draw fills into fill texture
+    redraw_fills(bounds);
+}
+
+void Renderer::redraw_fills(const Bounds& bounds) {
+    if (!fill_fbo_) return;
+
+    // Always clear the fill texture (prevents stale data when scene changes)
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_fbo_);
+    glViewport(0, 0, width_, height_);
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    if (fill_vertex_count_ <= 0) {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return;
+    }
+
+    auto vp = compute_viewport_xform(bounds, width_, height_);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    glUseProgram(fill_program_);
+    glUniform2f(fill_loc_bounds_min_, bounds.min.x, bounds.min.y);
+    glUniform2f(fill_loc_view_scale_, vp.scale, vp.scale);
+    glUniform2f(fill_loc_view_offset_, vp.offset_x, vp.offset_y);
+    glUniform2f(fill_loc_resolution_, (float)width_, (float)height_);
+
+    glBindVertexArray(fill_vao_);
+    glDrawArrays(GL_TRIANGLES, 0, fill_vertex_count_);
+    glBindVertexArray(0);
+
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 // ─── GPU trace + draw ────────────────────────────────────────────────
@@ -856,6 +1068,10 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect, const
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
     glUniform1i(loc_float_tex_, 0);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, fill_texture_);
+    glUniform1i(loc_fill_tex_, 1);
 
     glBindVertexArray(pp_vao_);
     glDrawArrays(GL_TRIANGLES, 0, 3);

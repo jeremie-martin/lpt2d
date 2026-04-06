@@ -1,12 +1,12 @@
 {
-  "version": 7,
+  "version": 8,
   "name": "ring",
   "camera": {
     "bounds": [
-      -1.0666666667,
-      -0.6,
-      1.0666666667,
-      0.6
+      -1.0666667222976685,
+      -0.6000000238418579,
+      1.0666667222976685,
+      0.6000000238418579
     ]
   },
   "canvas": {
@@ -31,7 +31,7 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7,
+    "vignette_radius": 0.699999988079071,
     "temperature": 0.0,
     "highlights": 0.0,
     "shadows": 0.0,
@@ -50,23 +50,29 @@
   "materials": {
     "ring_glass": {
       "ior": 1.5,
-      "roughness": 0,
-      "metallic": 0,
-      "transmission": 1,
-      "absorption": 0.4,
-      "cauchy_b": 20000,
-      "albedo": 1,
-      "emission": 0.0
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.4000000059604645,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     },
     "wall_mirror": {
-      "ior": 1,
-      "roughness": 0.1,
-      "metallic": 1,
-      "transmission": 1,
-      "absorption": 0,
-      "cauchy_b": 0,
-      "albedo": 0.95,
-      "emission": 0.0
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "color_wavelength": 0.0,
+      "color_bandwidth": 50.0,
+      "fill": 0.0
     }
   },
   "shapes": [
@@ -75,39 +81,39 @@
       "type": "circle",
       "center": [
         0.5,
-        0
+        0.0
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_northeast",
       "type": "circle",
       "center": [
-        0.35355338,
-        0.35355338
+        0.3535533845424652,
+        0.3535533845424652
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_north",
       "type": "circle",
       "center": [
-        0,
+        0.0,
         0.5
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_northwest",
       "type": "circle",
       "center": [
-        -0.35355338,
-        0.35355338
+        -0.3535533845424652,
+        0.3535533845424652
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
@@ -115,51 +121,51 @@
       "type": "circle",
       "center": [
         -0.5,
-        0
+        0.0
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_southwest",
       "type": "circle",
       "center": [
-        -0.35355332,
-        -0.35355344
+        -0.35355332493782043,
+        -0.35355344414711
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_south",
       "type": "circle",
       "center": [
-        0,
+        0.0,
         -0.5
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "orb_southeast",
       "type": "circle",
       "center": [
-        0.3535535,
-        -0.35355327
+        0.35355350375175476,
+        -0.35355326533317566
       ],
-      "radius": 0.1,
+      "radius": 0.10000000149011612,
       "material_id": "ring_glass"
     },
     {
       "id": "wall_floor",
       "type": "segment",
       "a": [
-        -1.0666666667,
-        -0.6
+        -1.0666667222976685,
+        -0.6000000238418579
       ],
       "b": [
-        1.0666666667,
-        -0.6
+        1.0666667222976685,
+        -0.6000000238418579
       ],
       "material_id": "wall_mirror"
     },
@@ -167,12 +173,12 @@
       "id": "wall_ceiling",
       "type": "segment",
       "a": [
-        1.0666666667,
-        0.6
+        1.0666667222976685,
+        0.6000000238418579
       ],
       "b": [
-        -1.0666666667,
-        0.6
+        -1.0666667222976685,
+        0.6000000238418579
       ],
       "material_id": "wall_mirror"
     },
@@ -180,12 +186,12 @@
       "id": "wall_left",
       "type": "segment",
       "a": [
-        -1.0666666667,
-        0.6
+        -1.0666667222976685,
+        0.6000000238418579
       ],
       "b": [
-        -1.0666666667,
-        -0.6
+        -1.0666667222976685,
+        -0.6000000238418579
       ],
       "material_id": "wall_mirror"
     },
@@ -193,12 +199,12 @@
       "id": "wall_right",
       "type": "segment",
       "a": [
-        1.0666666667,
-        -0.6
+        1.0666667222976685,
+        -0.6000000238418579
       ],
       "b": [
-        1.0666666667,
-        0.6
+        1.0666667222976685,
+        0.6000000238418579
       ],
       "material_id": "wall_mirror"
     }
@@ -208,12 +214,12 @@
       "id": "source_center",
       "type": "point",
       "pos": [
-        0,
-        0
+        0.0,
+        0.0
       ],
-      "intensity": 1,
-      "wavelength_min": 380,
-      "wavelength_max": 780
+      "intensity": 1.0,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
     }
   ],
   "groups": []

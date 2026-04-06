@@ -39,6 +39,10 @@ bool edit_material(Material& mat) {
     changed |= ImGui::SliderFloat("Albedo", &mat.albedo, 0.0f, 1.0f);
     changed |= ImGui::SliderFloat("Emission", &mat.emission, 0.0f, 10.0f, "%.2f",
                                    ImGuiSliderFlags_Logarithmic);
+    changed |= ImGui::SliderFloat("Color \xce\xbb", &mat.color_wavelength, 0.0f, 780.0f, "%.0f nm");
+    if (mat.color_wavelength > 0.0f)
+        changed |= ImGui::SliderFloat("Color BW", &mat.color_bandwidth, 5.0f, 200.0f, "%.0f nm");
+    changed |= ImGui::SliderFloat("Fill", &mat.fill, 0.0f, 1.0f);
     return changed;
 }
 
