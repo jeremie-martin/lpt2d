@@ -63,14 +63,22 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
     r.clear();
 
     // Trace rays in batched dispatches (skip if no lights)
-    if (r.num_lights() > 0) {
-        int64_t num_batches = (total_rays + trace_cfg.batch_size - 1) / trace_cfg.batch_size;
+    if (r.num_lights() > 0 && total_rays > 0) {
         constexpr int dispatches_per_draw = 4;
-        int64_t b = 0;
-        while (b < num_batches) {
-            int n = (int)std::min((int64_t)dispatches_per_draw, num_batches - b);
-            r.trace_and_draw_multi(trace_cfg, n);
-            b += n;
+        int64_t remaining = total_rays;
+        while (remaining > 0) {
+            int64_t full_batches = remaining / trace_cfg.batch_size;
+            if (full_batches > 0) {
+                int n = (int)std::min((int64_t)dispatches_per_draw, full_batches);
+                r.trace_and_draw_multi(trace_cfg, n);
+                remaining -= (int64_t)n * trace_cfg.batch_size;
+                continue;
+            }
+
+            TraceConfig tail = trace_cfg;
+            tail.batch_size = (int)remaining;
+            r.trace_and_draw(tail);
+            remaining = 0;
         }
     }
 

@@ -94,6 +94,7 @@ uniform uint uNumArcs;
 uniform uint uNumBeziers;
 uniform uint uNumEllipses;
 uniform uint uNumLights;
+uniform uint uBatchRays;
 uniform uint uMaxDepth;
 uniform uint uSeed;
 uniform float uIntensity;
@@ -381,6 +382,7 @@ void main() {
     if (uNumLights == 0u) return;
 
     uint gid = gl_GlobalInvocationID.x;
+    if (gid >= uBatchRays) return;
     rng_state = gid * 1099087573u + uSeed;
     pcg_next(); pcg_next();
 

@@ -713,6 +713,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 
     // ── Dispatch N compute batches ──
     glUseProgram(trace_program_);
+    glUniform1ui(glGetUniformLocation(trace_program_, "uBatchRays"), (GLuint)cfg.batch_size);
     glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
     glUniform1f(trace_loc_intensity_, cfg.intensity);
     glUniform1ui(trace_loc_max_segments_, max_segs);
