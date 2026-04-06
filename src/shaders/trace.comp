@@ -497,19 +497,19 @@ void main() {
         float mat_cauchy_b = mat.cauchy_b, mat_albedo = mat.albedo, mat_emission = mat.emission;
         float mat_sc0 = mat.spectral_c0, mat_sc1 = mat.spectral_c1, mat_sc2 = mat.spectral_c2;
 
+        // Compute spectral response once (shared by emission + BSDF)
+        float response = spectral_response(wavelength, mat_sc0, mat_sc1, mat_sc2);
+
         // Emissive surface
         if (mat_emission > 0.0) {
-            float emit_resp = spectral_response(wavelength, mat_sc0, mat_sc1, mat_sc2);
-            color += vec4(rgb * mat_emission * emit_resp * uIntensity * total_w,
-                          mat_emission * emit_resp * uIntensity * total_w);
+            color += vec4(rgb * mat_emission * response * uIntensity * total_w,
+                          mat_emission * response * uIntensity * total_w);
         }
 
         // ── Unified Principled BSDF ──
         {
             vec2 n = h.normal;
             float cos_i = dot(rd, n);
-
-            float response = spectral_response(wavelength, mat_sc0, mat_sc1, mat_sc2);
             float ior = mat_ior + mat_cauchy_b / (wavelength * wavelength);
 
             float n1, n2;
