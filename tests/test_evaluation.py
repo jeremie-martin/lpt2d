@@ -18,6 +18,7 @@ from evaluation import (
     save_baseline,
 )
 from evaluation.compare import compare_metrics
+from evaluation.timing import TimingSummary, classify_speedup
 
 # ── Image metrics ────────────────────────────────────────────────────────
 
@@ -274,3 +275,74 @@ class TestRenderTiming:
         session = _lpt2d.RenderSession(64, 64)
         result = session.render_shot(shot)
         assert result.time_ms > 0
+
+
+# ── Timing helpers ───────────────────────────────────────────────────────
+
+
+class TestTimingSummary:
+    def test_cv_pct(self):
+        s = TimingSummary(
+            times_ms=[100.0, 100.0, 100.0],
+            median_ms=100.0,
+            mean_ms=100.0,
+            std_ms=0.0,
+            min_ms=100.0,
+            max_ms=100.0,
+            repeats=3,
+        )
+        assert s.cv_pct == 0.0
+
+    def test_cv_pct_nonzero(self):
+        s = TimingSummary(
+            times_ms=[90.0, 100.0, 110.0],
+            median_ms=100.0,
+            mean_ms=100.0,
+            std_ms=10.0,
+            min_ms=90.0,
+            max_ms=110.0,
+            repeats=3,
+        )
+        assert s.cv_pct == pytest.approx(10.0)
+
+
+class TestClassifySpeedup:
+    def _summary(self, times: list[float]) -> TimingSummary:
+        from statistics import mean, median, stdev
+
+        return TimingSummary(
+            times_ms=times,
+            median_ms=median(times),
+            mean_ms=mean(times),
+            std_ms=stdev(times) if len(times) >= 2 else 0.0,
+            min_ms=min(times),
+            max_ms=max(times),
+            repeats=len(times),
+        )
+
+    def test_confirmed_speedup(self):
+        baseline = self._summary([200.0, 210.0, 205.0])
+        candidate = self._summary([100.0, 105.0, 102.0])
+        result = classify_speedup(baseline, candidate)
+        assert result.confidence == "confirmed"
+        assert result.speedup > 1.5
+
+    def test_confirmed_regression(self):
+        baseline = self._summary([100.0, 105.0, 102.0])
+        candidate = self._summary([200.0, 210.0, 205.0])
+        result = classify_speedup(baseline, candidate)
+        assert result.confidence == "confirmed_regression"
+        assert result.speedup < 1.0
+
+    def test_noise(self):
+        baseline = self._summary([100.0, 102.0, 101.0])
+        candidate = self._summary([100.0, 103.0, 99.0])
+        result = classify_speedup(baseline, candidate)
+        assert result.confidence == "noise"
+
+    def test_likely_speedup(self):
+        # Ranges must overlap (so not "confirmed") but median shift >5%
+        baseline = self._summary([100.0, 105.0, 110.0])
+        candidate = self._summary([85.0, 90.0, 102.0])
+        result = classify_speedup(baseline, candidate)
+        assert result.confidence == "likely"

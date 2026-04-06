@@ -26,6 +26,7 @@ __pycache__/
 # Local benchmark/evaluation outputs
 /benchmarks/
 /baselines/
+/runs/
 
 # Local editor / profiling artifacts
 /imgui.ini

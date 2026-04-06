@@ -4,6 +4,32 @@ Fidelity comparison and timing measurement for lpt2d. This module provides
 the measurement surface for autonomous optimization — render a frame, compare
 it against a reference, get a machine-readable verdict.
 
+## Command-line usage
+
+```bash
+# One-time: capture baseline (builds first)
+python -m evaluation capture
+
+# After code changes: build + evaluate against baseline
+python -m evaluation
+
+# Skip build if you already rebuilt
+python -m evaluation --skip-build
+```
+
+Output:
+```
+  solid_surface_gallery: PASS  psnr=105.7dB ssim=1.000000  565.7ms  speedup=1.000x (noise)
+
+verdict:    pass
+scenes:     1
+median_ms:  565.7
+total  speedup: 1.000x
+```
+
+Exit code 0 = all scenes pass, 1 = fidelity failure, 2 = setup error,
+3 = no baseline.
+
 ## Build
 
 After any C++ or shader change, rebuild and reinstall the Python package:
@@ -15,7 +41,8 @@ uv pip install -e .
 
 Both steps are required — the C++ build produces the shared library, and
 `uv pip install -e .` makes it importable as `_lpt2d`. Skipping the reinstall
-means Python will use a stale binary.
+means Python will use a stale binary. `python -m evaluation` handles both
+steps automatically unless `--skip-build` is passed.
 
 ## Quick start
 
@@ -44,6 +71,30 @@ inside `read_pixels()` ensures GPU work is drained before the clock stops.
 
 The first render after session creation includes one-time costs (shader
 compilation, buffer allocation). Always do a warm-up render before timing.
+
+## Benchmarking (repeated timing)
+
+For statistically sound timing, use `benchmark()` which handles warm-up and
+repeated measurement:
+
+```python
+from evaluation import benchmark, classify_speedup
+
+# Render 5 times with 1 warm-up, get timing stats + last RenderResult
+summary, result = benchmark(session, shot, repeats=5, warmup=1)
+print(f"{summary.median_ms:.1f} ms (std={summary.std_ms:.1f}, n={summary.repeats})")
+print(f"CV: {summary.cv_pct:.1f}%")  # coefficient of variation
+
+# Compare two timing summaries for speedup confidence
+baseline_summary, baseline_result = benchmark(session, baseline_shot)
+candidate_summary, candidate_result = benchmark(session, candidate_shot)
+
+speedup = classify_speedup(baseline_summary, candidate_summary)
+print(f"{speedup.speedup:.3f}x ({speedup.confidence})")
+# confidence: "confirmed", "likely", "noise", "regression", "confirmed_regression"
+```
+
+This is what an optimization loop should use — not raw `time_ms`.
 
 ## Comparing two renders
 

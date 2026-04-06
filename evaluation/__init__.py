@@ -11,6 +11,7 @@ from .compare import (
     compare_to_baseline,
 )
 from .image_metrics import compute_mse, compute_psnr, compute_ssim, max_abs_diff, pct_pixels_changed
+from .timing import SpeedupResult, TimingSummary, benchmark, classify_speedup
 
 __all__ = [
     "CompareResult",
@@ -27,4 +28,8 @@ __all__ = [
     "max_abs_diff",
     "pct_pixels_changed",
     "save_baseline",
+    "SpeedupResult",
+    "TimingSummary",
+    "benchmark",
+    "classify_speedup",
 ]
