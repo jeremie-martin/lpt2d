@@ -7,6 +7,7 @@
 #include "renderer.h"
 #include "scene.h"
 #include "scenes.h"
+#include "serialize.h"
 #include "ui.h"
 
 #include <GL/glew.h>
@@ -22,6 +23,7 @@
 #include <cmath>
 #include <cstdio>
 #include <deque>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <optional>
@@ -31,6 +33,12 @@
 #include <vector>
 
 namespace {
+
+struct InitialShot {
+    Shot shot;
+    int builtin_index = -1;
+    std::string save_path;
+};
 
 struct AlignmentGuide {
     float axis = 0.0f;
@@ -63,6 +71,43 @@ VignetteFrame make_camera_vignette_frame(const Bounds& display_bounds,
     frame.inv_size[1] = 1.0f / size_y;
     frame.x_scale = ((float)tex_w / (float)tex_h) * (size_x / size_y);
     return frame;
+}
+
+std::optional<InitialShot> try_load_initial_shot(const std::string& scene_arg,
+                                                 const std::vector<BuiltinScene>& builtins) {
+    namespace fs = std::filesystem;
+
+    if (scene_arg.empty())
+        return std::nullopt;
+
+    for (int i = 0; i < (int)builtins.size(); ++i) {
+        if (builtins[i].name == scene_arg) {
+            return InitialShot{
+                .shot = load_builtin_scene(builtins[i]),
+                .builtin_index = i,
+                .save_path = {},
+            };
+        }
+    }
+
+    const fs::path candidate{scene_arg};
+    const bool looks_like_path = candidate.has_extension()
+        || scene_arg.find('/') != std::string::npos
+        || scene_arg.find('\\') != std::string::npos;
+    if (looks_like_path || fs::exists(candidate)) {
+        std::string error;
+        if (auto loaded = try_load_shot_json(scene_arg, &error)) {
+            return InitialShot{
+                .shot = std::move(*loaded),
+                .builtin_index = -1,
+                .save_path = scene_arg,
+            };
+        }
+        std::cerr << (error.empty() ? "Failed to load scene: " + scene_arg : error) << "\n";
+        return std::nullopt;
+    }
+
+    return std::nullopt;
 }
 
 } // namespace
@@ -115,16 +160,29 @@ int App::run(const AppConfig& config) {
     const auto& builtins = get_builtin_scenes();
 
     PanelState panel;
-    panel.current_scene = 0;
-    if (!config.initial_scene.empty()) {
-        bool found = false;
-        for (int i = 0; i < (int)builtins.size(); ++i) {
-            if (builtins[i].name == config.initial_scene) { panel.current_scene = i; found = true; break; }
-        }
-        if (!found)
+    panel.current_scene = -1;
+    if (auto initial = try_load_initial_shot(config.initial_scene, builtins)) {
+        panel.current_scene = initial->builtin_index;
+        ed.shot = std::move(initial->shot);
+        ed.session.save_path = std::move(initial->save_path);
+    } else if (!config.initial_scene.empty()) {
+        if (!builtins.empty())
             std::cerr << "Unknown scene: " << config.initial_scene << ", using " << builtins[0].name << "\n";
+        else
+            std::cerr << "Unknown scene: " << config.initial_scene << "\n";
     }
-    ed.shot = load_builtin_scene(builtins[panel.current_scene]);
+    if (panel.current_scene < 0) {
+        if (ed.shot.name.empty()) {
+            if (builtins.empty()) {
+                std::cerr << "No built-in scenes available\n";
+                glfwDestroyWindow(window);
+                glfwTerminate();
+                return 1;
+            }
+            panel.current_scene = 0;
+            ed.shot = load_builtin_scene(builtins[panel.current_scene]);
+        }
+    }
     ed.shot.trace.batch = kGuiTraceBatch;
     ed.view.scene_bounds = compute_bounds(ed.shot.scene);
     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
