@@ -82,6 +82,72 @@ def benchmark(
     return summary, last_result
 
 
+def benchmark_animated(
+    scene_path: str,
+    *,
+    frames: int = 5,
+    warmup: int = 1,
+):
+    """Render an animated sequence and return timing statistics.
+
+    Each frame applies gentle transforms to scene groups so the GPU cannot
+    cache across frames. This gives more representative timing on hardware
+    with variable clocks (laptops, thermal throttling).
+
+    Args:
+        scene_path: Path to the scene JSON file.
+        frames: Number of animated frames to render and time.
+        warmup: Number of warm-up renders to discard.
+
+    Returns:
+        ``(TimingSummary, RenderResult)`` — the summary covers per-frame
+        timing; the RenderResult is from frame 0 (static, for fidelity).
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    import _lpt2d
+
+    from .animate import animate_scene
+
+    scene_dict = json.loads(Path(scene_path).read_text())
+
+    # Load the unmodified shot for fidelity comparison and session setup
+    shot = _lpt2d.load_shot(scene_path)
+    session = _lpt2d.RenderSession(shot.canvas.width, shot.canvas.height)
+
+    # Warm-up with animated frames
+    for i in range(warmup):
+        session.render_shot(shot, i)
+
+    # Render frame 0 (static) for fidelity comparison
+    fidelity_result = session.render_shot(shot, 0)
+
+    # Timed animated renders
+    times: list[float] = []
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for f in range(frames):
+            modified = animate_scene(scene_dict, f, frames)
+            tmp_path = Path(tmpdir) / "frame.json"
+            tmp_path.write_text(json.dumps(modified))
+            frame_shot = _lpt2d.load_shot(str(tmp_path))
+            result = session.render_shot(frame_shot, f)
+            times.append(result.time_ms)
+
+    std = stdev(times) if len(times) >= 2 else 0.0
+    summary = TimingSummary(
+        times_ms=times,
+        median_ms=median(times),
+        mean_ms=mean(times),
+        std_ms=std,
+        min_ms=min(times),
+        max_ms=max(times),
+        repeats=frames,
+    )
+    return summary, fidelity_result
+
+
 def classify_speedup(baseline: TimingSummary, candidate: TimingSummary) -> SpeedupResult:
     """Compare two timing summaries and classify the speedup confidence.
 

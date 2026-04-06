@@ -5,6 +5,7 @@ Usage:
     python -m evaluation capture          Build + save current as baseline
     python -m evaluation --skip-build     Evaluate without rebuilding
     python -m evaluation --repeats 10     Custom repeat count
+    python -m evaluation --animate         Animated mode (varying geometry per frame)
 
 Artifacts are saved to runs/<timestamp>/ with rendered images, a JSON report,
 and a human-readable summary. The path is printed at the end.
@@ -121,7 +122,7 @@ def _git_info() -> dict:
 # ── Capture ──────────────────────────────────────────────────────────────
 
 
-def _run_capture(skip_build: bool, repeats: int, warmup: int) -> None:
+def _run_capture(skip_build: bool, repeats: int, warmup: int, animate: bool = False) -> None:
     if not skip_build:
         if not _build():
             sys.exit(2)
@@ -129,14 +130,16 @@ def _run_capture(skip_build: bool, repeats: int, warmup: int) -> None:
     import _lpt2d
 
     from .baseline import save_baseline
-    from .timing import benchmark
+    from .timing import benchmark, benchmark_animated
 
     scenes = _discover_scenes()
     BASELINES_DIR.mkdir(parents=True, exist_ok=True)
 
+    mode_str = "animated" if animate else "static"
     print("=" * 60)
     print("  CAPTURE BASELINE")
     print(f"  scenes:  {len(scenes)}")
+    print(f"  mode:    {mode_str}")
     print(f"  repeats: {repeats} (warmup: {warmup})")
     print("=" * 60)
 
@@ -152,11 +155,16 @@ def _run_capture(skip_build: bool, repeats: int, warmup: int) -> None:
             continue
 
         print(f"    resolution: {res}", flush=True)
+        print(f"    mode:       {mode_str}", flush=True)
 
         try:
-            session = _lpt2d.RenderSession(shot.canvas.width, shot.canvas.height)
-            print(f"    warmup:     {warmup} render(s)...", flush=True)
-            summary, result = benchmark(session, shot, repeats=repeats, warmup=warmup)
+            if animate:
+                print(f"    frames:     {repeats} animated frames...", flush=True)
+                summary, result = benchmark_animated(str(scene_path), frames=repeats, warmup=warmup)
+            else:
+                session = _lpt2d.RenderSession(shot.canvas.width, shot.canvas.height)
+                print(f"    warmup:     {warmup} render(s)...", flush=True)
+                summary, result = benchmark(session, shot, repeats=repeats, warmup=warmup)
         except Exception as e:
             print(f"    RENDER ERROR: {e}", file=sys.stderr)
             continue
@@ -190,7 +198,7 @@ def _run_capture(skip_build: bool, repeats: int, warmup: int) -> None:
 # ── Evaluate ─────────────────────────────────────────────────────────────
 
 
-def _run_evaluate(skip_build: bool, repeats: int, warmup: int) -> None:
+def _run_evaluate(skip_build: bool, repeats: int, warmup: int, animate: bool = False) -> None:
     if not skip_build:
         if not _build():
             sys.exit(2)
@@ -199,7 +207,7 @@ def _run_evaluate(skip_build: bool, repeats: int, warmup: int) -> None:
 
     from .baseline import load_baseline
     from .compare import compare_to_baseline
-    from .timing import TimingSummary, benchmark, classify_speedup
+    from .timing import TimingSummary, benchmark, benchmark_animated, classify_speedup
 
     scenes = _discover_scenes()
 
@@ -217,11 +225,13 @@ def _run_evaluate(skip_build: bool, repeats: int, warmup: int) -> None:
     run_dir = RUNS_DIR / f"{timestamp}_{commit}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    mode_str = "animated" if animate else "static"
     print("=" * 60)
     print("  EVALUATE")
     print(f"  commit:   {commit}")
     print(f"  branch:   {git.get('branch', 'unknown')}")
     print(f"  scenes:   {len(scenes)}")
+    print(f"  mode:     {mode_str}")
     print(f"  repeats:  {repeats} (warmup: {warmup})")
     print(f"  run_dir:  {run_dir}/")
     print("=" * 60)
@@ -266,10 +276,14 @@ def _run_evaluate(skip_build: bool, repeats: int, warmup: int) -> None:
 
         # Render
         try:
-            session = _lpt2d.RenderSession(shot.canvas.width, shot.canvas.height)
-            print(f"    warmup:     {warmup} render(s)...", flush=True)
-            print(f"    rendering:  {repeats} timed render(s)...", flush=True)
-            summary, result = benchmark(session, shot, repeats=repeats, warmup=warmup)
+            if animate:
+                print(f"    frames:     {repeats} animated frames...", flush=True)
+                summary, result = benchmark_animated(str(scene_path), frames=repeats, warmup=warmup)
+            else:
+                session = _lpt2d.RenderSession(shot.canvas.width, shot.canvas.height)
+                print(f"    warmup:     {warmup} render(s)...", flush=True)
+                print(f"    rendering:  {repeats} timed render(s)...", flush=True)
+                summary, result = benchmark(session, shot, repeats=repeats, warmup=warmup)
         except Exception as e:
             msg = f"{name}: render failed: {e}"
             print(f"    RENDER ERROR: {e}", file=sys.stderr)
@@ -434,12 +448,15 @@ def main() -> None:
     skip_build = False
     repeats = DEFAULT_REPEATS
     warmup = DEFAULT_WARMUP
+    animate = False
     command = None
 
     i = 0
     while i < len(args):
         if args[i] == "--skip-build":
             skip_build = True
+        elif args[i] == "--animate":
+            animate = True
         elif args[i] == "--repeats" and i + 1 < len(args):
             i += 1
             repeats = int(args[i])
@@ -458,9 +475,9 @@ def main() -> None:
         i += 1
 
     if command == "capture":
-        _run_capture(skip_build, repeats, warmup)
+        _run_capture(skip_build, repeats, warmup, animate)
     else:
-        _run_evaluate(skip_build, repeats, warmup)
+        _run_evaluate(skip_build, repeats, warmup, animate)
 
 
 if __name__ == "__main__":
