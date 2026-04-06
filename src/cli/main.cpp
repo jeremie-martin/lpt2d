@@ -1,13 +1,9 @@
 #include "export.h"
-#include "geometry.h"
-#include "headless.h"
-#include "renderer.h"
 #include "scenes.h"
 #include "serialize.h"
+#include "session.h"
 
 #include <algorithm>
-#include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -40,8 +36,6 @@ static void print_usage() {
               << "  --vignette <float>       Radial edge darkening 0-1 (overrides shot look)\n"
               << "  --vignette-radius <float> Vignette falloff start (default: 0.7)\n"
               << "  --fast                   Half-precision FBO (RGBA16F) — ~3x faster, slight precision loss\n"
-              << "  --histogram              Include 256-bin luminance histogram in stderr JSON\n"
-              << "  --stream                 Streaming mode: read JSON shots from stdin, write raw RGB to stdout\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
         std::cerr << entry.name << " ";
@@ -74,150 +68,53 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
-// CLI overrides now use the shared RenderOverrides type from serialize.h.
-
-static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool histogram = false) {
-    (void)default_rays;
-    HeadlessGL gl;
-    if (!gl.init()) return 1;
-
-    int width = session.canvas.width;
-    int height = session.canvas.height;
-
-    Renderer renderer;
-    if (!renderer.init(width, height, fast)) return 1;
-
-    size_t frame_bytes = (size_t)width * height * 3;
-    std::vector<uint8_t> pixels;
-    std::vector<uint8_t> black(frame_bytes, 0);
-
-    // Ensure stdout is fully buffered for binary output
-    std::setvbuf(stdout, nullptr, _IOFBF, frame_bytes);
-
-    std::string line;
-    int frame = 0;
-    while (std::getline(std::cin, line)) {
-        auto t0 = std::chrono::steady_clock::now();
-
-        if (line.empty()) {
-            std::cerr << "frame " << frame << ": empty line, emitting black frame\n";
-            std::fwrite(black.data(), 1, frame_bytes, stdout);
-            std::fflush(stdout);
-            ++frame;
-            continue;
-        }
-
-        std::string frame_error;
-        auto frame_shot = try_load_stream_frame_json_string(line, &frame_error);
-        if (!frame_shot) {
-            std::cerr << "frame " << frame << ": "
-                      << (frame_error.empty() ? "Failed to parse shot" : frame_error) << "\n";
-            return 1;
-        }
-
-        StreamFrameDirectives directives = parse_stream_frame_directives(line);
-        Shot merged = session;
-        merged.scene = frame_shot->scene;
-        if (directives.has_name || !frame_shot->name.empty())
-            merged.name = frame_shot->name;
-        if (directives.has_camera) merged.camera = frame_shot->camera;
-        if (directives.has_canvas) merged.canvas = frame_shot->canvas;
-        if (directives.has_look) merged.look = frame_shot->look;
-        if (directives.has_trace) merged.trace = frame_shot->trace;
-
-        const RenderOverrides& fo = directives.render;
-        fo.apply_to(merged.canvas);
-
-        width = merged.canvas.width;
-        height = merged.canvas.height;
-        size_t current_frame_bytes = (size_t)width * height * 3;
-        if (current_frame_bytes != frame_bytes) {
-            frame_bytes = current_frame_bytes;
-            black.assign(frame_bytes, 0);
-            renderer.resize(width, height);
-        }
-
-        int64_t rays = merged.trace.rays;
-        if (fo.rays) rays = *fo.rays;
-        TraceConfig tcfg = merged.trace.to_trace_config();
-        fo.apply_to(tcfg);
-
-        PostProcess pp = merged.look.to_post_process();
-        fo.apply_to(pp);
-
-        Bounds bounds;
-        if (fo.bounds) {
-            bounds = *fo.bounds;
-        } else {
-            Bounds fallback = (merged.scene.shapes.empty() && merged.scene.lights.empty()
-                               && merged.scene.groups.empty())
-                ? Bounds{{-1, -1}, {1, 1}}
-                : compute_bounds(merged.scene);
-            if (!merged.camera.empty())
-                bounds = merged.camera.resolve(merged.canvas.aspect(), fallback);
-            else
-                bounds = fallback;
-        }
-        renderer.upload_scene(merged.scene, bounds);
-        renderer.clear();
-
-        // Trace rays in batched dispatches (skip if no lights)
-        if (renderer.num_lights() > 0) {
-            int64_t num_batches = (rays + tcfg.batch_size - 1) / tcfg.batch_size;
-            const int dispatches_per_draw = 4;
-            int64_t b = 0;
-            while (b < num_batches) {
-                int n = std::min((int64_t)dispatches_per_draw, num_batches - b);
-                renderer.trace_and_draw_multi(tcfg, n);
-                b += n;
-            }
-        }
-
-        // Read pixels and write raw RGB to stdout
-        renderer.read_pixels(pixels, pp, merged.canvas.aspect());
-        std::fwrite(pixels.data(), 1, current_frame_bytes, stdout);
-        std::fflush(stdout);
-
-        auto stats_t0 = std::chrono::steady_clock::now();
-        auto metrics = renderer.compute_frame_metrics();
-        auto stats_t1 = std::chrono::steady_clock::now();
-        auto t1 = std::chrono::steady_clock::now();
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-        double ms_exact = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() / 1000.0;
-        double stats_ms = std::chrono::duration_cast<std::chrono::microseconds>(stats_t1 - stats_t0).count() / 1000.0;
-        char mbuf[352];
-        std::snprintf(mbuf, sizeof(mbuf),
-            ", \"time_ms_exact\": %.3f, \"mean\": %.1f, \"pct_black\": %.4f, \"pct_clipped\": %.4f, \"p50\": %.0f, \"p95\": %.0f, \"stats_ms\": %.3f",
-            ms_exact, metrics.mean_lum, metrics.pct_black, metrics.pct_clipped, metrics.p50, metrics.p95, stats_ms);
-        std::string hbuf;
-        if (histogram) {
-            hbuf = ", \"histogram\": [";
-            for (int i = 0; i < 256; ++i) {
-                if (i > 0) hbuf += ',';
-                hbuf += std::to_string(metrics.histogram[i]);
-            }
-            hbuf += ']';
-        }
-        std::cerr << "frame " << frame << ": {\"rays\": " << rays
-                  << ", \"time_ms\": " << ms
-                  << ", \"max_hdr\": " << renderer.last_max()
-                  << ", \"total_rays\": " << renderer.total_rays()
-                  << mbuf << hbuf << "}\n";
-        ++frame;
-    }
-
-    renderer.shutdown();
-    return 0;
-}
-
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     std::string save_shot_path;
-    bool stream_mode = false;
     bool fast_mode = false;
-    bool emit_histogram = false;
-    RenderOverrides overrides;
+
+    // Deferred overrides: parse flags first, apply to shot after loading.
+    // Using lambdas to capture the override actions.
+    struct {
+        std::optional<int> width, height;
+        std::optional<int64_t> rays;
+        std::optional<int> batch, depth;
+        std::optional<float> exposure, contrast, gamma, white_point;
+        std::optional<ToneMap> tonemap;
+        std::optional<NormalizeMode> normalize;
+        std::optional<float> normalize_ref, normalize_pct;
+        std::optional<float> ambient, opacity, saturation, intensity;
+        std::optional<float> vignette, vignette_radius;
+        std::optional<std::array<float, 3>> background;
+
+        void apply_to(Shot& shot) const {
+            if (width) shot.canvas.width = *width;
+            if (height) shot.canvas.height = *height;
+            if (rays) shot.trace.rays = *rays;
+            if (batch) shot.trace.batch = *batch;
+            if (depth) shot.trace.depth = *depth;
+            if (intensity) shot.trace.intensity = *intensity;
+            if (exposure) shot.look.exposure = *exposure;
+            if (contrast) shot.look.contrast = *contrast;
+            if (gamma) shot.look.gamma = *gamma;
+            if (white_point) shot.look.white_point = *white_point;
+            if (tonemap) shot.look.tone_map = *tonemap;
+            if (normalize) shot.look.normalize = *normalize;
+            if (normalize_ref) shot.look.normalize_ref = *normalize_ref;
+            if (normalize_pct) shot.look.normalize_pct = *normalize_pct;
+            if (ambient) shot.look.ambient = *ambient;
+            if (opacity) shot.look.opacity = *opacity;
+            if (saturation) shot.look.saturation = *saturation;
+            if (vignette) shot.look.vignette = *vignette;
+            if (vignette_radius) shot.look.vignette_radius = *vignette_radius;
+            if (background) {
+                shot.look.background[0] = (*background)[0];
+                shot.look.background[1] = (*background)[1];
+                shot.look.background[2] = (*background)[2];
+            }
+        }
+    } overrides;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--scene") == 0 && i + 1 < argc)
@@ -237,13 +134,13 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
             overrides.depth = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--exposure") == 0 && i + 1 < argc)
-            overrides.exposure = std::atof(argv[++i]);
+            overrides.exposure = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--gamma") == 0 && i + 1 < argc)
-            overrides.gamma = std::atof(argv[++i]);
+            overrides.gamma = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--contrast") == 0 && i + 1 < argc)
-            overrides.contrast = std::atof(argv[++i]);
+            overrides.contrast = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--white-point") == 0 && i + 1 < argc)
-            overrides.white_point = std::atof(argv[++i]);
+            overrides.white_point = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--tonemap") == 0 && i + 1 < argc) {
             const char* value = argv[++i];
             if (auto tm = parse_tonemap(value)) overrides.tonemap = *tm;
@@ -259,11 +156,11 @@ int main(int argc, char** argv) {
                 return 1;
             }
         } else if (std::strcmp(argv[i], "--normalize-ref") == 0 && i + 1 < argc) {
-            overrides.normalize_ref = std::atof(argv[++i]);
+            overrides.normalize_ref = (float)std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--normalize-pct") == 0 && i + 1 < argc) {
-            overrides.normalize_pct = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+            overrides.normalize_pct = (float)std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--ambient") == 0 && i + 1 < argc) {
-            overrides.ambient = std::atof(argv[++i]);
+            overrides.ambient = (float)std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--background") == 0 && i + 1 < argc) {
             char* end = nullptr;
             float r = std::strtof(argv[++i], &end);
@@ -272,21 +169,17 @@ int main(int argc, char** argv) {
             if (end && *end == ',') { b = std::strtof(end + 1, &end); }
             overrides.background = {r, g, b};
         } else if (std::strcmp(argv[i], "--opacity") == 0 && i + 1 < argc) {
-            overrides.opacity = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+            overrides.opacity = (float)std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--intensity") == 0 && i + 1 < argc) {
-            overrides.intensity = std::atof(argv[++i]);
+            overrides.intensity = (float)std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--saturation") == 0 && i + 1 < argc) {
-            overrides.saturation = std::max(std::atof(argv[++i]), 0.0);
+            overrides.saturation = (float)std::max(std::atof(argv[++i]), 0.0);
         } else if (std::strcmp(argv[i], "--vignette") == 0 && i + 1 < argc) {
-            overrides.vignette = std::clamp(std::atof(argv[++i]), 0.0, 1.0);
+            overrides.vignette = (float)std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--vignette-radius") == 0 && i + 1 < argc) {
-            overrides.vignette_radius = std::atof(argv[++i]);
+            overrides.vignette_radius = (float)std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--fast") == 0) {
             fast_mode = true;
-        } else if (std::strcmp(argv[i], "--histogram") == 0) {
-            emit_histogram = true;
-        } else if (std::strcmp(argv[i], "--stream") == 0) {
-            stream_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
             print_usage();
             return 0;
@@ -297,15 +190,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (stream_mode) {
-        // Stream mode: use default shot (no scene file needed), apply CLI overrides
-        Shot session;
-        overrides.apply_to(session);
-        return run_stream(session, session.trace.rays, fast_mode, emit_histogram);
-    }
-    (void)emit_histogram; // only used in stream mode
-
-    // Load shot (scene file provides defaults for everything)
+    // Load shot and apply CLI overrides
     Shot shot = resolve_shot(scene_name);
     overrides.apply_to(shot);
 
@@ -319,54 +204,18 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    HeadlessGL gl;
-    if (!gl.init())
-        return 1;
+    // Render using RenderSession
+    RenderSession session(shot.canvas.width, shot.canvas.height, fast_mode);
+    auto result = session.render_shot(shot);
 
-    int width = shot.canvas.width;
-    int height = shot.canvas.height;
+    std::cerr << shot.trace.rays << "/" << shot.trace.rays << " rays\n";
 
-    Renderer renderer;
-    if (!renderer.init(width, height, fast_mode))
-        return 1;
-
-    // Resolve camera bounds
-    Bounds scene_bounds = compute_bounds(shot.scene);
-    Bounds bounds = shot.camera.resolve(shot.canvas.aspect(), scene_bounds);
-    renderer.upload_scene(shot.scene, bounds);
-    renderer.clear();
-
-    TraceConfig tcfg = shot.trace.to_trace_config();
-    PostProcess pp = shot.look.to_post_process();
-    int64_t total_rays = shot.trace.rays;
-
-    int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
-
-    // Multi-batch: group N compute dispatches per draw call to amortize draw overhead
-    const int dispatches_per_draw = 4;
-    int64_t i = 0;
-    while (i < num_batches) {
-        int n = std::min((int64_t)dispatches_per_draw, num_batches - i);
-        renderer.trace_and_draw_multi(tcfg, n);
-        i += n;
-
-        int64_t done = i * tcfg.batch_size;
-        if (done > total_rays) done = total_rays;
-        std::cerr << "\r" << done << "/" << total_rays << " rays"
-                  << std::flush;
-    }
-    std::cerr << "\n";
-
-    std::vector<uint8_t> pixels;
-    renderer.read_pixels(pixels, pp);
-
-    if (export_png(output, pixels.data(), width, height)) {
+    if (export_png(output, result.pixels.data(), result.width, result.height)) {
         std::cerr << "Saved: " << output << "\n";
     } else {
         std::cerr << "Failed to save: " << output << "\n";
         return 1;
     }
 
-    renderer.shutdown();
     return 0;
 }

@@ -14,7 +14,7 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 constexpr int SHOT_JSON_VERSION = 5;
-enum class Schema { Authored, Stream };
+enum class Schema { Authored };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
@@ -108,29 +108,6 @@ float read_required_float(const Json& json, std::string_view key, std::string_vi
 Json vec2_json(Vec2 value) { return Json::array({value.x, value.y}); }
 Json rgb_json(const float value[3]) { return Json::array({value[0], value[1], value[2]}); }
 Json bounds_json(const Bounds& value) { return Json::array({value.min.x, value.min.y, value.max.x, value.max.y}); }
-
-void read_render_overrides(const Json& json, RenderOverrides& overrides);
-
-const char* tonemap_to_string(ToneMap tonemap) {
-    switch (tonemap) {
-        case ToneMap::None: return "none";
-        case ToneMap::Reinhard: return "reinhard";
-        case ToneMap::ReinhardExtended: return "reinhardx";
-        case ToneMap::ACES: return "aces";
-        case ToneMap::Logarithmic: return "log";
-    }
-    return "reinhardx";
-}
-
-const char* normalize_to_string(NormalizeMode mode) {
-    switch (mode) {
-        case NormalizeMode::Max: return "max";
-        case NormalizeMode::Rays: return "rays";
-        case NormalizeMode::Fixed: return "fixed";
-        case NormalizeMode::Off: return "off";
-    }
-    return "rays";
-}
 
 ToneMap read_tonemap(const Json& json, std::string_view context) {
     const std::string value = read_string(json, context);
@@ -574,7 +551,7 @@ Look read_look(const Json& json, Schema schema, std::string_view context) {
 Json write_look(const Look& look) {
     return Json{{"exposure", look.exposure}, {"contrast", look.contrast}, {"gamma", look.gamma},
                 {"tonemap", tonemap_to_string(look.tone_map)}, {"white_point", look.white_point},
-                {"normalize", normalize_to_string(look.normalize)}, {"normalize_ref", look.normalize_ref},
+                {"normalize", normalize_mode_to_string(look.normalize)}, {"normalize_ref", look.normalize_ref},
                 {"normalize_pct", look.normalize_pct}, {"ambient", look.ambient},
                 {"background", rgb_json(look.background)}, {"opacity", look.opacity},
                 {"saturation", look.saturation}, {"vignette", look.vignette},
@@ -669,13 +646,9 @@ int read_version(const Json& root) {
     return value;
 }
 
-Shot read_authored_shot(const Json& root, bool allow_render) {
-    if (allow_render)
-        reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace", "render",
-                                   "materials", "shapes", "lights", "groups"}, "shot");
-    else
-        reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace",
-                                   "materials", "shapes", "lights", "groups"}, "shot");
+Shot read_authored_shot(const Json& root) {
+    reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace",
+                               "materials", "shapes", "lights", "groups"}, "shot");
     (void)read_version(root);
     Shot shot;
     shot.name = read_required_string(root, "name", "shot");
@@ -684,31 +657,6 @@ Shot read_authored_shot(const Json& root, bool allow_render) {
     shot.look = read_look(require_key(root, "look", "shot"), Schema::Authored, "look");
     shot.trace = read_trace(require_key(root, "trace", "shot"), Schema::Authored, "trace");
     shot.scene = read_scene(root, Schema::Authored);
-    return shot;
-}
-
-bool is_explicit_authored_root(const Json& root) {
-    return root.contains("name") && root.contains("camera") && root.contains("canvas")
-        && root.contains("look") && root.contains("trace") && root.contains("materials")
-        && root.contains("shapes") && root.contains("lights") && root.contains("groups");
-}
-
-Shot read_stream_frame_shot(const Json& root) {
-    reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace", "render",
-                               "materials", "shapes", "lights", "groups"}, "stream frame");
-    if (const Json* render = find_key(root, "render")) {
-        RenderOverrides overrides;
-        read_render_overrides(*render, overrides);
-    }
-    if (is_explicit_authored_root(root)) return read_authored_shot(root, true);
-    (void)read_version(root);
-    Shot shot;
-    if (root.contains("name")) shot.name = read_required_string(root, "name", "stream frame");
-    if (root.contains("camera")) shot.camera = read_camera(root["camera"], "camera");
-    if (root.contains("canvas")) shot.canvas = read_canvas(root["canvas"], "canvas");
-    if (root.contains("look")) shot.look = read_look(root["look"], Schema::Stream, "look");
-    if (root.contains("trace")) shot.trace = read_trace(root["trace"], Schema::Stream, "trace");
-    shot.scene = read_scene(root, Schema::Stream);
     return shot;
 }
 
@@ -726,35 +674,6 @@ Json write_shot(const Shot& shot) {
     json["lights"] = std::move(scene["lights"]);
     json["groups"] = std::move(scene["groups"]);
     return json;
-}
-
-void read_render_overrides(const Json& json, RenderOverrides& overrides) {
-    reject_unknown_keys(json, {"width", "height", "rays", "batch", "depth", "exposure", "contrast",
-                               "gamma", "white_point", "tonemap", "bounds", "normalize",
-                               "normalize_ref", "normalize_pct", "ambient", "background",
-                               "opacity", "intensity", "saturation", "vignette", "vignette_radius"},
-                        "render");
-    if (const Json* value = find_key(json, "width")) overrides.width = read_int(*value, "render.width");
-    if (const Json* value = find_key(json, "height")) overrides.height = read_int(*value, "render.height");
-    if (const Json* value = find_key(json, "rays")) overrides.rays = read_int64(*value, "render.rays");
-    if (const Json* value = find_key(json, "batch")) overrides.batch = read_int(*value, "render.batch");
-    if (const Json* value = find_key(json, "depth")) overrides.depth = read_int(*value, "render.depth");
-    if (const Json* value = find_key(json, "exposure")) overrides.exposure = read_float(*value, "render.exposure");
-    if (const Json* value = find_key(json, "contrast")) overrides.contrast = read_float(*value, "render.contrast");
-    if (const Json* value = find_key(json, "gamma")) overrides.gamma = read_float(*value, "render.gamma");
-    if (const Json* value = find_key(json, "white_point")) overrides.white_point = read_float(*value, "render.white_point");
-    if (const Json* value = find_key(json, "tonemap")) overrides.tonemap = read_tonemap(*value, "render.tonemap");
-    if (const Json* value = find_key(json, "bounds")) overrides.bounds = read_bounds(*value, "render.bounds");
-    if (const Json* value = find_key(json, "normalize")) overrides.normalize = read_normalize_mode(*value, "render.normalize");
-    if (const Json* value = find_key(json, "normalize_ref")) overrides.normalize_ref = read_float(*value, "render.normalize_ref");
-    if (const Json* value = find_key(json, "normalize_pct")) overrides.normalize_pct = read_float(*value, "render.normalize_pct");
-    if (const Json* value = find_key(json, "ambient")) overrides.ambient = read_float(*value, "render.ambient");
-    if (const Json* value = find_key(json, "background")) overrides.background = read_rgb(*value, "render.background");
-    if (const Json* value = find_key(json, "opacity")) overrides.opacity = read_float(*value, "render.opacity");
-    if (const Json* value = find_key(json, "intensity")) overrides.intensity = read_float(*value, "render.intensity");
-    if (const Json* value = find_key(json, "saturation")) overrides.saturation = read_float(*value, "render.saturation");
-    if (const Json* value = find_key(json, "vignette")) overrides.vignette = read_float(*value, "render.vignette");
-    if (const Json* value = find_key(json, "vignette_radius")) overrides.vignette_radius = read_float(*value, "render.vignette_radius");
 }
 
 template <typename Fn>
@@ -782,11 +701,7 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
 }
 
 std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std::string* error) {
-    return parse_shot(json_content, error, [](const Json& root) { return read_authored_shot(root, false); });
-}
-
-std::optional<Shot> try_load_stream_frame_json_string(std::string_view json_content, std::string* error) {
-    return parse_shot(json_content, error, [](const Json& root) { return read_stream_frame_shot(root); });
+    return parse_shot(json_content, error, [](const Json& root) { return read_authored_shot(root); });
 }
 
 Shot load_shot_json_string(std::string_view json_content) {
@@ -809,91 +724,4 @@ std::optional<Shot> try_load_shot_json(const std::string& path, std::string* err
 Shot load_shot_json(const std::string& path) {
     if (auto shot = try_load_shot_json(path)) return *shot;
     return {};
-}
-
-void RenderOverrides::apply_to(Look& look) const {
-    if (exposure) look.exposure = *exposure;
-    if (contrast) look.contrast = *contrast;
-    if (gamma) look.gamma = *gamma;
-    if (white_point) look.white_point = *white_point;
-    if (tonemap) look.tone_map = *tonemap;
-    if (normalize) look.normalize = *normalize;
-    if (normalize_ref) look.normalize_ref = *normalize_ref;
-    if (normalize_pct) look.normalize_pct = *normalize_pct;
-    if (ambient) look.ambient = *ambient;
-    if (opacity) look.opacity = *opacity;
-    if (saturation) look.saturation = *saturation;
-    if (vignette) look.vignette = *vignette;
-    if (vignette_radius) look.vignette_radius = *vignette_radius;
-    if (background) {
-        look.background[0] = (*background)[0];
-        look.background[1] = (*background)[1];
-        look.background[2] = (*background)[2];
-    }
-}
-
-void RenderOverrides::apply_to(PostProcess& pp) const {
-    if (exposure) pp.exposure = *exposure;
-    if (contrast) pp.contrast = *contrast;
-    if (gamma) pp.gamma = *gamma;
-    if (white_point) pp.white_point = *white_point;
-    if (tonemap) pp.tone_map = *tonemap;
-    if (normalize) pp.normalize = *normalize;
-    if (normalize_ref) pp.normalize_ref = *normalize_ref;
-    if (normalize_pct) pp.normalize_pct = *normalize_pct;
-    if (ambient) pp.ambient = *ambient;
-    if (opacity) pp.opacity = *opacity;
-    if (saturation) pp.saturation = *saturation;
-    if (vignette) pp.vignette = *vignette;
-    if (vignette_radius) pp.vignette_radius = *vignette_radius;
-    if (background) {
-        pp.background[0] = (*background)[0];
-        pp.background[1] = (*background)[1];
-        pp.background[2] = (*background)[2];
-    }
-}
-
-void RenderOverrides::apply_to(TraceDefaults& trace) const {
-    if (rays) trace.rays = *rays;
-    if (batch) trace.batch = *batch;
-    if (depth) trace.depth = *depth;
-    if (intensity) trace.intensity = *intensity;
-}
-
-void RenderOverrides::apply_to(TraceConfig& tcfg) const {
-    if (batch) tcfg.batch_size = *batch;
-    if (depth) tcfg.max_depth = *depth;
-    if (intensity) tcfg.intensity = *intensity;
-}
-
-void RenderOverrides::apply_to(Canvas& canvas) const {
-    if (width) canvas.width = *width;
-    if (height) canvas.height = *height;
-}
-
-void RenderOverrides::apply_to(Shot& shot) const {
-    apply_to(shot.canvas);
-    apply_to(shot.look);
-    apply_to(shot.trace);
-}
-
-StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
-    StreamFrameDirectives directives;
-    try {
-        Json root = parse_root(json);
-        reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace", "render",
-                                   "materials", "shapes", "lights", "groups"}, "stream frame");
-        directives.has_name = root.contains("name");
-        directives.has_camera = root.contains("camera");
-        directives.has_canvas = root.contains("canvas");
-        directives.has_look = root.contains("look");
-        directives.has_trace = root.contains("trace");
-        if (const Json* render = find_key(root, "render")) read_render_overrides(*render, directives.render);
-    } catch (const std::exception&) {
-    }
-    return directives;
-}
-
-RenderOverrides parse_frame_overrides(std::string_view json) {
-    return parse_stream_frame_directives(json).render;
 }

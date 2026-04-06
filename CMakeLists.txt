@@ -34,6 +34,7 @@ embed_shaders(
 # ── Dependencies ──────────────────────────────────────────────────
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
+find_library(EGL_LIBRARY EGL REQUIRED)
 
 # ── Core library ──────────────────────────────────────────────────
 add_library(lpt2d-core STATIC
@@ -45,6 +46,8 @@ add_library(lpt2d-core STATIC
     src/core/export.cpp
     src/core/serialize.cpp
     src/core/serialize_json.cpp
+    src/core/headless.cpp
+    src/core/session.cpp
 )
 
 target_include_directories(lpt2d-core PUBLIC
@@ -58,11 +61,13 @@ target_include_directories(lpt2d-core PRIVATE
 target_link_libraries(lpt2d-core PUBLIC
     OpenGL::GL
     GLEW::GLEW
+    ${EGL_LIBRARY}
 )
 target_compile_definitions(lpt2d-core PUBLIC
     LPT2D_SCENES_DIR="${CMAKE_SOURCE_DIR}/scenes"
 )
 target_compile_options(lpt2d-core PRIVATE -Wall -Wextra -Wpedantic)
+set_property(TARGET lpt2d-core PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_dependencies(lpt2d-core generate_shaders)
 
@@ -104,18 +109,28 @@ target_compile_definitions(lpt2d PRIVATE
 target_compile_options(lpt2d PRIVATE -Wall -Wextra -Wpedantic)
 
 # ── Headless CLI executable ───────────────────────────────────────
-find_library(EGL_LIBRARY EGL REQUIRED)
-
 add_executable(lpt2d-cli
     src/cli/main.cpp
-    src/cli/headless.cpp
 )
 
-target_include_directories(lpt2d-cli PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/cli
-)
 target_link_libraries(lpt2d-cli PRIVATE
     lpt2d-core
-    ${EGL_LIBRARY}
 )
 target_compile_options(lpt2d-cli PRIVATE -Wall -Wextra -Wpedantic)
+
+# ── Python extension module (nanobind) ───────────────────────────
+find_package(Python3 COMPONENTS Interpreter Development.Module)
+if(Python3_FOUND)
+    # nanobind uses find_package(Python), not find_package(Python3).
+    # Bridge the variables so nanobind finds the same Python.
+    set(Python_EXECUTABLE ${Python3_EXECUTABLE})
+    set(Python_INCLUDE_DIRS ${Python3_INCLUDE_DIRS})
+    set(Python_LIBRARIES ${Python3_LIBRARIES})
+    set(Python_FOUND TRUE)
+
+    add_subdirectory(${CMAKE_SOURCE_DIR}/external/nanobind)
+    nanobind_add_module(_lpt2d
+        src/bindings/lpt2d_bindings.cpp
+    )
+    target_link_libraries(_lpt2d PRIVATE lpt2d-core)
+endif()

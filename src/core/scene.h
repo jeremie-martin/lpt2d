@@ -361,6 +361,17 @@ inline std::optional<ToneMap> parse_tonemap(const std::string& s) {
     return std::nullopt;
 }
 
+inline const char* tonemap_to_string(ToneMap tm) {
+    switch (tm) {
+        case ToneMap::None: return "none";
+        case ToneMap::Reinhard: return "reinhard";
+        case ToneMap::ReinhardExtended: return "reinhardx";
+        case ToneMap::ACES: return "aces";
+        case ToneMap::Logarithmic: return "log";
+    }
+    return "none";
+}
+
 enum class NormalizeMode : int {
     Max = 0,   // per-frame max pixel (or percentile)
     Rays = 1,  // total accumulated rays — stable across ray counts (default)
@@ -374,6 +385,16 @@ inline std::optional<NormalizeMode> parse_normalize_mode(const std::string& s) {
     if (s == "fixed") return NormalizeMode::Fixed;
     if (s == "off") return NormalizeMode::Off;
     return std::nullopt;
+}
+
+inline const char* normalize_mode_to_string(NormalizeMode nm) {
+    switch (nm) {
+        case NormalizeMode::Max: return "max";
+        case NormalizeMode::Rays: return "rays";
+        case NormalizeMode::Fixed: return "fixed";
+        case NormalizeMode::Off: return "off";
+    }
+    return "rays";
 }
 
 struct TraceConfig {

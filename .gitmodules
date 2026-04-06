@@ -4,3 +4,6 @@
 [submodule "external/nlohmann"]
 	path = external/nlohmann
 	url = https://github.com/nlohmann/json.git
+[submodule "external/nanobind"]
+	path = external/nanobind
+	url = https://github.com/wjakob/nanobind.git
