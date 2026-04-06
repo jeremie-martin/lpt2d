@@ -210,7 +210,7 @@ struct Hit {
 
 const Hit NO_HIT = Hit(1e30, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
 
-Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
+Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c, float max_t) {
     vec2 oc = ro - c.center;
     // All ray directions are normalized before tracing, so this quadratic
     // can use the cheaper unit-length form.
@@ -223,13 +223,13 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     float t1 = -b - sq;
     float t2 = -b + sq;
     float t = (t1 > INTERSECT_EPS) ? t1 : t2;
-    if (t < INTERSECT_EPS) return NO_HIT;
+    if (t < INTERSECT_EPS || t >= max_t) return NO_HIT;
 
     vec2 p = ro + rd * t;
     return Hit(t, p, (p - c.center) * c.inv_radius, c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.spectral_c0, c.spectral_c1, c.spectral_c2);
 }
 
-Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
+Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
     vec2 d = s.b - s.a;
     float denom = rd.x * d.y - rd.y * d.x;
     if (abs(denom) < INTERSECT_EPS) return NO_HIT;
@@ -237,7 +237,7 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
     vec2 f = ro - s.a;
     float t = (d.x * f.y - d.y * f.x) / denom;
     float u = (rd.x * f.y - rd.y * f.x) / denom;
-    if (t < INTERSECT_EPS || u < 0.0 || u > 1.0) return NO_HIT;
+    if (t < INTERSECT_EPS || t >= max_t || u < 0.0 || u > 1.0) return NO_HIT;
 
     vec2 p = ro + rd * t;
     vec2 n = vec2(-d.y, d.x) * s.inv_len;
@@ -253,7 +253,7 @@ bool in_arc(float angle, float start, float sweep) {
     return delta <= arc_sweep + INTERSECT_EPS;
 }
 
-Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
+Hit hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
     vec2 oc = ro - a.center;
     float qb = dot(oc, rd);
     float qc = dot(oc, oc) - a.radius_sq;
@@ -266,7 +266,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
 
     for (int i = 0; i < 2; i++) {
         float t = (i == 0) ? t1 : t2;
-        if (t < INTERSECT_EPS) continue;
+        if (t < INTERSECT_EPS || t >= max_t) continue;
         vec2 p = ro + rd * t;
         float angle = atan(p.y - a.center.y, p.x - a.center.x);
         if (angle < 0.0) angle += 2.0 * PI;
@@ -279,7 +279,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
     return NO_HIT;
 }
 
-Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
+Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b, float max_t) {
     vec2 A = b.p0 - 2.0*b.p1 + b.p2;
     vec2 B = 2.0*(b.p1 - b.p0);
     vec2 C = b.p0;
@@ -306,7 +306,7 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
         }
     }
 
-    Hit best = NO_HIT;
+    Hit best = Hit(max_t, vec2(0), vec2(0), 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
     for (int i = 0; i < n_roots; i++) {
         float t = roots[i];
         if (t < 0.0 || t > 1.0) continue;
@@ -320,10 +320,10 @@ Hit hit_bezier(vec2 ro, vec2 rd, GPUBezier b) {
 
         best = Hit(s, p, n, b.ior, b.roughness, b.metallic, b.transmission, b.absorption, b.cauchy_b, b.albedo, b.emission, b.spectral_c0, b.spectral_c1, b.spectral_c2);
     }
-    return best;
+    return best.t < max_t ? best : NO_HIT;
 }
 
-Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
+Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e, float max_t) {
     float cr = e.rot_cos, sr = e.rot_sin;
     vec2 oc = ro - e.center;
     vec2 lo = vec2(oc.x*cr + oc.y*sr, -oc.x*sr + oc.y*cr);
@@ -339,7 +339,7 @@ Hit hit_ellipse(vec2 ro, vec2 rd, GPUEllipse e) {
     float t1 = (-B - sq) / (2.0*A);
     float t2 = (-B + sq) / (2.0*A);
     float t = (t1 > INTERSECT_EPS) ? t1 : t2;
-    if (t < INTERSECT_EPS) return NO_HIT;
+    if (t < INTERSECT_EPS || t >= max_t) return NO_HIT;
 
     // Hit point in local coords
     vec2 lp = lo + ld * t;
@@ -364,23 +364,23 @@ float spectral_response(float lambda_nm, float c0, float c1, float c2) {
 Hit hit_scene(vec2 ro, vec2 rd) {
     Hit best = NO_HIT;
     for (uint i = 0u; i < uNumCircles; i++) {
-        Hit h = hit_circle(ro, rd, circles[i]);
+        Hit h = hit_circle(ro, rd, circles[i], best.t);
         if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumSegments; i++) {
-        Hit h = hit_segment(ro, rd, segments[i]);
+        Hit h = hit_segment(ro, rd, segments[i], best.t);
         if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumArcs; i++) {
-        Hit h = hit_arc(ro, rd, arcs[i]);
+        Hit h = hit_arc(ro, rd, arcs[i], best.t);
         if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumBeziers; i++) {
-        Hit h = hit_bezier(ro, rd, beziers[i]);
+        Hit h = hit_bezier(ro, rd, beziers[i], best.t);
         if (h.t < best.t) best = h;
     }
     for (uint i = 0u; i < uNumEllipses; i++) {
-        Hit h = hit_ellipse(ro, rd, ellipses[i]);
+        Hit h = hit_ellipse(ro, rd, ellipses[i], best.t);
         if (h.t < best.t) best = h;
     }
     return best;
