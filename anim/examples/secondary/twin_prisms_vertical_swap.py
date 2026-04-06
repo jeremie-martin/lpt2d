@@ -9,12 +9,12 @@ from functools import cache
 from pathlib import Path
 
 from anim import (
-    BeamLight,
     Camera2D,
     Canvas,
     Frame,
     FrameContext,
     Look,
+    ProjectorLight,
     Scene,
     Segment,
     Shot,
@@ -94,19 +94,19 @@ def infer_room_bounds(scene: Scene) -> Bounds:
     return Bounds(min(xs), min(ys), max(xs), max(ys))
 
 
-def require_primary_beam(scene: Scene) -> BeamLight:
+def require_primary_beam(scene: Scene) -> ProjectorLight:
     beam = scene.require_light(PRIMARY_BEAM_ID)
-    if not isinstance(beam, BeamLight):
-        raise ValueError(f"{PRIMARY_BEAM_ID} must be a beam light")
+    if not isinstance(beam, ProjectorLight):
+        raise ValueError(f"{PRIMARY_BEAM_ID} must be a projector light")
     return beam
 
 
-def infer_vertical_inset(room: Bounds, beam: BeamLight) -> float:
+def infer_vertical_inset(room: Bounds, beam: ProjectorLight) -> float:
     return min(
-        beam.origin[0] - room.xmin,
-        room.xmax - beam.origin[0],
-        room.ymax - beam.origin[1],
-        beam.origin[1] - room.ymin,
+        beam.position[0] - room.xmin,
+        room.xmax - beam.position[0],
+        room.ymax - beam.position[1],
+        beam.position[1] - room.ymin,
     )
 
 
@@ -131,7 +131,7 @@ def infer_layout(scene: Scene, aspect: float) -> Layout:
     camera = Camera2D(center=list(visible.center), width=visible.width)
     return Layout(
         camera=camera,
-        beam_x=beam.origin[0],
+        beam_x=beam.position[0],
         start_y=visible.ymax - inset,
         end_y=visible.ymin + inset,
     )
@@ -142,7 +142,7 @@ def make_animate(layout: Layout):
         scene = _base_shot().scene.clone()
         p = ease_in_out_sine(ctx.progress)
         beam = require_primary_beam(scene)
-        beam.origin = [layout.beam_x, lerp(layout.start_y, layout.end_y, p)]
+        beam.position = [layout.beam_x, lerp(layout.start_y, layout.end_y, p)]
         return Frame(scene=scene, look=FRAME_LOOK)
 
     return animate

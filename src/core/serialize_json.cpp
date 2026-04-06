@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <algorithm>
 #include <array>
 #include <exception>
 #include <fstream>
@@ -26,7 +27,7 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 constexpr int SHOT_JSON_VERSION = 7;
-enum class Schema { Authored };
+enum class Schema { Authored, Stream };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
@@ -137,6 +138,12 @@ SeedMode read_seed_mode(const Json& json, std::string_view context) {
     const std::string value = read_string(json, context);
     if (auto parsed = parse_seed_mode(value)) return *parsed;
     fail("invalid seed mode: " + value);
+}
+
+ProjectorProfile read_projector_profile(const Json& json, std::string_view context) {
+    const std::string value = read_string(json, context);
+    if (auto parsed = parse_projector_profile(value)) return *parsed;
+    fail("invalid projector profile: " + value);
 }
 
 Material read_material(const Json& json, Schema schema, std::string_view context) {
@@ -357,16 +364,22 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
             light.wavelength_max = read_required_float(json, "wavelength_max", context);
         return light;
     }
-    if (type == "beam") {
-        reject_unknown_keys(json, {"id", "type", "origin", "direction", "angular_width",
-                                   "intensity", "wavelength_min", "wavelength_max"}, context);
-        BeamLight light{id, {}, {1.0f, 0.0f}, 0.1f, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("origin"))
-            light.origin = read_vec2(require_key(json, "origin", context), std::string(context) + ".origin");
+    if (type == "projector") {
+        reject_unknown_keys(json, {"id", "type", "position", "direction", "source_radius", "spread",
+                                   "profile", "softness", "intensity", "wavelength_min", "wavelength_max"}, context);
+        ProjectorLight light{id, {}, {1.0f, 0.0f}, 0.03f, 0.1f, ProjectorProfile::Uniform, 0.0f, 1.0f, 380.0f, 780.0f};
+        if (schema == Schema::Authored || json.contains("position"))
+            light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
         if (schema == Schema::Authored || json.contains("direction"))
             light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
-        if (schema == Schema::Authored || json.contains("angular_width"))
-            light.angular_width = read_required_float(json, "angular_width", context);
+        if (schema == Schema::Authored || json.contains("source_radius"))
+            light.source_radius = read_required_float(json, "source_radius", context);
+        if (schema == Schema::Authored || json.contains("spread"))
+            light.spread = read_required_float(json, "spread", context);
+        if (schema == Schema::Authored || json.contains("profile"))
+            light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
+        if (schema == Schema::Authored || json.contains("softness"))
+            light.softness = read_required_float(json, "softness", context);
         if (schema == Schema::Authored || json.contains("intensity"))
             light.intensity = read_required_float(json, "intensity", context);
         if (schema == Schema::Authored || json.contains("wavelength_min"))
@@ -374,48 +387,9 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
         if (schema == Schema::Authored || json.contains("wavelength_max"))
             light.wavelength_max = read_required_float(json, "wavelength_max", context);
         light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1, 0};
-        return light;
-    }
-    if (type == "parallel_beam") {
-        reject_unknown_keys(json, {"id", "type", "a", "b", "direction", "angular_width",
-                                   "intensity", "wavelength_min", "wavelength_max"}, context);
-        ParallelBeamLight light{id, {}, {0.0f, 0.5f}, {1.0f, 0.0f}, 0.0f, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("a"))
-            light.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
-        if (schema == Schema::Authored || json.contains("b"))
-            light.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
-        if (schema == Schema::Authored || json.contains("direction"))
-            light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
-        if (schema == Schema::Authored || json.contains("angular_width"))
-            light.angular_width = read_required_float(json, "angular_width", context);
-        if (schema == Schema::Authored || json.contains("intensity"))
-            light.intensity = read_required_float(json, "intensity", context);
-        if (schema == Schema::Authored || json.contains("wavelength_min"))
-            light.wavelength_min = read_required_float(json, "wavelength_min", context);
-        if (schema == Schema::Authored || json.contains("wavelength_max"))
-            light.wavelength_max = read_required_float(json, "wavelength_max", context);
-        light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1, 0};
-        return light;
-    }
-    if (type == "spot") {
-        reject_unknown_keys(json, {"id", "type", "pos", "direction", "angular_width", "falloff",
-                                   "intensity", "wavelength_min", "wavelength_max"}, context);
-        SpotLight light{id, {}, {1.0f, 0.0f}, 0.5f, 2.0f, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("pos"))
-            light.pos = read_vec2(require_key(json, "pos", context), std::string(context) + ".pos");
-        if (schema == Schema::Authored || json.contains("direction"))
-            light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
-        if (schema == Schema::Authored || json.contains("angular_width"))
-            light.angular_width = read_required_float(json, "angular_width", context);
-        if (schema == Schema::Authored || json.contains("falloff"))
-            light.falloff = read_required_float(json, "falloff", context);
-        if (schema == Schema::Authored || json.contains("intensity"))
-            light.intensity = read_required_float(json, "intensity", context);
-        if (schema == Schema::Authored || json.contains("wavelength_min"))
-            light.wavelength_min = read_required_float(json, "wavelength_min", context);
-        if (schema == Schema::Authored || json.contains("wavelength_max"))
-            light.wavelength_max = read_required_float(json, "wavelength_max", context);
-        light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1, 0};
+        light.source_radius = std::max(light.source_radius, 0.0f);
+        light.spread = std::clamp(light.spread, 0.0f, PI);
+        light.softness = std::clamp(light.softness, 0.0f, 1.0f);
         return light;
     }
     fail("unknown light type: " + type);
@@ -431,24 +405,13 @@ Json write_light(const Light& light) {
                                                     {"b", vec2_json(value.b)}, {"intensity", value.intensity},
                                                     {"wavelength_min", value.wavelength_min},
                                                     {"wavelength_max", value.wavelength_max}}; },
-        [](const BeamLight& value) { return Json{{"id", value.id}, {"type", "beam"}, {"origin", vec2_json(value.origin)},
-                                                 {"direction", vec2_json(value.direction)},
-                                                 {"angular_width", value.angular_width},
-                                                 {"intensity", value.intensity},
-                                                 {"wavelength_min", value.wavelength_min},
-                                                 {"wavelength_max", value.wavelength_max}}; },
-        [](const ParallelBeamLight& value) {
-            return Json{{"id", value.id}, {"type", "parallel_beam"}, {"a", vec2_json(value.a)},
-                        {"b", vec2_json(value.b)}, {"direction", vec2_json(value.direction)},
-                        {"angular_width", value.angular_width}, {"intensity", value.intensity},
+        [](const ProjectorLight& value) {
+            return Json{{"id", value.id}, {"type", "projector"}, {"position", vec2_json(value.position)},
+                        {"direction", vec2_json(value.direction)}, {"source_radius", value.source_radius},
+                        {"spread", value.spread}, {"profile", projector_profile_to_string(value.profile)},
+                        {"softness", value.softness}, {"intensity", value.intensity},
                         {"wavelength_min", value.wavelength_min}, {"wavelength_max", value.wavelength_max}};
         },
-        [](const SpotLight& value) { return Json{{"id", value.id}, {"type", "spot"}, {"pos", vec2_json(value.pos)},
-                                                 {"direction", vec2_json(value.direction)},
-                                                 {"angular_width", value.angular_width},
-                                                 {"falloff", value.falloff}, {"intensity", value.intensity},
-                                                 {"wavelength_min", value.wavelength_min},
-                                                 {"wavelength_max", value.wavelength_max}}; },
     }, light);
 }
 
@@ -703,6 +666,26 @@ Shot read_authored_shot(const Json& root) {
     return shot;
 }
 
+Shot read_stream_shot(const Json& root) {
+    reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace",
+                               "materials", "shapes", "lights", "groups"}, "stream");
+    if (root.contains("version"))
+        (void)read_version(root);
+
+    Shot shot;
+    shot.name = root.contains("name") ? read_required_string(root, "name", "stream") : "stream";
+    if (const Json* camera = find_key(root, "camera"))
+        shot.camera = read_camera(*camera, "camera");
+    if (const Json* canvas = find_key(root, "canvas"))
+        shot.canvas = read_canvas(*canvas, "canvas");
+    if (const Json* look = find_key(root, "look"))
+        shot.look = read_look(*look, Schema::Stream, "look");
+    if (const Json* trace = find_key(root, "trace"))
+        shot.trace = read_trace(*trace, Schema::Stream, "trace");
+    shot.scene = read_scene(root, Schema::Stream);
+    return shot;
+}
+
 Json write_shot(const Shot& shot) {
     Json json = Json::object();
     json["version"] = SHOT_JSON_VERSION;
@@ -745,6 +728,10 @@ bool save_shot_json(const Shot& shot, const std::string& path) {
 
 std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std::string* error) {
     return parse_shot(json_content, error, [](const Json& root) { return read_authored_shot(root); });
+}
+
+std::optional<Shot> try_load_stream_shot_json_string(std::string_view json_content, std::string* error) {
+    return parse_shot(json_content, error, [](const Json& root) { return read_stream_shot(root); });
 }
 
 Shot load_shot_json_string(std::string_view json_content) {

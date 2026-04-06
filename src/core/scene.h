@@ -70,6 +70,9 @@ struct Material {
     float cauchy_b = 0.0f;     // Cauchy dispersion: ior_eff = ior + cauchy_b / lambda_nm^2
     float albedo = 1.0f;       // Metallic: reflectance F0. Dielectric: diffuse scatter probability.
     float emission = 0.0f;     // Emissive intensity (adds energy at hit wavelength)
+    float color_wavelength = 0.0f;  // Peak passband wavelength in nm (0 = spectrally neutral)
+    float color_bandwidth = 50.0f;  // Gaussian sigma in nm (width of spectral response)
+    float fill = 0.0f;              // Interior fill intensity (0 = no fill, >0 = rasterized fill)
 
     bool operator==(const Material&) const = default;
 };
@@ -243,38 +246,42 @@ struct SegmentLight {
     float wavelength_max = 780.0f;
 };
 
-struct BeamLight {
+enum class ProjectorProfile : int {
+    Uniform,
+    Soft,
+    Gaussian,
+};
+
+inline std::optional<ProjectorProfile> parse_projector_profile(const std::string& s) {
+    if (s == "uniform") return ProjectorProfile::Uniform;
+    if (s == "soft") return ProjectorProfile::Soft;
+    if (s == "gaussian") return ProjectorProfile::Gaussian;
+    return std::nullopt;
+}
+
+inline const char* projector_profile_to_string(ProjectorProfile profile) {
+    switch (profile) {
+        case ProjectorProfile::Uniform: return "uniform";
+        case ProjectorProfile::Soft: return "soft";
+        case ProjectorProfile::Gaussian: return "gaussian";
+    }
+    return "uniform";
+}
+
+struct ProjectorLight {
     std::string id;
-    Vec2 origin;
-    Vec2 direction{1.0f, 0.0f}; // normalized
-    float angular_width = 0.1f;  // full cone angle in radians
-    float intensity = 1.0f;
+    Vec2 position;
+    Vec2 direction{1.0f, 0.0f};       // normalized
+    float source_radius = 0.03f;      // world-space radius; aperture length = 2 * radius
+    float spread = 0.1f;              // full cone angle in radians; 0 = perfectly collimated
+    ProjectorProfile profile = ProjectorProfile::Uniform;
+    float softness = 0.0f;            // normalized [0, 1], ignored for uniform profile
+    float intensity = 1.0f;           // total emitted power
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
 };
 
-struct ParallelBeamLight {
-    std::string id;
-    Vec2 a, b;                      // segment endpoints (emission aperture)
-    Vec2 direction{1.0f, 0.0f};     // normalized beam direction
-    float angular_width = 0.0f;     // full cone angle in radians (0 = perfectly collimated)
-    float intensity = 1.0f;
-    float wavelength_min = 380.0f;
-    float wavelength_max = 780.0f;
-};
-
-struct SpotLight {
-    std::string id;
-    Vec2 pos;
-    Vec2 direction{1.0f, 0.0f};     // normalized
-    float angular_width = 0.5f;     // full cone angle in radians
-    float falloff = 2.0f;           // cosine-power exponent (0=uniform, higher=sharper)
-    float intensity = 1.0f;
-    float wavelength_min = 380.0f;
-    float wavelength_max = 780.0f;
-};
-
-using Light = std::variant<PointLight, SegmentLight, BeamLight, ParallelBeamLight, SpotLight>;
+using Light = std::variant<PointLight, SegmentLight, ProjectorLight>;
 
 // --- Groups ---
 

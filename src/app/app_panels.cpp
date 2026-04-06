@@ -92,6 +92,37 @@ bool detach_material_from_selection(EditorState& ed, std::string_view material_i
     return changed;
 }
 
+void apply_projector_preset(ProjectorLight& light, int preset) {
+    switch (preset) {
+        case 1:
+            light.source_radius = 0.03f;
+            light.spread = 0.10f;
+            light.profile = ProjectorProfile::Uniform;
+            light.softness = 0.0f;
+            break;
+        case 2:
+            light.source_radius = 0.03f;
+            light.spread = 0.50f;
+            light.profile = ProjectorProfile::Soft;
+            light.softness = 0.5f;
+            break;
+        case 3:
+            light.source_radius = 0.015f;
+            light.spread = 0.02f;
+            light.profile = ProjectorProfile::Gaussian;
+            light.softness = 0.8f;
+            break;
+        case 4:
+            light.source_radius = 0.15f;
+            light.spread = 0.0f;
+            light.profile = ProjectorProfile::Uniform;
+            light.softness = 0.0f;
+            break;
+        default:
+            break;
+    }
+}
+
 void for_each_clipboard_shape(EditorState& ed, auto&& fn) {
     for (auto& shape : ed.session.clipboard.shapes)
         fn(shape);
@@ -262,9 +293,7 @@ void draw_controls_panel(
         tbtn("Erase", EditTool::Erase);
         tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
         tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
-        tbtn("Beam", EditTool::BeamLight);
-        tbtn("Par.Beam", EditTool::ParallelBeamLight); ImGui::SameLine();
-        tbtn("Spot", EditTool::SpotLight); ImGui::SameLine();
+        tbtn("Projector", EditTool::ProjectorLight); ImGui::SameLine();
         tbtn("Measure", EditTool::Measure);
 
         ImGui::Checkbox("Wireframe overlay", &panel.show_wireframe);
@@ -733,32 +762,30 @@ void draw_controls_panel(
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
                     edit_wavelength(l.wavelength_min, l.wavelength_max);
                 },
-                [&](BeamLight& l) {
-                    changed |= ImGui::DragFloat2("Origin", &l.origin.x, 0.01f);
+                [&](ProjectorLight& l) {
+                    const char* presets[] = {"(apply)", "Beam", "Spot", "Laser", "Parallel"};
+                    int preset = 0;
+                    if (ImGui::Combo("Preset", &preset, presets, 5) && preset > 0) {
+                        apply_projector_preset(l, preset);
+                        changed = true;
+                    }
+                    changed |= ImGui::DragFloat2("Position", &l.position.x, 0.01f);
                     changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
                     if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
                     else l.direction = {1.0f, 0.0f};
-                    changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.01f, PI);
-                    changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
-                    edit_wavelength(l.wavelength_min, l.wavelength_max);
-                },
-                [&](ParallelBeamLight& l) {
-                    changed |= ImGui::DragFloat2("Point A", &l.a.x, 0.01f);
-                    changed |= ImGui::DragFloat2("Point B", &l.b.x, 0.01f);
-                    changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
-                    if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
-                    else l.direction = {1.0f, 0.0f};
-                    changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.0f, PI);
-                    changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
-                    edit_wavelength(l.wavelength_min, l.wavelength_max);
-                },
-                [&](SpotLight& l) {
-                    changed |= ImGui::DragFloat2("Position", &l.pos.x, 0.01f);
-                    changed |= ImGui::DragFloat2("Direction", &l.direction.x, 0.01f);
-                    if (l.direction.length_sq() > 1e-6f) l.direction = l.direction.normalized();
-                    else l.direction = {1.0f, 0.0f};
-                    changed |= ImGui::SliderFloat("Ang. width", &l.angular_width, 0.01f, PI);
-                    changed |= ImGui::SliderFloat("Falloff", &l.falloff, 0.0f, 20.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
+                    changed |= ImGui::DragFloat("Source radius", &l.source_radius, 0.005f, 0.0f, 5.0f, "%.3f");
+                    changed |= ImGui::SliderFloat("Spread", &l.spread, 0.0f, PI);
+                    int profile = static_cast<int>(l.profile);
+                    if (ImGui::Combo("Profile", &profile, "Uniform\0Soft\0Gaussian\0")) {
+                        l.profile = static_cast<ProjectorProfile>(profile);
+                        changed = true;
+                    }
+                    if (l.profile == ProjectorProfile::Uniform) ImGui::BeginDisabled();
+                    changed |= ImGui::SliderFloat("Softness", &l.softness, 0.0f, 1.0f);
+                    if (l.profile == ProjectorProfile::Uniform) ImGui::EndDisabled();
+                    l.source_radius = std::max(l.source_radius, 0.0f);
+                    l.spread = std::clamp(l.spread, 0.0f, PI);
+                    l.softness = std::clamp(l.softness, 0.0f, 1.0f);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
                     edit_wavelength(l.wavelength_min, l.wavelength_max);
                 },

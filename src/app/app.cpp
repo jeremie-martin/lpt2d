@@ -490,7 +490,7 @@ int App::run(const AppConfig& config) {
                     ImVec2 b = io.MousePos;
                     dl->AddRect(ImVec2(std::min(a.x,b.x), std::min(a.y,b.y)),
                                 ImVec2(std::max(a.x,b.x), std::max(a.y,b.y)), COL_PREVIEW, 0.0f, 0, 1.5f * dpi_scale);
-                } else if (ed.interaction.tool == EditTool::Segment || ed.interaction.tool == EditTool::SegmentLight || ed.interaction.tool == EditTool::Bezier || ed.interaction.tool == EditTool::ParallelBeamLight) {
+                } else if (ed.interaction.tool == EditTool::Segment || ed.interaction.tool == EditTool::SegmentLight || ed.interaction.tool == EditTool::Bezier) {
                     dl->AddLine(cv.to_screen(ed.interaction.create_start), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
                 }
             }
@@ -782,9 +782,7 @@ int App::run(const AppConfig& config) {
                                     std::visit(overloaded{
                                         [&](const PointLight& l) { ed.interaction.drag_offsets.push_back({l.pos - mw_raw, {}}); },
                                         [&](const SegmentLight& l) { ed.interaction.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
-                                        [&](const BeamLight& l) { ed.interaction.drag_offsets.push_back({l.origin - mw_raw, {}}); },
-                                        [&](const ParallelBeamLight& l) { ed.interaction.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
-                                        [&](const SpotLight& l) { ed.interaction.drag_offsets.push_back({l.pos - mw_raw, {}}); },
+                                        [&](const ProjectorLight& l) { ed.interaction.drag_offsets.push_back({l.position - mw_raw, {}}); },
                                     }, *light);
                                 } else if (sid.type == SelectionRef::Group) {
                                     if (const Group* g = find_group(ed.shot.scene, sid.id))
@@ -815,26 +813,12 @@ int App::run(const AppConfig& config) {
                     ed.clear_selection();
                     ed.select({SelectionRef::Light, light.id, ""});
                     reload();
-                } else if (ed.interaction.tool == EditTool::BeamLight) {
+                } else if (ed.interaction.tool == EditTool::ProjectorLight) {
                     ed.session.undo.push(ed.shot.scene);
-                    BeamLight light;
-                    light.id = next_scene_entity_id(ed.shot.scene, "beam_light");
-                    light.origin = mw;
+                    ProjectorLight light;
+                    light.id = next_scene_entity_id(ed.shot.scene, "projector_light");
+                    light.position = mw;
                     light.direction = {1.0f, 0.0f};
-                    light.angular_width = 0.1f;
-                    light.intensity = 1.0f;
-                    ed.shot.scene.lights.push_back(light);
-                    ed.clear_selection();
-                    ed.select({SelectionRef::Light, light.id, ""});
-                    reload();
-                } else if (ed.interaction.tool == EditTool::SpotLight) {
-                    ed.session.undo.push(ed.shot.scene);
-                    SpotLight light;
-                    light.id = next_scene_entity_id(ed.shot.scene, "spot_light");
-                    light.pos = mw;
-                    light.direction = {1.0f, 0.0f};
-                    light.angular_width = 0.5f;
-                    light.falloff = 2.0f;
                     light.intensity = 1.0f;
                     ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
@@ -886,9 +870,7 @@ int App::run(const AppConfig& config) {
                     std::visit(overloaded{
                         [&](PointLight& l) { l.pos = mw + off.a; },
                         [&](SegmentLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
-                        [&](BeamLight& l) { l.origin = mw + off.a; },
-                        [&](ParallelBeamLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
-                        [&](SpotLight& l) { l.pos = mw + off.a; },
+                        [&](ProjectorLight& l) { l.position = mw + off.a; },
                     }, *light);
                 } else if (sid.type == SelectionRef::Group) {
                     if (Group* g = find_group(ed.shot.scene, sid.id))
@@ -979,20 +961,6 @@ int App::run(const AppConfig& config) {
                     light.id = next_scene_entity_id(ed.shot.scene, "segment_light");
                     light.a = ed.interaction.create_start;
                     light.b = end;
-                    light.intensity = 1.0f;
-                    ed.shot.scene.lights.push_back(light);
-                    ed.clear_selection();
-                    ed.select({SelectionRef::Light, light.id, ""});
-                    created = true;
-                } else if (ed.interaction.tool == EditTool::ParallelBeamLight && dist > 0.01f) {
-                    Vec2 seg_dir = end - ed.interaction.create_start;
-                    Vec2 perp = Vec2{-seg_dir.y, seg_dir.x}.normalized();
-                    ParallelBeamLight light;
-                    light.id = next_scene_entity_id(ed.shot.scene, "parallel_beam_light");
-                    light.a = ed.interaction.create_start;
-                    light.b = end;
-                    light.direction = perp;
-                    light.angular_width = 0.0f;
                     light.intensity = 1.0f;
                     ed.shot.scene.lights.push_back(light);
                     ed.clear_selection();
@@ -1244,7 +1212,7 @@ int App::run(const AppConfig& config) {
                     if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.interaction.transform.active()) switch_tool(EditTool::Erase);
                     if (ImGui::IsKeyPressed(ImGuiKey_P)) switch_tool(EditTool::PointLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);
-                    if (ImGui::IsKeyPressed(ImGuiKey_W)) switch_tool(EditTool::BeamLight);
+                    if (ImGui::IsKeyPressed(ImGuiKey_W)) switch_tool(EditTool::ProjectorLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_M)) switch_tool(EditTool::Measure);
                 }
 

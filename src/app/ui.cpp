@@ -160,6 +160,21 @@ static void draw_direction_cone(ImDrawList* dl, const CameraView& cv, Vec2 origi
     dl->AddLine(cv.to_screen(origin), cv.to_screen(origin + w2 * 0.2f), col, th * 0.5f);
 }
 
+static void draw_projector_aperture(ImDrawList* dl, const CameraView& cv, const ProjectorLight& light,
+                                    ImU32 col, float th, float dpi) {
+    Vec2 dir = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1.0f, 0.0f};
+    Vec2 tangent = dir.perp() * light.source_radius;
+    Vec2 a = light.position - tangent;
+    Vec2 b = light.position + tangent;
+    dl->AddCircleFilled(cv.to_screen(light.position), 4.0f * dpi, col);
+    if (light.source_radius > 0.0f) {
+        ImVec2 sa = cv.to_screen(a), sb = cv.to_screen(b);
+        dl->AddLine(sa, sb, col, th);
+        dl->AddCircleFilled(sa, 2.5f * dpi, col);
+        dl->AddCircleFilled(sb, 2.5f * dpi, col);
+    }
+}
+
 void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light, ImU32 col, float th, float dpi) {
     std::visit(overloaded{
         [&](const PointLight& l) {
@@ -171,21 +186,9 @@ void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light
             dl->AddCircleFilled(a, 3.0f * dpi, col);
             dl->AddCircleFilled(b, 3.0f * dpi, col);
         },
-        [&](const BeamLight& l) {
-            dl->AddCircleFilled(cv.to_screen(l.origin), 4.0f * dpi, col);
-            draw_direction_cone(dl, cv, l.origin, l.direction, l.angular_width, col, th);
-        },
-        [&](const ParallelBeamLight& l) {
-            ImVec2 sa = cv.to_screen(l.a), sb = cv.to_screen(l.b);
-            dl->AddLine(sa, sb, col, th);
-            dl->AddCircleFilled(sa, 3.0f * dpi, col);
-            dl->AddCircleFilled(sb, 3.0f * dpi, col);
-            Vec2 mid = (l.a + l.b) * 0.5f;
-            draw_direction_cone(dl, cv, mid, l.direction, l.angular_width, col, th);
-        },
-        [&](const SpotLight& l) {
-            dl->AddCircleFilled(cv.to_screen(l.pos), 4.0f * dpi, col);
-            draw_direction_cone(dl, cv, l.pos, l.direction, l.angular_width, col, th);
+        [&](const ProjectorLight& l) {
+            draw_projector_aperture(dl, cv, l, col, th, dpi);
+            draw_direction_cone(dl, cv, l.position, l.direction, l.spread, col, th);
         },
     }, light);
 }

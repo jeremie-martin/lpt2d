@@ -50,7 +50,6 @@ from .track import Wrap as Wrap
 from .track import sample_scalar as sample_scalar
 from .track import sample_vec2 as sample_vec2
 from .types import Arc as Arc
-from .types import BeamLight as BeamLight
 from .types import Bezier as Bezier
 from .types import Camera2D as Camera2D
 from .types import Canvas as Canvas
@@ -62,8 +61,9 @@ from .types import FrameReport as FrameReport
 from .types import Group as Group
 from .types import Look as Look
 from .types import Material as Material
-from .types import ParallelBeamLight as ParallelBeamLight
 from .types import PointLight as PointLight
+from .types import ProjectorLight as ProjectorLight
+from .types import ProjectorProfile as ProjectorProfile
 from .types import Polygon as Polygon
 from .types import Quality as Quality
 from .types import Scene as Scene
@@ -71,7 +71,6 @@ from .types import SeedMode as SeedMode
 from .types import Segment as Segment
 from .types import SegmentLight as SegmentLight
 from .types import Shot as Shot
-from .types import SpotLight as SpotLight
 from .types import Timeline as Timeline
 from .types import TraceDefaults as TraceDefaults
 from .types import Transform2D as Transform2D
@@ -85,9 +84,6 @@ from .types import opaque_mirror as opaque_mirror
 
 __all__ = [
     "Arc",
-    "BeamLight",
-    "ParallelBeamLight",
-    "SpotLight",
     "Bezier",
     "Camera2D",
     "Canvas",
@@ -104,6 +100,8 @@ __all__ = [
     "Look",
     "Material",
     "PointLight",
+    "ProjectorLight",
+    "ProjectorProfile",
     "Polygon",
     "Quality",
     "Scene",

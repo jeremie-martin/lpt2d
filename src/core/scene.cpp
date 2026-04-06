@@ -99,9 +99,7 @@ std::string light_type_name(const Light& light) {
     return std::visit(overloaded{
         [](const PointLight&) { return std::string{"point_light"}; },
         [](const SegmentLight&) { return std::string{"segment_light"}; },
-        [](const BeamLight&) { return std::string{"beam_light"}; },
-        [](const ParallelBeamLight&) { return std::string{"parallel_beam_light"}; },
-        [](const SpotLight&) { return std::string{"spot_light"}; },
+        [](const ProjectorLight&) { return std::string{"projector_light"}; },
     }, light);
 }
 
@@ -515,9 +513,7 @@ std::string light_display_name(const Light& l, int fallback_index) {
     std::string kind = std::visit(overloaded{
         [](const PointLight&) { return std::string{"Point Light"}; },
         [](const SegmentLight&) { return std::string{"Segment Light"}; },
-        [](const BeamLight&) { return std::string{"Beam Light"}; },
-        [](const ParallelBeamLight&) { return std::string{"Parallel Beam"}; },
-        [](const SpotLight&) { return std::string{"Spot Light"}; },
+        [](const ProjectorLight&) { return std::string{"Projector Light"}; },
     }, l);
     return kind + " " + std::to_string(fallback_index);
 }

@@ -191,17 +191,17 @@ Bounds light_bounds(const Light& l) {
                                   {std::max(light.a.x, light.b.x), std::max(light.a.y, light.b.y)},
                               };
                           },
-                          [](const BeamLight& light) {
-                              return Bounds{light.origin, light.origin};
-                          },
-                          [](const ParallelBeamLight& light) {
+                          [](const ProjectorLight& light) {
+                              Vec2 dir = light.direction.length_sq() > 1e-6f
+                                  ? light.direction.normalized()
+                                  : Vec2{1.0f, 0.0f};
+                              Vec2 tangent = dir.perp() * light.source_radius;
+                              Vec2 a = light.position - tangent;
+                              Vec2 b = light.position + tangent;
                               return Bounds{
-                                  {std::min(light.a.x, light.b.x), std::min(light.a.y, light.b.y)},
-                                  {std::max(light.a.x, light.b.x), std::max(light.a.y, light.b.y)},
+                                  {std::min({light.position.x, a.x, b.x}), std::min({light.position.y, a.y, b.y})},
+                                  {std::max({light.position.x, a.x, b.x}), std::max({light.position.y, a.y, b.y})},
                               };
-                          },
-                          [](const SpotLight& light) {
-                              return Bounds{light.pos, light.pos};
                           },
                       },
                       l);
@@ -721,28 +721,15 @@ Light transform_light(const Light& l, const Transform2D& t) {
             r.b = t.apply(sl.b);
             return r;
         },
-        [&](const BeamLight& bl) -> Light {
-            BeamLight r = bl;
-            r.origin = t.apply(bl.origin);
-            Vec2 d = t.apply_direction(bl.direction);
-            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
-            r.angular_width = std::clamp(bl.angular_width * std::sqrt(std::abs(t.scale.x * t.scale.y)), 0.01f, PI);
-            return r;
-        },
-        [&](const ParallelBeamLight& pl) -> Light {
-            ParallelBeamLight r = pl;
-            r.a = t.apply(pl.a);
-            r.b = t.apply(pl.b);
+        [&](const ProjectorLight& pl) -> Light {
+            ProjectorLight r = pl;
+            r.position = t.apply(pl.position);
             Vec2 d = t.apply_direction(pl.direction);
-            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
-            return r;
-        },
-        [&](const SpotLight& sl) -> Light {
-            SpotLight r = sl;
-            r.pos = t.apply(sl.pos);
-            Vec2 d = t.apply_direction(sl.direction);
-            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1, 0};
-            r.angular_width = std::clamp(sl.angular_width * std::sqrt(std::abs(t.scale.x * t.scale.y)), 0.01f, PI);
+            r.direction = d.length_sq() > 1e-6f ? d.normalized() : Vec2{1.0f, 0.0f};
+            float uniform_scale = std::sqrt(std::abs(t.scale.x * t.scale.y));
+            r.source_radius = std::max(pl.source_radius * uniform_scale, 0.0f);
+            r.spread = std::clamp(pl.spread * uniform_scale, 0.0f, PI);
+            r.softness = std::clamp(pl.softness, 0.0f, 1.0f);
             return r;
         },
     }, l);
@@ -765,9 +752,7 @@ Vec2 light_centroid(const Light& l) {
     return std::visit(overloaded{
         [](const PointLight& pl) { return pl.pos; },
         [](const SegmentLight& sl) { return (sl.a + sl.b) * 0.5f; },
-        [](const BeamLight& bl) { return bl.origin; },
-        [](const ParallelBeamLight& pl) { return (pl.a + pl.b) * 0.5f; },
-        [](const SpotLight& sl) { return sl.pos; },
+        [](const ProjectorLight& pl) { return pl.position; },
     }, l);
 }
 

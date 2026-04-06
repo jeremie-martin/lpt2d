@@ -12,7 +12,6 @@ import math
 import sys
 
 from anim import (
-    BeamLight,
     Camera2D,
     Circle,
     Frame,
@@ -20,6 +19,7 @@ from anim import (
     Group,
     Key,
     Look,
+    ProjectorLight,
     Scene,
     Segment,
     SegmentLight,
@@ -117,10 +117,11 @@ def make_beam(t: float) -> Group:
             rotate=angle + math.pi,
         ),
         lights=[
-            BeamLight(
-                origin=[0.0, 0.0],
+            ProjectorLight(
+                position=[0.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=sample_scalar(BEAM_WIDTH, t),
+                source_radius=0.0,
+                spread=sample_scalar(BEAM_WIDTH, t),
                 intensity=0.8,
             )
         ],

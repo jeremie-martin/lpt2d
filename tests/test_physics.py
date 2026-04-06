@@ -101,13 +101,26 @@ ABSORBER = {"albedo": 0.0}
 MIRROR_98 = {"metallic": 1.0, "albedo": 0.98, "transmission": 0.0}
 
 
-def beam_light(origin, direction, angular_width=0.005, intensity=1.0, wl_min=380.0, wl_max=780.0):
+def projector_light(
+    position,
+    direction,
+    spread=0.005,
+    intensity=1.0,
+    wl_min=380.0,
+    wl_max=780.0,
+    source_radius=0.0,
+    profile="uniform",
+    softness=0.0,
+):
     return {
-        "id": f"beam_light_{next(_LIGHT_IDS)}",
-        "type": "beam",
-        "origin": origin,
+        "id": f"projector_light_{next(_LIGHT_IDS)}",
+        "type": "projector",
+        "position": position,
         "direction": direction,
-        "angular_width": angular_width,
+        "source_radius": source_radius,
+        "spread": spread,
+        "profile": profile,
+        "softness": softness,
         "intensity": intensity,
         "wavelength_min": wl_min,
         "wavelength_max": wl_max,
@@ -188,16 +201,14 @@ def arc_shape(center, radius, angle_start, sweep, material):
     }
 
 
-def parallel_beam_light(a, b, direction, angular_width=0.0, intensity=1.0):
-    return {
-        "id": f"parallel_beam_light_{next(_LIGHT_IDS)}",
-        "type": "parallel_beam",
-        "a": a,
-        "b": b,
-        "direction": direction,
-        "angular_width": angular_width,
-        "intensity": intensity,
-    }
+def parallel_projector_light(a, b, direction, spread=0.0, intensity=1.0):
+    return projector_light(
+        position=[(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5],
+        direction=direction,
+        spread=spread,
+        intensity=intensity,
+        source_radius=0.5 * math.hypot(b[0] - a[0], b[1] - a[1]),
+    )
 
 
 def mirror_box_walls(half=0.9):
@@ -344,7 +355,7 @@ def test_snell_law():
     # Beam at 30 degrees from vertical, entering from above
     theta_i = math.radians(30)
     dx, dy = math.sin(theta_i), -math.cos(theta_i)
-    light = beam_light([0.0, 0.7], [dx, dy], angular_width=0.003)
+    light = projector_light([0.0, 0.7], [dx, dy], spread=0.003)
 
     bounds = [-1.0, -1.0, 1.0, 1.0]
     scene = make_scene([slab], [light], bounds)
@@ -396,7 +407,7 @@ def test_polygon_winding_is_physics_invariant():
 
     theta_i = math.radians(30)
     dx, dy = math.sin(theta_i), -math.cos(theta_i)
-    light = beam_light([0.0, 0.7], [dx, dy], angular_width=0.003)
+    light = projector_light([0.0, 0.7], [dx, dy], spread=0.003)
     bounds = [-1.0, -1.0, 1.0, 1.0]
     W, H = 240, 240
 
@@ -611,10 +622,10 @@ def test_dispersion():
         scene = make_scene(
             [prism, screen],
             [
-                beam_light(
+                projector_light(
                     [-0.8, 0.0],
                     [1.0, 0.0],
-                    angular_width=0.002,
+                    spread=0.002,
                     wl_min=wavelength_nm,
                     wl_max=wavelength_nm,
                 )
@@ -712,7 +723,7 @@ def test_tir():
     prism_low = polygon_shape(verts, {"ior": 1.2, "transmission": 1.0})
 
     # Beam enters from below, going straight up into the bottom face
-    light = beam_light([0.0, -0.7], [0.0, 1.0], angular_width=0.02)
+    light = projector_light([0.0, -0.7], [0.0, 1.0], spread=0.02)
 
     bounds = [-1.0, -1.0, 1.0, 1.0]
     W, H = 200, 200
@@ -811,7 +822,7 @@ def test_lens_focus():
     lens = circle_shape([0.0, 0.0], 0.25, GLASS)
 
     # Wide parallel beam from above, covering the lens diameter
-    light = parallel_beam_light([-0.3, 0.7], [0.3, 0.7], [0.0, -1.0])
+    light = parallel_projector_light([-0.3, 0.7], [0.3, 0.7], [0.0, -1.0])
 
     bounds = [-1.0, -1.0, 1.0, 1.0]
     W, H = 200, 200
@@ -873,7 +884,7 @@ def test_grouped_ellipse_matches_direct_ellipse():
         segment_shape([-1.0, 0.88], [1.0, 0.88], ABSORBER),
         segment_shape([1.0, -0.88], [-1.0, -0.88], ABSORBER),
     ]
-    light = parallel_beam_light([-0.55, 0.72], [0.55, 0.72], [0.0, -1.0], intensity=1.2)
+    light = parallel_projector_light([-0.55, 0.72], [0.55, 0.72], [0.0, -1.0], intensity=1.2)
     bounds = [-1.0, -1.0, 1.0, 1.0]
     material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1}
 

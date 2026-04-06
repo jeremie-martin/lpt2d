@@ -26,9 +26,7 @@ Polygon = _lpt2d.Polygon
 Ellipse = _lpt2d.Ellipse
 PointLight = _lpt2d.PointLight
 SegmentLight = _lpt2d.SegmentLight
-BeamLight = _lpt2d.BeamLight
-ParallelBeamLight = _lpt2d.ParallelBeamLight
-SpotLight = _lpt2d.SpotLight
+ProjectorLight = _lpt2d.ProjectorLight
 Transform2D = _lpt2d.Transform2D
 Group = _lpt2d.Group
 Scene = _lpt2d.Scene
@@ -40,6 +38,7 @@ Bounds = _lpt2d.Bounds
 ToneMap = _lpt2d.ToneMap
 NormalizeMode = _lpt2d.NormalizeMode
 SeedMode = _lpt2d.SeedMode
+ProjectorProfile = _lpt2d.ProjectorProfile
 RenderSession = _lpt2d.RenderSession
 RenderResult = _lpt2d.RenderResult
 FrameMetrics = _lpt2d.FrameMetrics
@@ -85,7 +84,7 @@ def light_type_name(light) -> str:
 # ─── Type aliases ────────────────────────────────────────────────
 
 Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse
-Light = PointLight | SegmentLight | BeamLight | ParallelBeamLight | SpotLight
+Light = PointLight | SegmentLight | ProjectorLight
 
 
 # ─── Scene convenience methods (monkey-patched onto C++ Scene) ───

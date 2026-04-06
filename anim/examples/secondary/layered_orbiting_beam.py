@@ -5,7 +5,6 @@ import sys
 
 from anim import (
     Arc,
-    BeamLight,
     Camera2D,
     Circle,
     Frame,
@@ -13,6 +12,7 @@ from anim import (
     Group,
     Key,
     Look,
+    ProjectorLight,
     Scene,
     Segment,
     SegmentLight,
@@ -243,7 +243,7 @@ def make_beam_group(
     radius: float,
     scale: float,
     intensity: float,
-    angular_width: float,
+    spread: float,
     wavelength_min: float,
     wavelength_max: float,
 ) -> Group:
@@ -255,10 +255,11 @@ def make_beam_group(
             scale=scale,
         ),
         lights=[
-            BeamLight(
-                origin=[0.0, 0.0],
+            ProjectorLight(
+                position=[0.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=angular_width,
+                source_radius=0.0,
+                spread=spread,
                 intensity=intensity,
                 wavelength_min=wavelength_min,
                 wavelength_max=wavelength_max,
@@ -285,7 +286,7 @@ def animate(ctx: FrameContext) -> Frame:
             radius=radius,
             scale=0.9 + 0.18 * (0.5 + 0.5 * math.sin(1.5 * ctx.time)),
             intensity=1.05 + 0.12 * math.sin(1.2 * ctx.time),
-            angular_width=0.052,
+            spread=0.052,
             wavelength_min=380.0,
             wavelength_max=780.0,
         )
@@ -297,7 +298,7 @@ def animate(ctx: FrameContext) -> Frame:
             radius=radius * 0.92,
             scale=0.74 + 0.12 * (0.5 + 0.5 * math.sin(1.1 * ctx.time + 0.8)),
             intensity=0.62 + 0.08 * math.sin(1.7 * ctx.time + 1.1),
-            angular_width=0.034,
+            spread=0.034,
             wavelength_min=420.0,
             wavelength_max=660.0,
         )

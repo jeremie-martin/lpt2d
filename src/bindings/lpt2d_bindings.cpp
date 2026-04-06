@@ -71,6 +71,15 @@ static SeedMode parse_seed_mode_arg(nb::object obj) {
     return nb::cast<SeedMode>(obj);
 }
 
+static ProjectorProfile parse_projector_profile_arg(nb::object obj) {
+    if (nb::isinstance<nb::str>(obj)) {
+        auto s = nb::cast<std::string>(obj);
+        if (auto profile = parse_projector_profile(s)) return *profile;
+        throw nb::value_error(("invalid projector profile: " + s).c_str());
+    }
+    return nb::cast<ProjectorProfile>(obj);
+}
+
 // ─── Module ──────────────────────────────────────────────────────
 
 NB_MODULE(_lpt2d, m) {
@@ -97,6 +106,11 @@ NB_MODULE(_lpt2d, m) {
     nb::enum_<SeedMode>(m, "SeedMode")
         .value("deterministic", SeedMode::Deterministic)
         .value("decorrelated", SeedMode::Decorrelated);
+
+    nb::enum_<ProjectorProfile>(m, "ProjectorProfile")
+        .value("uniform", ProjectorProfile::Uniform)
+        .value("soft", ProjectorProfile::Soft)
+        .value("gaussian", ProjectorProfile::Gaussian);
 
     // ── Material ─────────────────────────────────────────────────
     nb::class_<Material>(m, "Material")
@@ -298,56 +312,29 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("wavelength_min", &SegmentLight::wavelength_min)
         .def_rw("wavelength_max", &SegmentLight::wavelength_max);
 
-    nb::class_<BeamLight>(m, "BeamLight")
-        .def("__init__", [](BeamLight* l, std::string id, Vec2 origin, Vec2 direction,
-                            float angular_width, float intensity, float wl_min, float wl_max) {
-            new (l) BeamLight{std::move(id), origin, direction, angular_width, intensity, wl_min, wl_max};
-        }, "id"_a = "", "origin"_a = Vec2{}, "direction"_a = Vec2{1.0f, 0.0f},
-           "angular_width"_a = 0.1f, "intensity"_a = 1.0f,
+    nb::class_<ProjectorLight>(m, "ProjectorLight")
+        .def("__init__", [](ProjectorLight* l, std::string id, Vec2 position, Vec2 direction,
+                            float source_radius, float spread, nb::object profile_obj,
+                            float softness, float intensity, float wl_min, float wl_max) {
+            new (l) ProjectorLight{std::move(id), position, direction, source_radius, spread,
+                                   parse_projector_profile_arg(profile_obj), softness,
+                                   intensity, wl_min, wl_max};
+        }, "id"_a = "", "position"_a = Vec2{}, "direction"_a = Vec2{1.0f, 0.0f},
+           "source_radius"_a = 0.03f, "spread"_a = 0.1f, "profile"_a = nb::cast("uniform"),
+           "softness"_a = 0.0f, "intensity"_a = 1.0f,
            "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
-        .def_rw("id", &BeamLight::id)
-        .def_rw("origin", &BeamLight::origin)
-        .def_rw("direction", &BeamLight::direction)
-        .def_rw("angular_width", &BeamLight::angular_width)
-        .def_rw("intensity", &BeamLight::intensity)
-        .def_rw("wavelength_min", &BeamLight::wavelength_min)
-        .def_rw("wavelength_max", &BeamLight::wavelength_max);
-
-    nb::class_<ParallelBeamLight>(m, "ParallelBeamLight")
-        .def("__init__", [](ParallelBeamLight* l, std::string id, Vec2 a, Vec2 b,
-                            Vec2 direction, float angular_width, float intensity,
-                            float wl_min, float wl_max) {
-            new (l) ParallelBeamLight{std::move(id), a, b, direction, angular_width,
-                                      intensity, wl_min, wl_max};
-        }, "id"_a = "", "a"_a = Vec2{}, "b"_a = Vec2{0.0f, 0.5f},
-           "direction"_a = Vec2{1.0f, 0.0f}, "angular_width"_a = 0.0f,
-           "intensity"_a = 1.0f, "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
-        .def_rw("id", &ParallelBeamLight::id)
-        .def_rw("a", &ParallelBeamLight::a)
-        .def_rw("b", &ParallelBeamLight::b)
-        .def_rw("direction", &ParallelBeamLight::direction)
-        .def_rw("angular_width", &ParallelBeamLight::angular_width)
-        .def_rw("intensity", &ParallelBeamLight::intensity)
-        .def_rw("wavelength_min", &ParallelBeamLight::wavelength_min)
-        .def_rw("wavelength_max", &ParallelBeamLight::wavelength_max);
-
-    nb::class_<SpotLight>(m, "SpotLight")
-        .def("__init__", [](SpotLight* l, std::string id, Vec2 pos, Vec2 direction,
-                            float angular_width, float falloff, float intensity,
-                            float wl_min, float wl_max) {
-            new (l) SpotLight{std::move(id), pos, direction, angular_width, falloff,
-                              intensity, wl_min, wl_max};
-        }, "id"_a = "", "pos"_a = Vec2{}, "direction"_a = Vec2{1.0f, 0.0f},
-           "angular_width"_a = 0.5f, "falloff"_a = 2.0f, "intensity"_a = 1.0f,
-           "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
-        .def_rw("id", &SpotLight::id)
-        .def_rw("pos", &SpotLight::pos)
-        .def_rw("direction", &SpotLight::direction)
-        .def_rw("angular_width", &SpotLight::angular_width)
-        .def_rw("falloff", &SpotLight::falloff)
-        .def_rw("intensity", &SpotLight::intensity)
-        .def_rw("wavelength_min", &SpotLight::wavelength_min)
-        .def_rw("wavelength_max", &SpotLight::wavelength_max);
+        .def_rw("id", &ProjectorLight::id)
+        .def_rw("position", &ProjectorLight::position)
+        .def_rw("direction", &ProjectorLight::direction)
+        .def_rw("source_radius", &ProjectorLight::source_radius)
+        .def_rw("spread", &ProjectorLight::spread)
+        .def_prop_rw("profile",
+            [](const ProjectorLight& l) { return projector_profile_to_string(l.profile); },
+            [](ProjectorLight& l, nb::object obj) { l.profile = parse_projector_profile_arg(obj); })
+        .def_rw("softness", &ProjectorLight::softness)
+        .def_rw("intensity", &ProjectorLight::intensity)
+        .def_rw("wavelength_min", &ProjectorLight::wavelength_min)
+        .def_rw("wavelength_max", &ProjectorLight::wavelength_max);
 
     // ── Transform2D & Group ──────────────────────────────────────
     nb::class_<Transform2D>(m, "Transform2D")

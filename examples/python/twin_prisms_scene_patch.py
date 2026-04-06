@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from functools import cache
 
-from anim import BeamLight, Canvas, Frame, FrameContext, Look, Scene, Shot
+from anim import Canvas, Frame, FrameContext, ProjectorLight, Scene, Shot
 from anim.examples_support import REPO_ROOT, run_example
 
 NAME = "twin_prisms_scene_patch"
@@ -32,10 +32,11 @@ def _normalize(x: float, y: float) -> list[float]:
         return [1.0, 0.0]
     return [x / length, y / length]
 
-def _require_primary_beam(scene: Scene) -> BeamLight:
+
+def _require_primary_beam(scene: Scene) -> ProjectorLight:
     light = scene.require_light("beam_main")
-    if not isinstance(light, BeamLight):
-        raise ValueError("beam_main must be a beam light")
+    if not isinstance(light, ProjectorLight):
+        raise ValueError("beam_main must be a projector light")
     return light
 
 
@@ -65,8 +66,11 @@ def frame(ctx: FrameContext) -> Frame:
     right = scene.require_group("prism_right")
     prism_glass = scene.require_material("prism_glass")
 
-    left.transform.translate[1] += 0.16 * swing
-    right.transform.translate[1] -= 0.18 * swing
+    left.transform.translate = [left.transform.translate[0], left.transform.translate[1] + 0.16 * swing]
+    right.transform.translate = [
+        right.transform.translate[0],
+        right.transform.translate[1] - 0.18 * swing,
+    ]
     left.transform.rotate += 0.16 * swing
     right.transform.rotate += 0.22 * swing
     right.transform.scale = [0.8 + 0.05 * swing, 0.8 + 0.05 * swing]
@@ -74,10 +78,10 @@ def frame(ctx: FrameContext) -> Frame:
     prism_glass.absorption = 0.24 + 0.12 * (0.5 + 0.5 * math.cos(math.tau * ctx.progress))
 
     beam = _require_primary_beam(scene)
-    beam.origin[1] = 0.1 * swing
+    beam.position = [beam.position[0], 0.1 * swing]
     beam.direction = _normalize(1.0, 0.12 * math.cos(math.tau * ctx.progress))
 
-    return Frame(scene=scene, look=Look(exposure=2.2 + 0.18 * max(0.0, swing)))
+    return Frame(scene=scene, look={"exposure": 2.2 + 0.18 * max(0.0, swing)})
 
 
 def main(argv: list[str] | None = None) -> None:

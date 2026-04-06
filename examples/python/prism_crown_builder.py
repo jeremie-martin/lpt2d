@@ -17,7 +17,7 @@ from anim import (
     Key,
     Look,
     Material,
-    ParallelBeamLight,
+    ProjectorLight,
     Scene,
     Shot,
     Track,
@@ -195,12 +195,12 @@ def frame(ctx: FrameContext) -> Frame:
             ]
         ],
         lights=[
-            ParallelBeamLight(
+            ProjectorLight(
                 id="beam_main",
-                a=[-0.45, 0.72],
-                b=[0.45, 0.72],
+                position=[0.0, 0.72],
                 direction=_normalize(BEAM_SWEEP(ctx.time), -1.0),
-                angular_width=0.015,
+                source_radius=0.45,
+                spread=0.015,
                 intensity=1.0,
             )
         ],

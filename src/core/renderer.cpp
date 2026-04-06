@@ -95,9 +95,10 @@ struct GPUCircle {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
     float _pad; // std430: vec2 center gives alignment 8, stride must be multiple of 8
 };
-static_assert(sizeof(GPUCircle) == 48);
+static_assert(sizeof(GPUCircle) == 56);
 
 struct GPUSegment {
     float a[2];
@@ -105,21 +106,24 @@ struct GPUSegment {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
-static_assert(sizeof(GPUSegment) == 48);
+static_assert(sizeof(GPUSegment) == 56);
 
 struct GPULight {
-    uint32_t type; // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
+    uint32_t type;    // 0=point, 1=segment, 2=projector
+    uint32_t profile; // ProjectorProfile for type=2, ignored otherwise
     float intensity;
+    float softness;
     float pos_a[2];
     float pos_b[2];
-    float dir[2];         // direction for parallel_beam (3) and spot (4)
-    float angular_width;  // half-angle radians (converted at upload), 0 for point/segment
-    float falloff;        // spot cosine-power exponent, 0 for non-spot types
+    float dir[2];
+    float spread;         // projector half-angle radians, 0 for point/segment
+    float source_radius;  // projector aperture radius, 0 for point/segment
     float wavelength_min; // nm, default 380
     float wavelength_max; // nm, default 780
 };
-static_assert(sizeof(GPULight) == 48);
+static_assert(sizeof(GPULight) == 56);
 
 struct GPUArc {
     float center[2];
@@ -130,8 +134,9 @@ struct GPUArc {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
-static_assert(sizeof(GPUArc) == 56);
+static_assert(sizeof(GPUArc) == 64);
 
 struct GPUBezier {
     float p0[2];
@@ -140,8 +145,9 @@ struct GPUBezier {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
-static_assert(sizeof(GPUBezier) == 56);
+static_assert(sizeof(GPUBezier) == 64);
 
 struct GPUEllipse {
     float center[2];
@@ -150,8 +156,9 @@ struct GPUEllipse {
     float _pad;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo, emission;
+    float color_wavelength, color_bandwidth;
 };
-static_assert(sizeof(GPUEllipse) == 56);
+static_assert(sizeof(GPUEllipse) == 64);
 
 // ─── Renderer implementation ─────────────────────────────────────────
 
@@ -467,6 +474,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         gpu.cauchy_b = mat.cauchy_b;
         gpu.albedo = mat.albedo;
         gpu.emission = mat.emission;
+        gpu.color_wavelength = mat.color_wavelength;
+        gpu.color_bandwidth = mat.color_bandwidth;
     };
 
     // Collect all world-space shapes (ungrouped + transformed group shapes)
@@ -596,35 +605,16 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
             },
-            [&](const BeamLight& l) {
+            [&](const ProjectorLight& l) {
                 gl.type = 2;
+                gl.profile = static_cast<uint32_t>(l.profile);
                 gl.intensity = l.intensity;
-                gl.pos_a[0] = l.origin.x; gl.pos_a[1] = l.origin.y;
-                Vec2 d = l.direction.normalized();
-                gl.pos_b[0] = d.x; gl.pos_b[1] = d.y;
-                gl.angular_width = l.angular_width * 0.5f; // store half-angle
-                gl.wavelength_min = l.wavelength_min;
-                gl.wavelength_max = l.wavelength_max;
-            },
-            [&](const ParallelBeamLight& l) {
-                gl.type = 3;
-                gl.intensity = l.intensity;
-                gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
-                gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
+                gl.softness = l.softness;
+                gl.pos_a[0] = l.position.x; gl.pos_a[1] = l.position.y;
                 Vec2 d = l.direction.normalized();
                 gl.dir[0] = d.x; gl.dir[1] = d.y;
-                gl.angular_width = l.angular_width * 0.5f; // store half-angle
-                gl.wavelength_min = l.wavelength_min;
-                gl.wavelength_max = l.wavelength_max;
-            },
-            [&](const SpotLight& l) {
-                gl.type = 4;
-                gl.intensity = l.intensity;
-                gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
-                Vec2 d = l.direction.normalized();
-                gl.dir[0] = d.x; gl.dir[1] = d.y;
-                gl.angular_width = l.angular_width * 0.5f; // store half-angle
-                gl.falloff = l.falloff;
+                gl.spread = l.spread * 0.5f; // store half-angle
+                gl.source_radius = l.source_radius;
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
             },

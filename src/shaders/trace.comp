@@ -7,7 +7,8 @@ struct GPUCircle {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
-    float _pad; // explicit padding to match C++ sizeof(48) under std430 vec2 alignment
+    float color_wavelength, color_bandwidth;
+    float _pad;
 };
 
 struct GPUSeg {
@@ -16,16 +17,19 @@ struct GPUSeg {
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
+    float color_wavelength, color_bandwidth;
 };
 
 struct GPULight {
-    uint type;       // 0=point, 1=segment, 2=beam, 3=parallel_beam, 4=spot
+    uint type;       // 0=point, 1=segment, 2=projector
+    uint profile;    // 0=uniform, 1=soft, 2=gaussian
     float intensity;
+    float softness;
     vec2 pos_a;
     vec2 pos_b;
-    vec2 dir;        // direction for parallel_beam and spot
-    float angular_width;
-    float falloff;   // spot cosine-power exponent
+    vec2 dir;
+    float spread;    // projector half-angle
+    float source_radius;
     float wavelength_min;
     float wavelength_max;
 };
@@ -112,6 +116,7 @@ float rand01() { return float(pcg_next()) / 4294967295.0; }
 
 // ── Constants ──
 const float PI = 3.14159265358979;
+const float TWO_PI = 2.0 * PI;
 const float INTERSECT_EPS = 1e-5;
 const float SCATTER_EPS = 1e-4;
 const float ESCAPE_DIST = 10.0;
@@ -138,6 +143,42 @@ vec2 cosine_scatter_2d(vec2 n) {
 vec2 rotate_2d(vec2 v, float angle) {
     float cs = cos(angle), sn = sin(angle);
     return vec2(v.x*cs - v.y*sn, v.x*sn + v.y*cs);
+}
+
+float sample_uniform_angle(float half_angle) {
+    return (rand01() - 0.5) * 2.0 * half_angle;
+}
+
+float sample_soft_angle(float half_angle, float softness) {
+    if (half_angle <= 1e-6) return 0.0;
+    float exponent = mix(1.0, 16.0, clamp(softness, 0.0, 1.0));
+    for (int i = 0; i < 24; ++i) {
+        float theta = sample_uniform_angle(half_angle);
+        if (rand01() <= pow(max(cos(theta), 0.0), exponent))
+            return theta;
+    }
+    return sample_uniform_angle(half_angle);
+}
+
+float sample_gaussian_angle(float half_angle, float softness) {
+    if (half_angle <= 1e-6) return 0.0;
+    float sigma = max(half_angle * mix(0.45, 0.12, clamp(softness, 0.0, 1.0)), 1e-4);
+    for (int i = 0; i < 24; ++i) {
+        float u1 = max(rand01(), 1e-6);
+        float u2 = rand01();
+        float radius = sigma * sqrt(-2.0 * log(u1));
+        float theta = radius * cos(TWO_PI * u2);
+        if (abs(theta) <= half_angle)
+            return theta;
+    }
+    return clamp(sample_uniform_angle(sigma), -half_angle, half_angle);
+}
+
+float sample_projector_angle(GPULight lt) {
+    if (lt.spread <= 1e-6) return 0.0;
+    if (lt.profile == 1u) return sample_soft_angle(lt.spread, lt.softness);
+    if (lt.profile == 2u) return sample_gaussian_angle(lt.spread, lt.softness);
+    return sample_uniform_angle(lt.spread);
 }
 
 // ── Intersection ──
@@ -368,22 +409,17 @@ void main() {
         ro = mix(lt.pos_a, lt.pos_b, t);
         float a = rand01() * 2.0 * PI;
         rd = vec2(cos(a), sin(a));
-    } else if (lt.type == 2u) {
-        // Beam light: origin + direction ± angular half-width
-        ro = lt.pos_a;
-        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
-        rd = rotate_2d(lt.pos_b, spread);
-    } else if (lt.type == 3u) {
-        // Parallel segment beam: random point on segment, directed
-        float t = rand01();
-        ro = mix(lt.pos_a, lt.pos_b, t);
-        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
-        rd = rotate_2d(lt.dir, spread);
     } else {
-        // Spot light: point source with cosine-power angular falloff
+        // Projector light: finite aperture with a normalized angular profile
         ro = lt.pos_a;
-        float spread = (rand01() - 0.5) * 2.0 * lt.angular_width;
-        rd = rotate_2d(lt.dir, spread);
+        vec2 dir = normalize(lt.dir);
+        if (lt.source_radius > 0.0) {
+            vec2 tangent = vec2(-dir.y, dir.x);
+            float offset = (rand01() - 0.5) * 2.0 * lt.source_radius;
+            ro += tangent * offset;
+        }
+        float spread = sample_projector_angle(lt);
+        rd = rotate_2d(dir, spread);
     }
 
     // Random wavelength → color (per-light spectral range)
@@ -394,12 +430,6 @@ void main() {
     // estimator f(x)/p(x) where f = w_i * base and p = w_i / W, giving W * base.
     // Adding a light source ADDS energy — existing lights keep their brightness.
     vec4 color = vec4(rgb * uIntensity * total_w, uIntensity * total_w);
-
-    // Spot light angular falloff (cosine-power attenuation)
-    if (lt.type == 4u && lt.falloff > 0.0) {
-        // dot(rd, lt.dir) = cos(spread) since both are unit vectors
-        color *= pow(max(dot(rd, lt.dir), 0.0), lt.falloff);
-    }
 
     // Trace
     float current_absorption = 0.0;

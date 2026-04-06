@@ -18,13 +18,13 @@ import math
 import sys
 
 from anim import (
-    BeamLight,
     Camera2D,
     Frame,
     FrameContext,
     Group,
     Key,
     Look,
+    ProjectorLight,
     Scene,
     Segment,
     SegmentLight,
@@ -196,10 +196,11 @@ def make_scanning_beam(ctx: FrameContext) -> Group:
             rotate=beam_angle,
         ),
         lights=[
-            BeamLight(
-                origin=[0.0, 0.0],
+            ProjectorLight(
+                position=[0.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=0.070,
+                source_radius=0.0,
+                spread=0.070,
                 intensity=0.5,
                 wavelength_min=430.0,
                 wavelength_max=700.0,

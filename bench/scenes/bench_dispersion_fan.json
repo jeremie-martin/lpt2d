@@ -133,8 +133,8 @@
   "lights": [
     {
       "id": "beam_main",
-      "type": "beam",
-      "origin": [
+      "type": "projector",
+      "position": [
         -1.0,
         0.05
       ],
@@ -142,7 +142,10 @@
         1,
         -0.05
       ],
-      "angular_width": 0.01,
+      "source_radius": 0.0,
+      "spread": 0.01,
+      "profile": "uniform",
+      "softness": 0.0,
       "intensity": 1,
       "wavelength_min": 380,
       "wavelength_max": 780

@@ -8,13 +8,13 @@ import pytest
 
 import _lpt2d
 from anim.types import (
-    BeamLight,
     Camera2D,
     Canvas,
     Circle,
     Group,
     Look,
     Material,
+    ProjectorLight,
     RenderSession,
     Scene,
     Segment,
@@ -33,11 +33,12 @@ def _make_bound_scene() -> Scene:
             Circle(id="lens_b", center=[0.5, 0.0], radius=0.2, material_id="glass"),
         ],
         lights=[
-            BeamLight(
+            ProjectorLight(
                 id="beam_main",
-                origin=[-1.0, 0.0],
+                position=[-1.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=0.02,
+                source_radius=0.0,
+                spread=0.02,
                 intensity=1.0,
             )
         ],
@@ -120,11 +121,12 @@ def _make_seed_behavior_shot(seed_mode: str) -> Shot:
                 )
             ],
             lights=[
-                BeamLight(
+                ProjectorLight(
                     id="beam",
-                    origin=[-0.8, 0.05],
+                    position=[-0.8, 0.05],
                     direction=[1.0, 0.0],
-                    angular_width=0.08,
+                    source_radius=0.0,
+                    spread=0.08,
                     intensity=1.0,
                 )
             ],
@@ -224,7 +226,7 @@ def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
             Circle(id="bound", center=[-0.5, 0.0], radius=0.2, material_id="glass"),
             Circle(id="inline", center=[0.5, 0.0], radius=0.2, material=Material(ior=1.8, transmission=1.0)),
         ],
-        lights=[BeamLight(id="beam", origin=[-1, 0], direction=[1, 0])],
+        lights=[ProjectorLight(id="beam", position=[-1, 0], direction=[1, 0], source_radius=0.0)],
     )
     shot = Shot(name="bindings", scene=scene)
     shot.save(path)
@@ -521,8 +523,8 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
 
     loaded = Shot.load(path)
     beam = loaded.scene.require_light("beam_main")
-    assert isinstance(beam, BeamLight)
-    beam.origin = [-1.0, 0.15]
+    assert isinstance(beam, ProjectorLight)
+    beam.position = [-1.0, 0.15]
 
     lens = loaded.scene.require_shape("lens_a")
     lens.radius = 0.35
@@ -536,9 +538,9 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
 
     assert lens_reloaded.radius == pytest.approx(0.35)
     assert lens_reloaded.material_id == "glass"
-    assert isinstance(beam_reloaded, BeamLight)
-    assert beam_reloaded.origin[0] == pytest.approx(-1.0)
-    assert beam_reloaded.origin[1] == pytest.approx(0.15)
+    assert isinstance(beam_reloaded, ProjectorLight)
+    assert beam_reloaded.position[0] == pytest.approx(-1.0)
+    assert beam_reloaded.position[1] == pytest.approx(0.15)
 
 
 # ─── C++ validate_scene and normalize_scene ────────────────────────────
@@ -555,7 +557,7 @@ def test_normalize_scene_assigns_ids_and_syncs_materials():
         shapes=[
             Circle(radius=0.2, material_id="glass"),
         ],
-        lights=[BeamLight(origin=[-1, 0], direction=[1, 0])],
+        lights=[ProjectorLight(position=[-1, 0], direction=[1, 0], source_radius=0.0)],
     )
 
     _lpt2d.normalize_scene(scene)

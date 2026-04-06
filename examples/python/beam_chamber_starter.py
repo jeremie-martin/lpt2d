@@ -10,7 +10,6 @@ from __future__ import annotations
 import math
 
 from anim import (
-    BeamLight,
     Camera2D,
     Circle,
     Frame,
@@ -18,6 +17,7 @@ from anim import (
     Key,
     Look,
     Material,
+    ProjectorLight,
     Scene,
     Shot,
     Track,
@@ -144,11 +144,12 @@ def frame(ctx: FrameContext) -> Frame:
             ),
         ],
         lights=[
-            BeamLight(
+            ProjectorLight(
                 id="beam_main",
-                origin=[-1.02, BEAM_HEIGHT(ctx.time)],
+                position=[-1.02, BEAM_HEIGHT(ctx.time)],
                 direction=_unit(BEAM_ANGLE(ctx.time)),
-                angular_width=0.02,
+                source_radius=0.0,
+                spread=0.02,
                 intensity=1.0,
             )
         ],

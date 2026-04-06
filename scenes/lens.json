@@ -126,8 +126,8 @@
   "lights": [
     {
       "id": "beam_top",
-      "type": "beam",
-      "origin": [
+      "type": "projector",
+      "position": [
         -1.35,
         0.55
       ],
@@ -135,15 +135,18 @@
         1,
         0
       ],
-      "angular_width": 0.045,
+      "source_radius": 0.0,
+      "spread": 0.045,
+      "profile": "uniform",
+      "softness": 0.0,
       "intensity": 0.85,
       "wavelength_min": 380,
       "wavelength_max": 780
     },
     {
       "id": "beam_upper_mid",
-      "type": "beam",
-      "origin": [
+      "type": "projector",
+      "position": [
         -1.35,
         0.18
       ],
@@ -151,15 +154,18 @@
         1,
         0
       ],
-      "angular_width": 0.045,
+      "source_radius": 0.0,
+      "spread": 0.045,
+      "profile": "uniform",
+      "softness": 0.0,
       "intensity": 0.85,
       "wavelength_min": 380,
       "wavelength_max": 780
     },
     {
       "id": "beam_lower_mid",
-      "type": "beam",
-      "origin": [
+      "type": "projector",
+      "position": [
         -1.35,
         -0.18
       ],
@@ -167,15 +173,18 @@
         1,
         0
       ],
-      "angular_width": 0.045,
+      "source_radius": 0.0,
+      "spread": 0.045,
+      "profile": "uniform",
+      "softness": 0.0,
       "intensity": 0.85,
       "wavelength_min": 380,
       "wavelength_max": 780
     },
     {
       "id": "beam_bottom",
-      "type": "beam",
-      "origin": [
+      "type": "projector",
+      "position": [
         -1.35,
         -0.55
       ],
@@ -183,7 +192,10 @@
         1,
         0
       ],
-      "angular_width": 0.045,
+      "source_radius": 0.0,
+      "spread": 0.045,
+      "profile": "uniform",
+      "softness": 0.0,
       "intensity": 0.85,
       "wavelength_min": 380,
       "wavelength_max": 780

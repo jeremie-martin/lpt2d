@@ -4,7 +4,6 @@ import math
 import sys
 
 from anim import (
-    BeamLight,
     Camera2D,
     Circle,
     Frame,
@@ -12,6 +11,7 @@ from anim import (
     Group,
     Key,
     Look,
+    ProjectorLight,
     Scene,
     Segment,
     Shot,
@@ -154,7 +154,7 @@ def make_beam_group(
     angle: float,
     scale: float,
     intensity: float,
-    angular_width: float,
+    spread: float,
     wavelength_min: float,
     wavelength_max: float,
 ) -> Group:
@@ -166,10 +166,11 @@ def make_beam_group(
             scale=scale,
         ),
         lights=[
-            BeamLight(
-                origin=[0.0, 0.0],
+            ProjectorLight(
+                position=[0.0, 0.0],
                 direction=[1.0, 0.0],
-                angular_width=angular_width,
+                source_radius=0.0,
+                spread=spread,
                 intensity=intensity,
                 wavelength_min=wavelength_min,
                 wavelength_max=wavelength_max,
@@ -194,7 +195,7 @@ def animate(ctx: FrameContext) -> Frame:
             angle=sample_scalar(PRIMARY_BEAM_ORBIT, ctx.time),
             scale=primary_scale,
             intensity=0.085 * fade,
-            angular_width=0.04,
+            spread=0.04,
             wavelength_min=380.0,
             wavelength_max=780.0,
         )
@@ -205,7 +206,7 @@ def animate(ctx: FrameContext) -> Frame:
             angle=sample_scalar(ACCENT_BEAM_ORBIT, ctx.time),
             scale=accent_scale,
             intensity=0.038 * fade,
-            angular_width=0.026,
+            spread=0.026,
             wavelength_min=420.0,
             wavelength_max=660.0,
         )

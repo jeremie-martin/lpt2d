@@ -152,9 +152,13 @@ static float light_distance(Vec2 wp, const Light& light) {
     return std::visit(overloaded{
         [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
         [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
-        [&](const BeamLight& l) -> float { return (wp - l.origin).length(); },
-        [&](const ParallelBeamLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
-        [&](const SpotLight& l) -> float { return (wp - l.pos).length(); },
+        [&](const ProjectorLight& l) -> float {
+            Vec2 dir = l.direction.length_sq() > 1e-6f ? l.direction.normalized() : Vec2{1.0f, 0.0f};
+            Vec2 tangent = dir.perp() * l.source_radius;
+            Vec2 a = l.position - tangent;
+            Vec2 b = l.position + tangent;
+            return std::min((wp - l.position).length(), point_seg_dist(wp, a, b));
+        },
     }, light);
 }
 
@@ -298,9 +302,7 @@ void translate_light(Light& l, Vec2 delta) {
     std::visit(overloaded{
         [&](PointLight& pl) { pl.pos = pl.pos + delta; },
         [&](SegmentLight& sl) { sl.a = sl.a + delta; sl.b = sl.b + delta; },
-        [&](BeamLight& bl) { bl.origin = bl.origin + delta; },
-        [&](ParallelBeamLight& pl) { pl.a = pl.a + delta; pl.b = pl.b + delta; },
-        [&](SpotLight& sl) { sl.pos = sl.pos + delta; },
+        [&](ProjectorLight& pl) { pl.position = pl.position + delta; },
     }, l);
 }
 
@@ -330,24 +332,11 @@ static void rotate_light(Light& l, Vec2 pivot, float angle) {
     std::visit(overloaded{
         [&](PointLight& pl) { pl.pos = rotate_around(pl.pos, pivot, angle); },
         [&](SegmentLight& sl) { sl.a = rotate_around(sl.a, pivot, angle); sl.b = rotate_around(sl.b, pivot, angle); },
-        [&](BeamLight& bl) {
-            bl.origin = rotate_around(bl.origin, pivot, angle);
-            float c = std::cos(angle), s = std::sin(angle);
-            Vec2 d = bl.direction;
-            bl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
-        },
-        [&](ParallelBeamLight& pl) {
-            pl.a = rotate_around(pl.a, pivot, angle);
-            pl.b = rotate_around(pl.b, pivot, angle);
+        [&](ProjectorLight& pl) {
+            pl.position = rotate_around(pl.position, pivot, angle);
             float c = std::cos(angle), s = std::sin(angle);
             Vec2 d = pl.direction;
             pl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
-        },
-        [&](SpotLight& sl) {
-            sl.pos = rotate_around(sl.pos, pivot, angle);
-            float c = std::cos(angle), s = std::sin(angle);
-            Vec2 d = sl.direction;
-            sl.direction = Vec2{d.x * c - d.y * s, d.x * s + d.y * c}.normalized();
         },
     }, l);
 }
@@ -385,18 +374,11 @@ static void scale_light(Light& l, Vec2 pivot, float fx, float fy) {
     std::visit(overloaded{
         [&](PointLight& pl) { pl.pos = scale_around(pl.pos, pivot, fx, fy); },
         [&](SegmentLight& sl) { sl.a = scale_around(sl.a, pivot, fx, fy); sl.b = scale_around(sl.b, pivot, fx, fy); },
-        [&](BeamLight& bl) {
-            bl.origin = scale_around(bl.origin, pivot, fx, fy);
-            bl.angular_width = std::clamp(bl.angular_width * std::sqrt(fx * fy), 0.01f, PI);
-        },
-        [&](ParallelBeamLight& pl) {
-            pl.a = scale_around(pl.a, pivot, fx, fy);
-            pl.b = scale_around(pl.b, pivot, fx, fy);
-            // angular_width is collimation quality — doesn't scale with spatial transforms
-        },
-        [&](SpotLight& sl) {
-            sl.pos = scale_around(sl.pos, pivot, fx, fy);
-            sl.angular_width = std::clamp(sl.angular_width * std::sqrt(fx * fy), 0.01f, PI);
+        [&](ProjectorLight& pl) {
+            float uniform = std::sqrt(fx * fy);
+            pl.position = scale_around(pl.position, pivot, fx, fy);
+            pl.source_radius = std::max(pl.source_radius * uniform, 0.0f);
+            pl.spread = std::clamp(pl.spread * uniform, 0.0f, PI);
         },
     }, l);
 }
@@ -517,19 +499,12 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<SelectionR
                     handles.push_back({Handle::Position, id, 0, l.a});
                     handles.push_back({Handle::Position, id, 1, l.b});
                 },
-                [&](const BeamLight& l) {
-                    handles.push_back({Handle::Position, id, 0, l.origin});
-                    handles.push_back({Handle::Direction, id, 0, l.origin + l.direction.normalized() * 0.3f});
-                },
-                [&](const ParallelBeamLight& l) {
-                    handles.push_back({Handle::Position, id, 0, l.a});
-                    handles.push_back({Handle::Position, id, 1, l.b});
-                    Vec2 mid = (l.a + l.b) * 0.5f;
-                    handles.push_back({Handle::Direction, id, 0, mid + l.direction.normalized() * 0.3f});
-                },
-                [&](const SpotLight& l) {
-                    handles.push_back({Handle::Position, id, 0, l.pos});
-                    handles.push_back({Handle::Direction, id, 0, l.pos + l.direction.normalized() * 0.3f});
+                [&](const ProjectorLight& l) {
+                    Vec2 dir = l.direction.length_sq() > 1e-6f ? l.direction.normalized() : Vec2{1.0f, 0.0f};
+                    Vec2 tangent = dir.perp();
+                    handles.push_back({Handle::Position, id, 0, l.position});
+                    handles.push_back({Handle::Direction, id, 0, l.position + dir * 0.3f});
+                    handles.push_back({Handle::Radius, id, 0, l.position + tangent * std::max(l.source_radius, 0.08f)});
                 },
             }, *light);
         }
@@ -622,30 +597,16 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                 if (handle.param_index == 0) l.a = wp;
                 else l.b = wp;
             },
-            [&](BeamLight& l) {
+            [&](ProjectorLight& l) {
                 if (handle.kind == Handle::Position) {
-                    l.origin = wp;
+                    l.position = wp;
                 } else if (handle.kind == Handle::Direction) {
-                    Vec2 d = wp - l.origin;
+                    Vec2 d = wp - l.position;
                     if (d.length_sq() > 1e-6f) l.direction = d.normalized();
-                }
-            },
-            [&](ParallelBeamLight& l) {
-                if (handle.kind == Handle::Position) {
-                    if (handle.param_index == 0) l.a = wp;
-                    else l.b = wp;
-                } else if (handle.kind == Handle::Direction) {
-                    Vec2 mid = (l.a + l.b) * 0.5f;
-                    Vec2 d = wp - mid;
-                    if (d.length_sq() > 1e-6f) l.direction = d.normalized();
-                }
-            },
-            [&](SpotLight& l) {
-                if (handle.kind == Handle::Position) {
-                    l.pos = wp;
-                } else if (handle.kind == Handle::Direction) {
-                    Vec2 d = wp - l.pos;
-                    if (d.length_sq() > 1e-6f) l.direction = d.normalized();
+                } else if (handle.kind == Handle::Radius) {
+                    Vec2 dir = l.direction.length_sq() > 1e-6f ? l.direction.normalized() : Vec2{1.0f, 0.0f};
+                    Vec2 tangent = dir.perp();
+                    l.source_radius = std::max(std::abs((wp - l.position).dot(tangent)), 0.0f);
                 }
             },
         }, *light);
