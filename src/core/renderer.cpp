@@ -738,7 +738,7 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
     };
     std::vector<FillVertex> vertices;
 
-    // Resolve fill color for a material; returns false if shape should not be filled.
+    // Resolve fill color for a material; returns nullopt if shape should not be filled.
     struct FillColor { float r, g, b; };
     auto resolve_fill = [&](const MaterialBinding& binding) -> std::optional<FillColor> {
         const Material& mat = resolve_binding(binding, scene.materials);

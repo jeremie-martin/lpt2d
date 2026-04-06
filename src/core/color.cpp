@@ -69,7 +69,7 @@ static bool solve3(const float A[3][3], const float b[3], float x[3]) {
     float det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1])
               - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0])
               + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
-    if (std::abs(det) < 1e-12f) return false;
+    if (std::abs(det) < 1e-6f) return false;
     float inv = 1.0f / det;
     x[0] = inv * (b[0] * (A[1][1]*A[2][2] - A[1][2]*A[2][1])
                 - A[0][1] * (b[1]*A[2][2] - A[1][2]*b[2])
@@ -134,6 +134,10 @@ SpectralCoeffs rgb_to_spectral(float r, float g, float b) {
         c1 += step * delta[1];
         c2 += step * delta[2];
     }
+
+    // Guard against NaN from degenerate inputs
+    if (!std::isfinite(c0) || !std::isfinite(c1) || !std::isfinite(c2))
+        return {0.0f, 0.0f, 0.0f};
 
     return {c0, c1, c2};
 }

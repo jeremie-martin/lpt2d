@@ -1,4 +1,5 @@
 #include "spectrum.h"
+#include "color.h"
 
 #include <algorithm>
 #include <array>
@@ -50,25 +51,7 @@ Vec3 wavelength_to_rgb(float nm) {
 }
 
 Vec3 spectral_fill_rgb(float c0, float c1, float c2) {
-    if (c0 == 0.0f && c1 == 0.0f && c2 == 0.0f) return {1.0f, 1.0f, 1.0f};
-
-    // Integrate sigmoid(c0 + c1*t + c2*t²) × wavelength_rgb over visible spectrum
-    constexpr int N = 81;
-    Vec3 sum{0, 0, 0};
-    for (int i = 0; i < N; ++i) {
-        float nm = 380.0f + i * 5.0f;
-        float t = (nm - 380.0f) / 400.0f;
-        float x = c0 + c1 * t + c2 * t * t;
-        float R = 0.5f + x / (2.0f * std::sqrt(1.0f + x * x));
-        Vec3 rgb = wavelength_to_rgb(nm);
-        sum.r += R * rgb.r;
-        sum.g += R * rgb.g;
-        sum.b += R * rgb.b;
-    }
-    sum.r /= N;
-    sum.g /= N;
-    sum.b /= N;
-    // Normalize so max channel = 1
-    float m = std::max({sum.r, sum.g, sum.b, 1e-6f});
-    return {sum.r / m, sum.g / m, sum.b / m};
+    Vec3 raw = spectral_to_rgb(c0, c1, c2);
+    float m = std::max({raw.r, raw.g, raw.b, 1e-6f});
+    return {raw.r / m, raw.g / m, raw.b / m};
 }
