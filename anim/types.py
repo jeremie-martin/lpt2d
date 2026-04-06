@@ -4,11 +4,58 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 
 SHOT_JSON_VERSION = 5
+_CANONICAL_TONEMAPS = {"none", "reinhard", "reinhardx", "aces", "log"}
+_CANONICAL_NORMALIZE = {"max", "rays", "fixed", "off"}
+
+
+def _require_dict(value, context: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"{context} must be an object")
+    return value
+
+
+def _require_exact_keys(d: dict, keys: tuple[str, ...], context: str) -> None:
+    missing = [key for key in keys if key not in d]
+    if missing:
+        raise ValueError(f"{context} requires key: {missing[0]}")
+    extras = [key for key in d if key not in keys]
+    if extras:
+        raise ValueError(f"unknown key in {context}: {extras[0]}")
+
+
+def _reject_unknown_keys(d: dict, keys: tuple[str, ...], context: str) -> None:
+    extras = [key for key in d if key not in keys]
+    if extras:
+        raise ValueError(f"unknown key in {context}: {extras[0]}")
+
+
+def _require_string(value, context: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{context} must be a string")
+    return value
+
+
+def _require_int(value, context: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{context} must be an integer")
+    return value
+
+
+def _require_number(value, context: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{context} must be a number")
+    return float(value)
+
+
+def _require_vec(value, size: int, context: str) -> list[float]:
+    if not isinstance(value, list) or len(value) != size:
+        raise ValueError(f"{context} must contain exactly {size} numbers")
+    return [_require_number(item, f"{context}[{i}]") for i, item in enumerate(value)]
 
 # --- Materials ---
 
@@ -24,7 +71,7 @@ class Material:
     albedo: float = 1.0
     emission: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit: bool = False) -> dict:
         d = {
             "ior": self.ior,
             "roughness": self.roughness,
@@ -33,29 +80,38 @@ class Material:
             "absorption": self.absorption,
             "cauchy_b": self.cauchy_b,
             "albedo": self.albedo,
+            "emission": self.emission,
         }
-        if self.emission > 0:
-            d["emission"] = self.emission
+        if not explicit and self.emission <= 0:
+            d.pop("emission")
         return d
 
     @staticmethod
-    def from_dict(d: dict) -> Material:
+    def from_dict(d: dict, *, explicit: bool = True) -> Material:
+        d = _require_dict(d, "material")
+        keys = ("ior", "roughness", "metallic", "transmission", "absorption", "cauchy_b", "albedo", "emission")
+        if explicit:
+            _require_exact_keys(d, keys, "material")
+        else:
+            extras = [key for key in d if key not in keys]
+            if extras:
+                raise ValueError(f"unknown key in material: {extras[0]}")
         return Material(
-            ior=d.get("ior", 1.0),
-            roughness=d.get("roughness", 0.0),
-            metallic=d.get("metallic", 0.0),
-            transmission=d.get("transmission", 0.0),
-            absorption=d.get("absorption", 0.0),
-            cauchy_b=d.get("cauchy_b", 0.0),
-            albedo=d.get("albedo", 1.0),
-            emission=d.get("emission", 0.0),
+            ior=_require_number(d["ior"], "material.ior") if "ior" in d else 1.0,
+            roughness=_require_number(d["roughness"], "material.roughness") if "roughness" in d else 0.0,
+            metallic=_require_number(d["metallic"], "material.metallic") if "metallic" in d else 0.0,
+            transmission=_require_number(d["transmission"], "material.transmission") if "transmission" in d else 0.0,
+            absorption=_require_number(d["absorption"], "material.absorption") if "absorption" in d else 0.0,
+            cauchy_b=_require_number(d["cauchy_b"], "material.cauchy_b") if "cauchy_b" in d else 0.0,
+            albedo=_require_number(d["albedo"], "material.albedo") if "albedo" in d else 1.0,
+            emission=_require_number(d["emission"], "material.emission") if "emission" in d else 0.0,
         )
 
 
-def _material_payload(material: Material, material_id: str | None) -> dict:
+def _material_payload(material: Material, material_id: str | None, *, explicit_material: bool = False) -> dict:
     if material_id:
         return {"material_id": material_id}
-    return {"material": material.to_dict()}
+    return {"material": material.to_dict(explicit=explicit_material)}
 
 
 def _clone_material(material: Material) -> Material:
@@ -128,14 +184,14 @@ class Circle:
     material: Material = field(default_factory=Material)
     material_id: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {
             "id": self.id,
             "type": "circle",
             "center": self.center,
             "radius": self.radius,
         }
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -147,9 +203,9 @@ class Segment:
     material: Material = field(default_factory=Material)
     material_id: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {"id": self.id, "type": "segment", "a": self.a, "b": self.b}
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -167,7 +223,7 @@ class Arc:
         self.angle_start = normalize_angle(self.angle_start)
         self.sweep = clamp_arc_sweep(self.sweep)
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {
             "id": self.id,
             "type": "arc",
@@ -176,7 +232,7 @@ class Arc:
             "angle_start": normalize_angle(self.angle_start),
             "sweep": clamp_arc_sweep(self.sweep),
         }
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -189,7 +245,7 @@ class Bezier:
     material: Material = field(default_factory=Material)
     material_id: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {
             "id": self.id,
             "type": "bezier",
@@ -197,7 +253,7 @@ class Bezier:
             "p1": self.p1,
             "p2": self.p2,
         }
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -208,13 +264,13 @@ class Polygon:
     material: Material = field(default_factory=Material)
     material_id: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {
             "id": self.id,
             "type": "polygon",
             "vertices": self.vertices,
         }
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -228,7 +284,7 @@ class Ellipse:
     material: Material = field(default_factory=Material)
     material_id: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         d = {
             "id": self.id,
             "type": "ellipse",
@@ -237,7 +293,7 @@ class Ellipse:
             "semi_b": self.semi_b,
             "rotation": self.rotation,
         }
-        d.update(_material_payload(self.material, self.material_id))
+        d.update(_material_payload(self.material, self.material_id, explicit_material=explicit_material))
         return d
 
 
@@ -391,10 +447,12 @@ class Transform2D:
 
     @staticmethod
     def from_dict(d: dict) -> Transform2D:
+        d = _require_dict(d, "transform")
+        _require_exact_keys(d, ("translate", "rotate", "scale"), "transform")
         return Transform2D(
-            translate=d.get("translate", [0.0, 0.0]),
-            rotate=d.get("rotate", 0.0),
-            scale=d.get("scale", [1.0, 1.0]),
+            translate=_require_vec(d["translate"], 2, "transform.translate"),
+            rotate=_require_number(d["rotate"], "transform.rotate"),
+            scale=_require_vec(d["scale"], 2, "transform.scale"),
         )
 
 
@@ -405,11 +463,11 @@ class Group:
     shapes: list[Shape] = field(default_factory=list)
     lights: list[Light] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self, *, explicit_material: bool = False) -> dict:
         return {
             "id": self.id,
             "transform": self.transform.to_dict(),
-            "shapes": [s.to_dict() for s in self.shapes],
+            "shapes": [s.to_dict(explicit_material=explicit_material) for s in self.shapes],
             "lights": [light.to_dict() for light in self.lights],
         }
 
@@ -470,56 +528,106 @@ def _parse_shape_material(d: dict, materials: dict[str, Material]) -> tuple[Mate
         if material_id not in materials:
             raise ValueError(f"unknown material_id: {material_id}")
         return materials[material_id], material_id
-    return Material.from_dict(d["material"]), None
+    return Material.from_dict(d["material"], explicit=True), None
 
 
 def _parse_shape(d: dict, materials: dict[str, Material]) -> Shape:
+    d = _require_dict(d, "shape")
     shape_id = _require_entity_id(d, "shape")
     material, material_id = _parse_shape_material(d, materials)
     shape_type = d.get("type", "")
     if shape_type == "circle":
+        _reject_unknown_keys(d, ("id", "type", "center", "radius", "material", "material_id"), "shape")
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "center", "radius") if key in d},
+            ("id", "type", "center", "radius"),
+            "shape",
+        )
         return Circle(
             id=shape_id,
-            center=d["center"],
-            radius=d["radius"],
+            center=_require_vec(d["center"], 2, "shape.center"),
+            radius=_require_number(d["radius"], "shape.radius"),
             material=material,
             material_id=material_id,
         )
     if shape_type == "segment":
-        return Segment(id=shape_id, a=d["a"], b=d["b"], material=material, material_id=material_id)
+        _reject_unknown_keys(d, ("id", "type", "a", "b", "material", "material_id"), "shape")
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "a", "b") if key in d},
+            ("id", "type", "a", "b"),
+            "shape",
+        )
+        return Segment(
+            id=shape_id,
+            a=_require_vec(d["a"], 2, "shape.a"),
+            b=_require_vec(d["b"], 2, "shape.b"),
+            material=material,
+            material_id=material_id,
+        )
     if shape_type == "arc":
+        _reject_unknown_keys(
+            d, ("id", "type", "center", "radius", "angle_start", "sweep", "material", "material_id"), "shape"
+        )
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "center", "radius", "angle_start", "sweep") if key in d},
+            ("id", "type", "center", "radius", "angle_start", "sweep"),
+            "shape",
+        )
         return Arc(
             id=shape_id,
-            center=d["center"],
-            radius=d["radius"],
-            angle_start=d.get("angle_start", 0.0),
-            sweep=d.get("sweep", math.tau),
+            center=_require_vec(d["center"], 2, "shape.center"),
+            radius=_require_number(d["radius"], "shape.radius"),
+            angle_start=_require_number(d["angle_start"], "shape.angle_start"),
+            sweep=_require_number(d["sweep"], "shape.sweep"),
             material=material,
             material_id=material_id,
         )
     if shape_type == "bezier":
+        _reject_unknown_keys(d, ("id", "type", "p0", "p1", "p2", "material", "material_id"), "shape")
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "p0", "p1", "p2") if key in d},
+            ("id", "type", "p0", "p1", "p2"),
+            "shape",
+        )
         return Bezier(
             id=shape_id,
-            p0=d["p0"],
-            p1=d["p1"],
-            p2=d["p2"],
+            p0=_require_vec(d["p0"], 2, "shape.p0"),
+            p1=_require_vec(d["p1"], 2, "shape.p1"),
+            p2=_require_vec(d["p2"], 2, "shape.p2"),
             material=material,
             material_id=material_id,
         )
     if shape_type == "polygon":
+        _reject_unknown_keys(d, ("id", "type", "vertices", "material", "material_id"), "shape")
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "vertices") if key in d},
+            ("id", "type", "vertices"),
+            "shape",
+        )
+        vertices = d["vertices"]
+        if not isinstance(vertices, list):
+            raise ValueError("shape.vertices must be an array")
         return Polygon(
             id=shape_id,
-            vertices=d["vertices"],
+            vertices=[_require_vec(vertex, 2, f"shape.vertices[{i}]") for i, vertex in enumerate(vertices)],
             material=material,
             material_id=material_id,
         )
     if shape_type == "ellipse":
+        _reject_unknown_keys(
+            d, ("id", "type", "center", "semi_a", "semi_b", "rotation", "material", "material_id"), "shape"
+        )
+        _require_exact_keys(
+            {key: d[key] for key in ("id", "type", "center", "semi_a", "semi_b", "rotation") if key in d},
+            ("id", "type", "center", "semi_a", "semi_b", "rotation"),
+            "shape",
+        )
         return Ellipse(
             id=shape_id,
-            center=d["center"],
-            semi_a=d.get("semi_a", 0.2),
-            semi_b=d.get("semi_b", 0.1),
-            rotation=d.get("rotation", 0.0),
+            center=_require_vec(d["center"], 2, "shape.center"),
+            semi_a=_require_number(d["semi_a"], "shape.semi_a"),
+            semi_b=_require_number(d["semi_b"], "shape.semi_b"),
+            rotation=_require_number(d["rotation"], "shape.rotation"),
             material=material,
             material_id=material_id,
         )
@@ -531,56 +639,74 @@ def _parse_shapes(arr: list[dict], materials: dict[str, Material]) -> list[Shape
 
 
 def _parse_light(d: dict) -> Light:
+    d = _require_dict(d, "light")
     light_id = _require_entity_id(d, "light")
     light_type = d.get("type", "")
     if light_type == "point":
+        _require_exact_keys(d, ("id", "type", "pos", "intensity", "wavelength_min", "wavelength_max"), "light")
         return PointLight(
             id=light_id,
-            pos=d["pos"],
-            intensity=d.get("intensity", 1.0),
-            wavelength_min=d.get("wavelength_min", 380.0),
-            wavelength_max=d.get("wavelength_max", 780.0),
+            pos=_require_vec(d["pos"], 2, "light.pos"),
+            intensity=_require_number(d["intensity"], "light.intensity"),
+            wavelength_min=_require_number(d["wavelength_min"], "light.wavelength_min"),
+            wavelength_max=_require_number(d["wavelength_max"], "light.wavelength_max"),
         )
     if light_type == "segment":
+        _require_exact_keys(d, ("id", "type", "a", "b", "intensity", "wavelength_min", "wavelength_max"), "light")
         return SegmentLight(
             id=light_id,
-            a=d["a"],
-            b=d["b"],
-            intensity=d.get("intensity", 1.0),
-            wavelength_min=d.get("wavelength_min", 380.0),
-            wavelength_max=d.get("wavelength_max", 780.0),
+            a=_require_vec(d["a"], 2, "light.a"),
+            b=_require_vec(d["b"], 2, "light.b"),
+            intensity=_require_number(d["intensity"], "light.intensity"),
+            wavelength_min=_require_number(d["wavelength_min"], "light.wavelength_min"),
+            wavelength_max=_require_number(d["wavelength_max"], "light.wavelength_max"),
         )
     if light_type == "beam":
+        _require_exact_keys(
+            d,
+            ("id", "type", "origin", "direction", "angular_width", "intensity", "wavelength_min", "wavelength_max"),
+            "light",
+        )
         return BeamLight(
             id=light_id,
-            origin=d["origin"],
-            direction=d["direction"],
-            angular_width=d.get("angular_width", 0.1),
-            intensity=d.get("intensity", 1.0),
-            wavelength_min=d.get("wavelength_min", 380.0),
-            wavelength_max=d.get("wavelength_max", 780.0),
+            origin=_require_vec(d["origin"], 2, "light.origin"),
+            direction=_require_vec(d["direction"], 2, "light.direction"),
+            angular_width=_require_number(d["angular_width"], "light.angular_width"),
+            intensity=_require_number(d["intensity"], "light.intensity"),
+            wavelength_min=_require_number(d["wavelength_min"], "light.wavelength_min"),
+            wavelength_max=_require_number(d["wavelength_max"], "light.wavelength_max"),
         )
     if light_type == "parallel_beam":
+        _require_exact_keys(
+            d,
+            ("id", "type", "a", "b", "direction", "angular_width", "intensity", "wavelength_min", "wavelength_max"),
+            "light",
+        )
         return ParallelBeamLight(
             id=light_id,
-            a=d.get("a", [0.0, 0.0]),
-            b=d.get("b", [0.0, 0.5]),
-            direction=d.get("direction", [1.0, 0.0]),
-            angular_width=d.get("angular_width", 0.0),
-            intensity=d.get("intensity", 1.0),
-            wavelength_min=d.get("wavelength_min", 380.0),
-            wavelength_max=d.get("wavelength_max", 780.0),
+            a=_require_vec(d["a"], 2, "light.a"),
+            b=_require_vec(d["b"], 2, "light.b"),
+            direction=_require_vec(d["direction"], 2, "light.direction"),
+            angular_width=_require_number(d["angular_width"], "light.angular_width"),
+            intensity=_require_number(d["intensity"], "light.intensity"),
+            wavelength_min=_require_number(d["wavelength_min"], "light.wavelength_min"),
+            wavelength_max=_require_number(d["wavelength_max"], "light.wavelength_max"),
         )
     if light_type == "spot":
+        _require_exact_keys(
+            d,
+            ("id", "type", "pos", "direction", "angular_width", "falloff", "intensity", "wavelength_min", "wavelength_max"),
+            "light",
+        )
         return SpotLight(
             id=light_id,
-            pos=d.get("pos", [0.0, 0.0]),
-            direction=d.get("direction", [1.0, 0.0]),
-            angular_width=d.get("angular_width", 0.5),
-            falloff=d.get("falloff", 2.0),
-            intensity=d.get("intensity", 1.0),
-            wavelength_min=d.get("wavelength_min", 380.0),
-            wavelength_max=d.get("wavelength_max", 780.0),
+            pos=_require_vec(d["pos"], 2, "light.pos"),
+            direction=_require_vec(d["direction"], 2, "light.direction"),
+            angular_width=_require_number(d["angular_width"], "light.angular_width"),
+            falloff=_require_number(d["falloff"], "light.falloff"),
+            intensity=_require_number(d["intensity"], "light.intensity"),
+            wavelength_min=_require_number(d["wavelength_min"], "light.wavelength_min"),
+            wavelength_max=_require_number(d["wavelength_max"], "light.wavelength_max"),
         )
     raise ValueError(f"unknown light type: {light_type}")
 
@@ -692,40 +818,63 @@ class Scene:
         scene.validate()
         return scene
 
-    def _to_dict_unchecked(self) -> dict:
+    def _to_dict_unchecked(self, *, explicit_materials: bool, include_empty: bool) -> dict:
         d: dict = {}
-        if self.materials:
-            d["materials"] = {name: mat.to_dict() for name, mat in self.materials.items()}
-        d["shapes"] = [s.to_dict() for s in self.shapes]
+        if include_empty or self.materials:
+            d["materials"] = {
+                name: mat.to_dict(explicit=explicit_materials) for name, mat in self.materials.items()
+            }
+        d["shapes"] = [s.to_dict(explicit_material=explicit_materials) for s in self.shapes]
         d["lights"] = [light.to_dict() for light in self.lights]
-        if self.groups:
-            d["groups"] = [g.to_dict() for g in self.groups]
+        if include_empty or self.groups:
+            d["groups"] = [g.to_dict(explicit_material=explicit_materials) for g in self.groups]
         return d
 
     def to_dict(self) -> dict:
         """Scene content as a dict (no version — used inside Shot)."""
-        return self._normalized_copy(sync_material_bindings=True)._to_dict_unchecked()
+        return self._normalized_copy(sync_material_bindings=True)._to_dict_unchecked(
+            explicit_materials=True, include_empty=True
+        )
 
     def to_wire_dict(self) -> dict:
         """Scene content for transient renderer wire JSON."""
-        return self._normalized_copy(sync_material_bindings=False)._to_dict_unchecked()
+        return self._normalized_copy(sync_material_bindings=False)._to_dict_unchecked(
+            explicit_materials=False, include_empty=False
+        )
 
     @staticmethod
     def _from_dict(d: dict) -> Scene:
         """Parse scene content from a dict (materials/shapes/lights/groups)."""
+        d = _require_dict(d, "shot")
+        _require_exact_keys(d, ("version", "name", "camera", "canvas", "look", "trace", "materials", "shapes", "lights", "groups"), "shot")
         scene = Scene()
-        for name, mat_d in d.get("materials", {}).items():
+        materials = _require_dict(d["materials"], "materials")
+        for name, mat_d in materials.items():
             if not name:
                 raise ValueError("material ids must be non-empty")
-            scene.materials[name] = Material.from_dict(mat_d)
-        scene.shapes = _parse_shapes(d.get("shapes", []), scene.materials)
-        scene.lights = _parse_lights(d.get("lights", []))
-        for gd in d.get("groups", []):
+            scene.materials[name] = Material.from_dict(mat_d, explicit=True)
+        shapes = d["shapes"]
+        if not isinstance(shapes, list):
+            raise ValueError("shapes must be an array")
+        scene.shapes = _parse_shapes(shapes, scene.materials)
+        lights = d["lights"]
+        if not isinstance(lights, list):
+            raise ValueError("lights must be an array")
+        scene.lights = _parse_lights(lights)
+        groups = d["groups"]
+        if not isinstance(groups, list):
+            raise ValueError("groups must be an array")
+        for gd in groups:
+            gd = _require_dict(gd, "group")
+            _require_exact_keys(gd, ("id", "transform", "shapes", "lights"), "group")
             group = Group(id=_require_entity_id(gd, "group"))
-            if "transform" in gd:
-                group.transform = Transform2D.from_dict(gd["transform"])
-            group.shapes = _parse_shapes(gd.get("shapes", []), scene.materials)
-            group.lights = _parse_lights(gd.get("lights", []))
+            group.transform = Transform2D.from_dict(gd["transform"])
+            if not isinstance(gd["shapes"], list):
+                raise ValueError("group.shapes must be an array")
+            if not isinstance(gd["lights"], list):
+                raise ValueError("group.lights must be an array")
+            group.shapes = _parse_shapes(gd["shapes"], scene.materials)
+            group.lights = _parse_lights(gd["lights"])
             scene.groups.append(group)
         scene.sync_material_bindings().validate()
         return scene
@@ -855,20 +1004,33 @@ class Camera2D:
         return None
 
     def to_dict(self) -> dict | None:
-        """Serialize camera. Returns None if empty (auto-fit)."""
+        """Serialize camera using the explicit authored schema."""
         if self.bounds is not None:
             return {"bounds": self.bounds}
         if self.center is not None and self.width is not None:
             return {"center": self.center, "width": self.width}
-        return None
+        return {}
 
     @staticmethod
     def from_dict(d: dict) -> Camera2D:
-        return Camera2D(
-            bounds=d.get("bounds"),
-            center=d.get("center"),
-            width=d.get("width"),
-        )
+        d = _require_dict(d, "camera")
+        _reject_unknown_keys(d, ("bounds", "center", "width"), "camera")
+        has_bounds = "bounds" in d
+        has_center = "center" in d
+        has_width = "width" in d
+        if has_bounds and (has_center or has_width):
+            raise ValueError("camera cannot mix bounds with center/width")
+        if has_center != has_width:
+            raise ValueError("camera requires both center and width, or neither")
+        if has_bounds:
+            bounds = _require_vec(d["bounds"], 4, "camera.bounds")
+            return Camera2D(bounds=bounds)
+        if has_center:
+            return Camera2D(
+                center=_require_vec(d["center"], 2, "camera.center"),
+                width=_require_number(d["width"], "camera.width"),
+            )
+        return Camera2D()
 
 
 # --- Canvas, Look, TraceDefaults ---
@@ -890,7 +1052,9 @@ class Canvas:
 
     @staticmethod
     def from_dict(d: dict) -> Canvas:
-        return Canvas(width=d.get("width", 1920), height=d.get("height", 1080))
+        d = _require_dict(d, "canvas")
+        _require_exact_keys(d, ("width", "height"), "canvas")
+        return Canvas(width=_require_int(d["width"], "canvas.width"), height=_require_int(d["height"], "canvas.height"))
 
 
 _LOOK_FIELDS = (
@@ -976,14 +1140,23 @@ class Look:
         object.__setattr__(self, "_explicit_fields", frozenset(explicit))
 
     def to_dict(self) -> dict:
-        """Only emit non-default values."""
-        d: dict = {}
-        for name in _LOOK_FIELDS:
-            val = getattr(self, name)
-            default_val = getattr(Look(), name)
-            if val != default_val:
-                d[name] = list(val) if name == "background" else val
-        return d
+        """Emit the full authored look block."""
+        return {
+            "exposure": self.exposure,
+            "contrast": self.contrast,
+            "gamma": self.gamma,
+            "tonemap": self.tonemap,
+            "white_point": self.white_point,
+            "normalize": self.normalize,
+            "normalize_ref": self.normalize_ref,
+            "normalize_pct": self.normalize_pct,
+            "ambient": self.ambient,
+            "background": list(self.background),
+            "opacity": self.opacity,
+            "saturation": self.saturation,
+            "vignette": self.vignette,
+            "vignette_radius": self.vignette_radius,
+        }
 
     def to_override_dict(self) -> dict:
         """Only emit fields explicitly provided by the caller.
@@ -1008,11 +1181,30 @@ class Look:
 
     @staticmethod
     def from_dict(d: dict) -> Look:
-        kwargs: dict = {}
-        for name in _LOOK_FIELDS:
-            if name in d:
-                kwargs[name] = d[name]
-        return Look(**kwargs)
+        d = _require_dict(d, "look")
+        _require_exact_keys(d, _LOOK_FIELDS, "look")
+        tonemap = _require_string(d["tonemap"], "look.tonemap")
+        if tonemap not in _CANONICAL_TONEMAPS:
+            raise ValueError(f"invalid tonemap: {tonemap}")
+        normalize = _require_string(d["normalize"], "look.normalize")
+        if normalize not in _CANONICAL_NORMALIZE:
+            raise ValueError(f"invalid normalize mode: {normalize}")
+        return Look(
+            exposure=_require_number(d["exposure"], "look.exposure"),
+            contrast=_require_number(d["contrast"], "look.contrast"),
+            gamma=_require_number(d["gamma"], "look.gamma"),
+            tonemap=tonemap,
+            white_point=_require_number(d["white_point"], "look.white_point"),
+            normalize=normalize,
+            normalize_ref=_require_number(d["normalize_ref"], "look.normalize_ref"),
+            normalize_pct=_require_number(d["normalize_pct"], "look.normalize_pct"),
+            ambient=_require_number(d["ambient"], "look.ambient"),
+            background=_require_vec(d["background"], 3, "look.background"),
+            opacity=_require_number(d["opacity"], "look.opacity"),
+            saturation=_require_number(d["saturation"], "look.saturation"),
+            vignette=_require_number(d["vignette"], "look.vignette"),
+            vignette_radius=_require_number(d["vignette_radius"], "look.vignette_radius"),
+        )
 
 
 @dataclass
@@ -1025,23 +1217,22 @@ class TraceDefaults:
     intensity: float = 1.0
 
     def to_dict(self) -> dict:
-        """Only emit non-default values."""
-        _defaults = TraceDefaults()
-        d: dict = {}
-        for f in fields(self):
-            val = getattr(self, f.name)
-            default_val = getattr(_defaults, f.name)
-            if val != default_val:
-                d[f.name] = val
-        return d
+        return {
+            "rays": self.rays,
+            "batch": self.batch,
+            "depth": self.depth,
+            "intensity": self.intensity,
+        }
 
     @staticmethod
     def from_dict(d: dict) -> TraceDefaults:
+        d = _require_dict(d, "trace")
+        _require_exact_keys(d, ("rays", "batch", "depth", "intensity"), "trace")
         return TraceDefaults(
-            rays=d.get("rays", 10_000_000),
-            batch=d.get("batch", 200_000),
-            depth=d.get("depth", 12),
-            intensity=d.get("intensity", 1.0),
+            rays=_require_int(d["rays"], "trace.rays"),
+            batch=_require_int(d["batch"], "trace.batch"),
+            depth=_require_int(d["depth"], "trace.depth"),
+            intensity=_require_number(d["intensity"], "trace.intensity"),
         )
 
 
@@ -1092,17 +1283,10 @@ class Shot:
     def to_dict(self) -> dict:
         """Full v5 format dict."""
         d: dict = {"version": SHOT_JSON_VERSION, "name": self.name}
-        if self.camera is not None:
-            cam_d = self.camera.to_dict()
-            if cam_d:
-                d["camera"] = cam_d
+        d["camera"] = (self.camera or Camera2D()).to_dict()
         d["canvas"] = self.canvas.to_dict()
-        look_d = self.look.to_dict()
-        if look_d:
-            d["look"] = look_d
-        trace_d = self.trace.to_dict()
-        if trace_d:
-            d["trace"] = trace_d
+        d["look"] = self.look.to_dict()
+        d["trace"] = self.trace.to_dict()
         # Inline scene content at root level
         d.update(self.scene.to_dict())
         return d
@@ -1120,18 +1304,16 @@ class Shot:
     @staticmethod
     def from_json(s: str) -> Shot:
         """Parse shot from JSON."""
-        d = json.loads(s)
+        d = _require_dict(json.loads(s), "shot")
         version = d.get("version")
         if version != SHOT_JSON_VERSION:
             raise ValueError(f"unsupported shot version: {version} (expected {SHOT_JSON_VERSION})")
-        shot = Shot(name=d.get("name", ""))
-        # Shot-level blocks
-        if "camera" in d:
-            shot.camera = Camera2D.from_dict(d["camera"])
-        shot.canvas = Canvas.from_dict(d.get("canvas", {}))
-        shot.look = Look.from_dict(d.get("look", {}))
-        shot.trace = TraceDefaults.from_dict(d.get("trace", {}))
-        # Scene content
+        _require_exact_keys(d, ("version", "name", "camera", "canvas", "look", "trace", "materials", "shapes", "lights", "groups"), "shot")
+        shot = Shot(name=_require_string(d["name"], "shot.name"))
+        shot.camera = Camera2D.from_dict(d["camera"])
+        shot.canvas = Canvas.from_dict(d["canvas"])
+        shot.look = Look.from_dict(d["look"])
+        shot.trace = TraceDefaults.from_dict(d["trace"])
         shot.scene = Scene._from_dict(d)
         return shot
 

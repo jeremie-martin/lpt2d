@@ -13,6 +13,32 @@
     "width": 1920,
     "height": 1080
   },
+  "look": {
+    "exposure": -5.0,
+    "contrast": 1.0,
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.7
+  },
+  "trace": {
+    "rays": 10000000,
+    "batch": 200000,
+    "depth": 12,
+    "intensity": 1.0
+  },
   "materials": {
     "mirror_finish_01": {
       "ior": 1,
@@ -21,7 +47,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.4878301
+      "albedo": 0.4878301,
+      "emission": 0.0
     },
     "mirror_finish_02": {
       "ior": 1,
@@ -30,7 +57,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.79731715
+      "albedo": 0.79731715,
+      "emission": 0.0
     },
     "mirror_finish_03": {
       "ior": 1,
@@ -39,7 +67,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.5982349
+      "albedo": 0.5982349,
+      "emission": 0.0
     },
     "mirror_finish_04": {
       "ior": 1,
@@ -48,7 +77,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.74473447
+      "albedo": 0.74473447,
+      "emission": 0.0
     },
     "mirror_finish_05": {
       "ior": 1,
@@ -57,7 +87,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.7715608
+      "albedo": 0.7715608,
+      "emission": 0.0
     },
     "mirror_finish_06": {
       "ior": 1,
@@ -66,7 +97,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.33035243
+      "albedo": 0.33035243,
+      "emission": 0.0
     },
     "mirror_finish_07": {
       "ior": 1,
@@ -75,7 +107,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.64045906
+      "albedo": 0.64045906,
+      "emission": 0.0
     },
     "mirror_finish_08": {
       "ior": 1,
@@ -84,7 +117,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.659309
+      "albedo": 0.659309,
+      "emission": 0.0
     },
     "mirror_finish_09": {
       "ior": 1,
@@ -93,7 +127,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.52368927
+      "albedo": 0.52368927,
+      "emission": 0.0
     },
     "mirror_finish_10": {
       "ior": 1,
@@ -102,7 +137,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.49470568
+      "albedo": 0.49470568,
+      "emission": 0.0
     },
     "mirror_finish_11": {
       "ior": 1,
@@ -111,7 +147,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.46698415
+      "albedo": 0.46698415,
+      "emission": 0.0
     },
     "mirror_finish_12": {
       "ior": 1,
@@ -120,7 +157,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.5911615
+      "albedo": 0.5911615,
+      "emission": 0.0
     },
     "wall_mirror": {
       "ior": 1,
@@ -129,7 +167,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.9
+      "albedo": 0.9,
+      "emission": 0.0
     }
   },
   "shapes": [
@@ -365,5 +404,6 @@
       "wavelength_min": 380,
       "wavelength_max": 780
     }
-  ]
+  ],
+  "groups": []
 }

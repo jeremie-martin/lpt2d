@@ -44,11 +44,13 @@ add_library(lpt2d-core STATIC
     src/core/spectrum.cpp
     src/core/export.cpp
     src/core/serialize.cpp
+    src/core/serialize_json.cpp
 )
 
 target_include_directories(lpt2d-core PUBLIC
     ${CMAKE_SOURCE_DIR}/src/core
     ${CMAKE_BINARY_DIR}/generated
+    ${CMAKE_SOURCE_DIR}/external/nlohmann/single_include
 )
 target_include_directories(lpt2d-core PRIVATE
     ${CMAKE_SOURCE_DIR}/external/stb

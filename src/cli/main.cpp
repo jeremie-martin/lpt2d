@@ -108,7 +108,7 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         }
 
         std::string frame_error;
-        auto frame_shot = try_load_shot_json_string(line, &frame_error);
+        auto frame_shot = try_load_stream_frame_json_string(line, &frame_error);
         if (!frame_shot) {
             std::cerr << "frame " << frame << ": "
                       << (frame_error.empty() ? "Failed to parse shot" : frame_error) << "\n";
@@ -116,12 +116,10 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         }
 
         StreamFrameDirectives directives = parse_stream_frame_directives(line);
-        bool authored_contract = directives.has_name || directives.has_camera || directives.has_canvas
-            || directives.has_look || directives.has_trace;
-
-        Shot merged = authored_contract ? *frame_shot : session;
+        Shot merged = session;
         merged.scene = frame_shot->scene;
-        merged.name = frame_shot->name;
+        if (directives.has_name || !frame_shot->name.empty())
+            merged.name = frame_shot->name;
         if (directives.has_camera) merged.camera = frame_shot->camera;
         if (directives.has_canvas) merged.canvas = frame_shot->canvas;
         if (directives.has_look) merged.look = frame_shot->look;
@@ -247,9 +245,19 @@ int main(int argc, char** argv) {
         else if (std::strcmp(argv[i], "--white-point") == 0 && i + 1 < argc)
             overrides.white_point = std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--tonemap") == 0 && i + 1 < argc) {
-            if (auto tm = parse_tonemap(argv[++i])) overrides.tonemap = *tm;
+            const char* value = argv[++i];
+            if (auto tm = parse_tonemap(value)) overrides.tonemap = *tm;
+            else {
+                std::cerr << "Invalid tonemap: " << value << "\n";
+                return 1;
+            }
         } else if (std::strcmp(argv[i], "--normalize") == 0 && i + 1 < argc) {
-            if (auto nm = parse_normalize_mode(argv[++i])) overrides.normalize = *nm;
+            const char* value = argv[++i];
+            if (auto nm = parse_normalize_mode(value)) overrides.normalize = *nm;
+            else {
+                std::cerr << "Invalid normalize mode: " << value << "\n";
+                return 1;
+            }
         } else if (std::strcmp(argv[i], "--normalize-ref") == 0 && i + 1 < argc) {
             overrides.normalize_ref = std::atof(argv[++i]);
         } else if (std::strcmp(argv[i], "--normalize-pct") == 0 && i + 1 < argc) {

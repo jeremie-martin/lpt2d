@@ -16,6 +16,10 @@ std::optional<Shot> try_load_shot_json(const std::string& path, std::string* err
 // Try to parse a shot from a JSON string in the current authored format.
 std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std::string* error = nullptr);
 
+// Try to parse a stream frame JSON string. Supports either a full explicit
+// authored shot or the sparse stream wire format used by the Python renderer.
+std::optional<Shot> try_load_stream_frame_json_string(std::string_view json_content, std::string* error = nullptr);
+
 // Load shot from JSON file. Returns default shot on failure.
 Shot load_shot_json(const std::string& path);
 

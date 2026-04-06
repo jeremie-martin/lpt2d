@@ -355,8 +355,7 @@ enum class ToneMap { None, Reinhard, ReinhardExtended, ACES, Logarithmic };
 inline std::optional<ToneMap> parse_tonemap(const std::string& s) {
     if (s == "none") return ToneMap::None;
     if (s == "reinhard") return ToneMap::Reinhard;
-    if (s == "reinhardx" || s == "reinhard_ext" || s == "reinhard_extended")
-        return ToneMap::ReinhardExtended;
+    if (s == "reinhardx") return ToneMap::ReinhardExtended;
     if (s == "aces") return ToneMap::ACES;
     if (s == "log") return ToneMap::Logarithmic;
     return std::nullopt;
@@ -476,4 +475,3 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
 
 // Add four axis-aligned walls forming a box
 void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);
-

@@ -17,6 +17,28 @@ EXACT_ROOM_CAMERA_SCENES = {
     "three_spheres.json",
     "twin_prisms.json",
 }
+DEFAULT_LOOK = {
+    "exposure": -5.0,
+    "contrast": 1.0,
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [0.0, 0.0, 0.0],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.7,
+}
+DEFAULT_TRACE = {
+    "rays": 10_000_000,
+    "batch": 200_000,
+    "depth": 12,
+    "intensity": 1.0,
+}
 
 
 def _iter_scene_paths() -> list[Path]:
@@ -55,20 +77,26 @@ def _assert_authored_light(path: Path, light: dict, context: str, entity_ids: se
     entity_ids.add(light_id)
 
 
-def test_authored_json_omits_default_look_and_trace():
+def test_authored_json_uses_explicit_look_trace_and_groups():
     for path in _iter_scene_paths():
         data = _load(path)
-        assert "look" not in data, f"{path} should omit default look blocks"
-        assert "trace" not in data, f"{path} should omit default trace blocks"
+        assert data.get("look") == DEFAULT_LOOK, f"{path} should store the full canonical look block"
+        assert data.get("trace") == DEFAULT_TRACE, f"{path} should store the full canonical trace block"
+        assert "groups" in data, f"{path} should include groups explicitly"
+        assert isinstance(data["groups"], list), f"{path} groups must be an array"
 
 
 def test_repo_authored_json_is_strict_v5_and_id_coherent():
     for path in _iter_scene_paths():
         data = _load(path)
         assert data.get("version") == 5, f"{path} must declare version 5"
+        assert "camera" in data, f"{path} must include an explicit camera block"
+        assert "canvas" in data, f"{path} must include an explicit canvas block"
 
         material_ids = set(data.get("materials", {}))
         assert material_ids, f"{path} must define a named materials library"
+        for material_id, material in data["materials"].items():
+            assert "emission" in material, f"{path} material {material_id!r} must store explicit emission"
 
         entity_ids: set[str] = set()
 
@@ -82,6 +110,7 @@ def test_repo_authored_json_is_strict_v5_and_id_coherent():
             assert not group_id.startswith("group_"), f"{path} still uses legacy group id {group_id!r}"
             assert group_id not in entity_ids, f"{path} has duplicate entity id {group_id!r}"
             entity_ids.add(group_id)
+            assert set(group) == {"id", "transform", "shapes", "lights"}, f"{path} group {group_id!r} has non-canonical keys"
             for shape in group.get("shapes", []):
                 _assert_authored_shape(path, shape, f"group {group_id!r} shape", entity_ids, material_ids)
             for light in group.get("lights", []):

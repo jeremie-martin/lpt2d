@@ -54,6 +54,10 @@ def _run_stream(line: str, *args: str) -> subprocess.CompletedProcess[bytes]:
     )
 
 
+def _explicit_shot_dict(name: str = "test") -> dict:
+    return Shot(name=name).to_dict()
+
+
 def test_v5_round_trip_preserves_ids_and_material_bindings():
     shot = Shot(name="authored_v5", scene=_make_bound_scene())
 
@@ -86,13 +90,8 @@ def test_v5_rejects_unknown_material_id():
 
 
 def test_v5_rejects_shape_without_material_payload():
-    bad = {
-        "version": 5,
-        "name": "bad",
-        "shapes": [{"id": "lens", "type": "circle", "center": [0.0, 0.0], "radius": 0.2}],
-        "lights": [],
-        "groups": [],
-    }
+    bad = _explicit_shot_dict("bad")
+    bad["shapes"] = [{"id": "lens", "type": "circle", "center": [0.0, 0.0], "radius": 0.2}]
 
     with pytest.raises(
         ValueError, match="shape entries must declare exactly one of material and material_id"
@@ -210,32 +209,58 @@ def test_wire_json_does_not_mutate_scene_or_force_material_sync():
 
 
 def test_v5_rejects_older_shot_version():
-    outdated = {
-        "version": 4,
-        "name": "outdated",
-        "shapes": [],
-        "lights": [],
-        "groups": [],
-    }
+    outdated = _explicit_shot_dict("outdated")
+    outdated["version"] = 4
 
     with pytest.raises(ValueError, match=r"unsupported shot version: 4 \(expected 5\)"):
         Shot.from_json(json.dumps(outdated))
 
 
+def test_v5_rejects_sparse_authored_json_missing_explicit_blocks():
+    sparse = {
+        "version": 5,
+        "name": "sparse",
+        "materials": {},
+        "shapes": [],
+        "lights": [],
+        "groups": [],
+    }
+
+    with pytest.raises(ValueError, match="shot requires key: camera"):
+        Shot.from_json(json.dumps(sparse))
+
+
+def test_v5_authored_json_is_fully_explicit_for_defaults():
+    data = Shot(name="explicit_defaults").to_dict()
+
+    assert data["camera"] == {}
+    assert set(data["look"]) == {
+        "exposure",
+        "contrast",
+        "gamma",
+        "tonemap",
+        "white_point",
+        "normalize",
+        "normalize_ref",
+        "normalize_pct",
+        "ambient",
+        "background",
+        "opacity",
+        "saturation",
+        "vignette",
+        "vignette_radius",
+    }
+    assert set(data["trace"]) == {"rays", "batch", "depth", "intensity"}
+    assert data["materials"] == {}
+    assert data["groups"] == []
+
+
 def test_cpp_cli_rejects_older_shot_version(tmp_path):
     outdated_path = tmp_path / "outdated_v4.json"
     output = tmp_path / "outdated_v4.png"
-    outdated_path.write_text(
-        json.dumps(
-            {
-                "version": 4,
-                "name": "outdated",
-                "shapes": [],
-                "lights": [],
-                "groups": [],
-            }
-        )
-    )
+    outdated = _explicit_shot_dict("outdated")
+    outdated["version"] = 4
+    outdated_path.write_text(json.dumps(outdated))
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(outdated_path), "--output", str(output)],
@@ -251,9 +276,11 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
 
 
 def test_cpp_stream_rejects_older_shot_version():
+    outdated = _explicit_shot_dict("outdated")
+    outdated["version"] = 4
     result = subprocess.run(
         [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
-        input=json.dumps({"version": 4, "shapes": [], "lights": [], "groups": []}) + "\n",
+        input=json.dumps(outdated) + "\n",
         capture_output=True,
         text=True,
         check=False,
@@ -282,6 +309,26 @@ def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
     assert not output.exists()
 
 
+def test_cpp_cli_missing_version_reports_unsupported_shot_version(tmp_path):
+    bad = _explicit_shot_dict()
+    bad.pop("version")
+    bad_path = tmp_path / "missing_version.json"
+    output = tmp_path / "missing_version.png"
+    bad_path.write_text(json.dumps(bad))
+
+    result = subprocess.run(
+        [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "Unsupported shot version" in result.stderr
+    assert not output.exists()
+
+
 def test_cpp_stream_rejects_truncated_json():
     result = subprocess.run(
         [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
@@ -294,6 +341,36 @@ def test_cpp_stream_rejects_truncated_json():
 
     assert result.returncode != 0
     assert "frame 0: Invalid JSON" in result.stderr
+
+
+def test_cpp_stream_rejects_invalid_render_override_key():
+    result = subprocess.run(
+        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
+        input=json.dumps(
+            {"version": 5, "shapes": [], "lights": [], "groups": [], "render": {"bogus": 1}}
+        )
+        + "\n",
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "frame 0: unknown key in render: bogus" in result.stderr
+
+
+def test_cpp_cli_rejects_noncanonical_tonemap_alias():
+    result = subprocess.run(
+        [str(CLI_BINARY), "--scene", "diamond", "--output", "/tmp/alias.png", "--tonemap", "reinhard_extended"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode != 0
+    assert "Invalid tonemap: reinhard_extended" in result.stderr
 
 
 def test_cpp_stream_full_shot_json_ignores_session_look_defaults():

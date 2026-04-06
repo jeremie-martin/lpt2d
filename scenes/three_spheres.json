@@ -13,6 +13,32 @@
     "width": 1920,
     "height": 1080
   },
+  "look": {
+    "exposure": -5.0,
+    "contrast": 1.0,
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.7
+  },
+  "trace": {
+    "rays": 10000000,
+    "batch": 200000,
+    "depth": 12,
+    "intensity": 1.0
+  },
   "materials": {
     "sphere_glass": {
       "ior": 1.5,
@@ -21,7 +47,8 @@
       "transmission": 1,
       "absorption": 0.5,
       "cauchy_b": 20000,
-      "albedo": 1.0
+      "albedo": 1.0,
+      "emission": 0.0
     },
     "wall_mirror": {
       "ior": 1,
@@ -30,7 +57,8 @@
       "transmission": 1,
       "absorption": 0,
       "cauchy_b": 0,
-      "albedo": 0.95
+      "albedo": 0.95,
+      "emission": 0.0
     }
   },
   "shapes": [
@@ -140,5 +168,6 @@
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
     }
-  ]
+  ],
+  "groups": []
 }
