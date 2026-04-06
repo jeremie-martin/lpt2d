@@ -1,19 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(lpt2d VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
-
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -DDEBUG")
 
 # ── Shader embedding ──────────────────────────────────────────────
 include(cmake/embed_shaders.cmake)
+include(cmake/static_analysis.cmake)
 
 set(SHADER_DIR ${CMAKE_SOURCE_DIR}/src/shaders)
 set(SHADER_FILES
@@ -53,9 +49,11 @@ add_library(lpt2d-core STATIC
 target_include_directories(lpt2d-core PUBLIC
     ${CMAKE_SOURCE_DIR}/src/core
     ${CMAKE_BINARY_DIR}/generated
+)
+target_include_directories(lpt2d-core SYSTEM PUBLIC
     ${CMAKE_SOURCE_DIR}/external/nlohmann/single_include
 )
-target_include_directories(lpt2d-core PRIVATE
+target_include_directories(lpt2d-core SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/external/stb
 )
 target_link_libraries(lpt2d-core PUBLIC
@@ -66,10 +64,12 @@ target_link_libraries(lpt2d-core PUBLIC
 target_compile_definitions(lpt2d-core PUBLIC
     LPT2D_SCENES_DIR="${CMAKE_SOURCE_DIR}/scenes"
 )
-target_compile_options(lpt2d-core PRIVATE -Wall -Wextra -Wpedantic)
+lpt2d_enable_build_options(lpt2d-core)
+lpt2d_enable_warnings(lpt2d-core)
 set_property(TARGET lpt2d-core PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_dependencies(lpt2d-core generate_shaders)
+lpt2d_register_analysis_sources(lpt2d-core IWYU)
 
 # ── Interactive GUI executable ────────────────────────────────────
 find_package(glfw3 REQUIRED)
@@ -84,6 +84,19 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
+add_library(lpt2d-imgui STATIC
+    ${IMGUI_SOURCES}
+)
+
+target_include_directories(lpt2d-imgui SYSTEM PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+target_link_libraries(lpt2d-imgui PUBLIC
+    glfw
+)
+lpt2d_enable_build_options(lpt2d-imgui)
+
 add_executable(lpt2d
     src/app/main.cpp
     src/app/app.cpp
@@ -91,22 +104,22 @@ add_executable(lpt2d
     src/app/app_panels.cpp
     src/app/editor.cpp
     src/app/ui.cpp
-    ${IMGUI_SOURCES}
 )
 
 target_include_directories(lpt2d PRIVATE
     ${CMAKE_SOURCE_DIR}/src/app
-    ${IMGUI_DIR}
-    ${IMGUI_DIR}/backends
 )
 target_link_libraries(lpt2d PRIVATE
     lpt2d-core
+    lpt2d-imgui
     glfw
 )
 target_compile_definitions(lpt2d PRIVATE
     LPT2D_FONT_PATH="${CMAKE_SOURCE_DIR}/external/imgui/misc/fonts/Roboto-Medium.ttf"
 )
-target_compile_options(lpt2d PRIVATE -Wall -Wextra -Wpedantic)
+lpt2d_enable_build_options(lpt2d)
+lpt2d_enable_warnings(lpt2d)
+lpt2d_register_analysis_sources(lpt2d IWYU)
 
 # ── Headless CLI executable ───────────────────────────────────────
 add_executable(lpt2d-cli
@@ -116,7 +129,9 @@ add_executable(lpt2d-cli
 target_link_libraries(lpt2d-cli PRIVATE
     lpt2d-core
 )
-target_compile_options(lpt2d-cli PRIVATE -Wall -Wextra -Wpedantic)
+lpt2d_enable_build_options(lpt2d-cli)
+lpt2d_enable_warnings(lpt2d-cli)
+lpt2d_register_analysis_sources(lpt2d-cli IWYU)
 
 # ── Python extension module (nanobind) ───────────────────────────
 find_package(Python3 COMPONENTS Interpreter Development.Module)
@@ -133,4 +148,10 @@ if(Python3_FOUND)
         src/bindings/lpt2d_bindings.cpp
     )
     target_link_libraries(_lpt2d PRIVATE lpt2d-core)
+    lpt2d_enable_build_options(_lpt2d)
+    lpt2d_enable_warnings(_lpt2d)
+    lpt2d_register_analysis_sources(_lpt2d)
+    install(TARGETS _lpt2d LIBRARY DESTINATION .)
 endif()
+
+lpt2d_add_static_analysis_targets()

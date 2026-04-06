@@ -9,7 +9,12 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ```
 
-Produces three targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (headless renderer), and `liblpt2d-core.a` (static library). C++23 required. System dependencies: OpenGL, GLEW, GLFW3, EGL (Mesa).
+Produces four targets: `build/lpt2d` (interactive GUI), `build/lpt2d-cli` (headless renderer), `liblpt2d-core.a` (static library), and `_lpt2d.cpython-*.so` (Python extension). C++23 required. System dependencies: OpenGL, GLEW, GLFW3, EGL (Mesa), Python 3.10+ (for bindings).
+
+Install the Python package (builds the C++ extension via CMake):
+```bash
+uv pip install -e .
+```
 
 ## Run
 
@@ -70,7 +75,7 @@ carry compatibility fallback for pre-v5 authored files.
 
 ### Layer model
 
-The same data flows through five layers. **All layers must stay consistent.**
+The same data flows through four layers. **All layers must stay consistent.**
 
 | Layer | Material fields | Shot fields | Materials dict |
 |-------|----------------|-------------|----------------|
@@ -78,7 +83,8 @@ The same data flows through five layers. **All layers must stay consistent.**
 | **GPU structs** (renderer.cpp) | Same 8 fields in std430 layout | `PostProcess` + `TraceConfig` (runtime) | Flattened at upload |
 | **GLSL shader** (trace.comp) | Same 8 fields in `Hit` struct | Uniforms | N/A |
 | **JSON** (serialize.cpp) | All 8 read/written | v5 format: authored ids + camera/canvas/look/trace blocks | `"materials"` dict + `material_id` bindings |
-| **Python** (anim/types.py) | Same 8 fields on `Material` dataclass | `Shot` (Scene + Camera2D + Canvas + Look + TraceDefaults) | `Scene.materials` dict |
+
+Python (`anim/types.py`) re-exports C++ types from the `_lpt2d` nanobind extension — it is **not** a parallel implementation. The C++ core is the single source of truth.
 
 ### Material system
 
@@ -116,16 +122,15 @@ Applied per-pixel in `postprocess.frag`:
 ### Project structure
 
 ```
-CMakeLists.txt              — three targets: lpt2d-core (lib), lpt2d (GUI), lpt2d-cli (headless)
+CMakeLists.txt              — four targets: lpt2d-core (lib), lpt2d (GUI), lpt2d-cli (headless), _lpt2d (Python)
 examples/                   — canonical public example pack
   python/                   — workflow-first canonical Python animations
-anim/                       — Python animation library (pip install -e .)
+anim/                       — Python animation library (uv pip install -e .)
   __init__.py               — compact author-facing package surface; advanced APIs use explicit submodules
-  types.py                  — Shot model mirroring C++ (Shot, Scene, Canvas, Look, TraceDefaults, Camera2D, Material, Shape, Light, Group)
-  renderer.py               — C++ subprocess wrapper plus render/render_still/render_contact_sheet/render_stats
+  types.py                  — Re-exports C++ types from _lpt2d; Python-only: Shot, Frame, Timeline, FrameContext, Quality, FrameReport
+  renderer.py               — In-process rendering via _lpt2d.RenderSession + render/render_still/render_contact_sheet/render_stats
   analysis.py               — auto_look, calibrate_normalize_ref, compare_looks, look_report
   light_analysis.py         — light_contributions, scene_light_report, structure_contribution
-  diagnostics.py            — diagnose_scene
   builders.py               — Shape composition: polygon, regular_polygon, mirror_box/mirror_block, thick_arc/thick_segment, biconvex_lens, prism, slit, double_slit, grating, waveguide, elliptical_lens
   track.py                  — Keyframe animation with easing
   easing.py                 — 11 built-in easing functions
@@ -137,6 +142,8 @@ src/
     scene.h/cpp             — Vec2, Material, Shape/Light variants, Scene, Shot, Camera2D, Canvas, Look, TraceDefaults, intersection, bounds
     scenes.h/cpp            — runtime scene discovery from scenes/ directory (returns Shot)
     renderer.h/cpp          — GPU pipeline: framebuffers, compute dispatch, instanced draw, post-processing
+    session.h/cpp           — RenderSession: HeadlessGL + Renderer lifecycle (PIMPL), used by CLI and Python
+    headless.h/cpp          — EGL context creation (GL 4.3+ required)
     spectrum.h/cpp          — CIE 1931 wavelength→RGB (Gaussian fit), uploaded as 1D texture LUT
     export.h/cpp            — PNG export via stb_image_write
     serialize.h/cpp         — JSON shot save/load (v5 format, file and string APIs)
@@ -145,13 +152,14 @@ src/
     line.vert/frag          — instanced anti-aliased line rasterization
     postprocess.vert/frag   — HDR tone mapping + gamma correction
     max_reduce.comp         — parallel max reduction for normalization
+  bindings/                 — Python extension module (_lpt2d)
+    lpt2d_bindings.cpp      — nanobind bindings for all C++ types + RenderSession
   app/                      — lpt2d interactive GUI executable
     app.h/cpp               — GLFW window + ImGui frame loop
     editor.h/cpp            — scene editing: selection, transforms, handles, undo, clipboard, group enter/exit
     ui.h/cpp                — ImGui panels, material editor, overlay drawing, style
   cli/                      — lpt2d-cli headless executable
-    main.cpp                — CLI entry point, --stream mode for Python bridge
-    headless.h/cpp          — EGL context (GL 4.3+ required)
+    main.cpp                — CLI entry point (single-shot rendering via RenderSession)
 ```
 
 ### Scene upload pipeline
@@ -253,8 +261,8 @@ geometry; the block itself still exists in authored JSON.
 **Look** authored blocks are explicit, not sparse. Fields: `exposure`,
 `contrast`, `gamma`, `tonemap`, `white_point`, `normalize`,
 `normalize_ref`, `normalize_pct`, `ambient`, `background`, `opacity`,
-`saturation`, `vignette`, `vignette_radius`. Sparse look overrides only exist
-in transient stream `render` payloads and `Frame.look`.
+`saturation`, `vignette`, `vignette_radius`. Per-frame overrides use
+`Frame.look` (a `Look` or sparse `dict`).
 
 **Trace** authored blocks are explicit, not sparse. Fields: `rays`, `batch`,
 `depth`, `intensity`.
@@ -265,10 +273,15 @@ in transient stream `render` payloads and `Frame.look`.
 
 ### Python animation API
 
+C++ types (Material, shapes, lights, Scene, Look, etc.) are exposed to Python
+via the `_lpt2d` nanobind extension module. The `anim` package re-exports them
+and adds Python-only animation types (`Frame`, `Timeline`, `Shot` with presets).
+Rendering uses `RenderSession` (in-process GPU rendering) — no subprocess.
+
 ```python
 from anim import Shot, Scene, Frame, Look, Camera2D, Timeline, render
 
-# Load a shot file
+# Load a shot file (C++ JSON parser)
 shot = Shot.load("scenes/three_spheres.json")
 
 # Create from preset

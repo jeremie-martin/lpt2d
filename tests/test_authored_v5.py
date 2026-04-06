@@ -6,8 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from anim import renderer as renderer_mod
-from anim.types import Camera2D, Canvas, BeamLight, Circle, Frame, Group, Look, Material, Scene, Segment, Shot, TraceDefaults
+import _lpt2d
+from anim.types import (
+    BeamLight,
+    Camera2D,
+    Canvas,
+    Circle,
+    Group,
+    Look,
+    Material,
+    Scene,
+    Segment,
+    Shot,
+    TraceDefaults,
+)
 
 CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
 
@@ -44,30 +56,61 @@ def _make_bound_scene() -> Scene:
     )
 
 
-def _run_stream(line: str, *args: str) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        [str(CLI_BINARY), "--stream", *args],
-        input=(line + "\n").encode(),
-        capture_output=True,
-        check=False,
-        timeout=180,
-    )
+def _write_json(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data))
 
 
-def _explicit_shot_dict(name: str = "test") -> dict:
-    return Shot(name=name).to_dict()
+def _make_valid_shot_json(**overrides) -> dict:
+    """Return a minimal valid v5 shot JSON dict."""
+    base = {
+        "version": 5,
+        "name": "test",
+        "camera": {},
+        "canvas": {"width": 1920, "height": 1080},
+        "look": {
+            "exposure": -5.0,
+            "contrast": 1.0,
+            "gamma": 2.0,
+            "tonemap": "reinhardx",
+            "white_point": 0.5,
+            "normalize": "rays",
+            "normalize_ref": 0.0,
+            "normalize_pct": 1.0,
+            "ambient": 0.0,
+            "background": [0.0, 0.0, 0.0],
+            "opacity": 1.0,
+            "saturation": 1.0,
+            "vignette": 0.0,
+            "vignette_radius": 0.7,
+        },
+        "trace": {"rays": 10000000, "batch": 200000, "depth": 12, "intensity": 1.0},
+        "materials": {},
+        "shapes": [],
+        "lights": [],
+        "groups": [],
+    }
+    base.update(overrides)
+    return base
 
 
-def test_v5_round_trip_preserves_ids_and_material_bindings():
+# ─── Round-trip serialization via C++ ──────────────────────────────────
+
+
+def test_v5_round_trip_preserves_ids_and_material_bindings(tmp_path):
+    path = tmp_path / "roundtrip.json"
     shot = Shot(name="authored_v5", scene=_make_bound_scene())
+    shot.save(path)
 
-    loaded = Shot.from_json(shot.to_json())
+    loaded = Shot.load(path)
 
     assert loaded.scene.require_shape("lens_a").material_id == "glass"
     assert loaded.scene.require_shape("lens_b").material_id == "glass"
     assert loaded.scene.require_light("beam_main").id == "beam_main"
     assert loaded.scene.require_group("cluster").id == "cluster"
     assert loaded.scene.require_shape("cluster_edge").id == "cluster_edge"
+
+
+# ─── Scene validation via C++ ──────────────────────────────────────────
 
 
 def test_v5_rejects_duplicate_entity_ids():
@@ -78,25 +121,30 @@ def test_v5_rejects_duplicate_entity_ids():
         ]
     )
 
-    with pytest.raises(ValueError, match="duplicate entity id: dup"):
-        scene.validate()
+    with pytest.raises(RuntimeError, match="duplicate entity id: dup"):
+        _lpt2d.validate_scene(scene)
 
 
 def test_v5_rejects_unknown_material_id():
     scene = Scene(shapes=[Circle(id="lens", radius=0.2, material_id="missing")])
 
-    with pytest.raises(ValueError, match="unknown material_id: missing"):
-        scene.validate()
+    with pytest.raises(RuntimeError, match="unknown material_id: missing"):
+        _lpt2d.validate_scene(scene)
 
 
-def test_v5_rejects_shape_without_material_payload():
-    bad = _explicit_shot_dict("bad")
-    bad["shapes"] = [{"id": "lens", "type": "circle", "center": [0.0, 0.0], "radius": 0.2}]
+def test_v5_rejects_shape_without_material_payload(tmp_path):
+    path = tmp_path / "bad.json"
+    data = _make_valid_shot_json(
+        name="bad",
+        shapes=[{"id": "lens", "type": "circle", "center": [0.0, 0.0], "radius": 0.2}],
+    )
+    _write_json(path, data)
 
-    with pytest.raises(
-        ValueError, match="shape entries must declare exactly one of material and material_id"
-    ):
-        Shot.from_json(json.dumps(bad))
+    with pytest.raises(RuntimeError, match="shape entries must declare exactly one of material and material_id"):
+        Shot.load(path)
+
+
+# ─── Scene ID lookup helpers ───────────────────────────────────────────
 
 
 def test_scene_id_lookup_helpers_cover_shapes_lights_and_groups():
@@ -109,114 +157,51 @@ def test_scene_id_lookup_helpers_cover_shapes_lights_and_groups():
     assert scene.find_light("missing") is None
     assert scene.find_group("missing") is None
 
-    with pytest.raises(ValueError, match="unknown shape id: missing"):
+    with pytest.raises(ValueError, match="shape not found: missing"):
         scene.require_shape("missing")
-    with pytest.raises(ValueError, match="unknown light id: missing"):
+    with pytest.raises(ValueError, match="light not found: missing"):
         scene.require_light("missing")
-    with pytest.raises(ValueError, match="unknown group id: missing"):
+    with pytest.raises(ValueError, match="group not found: missing"):
         scene.require_group("missing")
 
 
-def test_shared_material_edits_propagate_and_detach_to_inline():
-    scene = _make_bound_scene()
-    lens_a = scene.require_shape("lens_a")
-    lens_b = scene.require_shape("lens_b")
-
-    scene.require_material("glass").ior = 1.7
-
-    assert lens_a.material.ior == pytest.approx(1.7)
-    assert lens_b.material.ior == pytest.approx(1.7)
-
-    scene.detach_material("lens_a")
-    scene.require_material("glass").ior = 1.9
-
-    assert lens_a.material_id is None
-    assert lens_a.material.ior == pytest.approx(1.7)
-    assert lens_b.material_id == "glass"
-    assert lens_b.material.ior == pytest.approx(1.9)
-
-    scene.bind_material("lens_a", "glass")
-    assert lens_a.material_id == "glass"
-    assert lens_a.material.ior == pytest.approx(1.9)
+# ─── Material bindings via round-trip ──────────────────────────────────
 
 
-def test_set_material_rebinds_existing_shared_shapes():
-    scene = _make_bound_scene()
-
-    replacement = scene.set_material("glass", Material(ior=1.8, transmission=1.0, absorption=0.2))
-
-    lens = scene.require_shape("lens_a")
-    assert lens.material is replacement
-    assert lens.material_id == "glass"
-    assert lens.material.absorption == pytest.approx(0.2)
-
-
-def test_delete_material_detaches_bound_shapes():
-    scene = _make_bound_scene()
-    scene.require_material("glass").ior = 1.7
-
-    removed = scene.delete_material("glass")
-
-    lens = scene.require_shape("lens_a")
-    assert removed.ior == pytest.approx(1.7)
-    assert lens.material_id is None
-    assert lens.material.ior == pytest.approx(1.7)
-    assert scene.find_material("glass") is None
-
-
-def test_rename_material_rebinds_shapes_after_library_replacement():
-    scene = Scene(shapes=[Circle(id="lens", radius=0.2, material_id="glass")])
-    scene.materials["glass"] = Material(ior=1.8, transmission=1.0)
-
-    scene.rename_material("glass", "glass_hot")
-
-    lens = scene.require_shape("lens")
-    rebound = scene.require_material("glass_hot")
-    assert lens.material_id == "glass_hot"
-    assert lens.material is rebound
-    assert lens.material.ior == pytest.approx(1.8)
-
-
-def test_shot_to_json_does_not_mutate_shared_scene_ids():
-    shot = Shot(scene=Scene(shapes=[Circle(center=[0.0, 0.0], radius=0.2, material=Material())]))
-    derived = shot.with_look(exposure=1.0)
-
-    derived.to_json()
-
-    assert shot.scene.shapes[0].id == ""
-    assert derived.scene.shapes[0].id == ""
-
-
-def test_wire_json_does_not_mutate_scene_or_force_material_sync():
+def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
+    """Shapes with material_id keep the binding; shapes with inline material keep the inline."""
+    path = tmp_path / "bindings.json"
     scene = Scene(
-        materials={"glass": Material(ior=1.7, transmission=1.0)},
-        shapes=[Circle(center=[0.0, 0.0], radius=0.2, material_id="glass")],
+        materials={"glass": Material(ior=1.5, transmission=1.0)},
+        shapes=[
+            Circle(id="bound", center=[-0.5, 0.0], radius=0.2, material_id="glass"),
+            Circle(id="inline", center=[0.5, 0.0], radius=0.2, material=Material(ior=1.8, transmission=1.0)),
+        ],
+        lights=[BeamLight(id="beam", origin=[-1, 0], direction=[1, 0])],
     )
+    shot = Shot(name="bindings", scene=scene)
+    shot.save(path)
 
-    wire = json.loads(
-        renderer_mod._build_wire_json(
-            Frame(scene=scene),
-            camera=None,
-            shot_camera=None,
-            aspect=16.0 / 9.0,
-        )
-    )
-
-    assert scene.shapes[0].id == ""
-    assert scene.shapes[0].material.ior == pytest.approx(1.7)
-    assert wire["shapes"][0]["material_id"] == "glass"
-    assert "material" not in wire["shapes"][0]
+    loaded = Shot.load(path)
+    assert loaded.scene.require_shape("bound").material_id == "glass"
+    assert loaded.scene.require_shape("inline").material_id == ""
+    assert loaded.scene.require_shape("inline").material.ior == pytest.approx(1.8)
 
 
-def test_v5_rejects_older_shot_version():
-    outdated = _explicit_shot_dict("outdated")
-    outdated["version"] = 4
-
-    with pytest.raises(ValueError, match=r"unsupported shot version: 4 \(expected 5\)"):
-        Shot.from_json(json.dumps(outdated))
+# ─── Authored JSON format validation ──────────────────────────────────
 
 
-def test_v5_rejects_sparse_authored_json_missing_explicit_blocks():
+def test_v5_rejects_older_shot_version(tmp_path):
+    path = tmp_path / "outdated.json"
+    data = _make_valid_shot_json(version=4)
+    _write_json(path, data)
+
+    with pytest.raises(RuntimeError, match=r"Unsupported shot version"):
+        Shot.load(path)
+
+
+def test_v5_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
+    path = tmp_path / "sparse.json"
     sparse = {
         "version": 5,
         "name": "sparse",
@@ -225,13 +210,18 @@ def test_v5_rejects_sparse_authored_json_missing_explicit_blocks():
         "lights": [],
         "groups": [],
     }
+    _write_json(path, sparse)
 
-    with pytest.raises(ValueError, match="shot requires key: camera"):
-        Shot.from_json(json.dumps(sparse))
+    with pytest.raises(RuntimeError, match="requires key: camera"):
+        Shot.load(path)
 
 
-def test_v5_authored_json_is_fully_explicit_for_defaults():
-    data = Shot(name="explicit_defaults").to_dict()
+def test_v5_authored_json_is_fully_explicit_for_defaults(tmp_path):
+    path = tmp_path / "defaults.json"
+    shot = Shot(name="explicit_defaults")
+    shot.save(path)
+
+    data = json.loads(path.read_text())
 
     assert data["camera"] == {}
     assert set(data["look"]) == {
@@ -255,12 +245,13 @@ def test_v5_authored_json_is_fully_explicit_for_defaults():
     assert data["groups"] == []
 
 
+# ─── CLI rejection tests ──────────────────────────────────────────────
+
+
 def test_cpp_cli_rejects_older_shot_version(tmp_path):
     outdated_path = tmp_path / "outdated_v4.json"
     output = tmp_path / "outdated_v4.png"
-    outdated = _explicit_shot_dict("outdated")
-    outdated["version"] = 4
-    outdated_path.write_text(json.dumps(outdated))
+    _write_json(outdated_path, _make_valid_shot_json(version=4))
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(outdated_path), "--output", str(output)],
@@ -273,22 +264,6 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     assert result.returncode != 0
     assert "Unsupported shot version (expected 5)" in result.stderr
     assert not output.exists()
-
-
-def test_cpp_stream_rejects_older_shot_version():
-    outdated = _explicit_shot_dict("outdated")
-    outdated["version"] = 4
-    result = subprocess.run(
-        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
-        input=json.dumps(outdated) + "\n",
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=180,
-    )
-
-    assert result.returncode != 0
-    assert "frame 0: Unsupported shot version (expected 5)" in result.stderr
 
 
 def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
@@ -310,11 +285,11 @@ def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
 
 
 def test_cpp_cli_missing_version_reports_unsupported_shot_version(tmp_path):
-    bad = _explicit_shot_dict()
+    bad = _make_valid_shot_json()
     bad.pop("version")
     bad_path = tmp_path / "missing_version.json"
     output = tmp_path / "missing_version.png"
-    bad_path.write_text(json.dumps(bad))
+    _write_json(bad_path, bad)
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
@@ -329,40 +304,17 @@ def test_cpp_cli_missing_version_reports_unsupported_shot_version(tmp_path):
     assert not output.exists()
 
 
-def test_cpp_stream_rejects_truncated_json():
-    result = subprocess.run(
-        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
-        input='{"version":5,"shapes":[],"lights":[],"groups":[]\n',
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=180,
-    )
-
-    assert result.returncode != 0
-    assert "frame 0: Invalid JSON" in result.stderr
-
-
-def test_cpp_stream_rejects_invalid_render_override_key():
-    result = subprocess.run(
-        [str(CLI_BINARY), "--stream", "--width", "8", "--height", "8"],
-        input=json.dumps(
-            {"version": 5, "shapes": [], "lights": [], "groups": [], "render": {"bogus": 1}}
-        )
-        + "\n",
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=180,
-    )
-
-    assert result.returncode != 0
-    assert "frame 0: unknown key in render: bogus" in result.stderr
-
-
 def test_cpp_cli_rejects_noncanonical_tonemap_alias():
     result = subprocess.run(
-        [str(CLI_BINARY), "--scene", "diamond", "--output", "/tmp/alias.png", "--tonemap", "reinhard_extended"],
+        [
+            str(CLI_BINARY),
+            "--scene",
+            "diamond",
+            "--output",
+            "/tmp/alias.png",
+            "--tonemap",
+            "reinhard_extended",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -373,103 +325,7 @@ def test_cpp_cli_rejects_noncanonical_tonemap_alias():
     assert "Invalid tonemap: reinhard_extended" in result.stderr
 
 
-def test_cpp_stream_full_shot_json_ignores_session_look_defaults():
-    shot = Shot(
-        name="stream_full_default_look",
-        scene=_make_bound_scene(),
-        canvas=Canvas(width=8, height=8),
-        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
-    )
-    line = shot.to_json()
-
-    result_dark = _run_stream(line, "--width", "16", "--height", "16", "--exposure", "-5")
-    result_bright = _run_stream(line, "--width", "16", "--height", "16", "--exposure", "5")
-
-    assert result_dark.returncode == 0, result_dark.stderr.decode()
-    assert result_bright.returncode == 0, result_bright.stderr.decode()
-    assert len(result_dark.stdout) == 8 * 8 * 3
-    assert result_dark.stdout == result_bright.stdout
-
-
-def test_cpp_stream_wire_frame_still_uses_session_look_defaults():
-    wire = renderer_mod._build_wire_json(
-        Frame(scene=_make_bound_scene()),
-        camera=None,
-        shot_camera=None,
-        aspect=1.0,
-    )
-
-    result_dark = _run_stream(wire, "--width", "8", "--height", "8", "--rays", "50000", "--exposure", "-5")
-    result_bright = _run_stream(wire, "--width", "8", "--height", "8", "--rays", "50000", "--exposure", "5")
-
-    assert result_dark.returncode == 0, result_dark.stderr.decode()
-    assert result_bright.returncode == 0, result_bright.stderr.decode()
-    assert result_dark.stdout != result_bright.stdout
-
-
-def test_cpp_stream_full_shot_json_respects_top_level_canvas_and_trace():
-    shot = Shot(
-        name="stream_canvas_trace",
-        scene=_make_bound_scene(),
-        canvas=Canvas(width=7, height=5),
-        trace=TraceDefaults(rays=1234, batch=1234, depth=1),
-    )
-
-    result = _run_stream(
-        shot.to_json(),
-        "--width",
-        "16",
-        "--height",
-        "16",
-        "--rays",
-        "999",
-    )
-
-    assert result.returncode == 0, result.stderr.decode()
-    assert len(result.stdout) == 7 * 5 * 3
-    assert '"rays": 1234' in result.stderr.decode()
-
-
-def test_cpp_stream_render_block_can_override_session_canvas_size():
-    line = json.dumps(
-        {
-            "version": 5,
-            "shapes": [],
-            "lights": [],
-            "groups": [],
-            "render": {"width": 7, "height": 5},
-        }
-    )
-
-    result = _run_stream(line, "--width", "16", "--height", "16")
-
-    assert result.returncode == 0, result.stderr.decode()
-    assert len(result.stdout) == 7 * 5 * 3
-
-
-def test_cpp_stream_full_shot_json_respects_top_level_camera():
-    base = _make_bound_scene()
-    wide = Shot(
-        name="camera_wide",
-        scene=base,
-        camera=Camera2D(bounds=[-1.5, -1.0, 1.5, 1.0]),
-        canvas=Canvas(width=8, height=8),
-        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
-    )
-    tight = Shot(
-        name="camera_tight",
-        scene=base,
-        camera=Camera2D(bounds=[-0.35, -0.35, 0.35, 0.35]),
-        canvas=Canvas(width=8, height=8),
-        trace=TraceDefaults(rays=50_000, batch=50_000, depth=2),
-    )
-
-    result_wide = _run_stream(wide.to_json(), "--width", "16", "--height", "16")
-    result_tight = _run_stream(tight.to_json(), "--width", "16", "--height", "16")
-
-    assert result_wide.returncode == 0, result_wide.stderr.decode()
-    assert result_tight.returncode == 0, result_tight.stderr.decode()
-    assert result_wide.stdout != result_tight.stdout
+# ─── CLI save-shot round-trip ──────────────────────────────────────────
 
 
 def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_path):
@@ -507,7 +363,7 @@ def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_pat
     assert saved.scene.require_shape("lens_b").material_id == "glass"
     assert saved.scene.require_light("beam_main").id == "beam_main"
     assert saved.scene.require_group("cluster").id == "cluster"
-    assert saved.scene.require_shape("cluster_edge").material_id is None
+    assert saved.scene.require_shape("cluster_edge").material_id == ""
 
 
 def test_cpp_save_shot_round_trip_preserves_phase2_look_fields(tmp_path):
@@ -542,6 +398,9 @@ def test_cpp_save_shot_round_trip_preserves_phase2_look_fields(tmp_path):
     assert saved.look.vignette_radius == pytest.approx(0.9)
 
 
+# ─── Save/load/modify round-trip ──────────────────────────────────────
+
+
 def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
     path = tmp_path / "authored_scene.json"
     shot = Shot(name="roundtrip", scene=_make_bound_scene())
@@ -550,7 +409,7 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
     loaded = Shot.load(path)
     beam = loaded.scene.require_light("beam_main")
     assert isinstance(beam, BeamLight)
-    beam.origin[1] = 0.15
+    beam.origin = [-1.0, 0.15]
 
     lens = loaded.scene.require_shape("lens_a")
     lens.radius = 0.35
@@ -565,16 +424,39 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
     assert lens_reloaded.radius == pytest.approx(0.35)
     assert lens_reloaded.material_id == "glass"
     assert isinstance(beam_reloaded, BeamLight)
-    assert beam_reloaded.origin == [-1.0, 0.15]
+    assert beam_reloaded.origin[0] == pytest.approx(-1.0)
+    assert beam_reloaded.origin[1] == pytest.approx(0.15)
 
-    wire = json.loads(
-        renderer_mod._build_wire_json(
-            Frame(scene=reloaded.scene),
-            camera=None,
-            shot_camera=None,
-            aspect=16.0 / 9.0,
-        )
+
+# ─── C++ validate_scene and normalize_scene ────────────────────────────
+
+
+def test_validate_scene_accepts_valid_scene():
+    scene = _make_bound_scene()
+    _lpt2d.validate_scene(scene)
+
+
+def test_normalize_scene_assigns_ids_and_syncs_materials():
+    scene = Scene(
+        materials={"glass": Material(ior=1.5, transmission=1.0)},
+        shapes=[
+            Circle(radius=0.2, material_id="glass"),
+        ],
+        lights=[BeamLight(origin=[-1, 0], direction=[1, 0])],
     )
-    assert wire["version"] == 5
-    lens_wire = next(shape for shape in wire["shapes"] if shape["id"] == "lens_a")
-    assert lens_wire["material_id"] == "glass"
+
+    _lpt2d.normalize_scene(scene)
+
+    assert scene.shapes[0].id != ""
+    assert scene.lights[0].id != ""
+
+
+def test_normalize_scene_rejects_invalid_after_normalization():
+    scene = Scene(
+        shapes=[
+            Circle(id="ok", radius=0.2, material_id="nonexistent"),
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="unknown material_id: nonexistent"):
+        _lpt2d.normalize_scene(scene)

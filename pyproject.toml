@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "nanobind>=2.0"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "lpt2d"
@@ -17,9 +17,16 @@ dev = [
     "pyright>=1.1.400",
     "pytest>=8.0",
     "ruff>=0.11.10",
+    "scikit-build-core>=0.10",
+    "nanobind>=2.0",
 ]
 
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["anim"]
+
 [tool.ruff]
+exclude = ["external"]
 line-length = 100
 target-version = "py310"
 
@@ -38,7 +45,3 @@ line-ending = "auto"
 include = ["anim", "bench"]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["anim*"]
