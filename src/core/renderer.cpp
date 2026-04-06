@@ -966,7 +966,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     if (!draw_cmd_buffer_) {
         glGenBuffers(1, &draw_cmd_buffer_);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer_);
-        uint32_t cmd[4] = {6, 0, 0, 0};
+        uint32_t cmd[4] = {4, 0, 0, 0};
         glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(cmd), cmd, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
     }
@@ -1024,7 +1024,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
 
     glBindVertexArray(line_vao_);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer_);
-    glDrawArraysIndirect(GL_TRIANGLES, nullptr);
+    glDrawArraysIndirect(GL_TRIANGLE_STRIP, nullptr);
 
     glBindVertexArray(0);
     glDisable(GL_BLEND);
