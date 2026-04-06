@@ -25,6 +25,7 @@ from anim.types import (
     Arc,
     Canvas,
     Circle,
+    Ellipse,
     FrameReport,
     Group,
     Look,
@@ -420,6 +421,32 @@ def test_diagnose_scene_grouped_rotated_arc_uses_precise_bounds():
     assert not any("overlapping" in w.lower() for w in warnings)
 
 
+def test_diagnose_scene_rotated_ellipse_uses_precise_bounds():
+    scene = Scene(
+        shapes=[
+            Ellipse(
+                center=[0.0, 0.0],
+                semi_a=1.0,
+                semi_b=0.2,
+                rotation=math.pi / 4,
+                material=Material(),
+            )
+        ]
+        + [
+            Circle(
+                center=[0.76, -0.45 + 0.09 * i],
+                radius=0.02,
+                material=Material(),
+            )
+            for i in range(11)
+        ],
+    )
+
+    warnings = diagnose_scene(scene)
+
+    assert not any("overlapping" in w.lower() for w in warnings)
+
+
 def test_internal_transform_shape_keeps_arc_bounds_tight():
     arc = types_mod.Arc(
         center=[0.0, 0.0],
@@ -433,3 +460,18 @@ def test_internal_transform_shape_keeps_arc_bounds_tight():
     bounds = _shape_bounds(transformed)
 
     assert bounds == pytest.approx((-1.0, 0.0, 0.0, 1.0))
+
+
+def test_internal_shape_bounds_keep_rotated_ellipse_tight():
+    bounds = _shape_bounds(
+        Ellipse(
+            center=[0.0, 0.0],
+            semi_a=1.0,
+            semi_b=0.2,
+            rotation=math.pi / 4,
+            material=Material(),
+        )
+    )
+
+    tight_extent = math.sqrt(0.52)
+    assert bounds == pytest.approx((-tight_extent, -tight_extent, tight_extent, tight_extent))

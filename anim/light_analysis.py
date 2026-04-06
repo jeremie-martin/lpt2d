@@ -4,16 +4,8 @@ from __future__ import annotations
 
 from dataclasses import replace as dc_replace
 
-from .analysis import (
-    _analysis_canvas,
-    _analysis_trace,
-    _resolve_static_scene_subject,
-    calibrate_normalize_ref,
-)
-from .renderer import (
-    DEFAULT_BINARY,
-    render_stats,
-)
+from . import analysis as analysis_mod
+from . import renderer as renderer_mod
 from .stats import (
     FrameStats,
     LightContribution,
@@ -157,18 +149,20 @@ def _contribution_reference_shot(
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
     rays_per_light: int = 500_000,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
 ) -> tuple[Scene, Shot]:
-    scene, shot = _resolve_static_scene_subject(subject, camera=camera, canvas=canvas)
+    scene, shot = analysis_mod._resolve_static_scene_subject(
+        subject, camera=camera, canvas=canvas
+    )
     scene = scene.clone()
     scene.ensure_ids()
     analysis_shot = Shot(
         scene=scene,
         camera=shot.camera,
-        canvas=_analysis_canvas(shot.canvas),
-        trace=_analysis_trace(shot.trace, rays=rays_per_light),
+        canvas=analysis_mod._analysis_canvas(shot.canvas),
+        trace=analysis_mod._analysis_trace(shot.trace, rays=rays_per_light),
     )
-    normalize_ref = calibrate_normalize_ref(
+    normalize_ref = analysis_mod.calibrate_normalize_ref(
         lambda _ctx, _scene=scene: Frame(scene=_scene),
         1.0,
         settings=analysis_shot,
@@ -186,7 +180,7 @@ def light_contributions(
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
     rays_per_light: int = 500_000,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
 ) -> list[LightContribution]:
     """Render each source solo and measure its linear frame contribution.
 
@@ -214,7 +208,7 @@ def light_contributions(
         def animate_solo(_ctx: FrameContext, _s: Scene = solo_scene) -> Frame:
             return Frame(scene=_s)
 
-        stats_list = render_stats(
+        stats_list = renderer_mod.render_stats(
             animate_solo,
             1.0,
             frames=[0],
@@ -253,7 +247,7 @@ def structure_contribution(
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
     rays: int = 5_000_000,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
 ) -> StructureReport:
     """Measure one shape's effect with the same neutral reference on both runs."""
     if isinstance(subject, Shot):
@@ -282,7 +276,7 @@ def structure_contribution(
         ],
     )
 
-    stats_with = render_stats(
+    stats_with = renderer_mod.render_stats(
         lambda _ctx, _s=scene: Frame(scene=_s),
         1.0,
         frames=[0],
@@ -291,7 +285,7 @@ def structure_contribution(
         binary=binary,
         fast=True,
     )
-    stats_without = render_stats(
+    stats_without = renderer_mod.render_stats(
         lambda _ctx, _s=scene_without: Frame(scene=_s),
         1.0,
         frames=[0],
@@ -336,7 +330,7 @@ def scene_light_report(
     *,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
 ) -> str:
     """Human-readable contribution report for authored light sources."""
     contribs = light_contributions(subject, camera=camera, canvas=canvas, binary=binary)

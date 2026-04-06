@@ -127,6 +127,9 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
         if (directives.has_look) merged.look = frame_shot->look;
         if (directives.has_trace) merged.trace = frame_shot->trace;
 
+        const RenderOverrides& fo = directives.render;
+        fo.apply_to(merged.canvas);
+
         width = merged.canvas.width;
         height = merged.canvas.height;
         size_t current_frame_bytes = (size_t)width * height * 3;
@@ -135,8 +138,6 @@ static int run_stream(const Shot& session, int64_t default_rays, bool fast, bool
             black.assign(frame_bytes, 0);
             renderer.resize(width, height);
         }
-
-        const RenderOverrides& fo = directives.render;
 
         int64_t rays = merged.trace.rays;
         if (fo.rays) rays = *fo.rays;

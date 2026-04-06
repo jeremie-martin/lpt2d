@@ -6,6 +6,8 @@ import json
 
 import pytest
 
+from anim import analysis as analysis_mod
+from anim import light_analysis as light_analysis_mod
 from anim import renderer as renderer_mod
 from anim.types import (
     Camera2D,
@@ -217,7 +219,7 @@ def test_calibrate_normalize_ref_uses_shot_camera_when_no_override(monkeypatch):
     captured = _install_capturing_renderer(monkeypatch)
     shot = Shot(camera=Camera2D(bounds=[-2.0, -1.0, 2.0, 1.0]), canvas=Canvas(width=2, height=2))
 
-    max_hdr = renderer_mod.calibrate_normalize_ref(
+    max_hdr = analysis_mod.calibrate_normalize_ref(
         lambda ctx: Scene(),
         1.0,
         settings=shot,
@@ -248,7 +250,7 @@ def test_auto_look_defaults_to_rays_normalization(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    look = renderer_mod.auto_look(Scene(), 1.0)
+    look = analysis_mod.auto_look(Scene(), 1.0)
 
     assert look.normalize == "rays"
     assert look.tonemap == "reinhardx"
@@ -279,9 +281,9 @@ def test_auto_look_respects_explicit_normalize(monkeypatch):
         return 123.0
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
-    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", fake_calibrate)
+    monkeypatch.setattr(analysis_mod, "calibrate_normalize_ref", fake_calibrate)
 
-    look = renderer_mod.auto_look(Scene(), 1.0, normalize="rays")
+    look = analysis_mod.auto_look(Scene(), 1.0, normalize="rays")
 
     assert look.normalize == "rays"
     assert look.normalize_ref == 0.0
@@ -317,7 +319,7 @@ def test_auto_look_shot_subject_uses_authored_camera_and_aspect(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    renderer_mod.auto_look(shot)
+    analysis_mod.auto_look(shot)
 
     assert captured["camera"] == shot.camera
     assert captured["frames"] == [0]
@@ -361,7 +363,7 @@ def test_auto_look_preserves_authored_look_fields(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    look = renderer_mod.auto_look(shot)
+    look = analysis_mod.auto_look(shot)
 
     assert captured["look"].white_point == pytest.approx(1.7)
     assert captured["look"].ambient == pytest.approx(0.12)
@@ -403,7 +405,7 @@ def test_auto_look_enforces_max_clipping(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    look = renderer_mod.auto_look(Scene(), 1.0, max_clipping=0.02)
+    look = analysis_mod.auto_look(Scene(), 1.0, max_clipping=0.02)
 
     assert len(calls) > 2
     assert look.exposure <= 1.0
@@ -436,7 +438,7 @@ def test_compare_looks_uses_shot_subject_defaults(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    renderer_mod.compare_looks(shot, looks=[Look(), Look(exposure=1.0)])
+    analysis_mod.compare_looks(shot, looks=[Look(), Look(exposure=1.0)])
 
     assert len(captured) == 2
     assert all(entry["frames"] == [0] for entry in captured)
@@ -471,7 +473,7 @@ def test_look_report_shot_subject_samples_single_frame(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    report = renderer_mod.look_report(shot, shot.look)
+    report = analysis_mod.look_report(shot, shot.look)
 
     assert captured["frames"] == [0]
     assert len(report.profile.per_frame) == 1
@@ -501,10 +503,10 @@ def test_light_contributions_use_neutral_fixed_reference(monkeypatch):
         captured.append(kwargs["settings"])
         return [(0, 0.0, sample)]
 
-    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", fake_calibrate)
+    monkeypatch.setattr(analysis_mod, "calibrate_normalize_ref", fake_calibrate)
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    contribs = renderer_mod.light_contributions(scene)
+    contribs = light_analysis_mod.light_contributions(scene)
 
     assert len(contribs) == 1
     assert contribs[0].source_id == "beam_main"
@@ -544,10 +546,10 @@ def test_light_contributions_keep_unnamed_emissive_shapes_distinct(monkeypatch):
         captured_scenes.append(kwargs["settings"].scene)
         return [(0, 0.0, sample)]
 
-    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", fake_calibrate)
+    monkeypatch.setattr(analysis_mod, "calibrate_normalize_ref", fake_calibrate)
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    contribs = renderer_mod.light_contributions(scene)
+    contribs = light_analysis_mod.light_contributions(scene)
 
     assert len(contribs) == 2
     assert len({c.source_id for c in contribs}) == 2
@@ -580,14 +582,14 @@ def test_light_contributions_normalize_unnamed_emissive_shapes_without_mutating_
         ]
     )
 
-    monkeypatch.setattr(renderer_mod, "calibrate_normalize_ref", lambda *args, **kwargs: 100.0)
+    monkeypatch.setattr(analysis_mod, "calibrate_normalize_ref", lambda *args, **kwargs: 100.0)
     monkeypatch.setattr(
         renderer_mod,
         "render_stats",
         lambda *args, **kwargs: [(0, 0.0, sample)],
     )
 
-    contribs = renderer_mod.light_contributions(scene)
+    contribs = light_analysis_mod.light_contributions(scene)
 
     assert len(contribs) == 2
     assert len({c.source_id for c in contribs}) == 2
@@ -600,14 +602,14 @@ def test_structure_contribution_rejects_unknown_shape_id():
     scene = Scene(shapes=[Circle(id="known", center=[0.0, 0.0], radius=0.5, material=Material())])
 
     with pytest.raises(ValueError, match="unknown shape id"):
-        renderer_mod.structure_contribution(scene, "missing")
+        light_analysis_mod.structure_contribution(scene, "missing")
 
 
 def test_structure_contribution_reports_dimmer_role(monkeypatch):
     scene = Scene(shapes=[Circle(id="known", center=[0.0, 0.0], radius=0.5, material=Material())])
 
     monkeypatch.setattr(
-        renderer_mod,
+        light_analysis_mod,
         "_contribution_reference_shot",
         lambda *args, **kwargs: (scene, Shot(scene=scene)),
     )
@@ -632,7 +634,7 @@ def test_structure_contribution_reports_dimmer_role(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    report = renderer_mod.structure_contribution(scene, "known")
+    report = light_analysis_mod.structure_contribution(scene, "known")
 
     assert report.role == "dimmer"
 
@@ -641,7 +643,7 @@ def test_structure_contribution_reports_brightener_role(monkeypatch):
     scene = Scene(shapes=[Circle(id="known", center=[0.0, 0.0], radius=0.5, material=Material())])
 
     monkeypatch.setattr(
-        renderer_mod,
+        light_analysis_mod,
         "_contribution_reference_shot",
         lambda *args, **kwargs: (scene, Shot(scene=scene)),
     )
@@ -666,6 +668,6 @@ def test_structure_contribution_reports_brightener_role(monkeypatch):
 
     monkeypatch.setattr(renderer_mod, "render_stats", fake_render_stats)
 
-    report = renderer_mod.structure_contribution(scene, "known")
+    report = light_analysis_mod.structure_contribution(scene, "known")
 
     assert report.role == "brightener"

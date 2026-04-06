@@ -4,16 +4,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace as dc_replace
-from typing import cast
+from typing import Callable, cast
 
-from .renderer import (
-    DEFAULT_BINARY,
-    AnimateFn,
-    Renderer,
-    _resolve_args,
-    _sample_frame_indices,
-    render_stats,
-)
+from . import renderer as renderer_mod
 from .stats import (
     FrameStats,
     LookComparison,
@@ -32,6 +25,8 @@ from .types import (
     Timeline,
     TraceDefaults,
 )
+
+AnimateFn = Callable[[FrameContext], Scene | Frame]
 
 # Draft quality for analysis functions (auto_look, compare_looks, look_report, etc.)
 _ANALYSIS_CANVAS = Canvas(width=480, height=480)
@@ -88,7 +83,7 @@ def _resolve_analysis_subject(
         timeline = (
             Timeline(duration=1.0, fps=1)
             if timeline_or_none is None
-            else _resolve_args(timeline_or_none, None)[0]
+            else renderer_mod._resolve_args(timeline_or_none, None)[0]
         )
 
         def animate_from_shot(_ctx: FrameContext, _scene: Scene = subject.scene) -> Frame:
@@ -97,7 +92,7 @@ def _resolve_analysis_subject(
         return animate_from_shot, timeline, subject
 
     if isinstance(subject, Scene):
-        timeline, shot = _resolve_args(
+        timeline, shot = renderer_mod._resolve_args(
             Timeline(duration=1.0, fps=1) if timeline_or_none is None else timeline_or_none,
             settings,
         )
@@ -109,7 +104,7 @@ def _resolve_analysis_subject(
 
     if timeline_or_none is None:
         raise ValueError("timeline is required when passing an animate callback")
-    timeline, shot = _resolve_args(timeline_or_none, settings)
+    timeline, shot = renderer_mod._resolve_args(timeline_or_none, settings)
     return subject, timeline, shot
 
 
@@ -149,7 +144,7 @@ def auto_look(
     max_clipping: float = 0.02,
     tonemap: str | None = None,
     normalize: str | None = None,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
     frame: int | None = None,
     sample_count: int = 8,
 ) -> Look:
@@ -167,7 +162,7 @@ def auto_look(
     animate, timeline, shot = _resolve_analysis_subject(
         scene_or_animate, timeline_or_none, settings
     )
-    analysis_frames = _sample_frame_indices(timeline, frame, sample_count)
+    analysis_frames = renderer_mod._sample_frame_indices(timeline, frame, sample_count)
 
     draft_canvas = canvas or _analysis_canvas(shot.canvas)
     draft_trace = _analysis_trace(shot.trace)
@@ -176,7 +171,7 @@ def auto_look(
 
     def measure_per_frame(look: Look) -> list[tuple[int, float, FrameStats]]:
         draft_shot = dc_replace(shot, canvas=draft_canvas, look=look, trace=draft_trace)
-        return render_stats(
+        return renderer_mod.render_stats(
             animate,
             timeline,
             frames=analysis_frames,
@@ -263,7 +258,7 @@ def calibrate_normalize_ref(
     *,
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
     fast: bool = False,
     frame: int | list[int] | None = 0,
 ) -> float:
@@ -275,23 +270,23 @@ def calibrate_normalize_ref(
     Camera precedence matches :func:`render`: per-frame camera override,
     then explicit ``camera=``, then ``settings.camera``.
     """
-    from .renderer import _build_wire_json
-
-    timeline, shot = _resolve_args(timeline, settings)
+    timeline, shot = renderer_mod._resolve_args(timeline, settings)
     frames = [frame] if isinstance(frame, int) else frame
     frame_indices = [0] if frames is None else list(frames)
 
     # Force max mode so the C++ renderer computes and reports true HDR peak.
     cal_shot = shot.with_look(normalize="max", normalize_pct=1.0)
 
-    renderer = Renderer(cal_shot, binary=binary, fast=fast)
+    renderer = renderer_mod.Renderer(cal_shot, binary=binary, fast=fast)
     try:
         max_hdr = 0.0
         for fi in frame_indices:
             ctx = timeline.context_at(fi)
             result = animate(ctx)
             f = result if isinstance(result, Frame) else Frame(scene=result)
-            wire = _build_wire_json(f, camera, cal_shot.camera, cal_shot.canvas.aspect)
+            wire = renderer_mod._build_wire_json(
+                f, camera, cal_shot.camera, cal_shot.canvas.aspect
+            )
             renderer.render_frame(wire)  # discard pixels, we want the report
 
             rpt = renderer.last_report
@@ -311,7 +306,7 @@ def compare_looks(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
     count: int = 8,
     frames: list[int] | None = None,
 ) -> LookComparison:
@@ -335,12 +330,16 @@ def compare_looks(
     )
     draft_canvas = canvas or _analysis_canvas(shot.canvas)
     draft_trace = _analysis_trace(shot.trace)
-    frame_indices = _sample_frame_indices(timeline, None, count) if frames is None else list(frames)
+    frame_indices = (
+        renderer_mod._sample_frame_indices(timeline, None, count)
+        if frames is None
+        else list(frames)
+    )
 
     profiles: list[LookProfile] = []
     for look in candidate_looks:
         draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
-        stats = render_stats(
+        stats = renderer_mod.render_stats(
             animate,
             timeline,
             frames=frame_indices,
@@ -361,7 +360,7 @@ def look_report(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
-    binary: str = DEFAULT_BINARY,
+    binary: str = renderer_mod.DEFAULT_BINARY,
     count: int = 12,
     frames: list[int] | None = None,
     dark_threshold: float = 0.15,
@@ -387,10 +386,14 @@ def look_report(
     )
     draft_canvas = canvas or _analysis_canvas(shot.canvas)
     draft_trace = _analysis_trace(shot.trace)
-    frame_indices = _sample_frame_indices(timeline, None, count) if frames is None else list(frames)
+    frame_indices = (
+        renderer_mod._sample_frame_indices(timeline, None, count)
+        if frames is None
+        else list(frames)
+    )
 
     draft_shot = Shot(canvas=draft_canvas, look=candidate_look, trace=draft_trace)
-    stats = render_stats(
+    stats = renderer_mod.render_stats(
         animate,
         timeline,
         frames=frame_indices,

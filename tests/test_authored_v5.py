@@ -353,6 +353,23 @@ def test_cpp_stream_full_shot_json_respects_top_level_canvas_and_trace():
     assert '"rays": 1234' in result.stderr.decode()
 
 
+def test_cpp_stream_render_block_can_override_session_canvas_size():
+    line = json.dumps(
+        {
+            "version": 5,
+            "shapes": [],
+            "lights": [],
+            "groups": [],
+            "render": {"width": 7, "height": 5},
+        }
+    )
+
+    result = _run_stream(line, "--width", "16", "--height", "16")
+
+    assert result.returncode == 0, result.stderr.decode()
+    assert len(result.stdout) == 7 * 5 * 3
+
+
 def test_cpp_stream_full_shot_json_respects_top_level_camera():
     base = _make_bound_scene()
     wide = Shot(

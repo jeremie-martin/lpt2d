@@ -28,8 +28,16 @@ def _shape_bounds(shape: Shape) -> tuple[float, float, float, float] | None:
         return (cx - r, cy - r, cx + r, cy + r)
     if isinstance(shape, Ellipse):
         cx, cy = shape.center
-        r = max(shape.semi_a, shape.semi_b)
-        return (cx - r, cy - r, cx + r, cy + r)
+        cr, sr = math.cos(shape.rotation), math.sin(shape.rotation)
+        hx = math.sqrt(
+            shape.semi_a * shape.semi_a * cr * cr
+            + shape.semi_b * shape.semi_b * sr * sr
+        )
+        hy = math.sqrt(
+            shape.semi_a * shape.semi_a * sr * sr
+            + shape.semi_b * shape.semi_b * cr * cr
+        )
+        return (cx - hx, cy - hy, cx + hx, cy + hy)
     if isinstance(shape, Segment):
         ax, ay = shape.a
         bx, by = shape.b

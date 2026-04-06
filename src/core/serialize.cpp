@@ -981,6 +981,8 @@ StreamFrameDirectives parse_stream_frame_directives(std::string_view json) {
     auto* render = root.get("render");
     if (!render || render->type != JsonValue::Object) return directives;
 
+    if (auto* v = render->get("width")) fo.width = (int)v->number;
+    if (auto* v = render->get("height")) fo.height = (int)v->number;
     if (auto* v = render->get("rays")) fo.rays = (int64_t)v->number;
     if (auto* v = render->get("batch")) fo.batch = (int)v->number;
     if (auto* v = render->get("depth")) fo.depth = (int)v->number;

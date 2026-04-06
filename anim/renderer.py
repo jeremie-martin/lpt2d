@@ -601,4 +601,3 @@ def render_stats(
         renderer.close()
     return results
 
-
