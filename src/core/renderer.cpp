@@ -1113,12 +1113,16 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect, const
 }
 
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect,
-                           const VignetteFrame* vignette_frame) {
+                           const VignetteFrame* vignette_frame, FrameMetrics* out_metrics) {
     update_display(pp, display_aspect, vignette_frame);
 
     read_display_rgba(rgba_buffer_);
 
     out_rgb.resize(width_ * height_ * 3);
+    static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
+    int histogram[256] = {};
+    size_t clipped = 0;
+
     // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
     // match the world-space orientation seen in the interactive viewport.
     for (int y = 0; y < height_; ++y) {
@@ -1126,11 +1130,55 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
         const uint8_t* src = rgba_buffer_.data() + (size_t)src_y * width_ * 4;
         uint8_t* dst = out_rgb.data() + (size_t)y * width_ * 3;
         for (int x = 0; x < width_; ++x) {
-            dst[x * 3 + 0] = src[x * 4 + 0];
-            dst[x * 3 + 1] = src[x * 4 + 1];
-            dst[x * 3 + 2] = src[x * 4 + 2];
+            uint8_t r = src[x * 4 + 0];
+            uint8_t g = src[x * 4 + 1];
+            uint8_t b = src[x * 4 + 2];
+            dst[x * 3 + 0] = r;
+            dst[x * 3 + 1] = g;
+            dst[x * 3 + 2] = b;
+
+            if (out_metrics) {
+                uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
+                if (lum > 255) lum = 255;
+                histogram[lum]++;
+                if (r == 255 || g == 255 || b == 255) ++clipped;
+            }
         }
     }
+
+    if (!out_metrics)
+        return;
+
+    const size_t n_pixels = (size_t)width_ * height_;
+    if (n_pixels == 0) {
+        *out_metrics = {0, 1, 0, 0, 0};
+        return;
+    }
+
+    double sum = 0.0;
+    for (int i = 0; i < 256; ++i)
+        sum += (double)i * histogram[i];
+
+    float mean = (float)(sum / n_pixels);
+    float pct_black = (float)histogram[0] / n_pixels;
+    float pct_clip = (float)clipped / n_pixels;
+
+    size_t target_50 = (size_t)(0.5f * n_pixels);
+    size_t target_95 = (size_t)(0.95f * n_pixels);
+    float p50 = 255.0f, p95 = 255.0f;
+    size_t cumul = 0;
+    for (int i = 0; i < 256; ++i) {
+        cumul += histogram[i];
+        if (p50 == 255.0f && cumul >= target_50)
+            p50 = (float)i;
+        if (cumul >= target_95) {
+            p95 = (float)i;
+            break;
+        }
+    }
+
+    *out_metrics = {mean, pct_black, pct_clip, p50, p95, {}};
+    std::copy(std::begin(histogram), std::end(histogram), out_metrics->histogram.begin());
 }
 
 void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {

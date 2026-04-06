@@ -87,12 +87,11 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
 
     // Read pixels and compute metrics
     RenderResult result;
-    r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height);
+    r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr, &result.metrics);
     result.width = impl_->width;
     result.height = impl_->height;
     result.total_rays = r.total_rays();
     result.max_hdr = r.last_max();
-    result.metrics = r.compute_frame_metrics();
 
     auto t1 = std::chrono::steady_clock::now();
     result.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

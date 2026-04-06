@@ -60,7 +60,7 @@ public:
     void update_display(const PostProcess& pp, float display_aspect = 0.0f,
                         const VignetteFrame* vignette_frame = nullptr);
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f,
-                     const VignetteFrame* vignette_frame = nullptr);
+                     const VignetteFrame* vignette_frame = nullptr, FrameMetrics* out_metrics = nullptr);
     void read_display_rgba(std::vector<uint8_t>& out_rgba);
 
     GLuint display_texture() const { return display_texture_; }
