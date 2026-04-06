@@ -67,7 +67,7 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
 
     // Trace rays in batched dispatches (skip if no lights)
     if (r.num_lights() > 0 && total_rays > 0) {
-        constexpr int dispatches_per_draw = 4;
+        constexpr int dispatches_per_draw = 5;
         int64_t remaining = total_rays;
         while (remaining > 0) {
             int64_t full_batches = remaining / trace_cfg.batch_size;

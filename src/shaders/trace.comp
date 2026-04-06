@@ -106,7 +106,7 @@ uniform uint uBatchRays;
 uniform uint uNumDispatches;
 uniform uint uMaxDepth;
 uniform uint uSeed;
-uniform uint uDispatchSeeds[4];
+uniform uint uDispatchSeeds[5];
 uniform float uIntensity;
 uniform uint uMaxSegments;
 uniform vec2 uBoundsMin;
@@ -414,6 +414,10 @@ void main() {
     }
     if (uNumDispatches > 3u && ray_id >= uBatchRays) {
         batch_id = 3u;
+        ray_id -= uBatchRays;
+    }
+    if (uNumDispatches > 4u && ray_id >= uBatchRays) {
+        batch_id = 4u;
         ray_id -= uBatchRays;
     }
     rng_state = ray_id * 1099087573u + uDispatchSeeds[batch_id];
