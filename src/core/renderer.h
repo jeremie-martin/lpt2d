@@ -130,6 +130,8 @@ private:
     GLint trace_loc_seed_ = -1;
     GLint trace_loc_intensity_ = -1;
     GLint trace_loc_batch_rays_ = -1;
+    GLint trace_loc_num_dispatches_ = -1;
+    GLint trace_loc_dispatch_seeds_ = -1;
     GLint trace_loc_max_segments_ = -1;
     GLint trace_loc_view_offset_ = -1;
     GLint trace_loc_view_scale_ = -1;

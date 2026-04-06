@@ -103,8 +103,10 @@ uniform uint uNumBeziers;
 uniform uint uNumEllipses;
 uniform uint uNumLights;
 uniform uint uBatchRays;
+uniform uint uNumDispatches;
 uniform uint uMaxDepth;
 uniform uint uSeed;
+uniform uint uDispatchSeeds[4];
 uniform float uIntensity;
 uniform uint uMaxSegments;
 uniform vec2 uBoundsMin;
@@ -398,8 +400,11 @@ void main() {
     if (uNumLights == 0u) return;
 
     uint gid = gl_GlobalInvocationID.x;
-    if (gid >= uBatchRays) return;
-    rng_state = gid * 1099087573u + uSeed;
+    uint total_rays = uBatchRays * uNumDispatches;
+    if (gid >= total_rays) return;
+    uint batch_id = gid / uBatchRays;
+    uint ray_id = gid - batch_id * uBatchRays;
+    rng_state = ray_id * 1099087573u + uDispatchSeeds[batch_id];
     pcg_next(); pcg_next();
 
     // Choose light (weighted, binary search over cumulative weights)

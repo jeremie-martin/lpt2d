@@ -381,6 +381,8 @@ bool Renderer::create_trace_shader() {
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
     trace_loc_intensity_ = glGetUniformLocation(trace_program_, "uIntensity");
     trace_loc_batch_rays_ = glGetUniformLocation(trace_program_, "uBatchRays");
+    trace_loc_num_dispatches_ = glGetUniformLocation(trace_program_, "uNumDispatches");
+    trace_loc_dispatch_seeds_ = glGetUniformLocation(trace_program_, "uDispatchSeeds[0]");
     trace_loc_max_segments_ = glGetUniformLocation(trace_program_, "uMaxSegments");
     trace_loc_bounds_min_ = glGetUniformLocation(trace_program_, "uBoundsMin");
     trace_loc_view_scale_ = glGetUniformLocation(trace_program_, "uViewScale");
@@ -978,9 +980,14 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     // ── Dispatch N compute batches ──
     glUseProgram(trace_program_);
     glUniform1ui(trace_loc_batch_rays_, (GLuint)cfg.batch_size);
+    glUniform1ui(trace_loc_num_dispatches_, (GLuint)num_dispatches);
     glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
     glUniform1f(trace_loc_intensity_, cfg.intensity);
     glUniform1ui(trace_loc_max_segments_, max_segs);
+    GLuint dispatch_seeds[4] = {};
+    for (int d = 0; d < num_dispatches; ++d)
+        dispatch_seeds[d] = trace_dispatch_seed(cfg, batch_counter_ + (uint32_t)d);
+    glUniform1uiv(trace_loc_dispatch_seeds_, num_dispatches, dispatch_seeds);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_1D, wavelength_lut_);
@@ -996,15 +1003,10 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ellipse_ssbo_);
 
-    GLuint groups = (cfg.batch_size + 63) / 64;
-
-    for (int d = 0; d < num_dispatches; d++) {
-        glUniform1ui(trace_loc_seed_, trace_dispatch_seed(cfg, batch_counter_));
-        glDispatchCompute(groups, 1, 1);
-        // Barrier between dispatches to ensure atomic counter is visible
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-        batch_counter_++;
-    }
+    GLuint groups = (GLuint)(((size_t)cfg.batch_size * (size_t)num_dispatches + 63u) / 64u);
+    glUniform1ui(trace_loc_seed_, dispatch_seeds[0]);
+    glDispatchCompute(groups, 1, 1);
+    batch_counter_ += (uint32_t)num_dispatches;
     total_rays_ += (int64_t)cfg.batch_size * num_dispatches;
 
     // Final barrier before draw (need command barrier for indirect draw)
