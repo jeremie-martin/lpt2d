@@ -284,8 +284,8 @@ bool Renderer::create_framebuffers() {
     // Float accumulation texture
     glGenTextures(1, &float_texture_);
     glBindTexture(GL_TEXTURE_2D, float_texture_);
-    glTexImage2D(GL_TEXTURE_2D, 0, half_precision_ ? GL_RGBA16F : GL_RGBA32F,
-                 width_, height_, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, half_precision_ ? GL_RGB16F : GL_RGB32F,
+                 width_, height_, 0, GL_RGB, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

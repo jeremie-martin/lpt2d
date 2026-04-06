@@ -87,7 +87,7 @@ private:
 
     // Float accumulation FBO
     GLuint fbo_ = 0;
-    GLuint float_texture_ = 0; // GL_RGBA32F or GL_RGBA16F
+    GLuint float_texture_ = 0; // GL_RGB32F or GL_RGB16F
 
     // Display FBO (8-bit for ImGui / export)
     GLuint display_fbo_ = 0;
