@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "name": "bench_deep_bounce",
   "camera": {
     "bounds": [
@@ -31,7 +31,14 @@
     "opacity": 1.0,
     "saturation": 1.0,
     "vignette": 0.0,
-    "vignette_radius": 0.7
+    "vignette_radius": 0.7,
+    "temperature": 0.0,
+    "highlights": 0.0,
+    "shadows": 0.0,
+    "hue_shift": 0.0,
+    "grain": 0.0,
+    "grain_seed": 0,
+    "chromatic_aberration": 0.0
   },
   "trace": {
     "rays": 10000000,

@@ -18,6 +18,13 @@ uniform float uVignetteRadius;
 uniform vec2 uVignetteCenter;
 uniform vec2 uVignetteInvSize;
 uniform float uVignetteXScale;
+uniform float uTemperature;
+uniform float uHighlights;
+uniform float uShadows;
+uniform mat3 uHueRot;
+uniform float uGrain;
+uniform int uGrainSeed;
+uniform float uChromaticAberration;
 
 float toneMapReinhard(float v) { return v / (1.0 + v); }
 
@@ -45,22 +52,40 @@ float toneMap(float v, int op, float wp) {
 
 void main() {
     vec2 flippedCoord = vec2(TexCoord.x, 1.0 - TexCoord.y);
-    vec4 hdr = texture(uFloatTexture, flippedCoord);
 
-    vec3 color;
-    for (int c = 0; c < 3; c++) {
-        float v = hdr[c];
-        v = v / uMaxVal;
-        v = v * uExposureMult;
-        // Background replaces pixels with negligible light; threshold is in
-        // post-exposure space so it works consistently across normalization modes.
-        if (v < 1e-6) v = uBackground[c];
-        else v = v + uAmbient;
-        v = toneMap(v, uToneMapOp, uWhitePoint);
-        v = (v - 0.5) * uContrast + 0.5;
-        v = clamp(v, 0.0, 1.0);
-        color[c] = v;
+    vec4 hdr;
+    if (uChromaticAberration > 0.0) {
+        vec2 dir = flippedCoord - vec2(0.5);
+        hdr.r = texture(uFloatTexture, flippedCoord + dir * uChromaticAberration).r;
+        hdr.g = texture(uFloatTexture, flippedCoord).g;
+        hdr.b = texture(uFloatTexture, flippedCoord - dir * uChromaticAberration).b;
+        hdr.a = 1.0;
+    } else {
+        hdr = texture(uFloatTexture, flippedCoord);
     }
+
+    vec3 color = hdr.rgb / uMaxVal * uExposureMult;
+
+    // Background replaces pixels with negligible light; threshold is in
+    // post-exposure space so it works consistently across normalization modes.
+    vec3 mask = step(vec3(1e-6), color);
+    color = mix(uBackground, color + uAmbient, mask);
+
+    // Highlights / shadows: luminance-weighted pre-tonemap lift
+    if (uHighlights != 0.0 || uShadows != 0.0) {
+        float lum = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        float sw = 1.0 - smoothstep(0.0, 0.5, lum);
+        float hw = smoothstep(0.5, 1.0, lum);
+        color += color * uShadows * sw + color * uHighlights * hw;
+        color = max(color, vec3(0.0));
+    }
+
+    // Tone mapping
+    for (int c = 0; c < 3; c++)
+        color[c] = toneMap(color[c], uToneMapOp, uWhitePoint);
+
+    // Contrast
+    color = clamp((color - 0.5) * uContrast + 0.5, 0.0, 1.0);
 
     // Saturation in post-tonemap linear space (BT.709 luminance weights).
     // Integer approximation (218/732/74 >>10) used in renderer.cpp and stats.py.
@@ -69,8 +94,21 @@ void main() {
         color = clamp(mix(vec3(lum), color, uSaturation), 0.0, 1.0);
     }
 
+    if (uTemperature != 0.0)
+        color *= vec3(1.0 + uTemperature * 0.3, 1.0, 1.0 - uTemperature * 0.3);
+
+    // Hue rotation (precomputed on CPU; identity when hue_shift == 0)
+    color = clamp(uHueRot * color, 0.0, 1.0);
+
     // Gamma
     color = pow(color, vec3(uInvGamma));
+
+    // Film grain: hash-based noise in display space
+    if (uGrain > 0.0) {
+        vec2 seed = flippedCoord + vec2(float(uGrainSeed) * 0.7123, float(uGrainSeed) * 0.3217);
+        float noise = fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453) - 0.5;
+        color = clamp(color + noise * uGrain, 0.0, 1.0);
+    }
 
     // Vignette: radial edge darkening
     if (uVignette > 0.0) {

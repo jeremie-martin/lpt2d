@@ -64,7 +64,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid v6 shot JSON dict."""
     base = {
-        "version": 6,
+        "version": 7,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -83,6 +83,13 @@ def _make_valid_shot_json(**overrides) -> dict:
             "saturation": 1.0,
             "vignette": 0.0,
             "vignette_radius": 0.7,
+            "temperature": 0.0,
+            "highlights": 0.0,
+            "shadows": 0.0,
+            "hue_shift": 0.0,
+            "grain": 0.0,
+            "grain_seed": 0,
+            "chromatic_aberration": 0.0,
         },
         "trace": {
             "rays": 10000000,
@@ -243,7 +250,7 @@ def test_v6_rejects_older_shot_version(tmp_path):
 def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 6,
+        "version": 7,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -279,6 +286,13 @@ def test_v6_authored_json_is_fully_explicit_for_defaults(tmp_path):
         "saturation",
         "vignette",
         "vignette_radius",
+        "temperature",
+        "highlights",
+        "shadows",
+        "hue_shift",
+        "grain",
+        "grain_seed",
+        "chromatic_aberration",
     }
     assert set(data["trace"]) == {"rays", "batch", "depth", "intensity", "seed_mode"}
     assert data["materials"] == {}
@@ -329,7 +343,7 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 6)" in result.stderr
+    assert "Unsupported shot version (expected 7)" in result.stderr
     assert not output.exists()
 
 

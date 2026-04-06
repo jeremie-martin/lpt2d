@@ -167,6 +167,13 @@ private:
     GLint loc_vignette_center_ = -1;
     GLint loc_vignette_inv_size_ = -1;
     GLint loc_vignette_x_scale_ = -1;
+    GLint loc_temperature_ = -1;
+    GLint loc_highlights_ = -1;
+    GLint loc_shadows_ = -1;
+    GLint loc_hue_rot_ = -1;
+    GLint loc_grain_ = -1;
+    GLint loc_grain_seed_ = -1;
+    GLint loc_chromatic_aberration_ = -1;
 
     bool create_framebuffers();
     void delete_framebuffers();

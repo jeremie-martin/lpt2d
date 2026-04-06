@@ -36,7 +36,7 @@ _LIGHT_IDS = count()
 
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
-        "version": 6,
+        "version": 7,
         "name": name,
         "shapes": [
             {

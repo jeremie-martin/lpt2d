@@ -460,6 +460,13 @@ struct PostProcess {
     float saturation = 1.0f;    // color saturation (1=normal, 0=grayscale, >1=boosted)
     float vignette = 0.0f;      // radial edge darkening strength [0,1]
     float vignette_radius = 0.7f; // falloff start (smaller=more aggressive, default 0.7)
+    float temperature = 0.0f;   // warm/cool color shift (-1=cool, 0=neutral, 1=warm)
+    float highlights = 0.0f;    // highlight adjustment (-1=compress, 0=neutral, 1=boost)
+    float shadows = 0.0f;       // shadow adjustment (-1=crush, 0=neutral, 1=lift)
+    float hue_shift = 0.0f;     // hue rotation in degrees (-180 to 180)
+    float grain = 0.0f;         // film grain strength (0=off)
+    int grain_seed = 0;         // grain noise seed (vary per frame for animation)
+    float chromatic_aberration = 0.0f; // per-channel UV offset strength (0=off)
 };
 
 // --- Shot: the authored document ---
@@ -498,12 +505,21 @@ struct Look {
     float saturation = 1.0f;
     float vignette = 0.0f;
     float vignette_radius = 0.7f;
+    float temperature = 0.0f;
+    float highlights = 0.0f;
+    float shadows = 0.0f;
+    float hue_shift = 0.0f;
+    float grain = 0.0f;
+    int grain_seed = 0;
+    float chromatic_aberration = 0.0f;
 
     PostProcess to_post_process() const {
         return {exposure, contrast, gamma, tone_map, white_point, normalize,
                 normalize_ref, normalize_pct, ambient,
                 {background[0], background[1], background[2]},
-                opacity, saturation, vignette, vignette_radius};
+                opacity, saturation, vignette, vignette_radius,
+                temperature, highlights, shadows, hue_shift,
+                grain, grain_seed, chromatic_aberration};
     }
 };
 

@@ -354,6 +354,13 @@ bool Renderer::create_pp_shader() {
     loc_vignette_center_ = glGetUniformLocation(pp_program_, "uVignetteCenter");
     loc_vignette_inv_size_ = glGetUniformLocation(pp_program_, "uVignetteInvSize");
     loc_vignette_x_scale_ = glGetUniformLocation(pp_program_, "uVignetteXScale");
+    loc_temperature_ = glGetUniformLocation(pp_program_, "uTemperature");
+    loc_highlights_ = glGetUniformLocation(pp_program_, "uHighlights");
+    loc_shadows_ = glGetUniformLocation(pp_program_, "uShadows");
+    loc_hue_rot_ = glGetUniformLocation(pp_program_, "uHueRot");
+    loc_grain_ = glGetUniformLocation(pp_program_, "uGrain");
+    loc_grain_seed_ = glGetUniformLocation(pp_program_, "uGrainSeed");
+    loc_chromatic_aberration_ = glGetUniformLocation(pp_program_, "uChromaticAberration");
     return true;
 }
 
@@ -808,6 +815,27 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect, const
     glUniform2f(loc_vignette_center_, vf.center[0], vf.center[1]);
     glUniform2f(loc_vignette_inv_size_, vf.inv_size[0], vf.inv_size[1]);
     glUniform1f(loc_vignette_x_scale_, vf.x_scale);
+    glUniform1f(loc_temperature_, pp.temperature);
+    glUniform1f(loc_highlights_, pp.highlights);
+    glUniform1f(loc_shadows_, pp.shadows);
+    // Precompute hue rotation matrix on CPU (Rodrigues' formula around (1,1,1)/sqrt(3))
+    {
+        float angle = pp.hue_shift * 3.14159265f / 180.0f;
+        float cosA = std::cos(angle);
+        float sinA = std::sin(angle);
+        float k = (1.0f - cosA) / 3.0f;
+        float s = sinA * 0.57735026919f; // 1/sqrt(3)
+        // Column-major for OpenGL
+        float hue_rot[9] = {
+            cosA + k, k + s, k - s,
+            k - s, cosA + k, k + s,
+            k + s, k - s, cosA + k,
+        };
+        glUniformMatrix3fv(loc_hue_rot_, 1, GL_FALSE, hue_rot);
+    }
+    glUniform1f(loc_grain_, pp.grain);
+    glUniform1i(loc_grain_seed_, pp.grain_seed);
+    glUniform1f(loc_chromatic_aberration_, pp.chromatic_aberration);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, float_texture_);

@@ -426,20 +426,28 @@ NB_MODULE(_lpt2d, m) {
                             float normalize_ref, float normalize_pct,
                             float ambient, std::array<float, 3> background,
                             float opacity, float saturation,
-                            float vignette, float vignette_radius) {
+                            float vignette, float vignette_radius,
+                            float temperature, float highlights, float shadows,
+                            float hue_shift, float grain, int grain_seed,
+                            float chromatic_aberration) {
             new (l) Look{exposure, contrast, gamma,
                          parse_tonemap_arg(tonemap_obj), white_point,
                          parse_normalize_arg(normalize_obj),
                          normalize_ref, normalize_pct,
                          ambient, {background[0], background[1], background[2]},
-                         opacity, saturation, vignette, vignette_radius};
+                         opacity, saturation, vignette, vignette_radius,
+                         temperature, highlights, shadows, hue_shift,
+                         grain, grain_seed, chromatic_aberration};
         }, "exposure"_a = -5.0f, "contrast"_a = 1.0f, "gamma"_a = 2.0f,
            "tonemap"_a = nb::cast("reinhardx"), "white_point"_a = 0.5f,
            "normalize"_a = nb::cast("rays"),
            "normalize_ref"_a = 0.0f, "normalize_pct"_a = 1.0f,
            "ambient"_a = 0.0f, "background"_a = std::array<float, 3>{0, 0, 0},
            "opacity"_a = 1.0f, "saturation"_a = 1.0f,
-           "vignette"_a = 0.0f, "vignette_radius"_a = 0.7f)
+           "vignette"_a = 0.0f, "vignette_radius"_a = 0.7f,
+           "temperature"_a = 0.0f, "highlights"_a = 0.0f, "shadows"_a = 0.0f,
+           "hue_shift"_a = 0.0f, "grain"_a = 0.0f, "grain_seed"_a = 0,
+           "chromatic_aberration"_a = 0.0f)
         .def_rw("exposure", &Look::exposure)
         .def_rw("contrast", &Look::contrast)
         .def_rw("gamma", &Look::gamma)
@@ -460,6 +468,13 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("saturation", &Look::saturation)
         .def_rw("vignette", &Look::vignette)
         .def_rw("vignette_radius", &Look::vignette_radius)
+        .def_rw("temperature", &Look::temperature)
+        .def_rw("highlights", &Look::highlights)
+        .def_rw("shadows", &Look::shadows)
+        .def_rw("hue_shift", &Look::hue_shift)
+        .def_rw("grain", &Look::grain)
+        .def_rw("grain_seed", &Look::grain_seed)
+        .def_rw("chromatic_aberration", &Look::chromatic_aberration)
         .def("to_post_process", &Look::to_post_process);
 
     // ── TraceDefaults ────────────────────────────────────────────
@@ -503,6 +518,13 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("saturation", &PostProcess::saturation)
         .def_rw("vignette", &PostProcess::vignette)
         .def_rw("vignette_radius", &PostProcess::vignette_radius)
+        .def_rw("temperature", &PostProcess::temperature)
+        .def_rw("highlights", &PostProcess::highlights)
+        .def_rw("shadows", &PostProcess::shadows)
+        .def_rw("hue_shift", &PostProcess::hue_shift)
+        .def_rw("grain", &PostProcess::grain)
+        .def_rw("grain_seed", &PostProcess::grain_seed)
+        .def_rw("chromatic_aberration", &PostProcess::chromatic_aberration)
         .def_prop_rw("tone_map",
             [](const PostProcess& pp) { return tonemap_to_string(pp.tone_map); },
             [](PostProcess& pp, nb::object obj) { pp.tone_map = parse_tonemap_arg(obj); })

@@ -1,6 +1,6 @@
-# Authored V6
+# Authored V7
 
-This repo treats authored shot JSON as a strict `version: 6` format.
+This repo treats authored shot JSON as a strict `version: 7` format.
 
 ## Policy
 

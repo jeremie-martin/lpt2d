@@ -7,7 +7,7 @@ useful over time.
 
 - [README.md](/home/holo/prog/lpt2d/README.md)
   Project overview, build, run, and doc entry points.
-- [AUTHORED_V6.md](/home/holo/prog/lpt2d/docs/AUTHORED_V6.md)
+- [AUTHORED_V7.md](/home/holo/prog/lpt2d/docs/AUTHORED_V7.md)
   The authored JSON contract used by committed scenes and benchmark shots.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current Python and GUI workflow for look development and diagnostics.

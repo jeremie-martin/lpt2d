@@ -321,6 +321,13 @@ def _apply_look_override(base: Look, override: Look | dict[str, Any] | None) -> 
             saturation=base.saturation,
             vignette=base.vignette,
             vignette_radius=base.vignette_radius,
+            temperature=base.temperature,
+            highlights=base.highlights,
+            shadows=base.shadows,
+            hue_shift=base.hue_shift,
+            grain=base.grain,
+            grain_seed=base.grain_seed,
+            chromatic_aberration=base.chromatic_aberration,
         )
         for k, v in override.items():
             setattr(result, k, v)

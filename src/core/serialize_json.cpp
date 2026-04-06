@@ -25,7 +25,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 6;
+constexpr int SHOT_JSON_VERSION = 7;
 enum class Schema { Authored };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
@@ -526,7 +526,9 @@ Json write_canvas(const Canvas& canvas) { return Json{{"width", canvas.width}, {
 Look read_look(const Json& json, Schema schema, std::string_view context) {
     reject_unknown_keys(json, {"exposure", "contrast", "gamma", "tonemap", "white_point",
                                "normalize", "normalize_ref", "normalize_pct", "ambient",
-                               "background", "opacity", "saturation", "vignette", "vignette_radius"}, context);
+                               "background", "opacity", "saturation", "vignette", "vignette_radius",
+                               "temperature", "highlights", "shadows", "hue_shift",
+                               "grain", "grain_seed", "chromatic_aberration"}, context);
     Look look;
     if (schema == Schema::Authored || json.contains("exposure"))
         look.exposure = read_required_float(json, "exposure", context);
@@ -561,6 +563,20 @@ Look read_look(const Json& json, Schema schema, std::string_view context) {
         look.vignette = read_required_float(json, "vignette", context);
     if (schema == Schema::Authored || json.contains("vignette_radius"))
         look.vignette_radius = read_required_float(json, "vignette_radius", context);
+    if (schema == Schema::Authored || json.contains("temperature"))
+        look.temperature = read_required_float(json, "temperature", context);
+    if (schema == Schema::Authored || json.contains("highlights"))
+        look.highlights = read_required_float(json, "highlights", context);
+    if (schema == Schema::Authored || json.contains("shadows"))
+        look.shadows = read_required_float(json, "shadows", context);
+    if (schema == Schema::Authored || json.contains("hue_shift"))
+        look.hue_shift = read_required_float(json, "hue_shift", context);
+    if (schema == Schema::Authored || json.contains("grain"))
+        look.grain = read_required_float(json, "grain", context);
+    if (schema == Schema::Authored || json.contains("grain_seed"))
+        look.grain_seed = read_int(require_key(json, "grain_seed", context), std::string(context) + ".grain_seed");
+    if (schema == Schema::Authored || json.contains("chromatic_aberration"))
+        look.chromatic_aberration = read_required_float(json, "chromatic_aberration", context);
     return look;
 }
 
@@ -571,7 +587,11 @@ Json write_look(const Look& look) {
                 {"normalize_pct", look.normalize_pct}, {"ambient", look.ambient},
                 {"background", rgb_json(look.background)}, {"opacity", look.opacity},
                 {"saturation", look.saturation}, {"vignette", look.vignette},
-                {"vignette_radius", look.vignette_radius}};
+                {"vignette_radius", look.vignette_radius},
+                {"temperature", look.temperature}, {"highlights", look.highlights},
+                {"shadows", look.shadows}, {"hue_shift", look.hue_shift},
+                {"grain", look.grain}, {"grain_seed", look.grain_seed},
+                {"chromatic_aberration", look.chromatic_aberration}};
 }
 
 TraceDefaults read_trace(const Json& json, Schema schema, std::string_view context) {

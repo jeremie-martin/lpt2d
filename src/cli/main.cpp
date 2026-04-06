@@ -19,7 +19,7 @@ static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
-              << "  --save-shot <path>       Save the resolved v6 shot JSON via the C++ serializer and exit\n"
+              << "  --save-shot <path>       Save the resolved v7 shot JSON via the C++ serializer and exit\n"
               << "  --width <int>            Width (overrides shot canvas)\n"
               << "  --height <int>           Height (overrides shot canvas)\n"
               << "  --rays <int>             Total rays (overrides shot trace)\n"
@@ -42,6 +42,13 @@ static void print_usage() {
               << "  --saturation <float>     Color saturation (1=normal, 0=grayscale, >1=boost)\n"
               << "  --vignette <float>       Radial edge darkening 0-1 (overrides shot look)\n"
               << "  --vignette-radius <float> Vignette falloff start (default: 0.7)\n"
+              << "  --temperature <float>    Warm/cool color shift (-1 to 1, overrides shot look)\n"
+              << "  --highlights <float>     Highlight adjustment (-1 to 1, overrides shot look)\n"
+              << "  --shadows <float>        Shadow adjustment (-1 to 1, overrides shot look)\n"
+              << "  --hue-shift <float>      Hue rotation in degrees (-180 to 180, overrides shot look)\n"
+              << "  --grain <float>          Film grain strength (0=off, overrides shot look)\n"
+              << "  --grain-seed <int>       Grain noise seed (vary per frame for animation)\n"
+              << "  --chromatic-aberration <float> Per-channel UV offset (0=off, overrides shot look)\n"
               << "  --fast                   Half-precision FBO (RGBA16F) — ~3x faster, slight precision loss\n"
               << "\nBuilt-in scenes: ";
     for (const auto& entry : get_builtin_scenes())
@@ -95,6 +102,9 @@ int main(int argc, char** argv) {
         std::optional<float> normalize_ref, normalize_pct;
         std::optional<float> ambient, opacity, saturation, intensity;
         std::optional<float> vignette, vignette_radius;
+        std::optional<float> temperature, highlights, shadows, hue_shift;
+        std::optional<float> grain, chromatic_aberration;
+        std::optional<int> grain_seed;
         std::optional<std::array<float, 3>> background;
 
         void apply_to(Shot& shot) const {
@@ -118,6 +128,13 @@ int main(int argc, char** argv) {
             if (saturation) shot.look.saturation = *saturation;
             if (vignette) shot.look.vignette = *vignette;
             if (vignette_radius) shot.look.vignette_radius = *vignette_radius;
+            if (temperature) shot.look.temperature = *temperature;
+            if (highlights) shot.look.highlights = *highlights;
+            if (shadows) shot.look.shadows = *shadows;
+            if (hue_shift) shot.look.hue_shift = *hue_shift;
+            if (grain) shot.look.grain = *grain;
+            if (grain_seed) shot.look.grain_seed = *grain_seed;
+            if (chromatic_aberration) shot.look.chromatic_aberration = *chromatic_aberration;
             if (background) {
                 shot.look.background[0] = (*background)[0];
                 shot.look.background[1] = (*background)[1];
@@ -202,6 +219,20 @@ int main(int argc, char** argv) {
             overrides.vignette = (float)std::clamp(std::atof(argv[++i]), 0.0, 1.0);
         } else if (std::strcmp(argv[i], "--vignette-radius") == 0 && i + 1 < argc) {
             overrides.vignette_radius = (float)std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--temperature") == 0 && i + 1 < argc) {
+            overrides.temperature = (float)std::clamp(std::atof(argv[++i]), -1.0, 1.0);
+        } else if (std::strcmp(argv[i], "--highlights") == 0 && i + 1 < argc) {
+            overrides.highlights = (float)std::clamp(std::atof(argv[++i]), -1.0, 1.0);
+        } else if (std::strcmp(argv[i], "--shadows") == 0 && i + 1 < argc) {
+            overrides.shadows = (float)std::clamp(std::atof(argv[++i]), -1.0, 1.0);
+        } else if (std::strcmp(argv[i], "--hue-shift") == 0 && i + 1 < argc) {
+            overrides.hue_shift = (float)std::atof(argv[++i]);
+        } else if (std::strcmp(argv[i], "--grain") == 0 && i + 1 < argc) {
+            overrides.grain = (float)std::max(std::atof(argv[++i]), 0.0);
+        } else if (std::strcmp(argv[i], "--grain-seed") == 0 && i + 1 < argc) {
+            overrides.grain_seed = std::atoi(argv[++i]);
+        } else if (std::strcmp(argv[i], "--chromatic-aberration") == 0 && i + 1 < argc) {
+            overrides.chromatic_aberration = (float)std::max(std::atof(argv[++i]), 0.0);
         } else if (std::strcmp(argv[i], "--fast") == 0) {
             fast_mode = true;
         } else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {

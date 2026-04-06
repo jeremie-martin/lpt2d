@@ -1069,6 +1069,13 @@ void draw_controls_panel(
         ImGui::SliderFloat("Vignette", &ed.shot.look.vignette, 0.0f, 1.0f);
         if (ed.shot.look.vignette > 0.0f)
             ImGui::SliderFloat("Vignette Radius", &ed.shot.look.vignette_radius, 0.3f, 1.5f);
+        ImGui::Separator();
+        ImGui::SliderFloat("Temperature", &ed.shot.look.temperature, -1.0f, 1.0f);
+        ImGui::SliderFloat("Highlights", &ed.shot.look.highlights, -1.0f, 1.0f);
+        ImGui::SliderFloat("Shadows", &ed.shot.look.shadows, -1.0f, 1.0f);
+        ImGui::SliderFloat("Hue Shift", &ed.shot.look.hue_shift, -180.0f, 180.0f);
+        ImGui::SliderFloat("Grain", &ed.shot.look.grain, 0.0f, 0.5f, "%.3f");
+        ImGui::SliderFloat("Chromatic Aberr.", &ed.shot.look.chromatic_aberration, 0.0f, 0.02f, "%.4f");
         ImGui::PopID();
     }
 

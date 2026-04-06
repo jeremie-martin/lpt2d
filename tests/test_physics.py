@@ -115,7 +115,12 @@ def beam_light(origin, direction, angular_width=0.005, intensity=1.0, wl_min=380
 
 
 def point_light(pos, intensity=1.0):
-    return {"id": f"point_light_{next(_LIGHT_IDS)}", "type": "point", "pos": pos, "intensity": intensity}
+    return {
+        "id": f"point_light_{next(_LIGHT_IDS)}",
+        "type": "point",
+        "pos": pos,
+        "intensity": intensity,
+    }
 
 
 def segment_light(a, b, intensity=1.0, wl_min=380.0, wl_max=780.0):
@@ -131,15 +136,32 @@ def segment_light(a, b, intensity=1.0, wl_min=380.0, wl_max=780.0):
 
 
 def polygon_shape(vertices, material):
-    return {"id": f"polygon_{next(_SHAPE_IDS)}", "type": "polygon", "vertices": vertices, "material": material}
+    return {
+        "id": f"polygon_{next(_SHAPE_IDS)}",
+        "type": "polygon",
+        "vertices": vertices,
+        "material": material,
+    }
 
 
 def segment_shape(a, b, material):
-    return {"id": f"segment_{next(_SHAPE_IDS)}", "type": "segment", "a": a, "b": b, "material": material}
+    return {
+        "id": f"segment_{next(_SHAPE_IDS)}",
+        "type": "segment",
+        "a": a,
+        "b": b,
+        "material": material,
+    }
 
 
 def circle_shape(center, radius, material):
-    return {"id": f"circle_{next(_SHAPE_IDS)}", "type": "circle", "center": center, "radius": radius, "material": material}
+    return {
+        "id": f"circle_{next(_SHAPE_IDS)}",
+        "type": "circle",
+        "center": center,
+        "radius": radius,
+        "material": material,
+    }
 
 
 def ellipse_shape(center, semi_a, semi_b, rotation, material):
@@ -189,7 +211,7 @@ def mirror_box_walls(half=0.9):
 
 def make_scene(shapes, lights, bounds):
     return {
-        "version": 6,
+        "version": 7,
         "name": "test",
         "camera": {"bounds": bounds},
         "shapes": shapes,
@@ -443,7 +465,9 @@ def test_segment_light_emits_both_sides():
     detail = f"top={top:.2f}, bottom={bottom:.2f}"
     print(f"        {detail}")
     assert top > 2.0 and bottom > 2.0, f"segment light should illuminate both sides: {detail}"
-    assert abs(top - bottom) / max(top, bottom) < 0.2, f"segment light should be roughly symmetric: {detail}"
+    assert abs(top - bottom) / max(top, bottom) < 0.2, (
+        f"segment light should be roughly symmetric: {detail}"
+    )
 
 
 def test_emissive_segment_is_endpoint_order_invariant():
@@ -614,7 +638,9 @@ def test_dispersion():
         row_energy = strip.mean(axis=2).sum(axis=1)
         total = row_energy.sum()
         if total < 100.0:
-            raise AssertionError(f"screen too dark to measure at {wavelength_nm:.0f} nm: total={total:.1f}")
+            raise AssertionError(
+                f"screen too dark to measure at {wavelength_nm:.0f} nm: total={total:.1f}"
+            )
         peak = int(np.argmax(row_energy))
         # Escape-path overlays can add low-level energy outside the main screen hit.
         # Measure a local centroid around the dominant lobe instead of the whole strip.
@@ -655,7 +681,9 @@ def test_dispersion():
     assert abs(offsets[450.0] - offsets[650.0]) < 5.0, (
         "red and blue should share the same screen-measurement bias"
     )
-    assert measured_rows[450.0] < measured_rows[650.0], "shorter wavelengths should deflect more strongly"
+    assert measured_rows[450.0] < measured_rows[650.0], (
+        "shorter wavelengths should deflect more strongly"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -850,7 +878,7 @@ def test_grouped_ellipse_matches_direct_ellipse():
     material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1}
 
     grouped_scene = {
-        "version": 6,
+        "version": 7,
         "name": "grouped-ellipse",
         "camera": {"bounds": bounds},
         "shapes": collectors,
@@ -859,13 +887,26 @@ def test_grouped_ellipse_matches_direct_ellipse():
             {
                 "id": "ellipse",
                 "transform": group_transform,
-                "shapes": [ellipse_shape(local["center"], local["semi_a"], local["semi_b"], local["rotation"], material)],
+                "shapes": [
+                    ellipse_shape(
+                        local["center"],
+                        local["semi_a"],
+                        local["semi_b"],
+                        local["rotation"],
+                        material,
+                    )
+                ],
                 "lights": [],
             }
         ],
     }
     direct_scene = make_scene(
-        collectors + [ellipse_shape(direct["center"], direct["semi_a"], direct["semi_b"], direct["rotation"], material)],
+        collectors
+        + [
+            ellipse_shape(
+                direct["center"], direct["semi_a"], direct["semi_b"], direct["rotation"], material
+            )
+        ],
         [light],
         bounds,
     )
@@ -896,7 +937,9 @@ def test_grouped_ellipse_matches_direct_ellipse():
     max_diff = int(diff.max())
     detail = f"mean abs diff={mean_diff:.3f}, max diff={max_diff}"
     print(f"        {detail}")
-    assert mean_diff < 1.0 and max_diff < 24, f"grouped ellipse diverged from direct ellipse: {detail}"
+    assert mean_diff < 1.0 and max_diff < 24, (
+        f"grouped ellipse diverged from direct ellipse: {detail}"
+    )
 
 
 # ---------------------------------------------------------------------------
