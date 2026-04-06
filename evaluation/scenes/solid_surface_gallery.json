@@ -10,8 +10,8 @@
     ]
   },
   "canvas": {
-    "width": 1280,
-    "height": 720
+    "width": 1920,
+    "height": 1080
   },
   "look": {
     "exposure": -4.690000057220459,
@@ -41,7 +41,7 @@
     "chromatic_aberration": 0.0
   },
   "trace": {
-    "rays": 2000000,
+    "rays": 5000000,
     "batch": 200000,
     "depth": 12,
     "intensity": 1.0,
