@@ -6,9 +6,9 @@ import math
 
 import pytest
 
+from anim import diagnose_scene
 from anim import renderer as renderer_mod
 from anim import types as types_mod
-from anim.geometry import _shape_bounds, _transform_shape
 from anim.stats import (
     FrameStats,
     LookComparison,
@@ -16,6 +16,8 @@ from anim.stats import (
     LookReport,
     QualityGate,
     StatsDiff,
+    _shape_bounds,
+    _transform_shape,
     check_quality,
     compare_stats,
     compare_summary,
@@ -34,7 +36,6 @@ from anim.types import (
     Shot,
     Transform2D,
 )
-from anim.diagnostics import diagnose_scene
 
 # --- QualityGate / check_quality ---
 

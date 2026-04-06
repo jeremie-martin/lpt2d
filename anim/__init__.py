@@ -4,7 +4,6 @@ from .analysis import auto_look as auto_look
 from .analysis import calibrate_normalize_ref as calibrate_normalize_ref
 from .analysis import compare_looks as compare_looks
 from .analysis import look_report as look_report
-from .diagnostics import diagnose_scene as diagnose_scene
 from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
 from .builders import double_slit as double_slit
@@ -44,6 +43,7 @@ from .stats import StructureReport as StructureReport
 from .stats import check_quality as check_quality
 from .stats import compare_stats as compare_stats
 from .stats import compare_summary as compare_summary
+from .stats import diagnose_scene as diagnose_scene
 from .stats import frame_stats as frame_stats
 from .track import Key as Key
 from .track import Track as Track
