@@ -202,6 +202,17 @@ struct HitGeo {
 
 const HitGeo NO_HIT = HitGeo(1e30, vec2(0), vec2(0));
 
+// Flat material buffer for branchless deferred lookup
+struct GPUMaterial {
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo, emission;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
+};
+
+layout(std430, binding = 9) readonly buffer MaterialBuf { GPUMaterial flat_materials[]; };
+uniform uint uMaterialOffsets[5]; // base index per type: circle, segment, arc, bezier, ellipse
+
 const uint PRIM_CIRCLE  = 0u;
 const uint PRIM_SEGMENT = 1u;
 const uint PRIM_ARC     = 2u;
@@ -479,42 +490,12 @@ void main() {
 
         emit(ro, h.point, color);
 
-        // Fetch material only for the winning primitive (deferred lookup)
-        float mat_ior, mat_roughness, mat_metallic, mat_transmission;
-        float mat_absorption, mat_cauchy_b, mat_albedo, mat_emission;
-        float mat_sc0, mat_sc1, mat_sc2;
-
-        if (hit_type == PRIM_CIRCLE) {
-            GPUCircle c = circles[hit_index];
-            mat_ior = c.ior; mat_roughness = c.roughness; mat_metallic = c.metallic;
-            mat_transmission = c.transmission; mat_absorption = c.absorption;
-            mat_cauchy_b = c.cauchy_b; mat_albedo = c.albedo; mat_emission = c.emission;
-            mat_sc0 = c.spectral_c0; mat_sc1 = c.spectral_c1; mat_sc2 = c.spectral_c2;
-        } else if (hit_type == PRIM_SEGMENT) {
-            GPUSeg s = segments[hit_index];
-            mat_ior = s.ior; mat_roughness = s.roughness; mat_metallic = s.metallic;
-            mat_transmission = s.transmission; mat_absorption = s.absorption;
-            mat_cauchy_b = s.cauchy_b; mat_albedo = s.albedo; mat_emission = s.emission;
-            mat_sc0 = s.spectral_c0; mat_sc1 = s.spectral_c1; mat_sc2 = s.spectral_c2;
-        } else if (hit_type == PRIM_ARC) {
-            GPUArc a = arcs[hit_index];
-            mat_ior = a.ior; mat_roughness = a.roughness; mat_metallic = a.metallic;
-            mat_transmission = a.transmission; mat_absorption = a.absorption;
-            mat_cauchy_b = a.cauchy_b; mat_albedo = a.albedo; mat_emission = a.emission;
-            mat_sc0 = a.spectral_c0; mat_sc1 = a.spectral_c1; mat_sc2 = a.spectral_c2;
-        } else if (hit_type == PRIM_BEZIER) {
-            GPUBezier b = beziers[hit_index];
-            mat_ior = b.ior; mat_roughness = b.roughness; mat_metallic = b.metallic;
-            mat_transmission = b.transmission; mat_absorption = b.absorption;
-            mat_cauchy_b = b.cauchy_b; mat_albedo = b.albedo; mat_emission = b.emission;
-            mat_sc0 = b.spectral_c0; mat_sc1 = b.spectral_c1; mat_sc2 = b.spectral_c2;
-        } else {
-            GPUEllipse e = ellipses[hit_index];
-            mat_ior = e.ior; mat_roughness = e.roughness; mat_metallic = e.metallic;
-            mat_transmission = e.transmission; mat_absorption = e.absorption;
-            mat_cauchy_b = e.cauchy_b; mat_albedo = e.albedo; mat_emission = e.emission;
-            mat_sc0 = e.spectral_c0; mat_sc1 = e.spectral_c1; mat_sc2 = e.spectral_c2;
-        }
+        // Branchless material lookup from flat buffer
+        GPUMaterial mat = flat_materials[uMaterialOffsets[hit_type] + hit_index];
+        float mat_ior = mat.ior, mat_roughness = mat.roughness, mat_metallic = mat.metallic;
+        float mat_transmission = mat.transmission, mat_absorption = mat.absorption;
+        float mat_cauchy_b = mat.cauchy_b, mat_albedo = mat.albedo, mat_emission = mat.emission;
+        float mat_sc0 = mat.spectral_c0, mat_sc1 = mat.spectral_c1, mat_sc2 = mat.spectral_c2;
 
         // Emissive surface
         if (mat_emission > 0.0) {

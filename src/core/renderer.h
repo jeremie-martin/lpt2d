@@ -104,6 +104,7 @@ private:
     GLuint light_ssbo_ = 0;
     GLuint light_weights_ssbo_ = 0;
     GLuint ellipse_ssbo_ = 0;
+    GLuint material_ssbo_ = 0;
     int num_circles_ = 0;
     int num_segments_ = 0;
     int num_arcs_ = 0;
@@ -137,6 +138,7 @@ private:
     GLint trace_loc_view_scale_ = -1;
     GLint trace_loc_bounds_min_ = -1;
     GLint trace_loc_wavelength_lut_ = -1;
+    GLint trace_loc_material_offsets_ = -1;
 
     uint32_t batch_counter_ = 0;
     int64_t total_rays_ = 0;

@@ -181,6 +181,14 @@ struct GPUEllipse {
 };
 static_assert(sizeof(GPUEllipse) == 72);
 
+struct GPUMaterial {
+    float ior, roughness, metallic, transmission;
+    float absorption, cauchy_b, albedo, emission;
+    float spectral_c0, spectral_c1, spectral_c2;
+    float _pad;
+};
+static_assert(sizeof(GPUMaterial) == 48);
+
 // ─── Renderer implementation ─────────────────────────────────────────
 
 Renderer::~Renderer() { shutdown(); }
@@ -262,6 +270,7 @@ void Renderer::shutdown() {
     del_buf(arc_ssbo_);
     del_buf(bezier_ssbo_);
     del_buf(ellipse_ssbo_);
+    del_buf(material_ssbo_);
     del_buf(light_ssbo_);
     del_buf(light_weights_ssbo_);
     del_buf(output_ssbo_);
@@ -388,6 +397,7 @@ bool Renderer::create_trace_shader() {
     trace_loc_view_scale_ = glGetUniformLocation(trace_program_, "uViewScale");
     trace_loc_view_offset_ = glGetUniformLocation(trace_program_, "uViewOffset");
     trace_loc_wavelength_lut_ = glGetUniformLocation(trace_program_, "uWavelengthLUT");
+    trace_loc_material_offsets_ = glGetUniformLocation(trace_program_, "uMaterialOffsets");
     return true;
 }
 
@@ -743,6 +753,28 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     upload(light_ssbo_, gpu_lights.data(), gpu_lights.size() * sizeof(GPULight));
     upload(light_weights_ssbo_, cum_weights.data(), cum_weights.size() * sizeof(float));
 
+    // Build flat material buffer (one GPUMaterial per primitive, ordered by type)
+    auto extract_mat = [](const auto& prim) -> GPUMaterial {
+        return {prim.ior, prim.roughness, prim.metallic, prim.transmission,
+                prim.absorption, prim.cauchy_b, prim.albedo, prim.emission,
+                prim.spectral_c0, prim.spectral_c1, prim.spectral_c2, 0.0f};
+    };
+
+    std::vector<GPUMaterial> flat_mats;
+    uint32_t mat_offsets[5];
+    mat_offsets[0] = 0; // circles
+    for (auto& c : circles) flat_mats.push_back(extract_mat(c));
+    mat_offsets[1] = (uint32_t)flat_mats.size(); // segments
+    for (auto& s : segs) flat_mats.push_back(extract_mat(s));
+    mat_offsets[2] = (uint32_t)flat_mats.size(); // arcs
+    for (auto& a : gpu_arcs) flat_mats.push_back(extract_mat(a));
+    mat_offsets[3] = (uint32_t)flat_mats.size(); // beziers
+    for (auto& b : gpu_beziers) flat_mats.push_back(extract_mat(b));
+    mat_offsets[4] = (uint32_t)flat_mats.size(); // ellipses
+    for (auto& e : gpu_ellipses) flat_mats.push_back(extract_mat(e));
+
+    upload(material_ssbo_, flat_mats.data(), flat_mats.size() * sizeof(GPUMaterial));
+
     update_viewport(bounds);
 
     glUseProgram(trace_program_);
@@ -752,6 +784,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     glUniform1ui(trace_loc_num_beziers_, num_beziers_);
     glUniform1ui(trace_loc_num_ellipses_, num_ellipses_);
     glUniform1ui(trace_loc_num_lights_, num_lights_);
+    glUniform1uiv(trace_loc_material_offsets_, 5, mat_offsets);
 }
 
 // ─── Viewport update ────────────────────────────────────────────────
@@ -1002,6 +1035,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, arc_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ellipse_ssbo_);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, material_ssbo_);
 
     GLuint groups = (GLuint)(((size_t)cfg.batch_size * (size_t)num_dispatches + 63u) / 64u);
     glUniform1ui(trace_loc_seed_, dispatch_seeds[0]);
