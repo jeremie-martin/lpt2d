@@ -4,6 +4,10 @@
 #include "renderer.h"
 #include "scene.h"
 
+// GUI interactive batch default — applied on scene load so the slider
+// starts at a responsive interactive value rather than the authored default.
+inline constexpr int kGuiTraceBatch = 20'000;
+
 #include <set>
 #include <string>
 #include <vector>

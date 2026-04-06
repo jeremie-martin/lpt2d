@@ -183,6 +183,8 @@ bool export_authored_png(const Shot& source_shot) {
 void do_save(EditorState& ed) {
     std::string path = ed.session.save_path.empty() ? (ed.shot.name + ".json") : ed.session.save_path;
     Shot saved = ed.shot;
+    // GUI batch is session-only; restore authored default for saving
+    saved.trace.batch = TraceDefaults{}.batch;
     std::string norm_error;
     if (!normalize_scene(saved.scene, &norm_error)) {
         std::cerr << "Cannot save: " << norm_error << "\n";

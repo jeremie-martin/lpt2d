@@ -23,8 +23,6 @@
 
 namespace {
 
-constexpr int kGuiTraceBatch = 20'000;
-
 struct AlignmentGuide {
     float axis = 0.0f;
     float span_min = 0.0f;
@@ -91,6 +89,7 @@ int App::run(const AppConfig& config) {
             std::cerr << "Unknown scene: " << config.initial_scene << ", using " << builtins[0].name << "\n";
     }
     ed.shot = load_builtin_scene(builtins[panel.current_scene]);
+    ed.shot.trace.batch = kGuiTraceBatch;
     ed.view.scene_bounds = compute_bounds(ed.shot.scene);
     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
 
@@ -181,9 +180,7 @@ int App::run(const AppConfig& config) {
         // Trace
         auto t0 = std::chrono::steady_clock::now();
         if (!showing_snapshot_a && !panel.paused && renderer.num_lights() > 0) {
-            TraceConfig gui_tcfg = ed.shot.trace.to_trace_config();
-            gui_tcfg.batch_size = kGuiTraceBatch;
-            renderer.trace_and_draw(gui_tcfg);
+            renderer.trace_and_draw(ed.shot.trace.to_trace_config());
             glFinish();
         }
         if (!showing_snapshot_a)

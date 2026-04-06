@@ -161,6 +161,7 @@ void draw_controls_panel(
                 if (ImGui::Selectable(builtins[i].name.c_str(), i == panel.current_scene)) {
                     panel.current_scene = i;
                     ed.shot = load_builtin_scene(builtins[i]);
+                    ed.shot.trace.batch = kGuiTraceBatch;
                     reset_editor(ed, renderer, compare_ab, panel.light_analysis_valid,
                                  force_live_metrics_refresh, win_w, win_h);
                 }
@@ -203,6 +204,7 @@ void draw_controls_panel(
                 std::string error;
                 if (auto loaded = try_load_shot_json(panel.load_dialog.path.data(), &error)) {
                     ed.shot = *loaded;
+                    ed.shot.trace.batch = kGuiTraceBatch;
                     ed.session.save_path = panel.load_dialog.path.data();
                     panel.current_scene = -1;
                     panel.load_dialog.error.clear();
