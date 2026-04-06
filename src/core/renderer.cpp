@@ -1003,7 +1003,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, bezier_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ellipse_ssbo_);
 
-    GLuint groups = (GLuint)(((size_t)cfg.batch_size * (size_t)num_dispatches + 63u) / 64u);
+    GLuint groups = (GLuint)(((size_t)cfg.batch_size * (size_t)num_dispatches + 255u) / 256u);
     glUniform1ui(trace_loc_seed_, dispatch_seeds[0]);
     glDispatchCompute(groups, 1, 1);
     batch_counter_ += (uint32_t)num_dispatches;
