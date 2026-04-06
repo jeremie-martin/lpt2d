@@ -116,16 +116,6 @@ std::string next_scene_entity_id(const Scene& scene, std::string_view prefix) {
     }
 }
 
-void sync_material_bindings(Scene& scene) {
-    for_each_shape(scene, [&](Shape& shape) {
-        std::visit([&](auto& value) {
-            if (value.material_id.empty()) return;
-            if (auto it = scene.materials.find(value.material_id); it != scene.materials.end())
-                value.material = it->second;
-        }, shape);
-    });
-}
-
 bool validate_scene(const Scene& scene, std::string* error) {
     std::set<std::string> used_ids;
     auto fail = [&](std::string message) {
@@ -148,8 +138,9 @@ bool validate_scene(const Scene& scene, std::string* error) {
                 if (error) *error = "duplicate entity id: " + value.id;
                 return;
             }
-            if (!value.material_id.empty() && !scene.materials.contains(value.material_id))
-                if (error) *error = "unknown material_id: " + value.material_id;
+            auto ref = material_ref_id(value.binding);
+            if (!ref.empty() && !scene.materials.contains(std::string(ref)))
+                if (error) *error = "unknown material_id: " + std::string(ref);
         }, shape);
     });
     if (error && !error->empty()) return false;
@@ -273,32 +264,24 @@ bool bind_material(Shape& shape, const Scene& scene, std::string_view material_i
         if (error) *error = "material ids must be non-empty";
         return false;
     }
-    const Material* material = find_material(scene, material_id);
-    if (!material) {
+    if (!find_material(scene, material_id)) {
         if (error) *error = "unknown material_id: " + std::string(material_id);
         return false;
     }
-    std::visit([&](auto& value) {
-        value.material_id = std::string(material_id);
-        value.material = *material;
-    }, shape);
+    shape_binding(shape) = std::string(material_id);
     return true;
 }
 
-void detach_material(Shape& shape) {
-    std::visit([](auto& value) {
-        value.material_id.clear();
-    }, shape);
+void detach_material(Shape& shape, const MaterialMap& materials) {
+    shape_binding(shape) = resolve_binding(shape_binding(shape), materials);
 }
 
 int material_usage_count(const Scene& scene, std::string_view material_id) {
     int count = 0;
     if (material_id.empty()) return count;
     for_each_shape(scene, [&](const Shape& shape) {
-        std::visit([&](const auto& value) {
-            if (value.material_id == material_id)
-                ++count;
-        }, shape);
+        if (material_ref_id(shape_binding(shape)) == material_id)
+            ++count;
     });
     return count;
 }
@@ -325,12 +308,8 @@ bool rename_material(Scene& scene, std::string_view old_id, std::string_view new
     scene.materials[std::string(new_id)] = material;
 
     for_each_shape(scene, [&](Shape& shape) {
-        std::visit([&](auto& value) {
-            if (value.material_id == old_id) {
-                value.material_id = std::string(new_id);
-                value.material = material;
-            }
-        }, shape);
+        if (material_ref_id(shape_binding(shape)) == old_id)
+            shape_binding(shape) = std::string(new_id);
     });
     return true;
 }
@@ -347,16 +326,12 @@ bool delete_material(Scene& scene, std::string_view material_id, std::string* er
     if (it == scene.materials.end())
         return fail("unknown material_id: " + std::string(material_id));
 
-    Material material = it->second;
-    scene.materials.erase(it);
+    // Resolve bindings to inline before erasing from the map
     for_each_shape(scene, [&](Shape& shape) {
-        std::visit([&](auto& value) {
-            if (value.material_id == material_id) {
-                value.material = material;
-                value.material_id.clear();
-            }
-        }, shape);
+        if (material_ref_id(shape_binding(shape)) == material_id)
+            detach_material(shape, scene.materials);
     });
+    scene.materials.erase(it);
     return true;
 }
 
@@ -390,7 +365,7 @@ std::vector<AuthoredSource> collect_authored_sources(const Scene& scene) {
 
     // Emissive shapes (top-level)
     for (int i = 0; i < (int)scene.shapes.size(); ++i) {
-        if (shape_material(scene.shapes[i]).emission <= 0.0f) continue;
+        if (resolve_shape_material(scene.shapes[i], scene.materials).emission <= 0.0f) continue;
         sources.push_back({
             AuthoredSource::ShapeEmission,
             shape_display_name(scene.shapes[i], i),
@@ -403,7 +378,7 @@ std::vector<AuthoredSource> collect_authored_sources(const Scene& scene) {
     for (int gi = 0; gi < (int)scene.groups.size(); ++gi) {
         const auto& group = scene.groups[gi];
         for (int si = 0; si < (int)group.shapes.size(); ++si) {
-            if (shape_material(group.shapes[si]).emission <= 0.0f) continue;
+            if (resolve_shape_material(group.shapes[si], scene.materials).emission <= 0.0f) continue;
             sources.push_back({
                 AuthoredSource::ShapeEmission,
                 group.id + "/" + shape_display_name(group.shapes[si], si),
@@ -419,12 +394,19 @@ std::vector<AuthoredSource> collect_authored_sources(const Scene& scene) {
 Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
     Scene isolated = scene;
 
-    // Zero all emission
+    // Zero all emission (only detach shapes that actually have emission)
+    auto zero_emission = [&](Shape& shape) {
+        Material mat = resolve_shape_material(shape, isolated.materials);
+        if (mat.emission > 0.0f) {
+            mat.emission = 0.0f;
+            shape_binding(shape) = mat;
+        }
+    };
     for (auto& shape : isolated.shapes)
-        shape_material(shape).emission = 0.0f;
+        zero_emission(shape);
     for (auto& group : isolated.groups)
         for (auto& shape : group.shapes)
-            shape_material(shape).emission = 0.0f;
+            zero_emission(shape);
 
     // Remove all lights
     isolated.lights.clear();
@@ -453,8 +435,11 @@ Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
         if (source.group_id.empty()) {
             Shape* s = find_shape(isolated, source.entity_id);
             const Shape* orig = find_shape(scene, source.entity_id);
-            if (s && orig)
-                shape_material(*s).emission = shape_material(*orig).emission;
+            if (s && orig) {
+                Material mat = resolve_shape_material(*s, isolated.materials);
+                mat.emission = resolve_shape_material(*orig, scene.materials).emission;
+                shape_binding(*s) = mat;
+            }
         } else {
             Group* g = find_group(isolated, source.group_id);
             const Group* orig_g = find_group(scene, source.group_id);
@@ -463,7 +448,9 @@ Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
                     if (shape_id(shape) == source.entity_id) {
                         for (const auto& orig_shape : orig_g->shapes) {
                             if (shape_id(orig_shape) == source.entity_id) {
-                                shape_material(shape).emission = shape_material(orig_shape).emission;
+                                Material mat = resolve_shape_material(shape, isolated.materials);
+                                mat.emission = resolve_shape_material(orig_shape, scene.materials).emission;
+                                shape_binding(shape) = mat;
                                 break;
                             }
                         }
@@ -481,7 +468,6 @@ Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
 
 bool normalize_scene(Scene& scene, std::string* error) {
     ensure_scene_entity_ids(scene);
-    sync_material_bindings(scene);
     return validate_scene(scene, error);
 }
 
@@ -499,17 +485,14 @@ const std::string& light_id(const Light& l) {
 std::string& light_id(Light& l) {
     return std::visit([](auto& v) -> std::string& { return v.id; }, l);
 }
-const Material& shape_material(const Shape& s) {
-    return std::visit([](const auto& v) -> const Material& { return v.material; }, s);
+const MaterialBinding& shape_binding(const Shape& s) {
+    return std::visit([](const auto& v) -> const MaterialBinding& { return v.binding; }, s);
 }
-Material& shape_material(Shape& s) {
-    return std::visit([](auto& v) -> Material& { return v.material; }, s);
+MaterialBinding& shape_binding(Shape& s) {
+    return std::visit([](auto& v) -> MaterialBinding& { return v.binding; }, s);
 }
-const std::string& shape_material_id(const Shape& s) {
-    return std::visit([](const auto& v) -> const std::string& { return v.material_id; }, s);
-}
-std::string& shape_material_id(Shape& s) {
-    return std::visit([](auto& v) -> std::string& { return v.material_id; }, s);
+const Material& resolve_shape_material(const Shape& s, const MaterialMap& materials) {
+    return resolve_binding(shape_binding(s), materials);
 }
 
 std::string shape_display_name(const Shape& s, int fallback_index) {
@@ -559,25 +542,25 @@ void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat
     Segment bottom;
     bottom.a = {-half_w, -half_h};
     bottom.b = {half_w, -half_h};
-    bottom.material = mat;
+    bottom.binding = mat;
     scene.shapes.push_back(bottom);
 
     Segment top;
     top.a = {half_w, half_h};
     top.b = {-half_w, half_h};
-    top.material = mat;
+    top.binding = mat;
     scene.shapes.push_back(top);
 
     Segment left;
     left.a = {-half_w, half_h};
     left.b = {-half_w, -half_h};
-    left.material = mat;
+    left.binding = mat;
     scene.shapes.push_back(left);
 
     Segment right;
     right.a = {half_w, -half_h};
     right.b = {half_w, half_h};
-    right.material = mat;
+    right.binding = mat;
     scene.shapes.push_back(right);
 }
 
@@ -594,5 +577,11 @@ Bounds Camera2D::resolve(float aspect, const Bounds& fallback) const {
 }
 
 TraceConfig TraceDefaults::to_trace_config() const {
-    return {.batch_size = batch, .max_depth = depth, .intensity = intensity};
+    return {
+        .batch_size = batch,
+        .max_depth = depth,
+        .intensity = intensity,
+        .seed_mode = seed_mode,
+        .frame_index = 0,
+    };
 }

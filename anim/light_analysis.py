@@ -41,11 +41,11 @@ def _collect_light_sources(scene: Scene) -> list[tuple[str, str]]:
             label = (group.id or f"group_{gi}") + "/" + (light.id or f"light_{li}")
             sources.append((label, f"group:{gi}:{li}"))
     for si, shape in enumerate(scene.shapes):
-        if shape.material.emission > 0:
+        if _lpt2d.resolve_material(shape, scene).emission > 0:
             sources.append((shape.id or f"emissive_shape_{si}", f"emissive:{si}"))
     for gi, group in enumerate(scene.groups):
         for si, shape in enumerate(group.shapes):
-            if shape.material.emission > 0:
+            if _lpt2d.resolve_material(shape, scene).emission > 0:
                 label = (group.id or f"group_{gi}") + "/" + (shape.id or f"emissive_{si}")
                 sources.append((label, f"emissive_group:{gi}:{si}"))
     return sources
@@ -62,34 +62,28 @@ def _zero_emission_material(mat: Material) -> Material:
 
 
 def _copy_shape_with_material(shape, mat: Material):
-    """Copy a shape with a new material."""
+    """Copy a shape with a new inline material (drops any material_id binding)."""
     t = type(shape)
     if t is _lpt2d.Circle:
-        return _lpt2d.Circle(id=shape.id, center=shape.center, radius=shape.radius,
-                             material=mat, material_id=shape.material_id)
+        return _lpt2d.Circle(id=shape.id, center=shape.center, radius=shape.radius, material=mat)
     if t is _lpt2d.Segment:
-        return _lpt2d.Segment(id=shape.id, a=shape.a, b=shape.b,
-                              material=mat, material_id=shape.material_id)
+        return _lpt2d.Segment(id=shape.id, a=shape.a, b=shape.b, material=mat)
     if t is _lpt2d.Arc:
         return _lpt2d.Arc(id=shape.id, center=shape.center, radius=shape.radius,
-                          angle_start=shape.angle_start, sweep=shape.sweep,
-                          material=mat, material_id=shape.material_id)
+                          angle_start=shape.angle_start, sweep=shape.sweep, material=mat)
     if t is _lpt2d.Polygon:
-        return _lpt2d.Polygon(id=shape.id, vertices=list(shape.vertices),
-                              material=mat, material_id=shape.material_id)
+        return _lpt2d.Polygon(id=shape.id, vertices=list(shape.vertices), material=mat)
     if t is _lpt2d.Ellipse:
         return _lpt2d.Ellipse(id=shape.id, center=shape.center,
                               semi_a=shape.semi_a, semi_b=shape.semi_b,
-                              rotation=shape.rotation,
-                              material=mat, material_id=shape.material_id)
+                              rotation=shape.rotation, material=mat)
     if t is _lpt2d.Bezier:
-        return _lpt2d.Bezier(id=shape.id, p0=shape.p0, p1=shape.p1, p2=shape.p2,
-                             material=mat, material_id=shape.material_id)
+        return _lpt2d.Bezier(id=shape.id, p0=shape.p0, p1=shape.p1, p2=shape.p2, material=mat)
     return shape
 
 
-def _zero_emission(shape):
-    mat = shape.material
+def _zero_emission(shape, scene: Scene):
+    mat = _lpt2d.resolve_material(shape, scene)
     if mat.emission <= 0:
         return shape
     return _copy_shape_with_material(shape, _zero_emission_material(mat))
@@ -98,10 +92,10 @@ def _zero_emission(shape):
 def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
     kind, _, detail = key.partition(":")
 
-    ze_shapes = [_zero_emission(s) for s in scene.shapes]
+    ze_shapes = [_zero_emission(s, scene) for s in scene.shapes]
     ze_groups = [
         _lpt2d.Group(id=g.id, transform=g.transform,
-                      shapes=[_zero_emission(s) for s in g.shapes], lights=[])
+                      shapes=[_zero_emission(s, scene) for s in g.shapes], lights=[])
         for g in scene.groups
     ]
 
@@ -118,7 +112,7 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
             kept_lights = [g.lights[li]] if i == gi else []
             new_groups.append(
                 _lpt2d.Group(id=g.id, transform=g.transform,
-                              shapes=[_zero_emission(s) for s in g.shapes], lights=kept_lights)
+                              shapes=[_zero_emission(s, scene) for s in g.shapes], lights=kept_lights)
             )
         return Scene(lights=[], shapes=ze_shapes, groups=new_groups,
                      materials=dict(scene.materials))
@@ -135,7 +129,7 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
             if target_gi < 0 and si == target_si:
                 new_shapes.append(s)
             else:
-                new_shapes.append(_zero_emission(s))
+                new_shapes.append(_zero_emission(s, scene))
         new_groups = []
         for gi, g in enumerate(scene.groups):
             gs = []
@@ -143,7 +137,7 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
                 if gi == target_gi and si == target_si:
                     gs.append(s)
                 else:
-                    gs.append(_zero_emission(s))
+                    gs.append(_zero_emission(s, scene))
             new_groups.append(
                 _lpt2d.Group(id=g.id, transform=g.transform, shapes=gs, lights=[])
             )

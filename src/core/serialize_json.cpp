@@ -25,7 +25,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 5;
+constexpr int SHOT_JSON_VERSION = 6;
 enum class Schema { Authored };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
@@ -133,6 +133,12 @@ NormalizeMode read_normalize_mode(const Json& json, std::string_view context) {
     fail("invalid normalize mode: " + value);
 }
 
+SeedMode read_seed_mode(const Json& json, std::string_view context) {
+    const std::string value = read_string(json, context);
+    if (auto parsed = parse_seed_mode(value)) return *parsed;
+    fail("invalid seed mode: " + value);
+}
+
 Material read_material(const Json& json, Schema schema, std::string_view context) {
     reject_unknown_keys(json, {"ior", "roughness", "metallic", "transmission", "absorption",
                                "cauchy_b", "albedo", "emission"}, context);
@@ -169,22 +175,21 @@ Json write_material(const Material& material) {
     return json;
 }
 
-std::pair<Material, std::string> read_shape_material(const Json& json,
-                                                     const std::map<std::string, Material>& materials,
-                                                     Schema schema, std::string_view context) {
+MaterialBinding read_shape_material(const Json& json,
+                                    const std::map<std::string, Material>& materials,
+                                    Schema schema, std::string_view context) {
     const bool has_material = json.contains("material");
     const bool has_material_id = json.contains("material_id");
     if (has_material == has_material_id)
         fail("shape entries must declare exactly one of material and material_id");
     if (has_material_id) {
-        const std::string material_id = read_required_string(json, "material_id", context);
-        if (material_id.empty()) fail("material_id must be a non-empty string");
-        auto it = materials.find(material_id);
-        if (it == materials.end()) fail("unknown material_id: " + material_id);
-        return {it->second, material_id};
+        const std::string mid = read_required_string(json, "material_id", context);
+        if (mid.empty()) fail("material_id must be a non-empty string");
+        if (!materials.contains(mid)) fail("unknown material_id: " + mid);
+        return MaterialBinding(mid);
     }
-    return {read_material(require_key(json, "material", context), schema,
-                          std::string(context) + ".material"), {}};
+    return MaterialBinding(read_material(require_key(json, "material", context), schema,
+                                          std::string(context) + ".material"));
 }
 
 Shape read_shape(const Json& json, const std::map<std::string, Material>& materials,
@@ -192,10 +197,10 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     const std::string type = read_required_string(json, "type", context);
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("shape ids must be non-empty");
-    auto [material, material_id] = read_shape_material(json, materials, schema, context);
+    auto binding = read_shape_material(json, materials, schema, context);
     if (type == "circle") {
         reject_unknown_keys(json, {"id", "type", "center", "radius", "material", "material_id"}, context);
-        Circle circle{id, {}, 0.1f, material, material_id};
+        Circle circle{id, {}, 0.1f, std::move(binding)};
         if (schema == Schema::Authored || json.contains("center"))
             circle.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
         if (schema == Schema::Authored || json.contains("radius"))
@@ -204,7 +209,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     }
     if (type == "segment") {
         reject_unknown_keys(json, {"id", "type", "a", "b", "material", "material_id"}, context);
-        Segment segment{id, {}, {}, material, material_id};
+        Segment segment{id, {}, {}, std::move(binding)};
         if (schema == Schema::Authored || json.contains("a"))
             segment.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
         if (schema == Schema::Authored || json.contains("b"))
@@ -214,7 +219,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     if (type == "arc") {
         reject_unknown_keys(json, {"id", "type", "center", "radius", "angle_start", "sweep",
                                    "material", "material_id"}, context);
-        Arc arc{id, {}, 0.1f, 0.0f, TWO_PI, material, material_id};
+        Arc arc{id, {}, 0.1f, 0.0f, TWO_PI, std::move(binding)};
         if (schema == Schema::Authored || json.contains("center"))
             arc.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
         if (schema == Schema::Authored || json.contains("radius"))
@@ -227,7 +232,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     }
     if (type == "bezier") {
         reject_unknown_keys(json, {"id", "type", "p0", "p1", "p2", "material", "material_id"}, context);
-        Bezier bezier{id, {}, {0.5f, 0.5f}, {1.0f, 0.0f}, material, material_id};
+        Bezier bezier{id, {}, {0.5f, 0.5f}, {1.0f, 0.0f}, std::move(binding)};
         if (schema == Schema::Authored || json.contains("p0"))
             bezier.p0 = read_vec2(require_key(json, "p0", context), std::string(context) + ".p0");
         if (schema == Schema::Authored || json.contains("p1"))
@@ -246,14 +251,13 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                 polygon.vertices.push_back(read_vec2(json["vertices"][i],
                                                      std::string(context) + ".vertices[" + std::to_string(i) + "]"));
         }
-        polygon.material = material;
-        polygon.material_id = material_id;
+        polygon.binding = std::move(binding);
         return polygon;
     }
     if (type == "ellipse") {
         reject_unknown_keys(json, {"id", "type", "center", "semi_a", "semi_b", "rotation",
                                    "material", "material_id"}, context);
-        Ellipse ellipse{id, {}, 0.2f, 0.1f, 0.0f, material, material_id};
+        Ellipse ellipse{id, {}, 0.2f, 0.1f, 0.0f, std::move(binding)};
         if (schema == Schema::Authored || json.contains("center"))
             ellipse.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
         if (schema == Schema::Authored || json.contains("semi_a"))
@@ -268,50 +272,50 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
 }
 
 Json write_shape(const Shape& shape) {
+    auto write_binding = [](Json& json, const MaterialBinding& binding) {
+        if (is_material_ref(binding))
+            json["material_id"] = std::string(material_ref_id(binding));
+        else
+            json["material"] = write_material(std::get<Material>(binding));
+    };
     return std::visit(overloaded{
-        [](const Circle& value) {
+        [&](const Circle& value) {
             Json json = {{"id", value.id}, {"type", "circle"}, {"center", vec2_json(value.center)},
                          {"radius", value.radius}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
-        [](const Segment& value) {
+        [&](const Segment& value) {
             Json json = {{"id", value.id}, {"type", "segment"}, {"a", vec2_json(value.a)},
                          {"b", vec2_json(value.b)}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
-        [](const Arc& value) {
+        [&](const Arc& value) {
             Json json = {{"id", value.id}, {"type", "arc"}, {"center", vec2_json(value.center)},
                          {"radius", value.radius}, {"angle_start", value.angle_start},
                          {"sweep", value.sweep}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
-        [](const Bezier& value) {
+        [&](const Bezier& value) {
             Json json = {{"id", value.id}, {"type", "bezier"}, {"p0", vec2_json(value.p0)},
                          {"p1", vec2_json(value.p1)}, {"p2", vec2_json(value.p2)}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
-        [](const Polygon& value) {
+        [&](const Polygon& value) {
             Json vertices = Json::array();
             for (Vec2 vertex : value.vertices) vertices.push_back(vec2_json(vertex));
             Json json = {{"id", value.id}, {"type", "polygon"}, {"vertices", std::move(vertices)}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
-        [](const Ellipse& value) {
+        [&](const Ellipse& value) {
             Json json = {{"id", value.id}, {"type", "ellipse"}, {"center", vec2_json(value.center)},
                          {"semi_a", value.semi_a}, {"semi_b", value.semi_b},
                          {"rotation", value.rotation}};
-            if (value.material_id.empty()) json["material"] = write_material(value.material);
-            else json["material_id"] = value.material_id;
+            write_binding(json, value.binding);
             return json;
         },
     }, shape);
@@ -571,7 +575,7 @@ Json write_look(const Look& look) {
 }
 
 TraceDefaults read_trace(const Json& json, Schema schema, std::string_view context) {
-    reject_unknown_keys(json, {"rays", "batch", "depth", "intensity"}, context);
+    reject_unknown_keys(json, {"rays", "batch", "depth", "intensity", "seed_mode"}, context);
     TraceDefaults trace;
     if (schema == Schema::Authored || json.contains("rays"))
         trace.rays = read_int64(require_key(json, "rays", context), std::string(context) + ".rays");
@@ -581,12 +585,16 @@ TraceDefaults read_trace(const Json& json, Schema schema, std::string_view conte
         trace.depth = read_int(require_key(json, "depth", context), std::string(context) + ".depth");
     if (schema == Schema::Authored || json.contains("intensity"))
         trace.intensity = read_required_float(json, "intensity", context);
+    if (schema == Schema::Authored || json.contains("seed_mode"))
+        trace.seed_mode = read_seed_mode(require_key(json, "seed_mode", context),
+                                         std::string(context) + ".seed_mode");
     return trace;
 }
 
 Json write_trace(const TraceDefaults& trace) {
     return Json{{"rays", trace.rays}, {"batch", trace.batch}, {"depth", trace.depth},
-                {"intensity", trace.intensity}};
+                {"intensity", trace.intensity},
+                {"seed_mode", seed_mode_to_string(trace.seed_mode)}};
 }
 
 Scene read_scene(const Json& root, Schema schema) {
@@ -623,7 +631,6 @@ Scene read_scene(const Json& root, Schema schema) {
         scene.groups.push_back(read_group(groups[i], scene.materials, schema,
                                           "groups[" + std::to_string(i) + "]"));
 
-    sync_material_bindings(scene);
     std::string error;
     if (!validate_scene(scene, &error)) fail("Invalid scene: " + error);
     return scene;

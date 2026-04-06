@@ -72,8 +72,8 @@ bool apply_material_to_selection(EditorState& ed, std::string_view material_id) 
 bool detach_material_from_selection(EditorState& ed, std::string_view material_id) {
     bool changed = false;
     auto maybe_detach = [&](Shape& shape) {
-        if (shape_material_id(shape) == material_id) {
-            detach_material(shape);
+        if (material_ref_id(shape_binding(shape)) == material_id) {
+            detach_material(shape, ed.shot.scene.materials);
             changed = true;
         }
     };
@@ -102,15 +102,15 @@ void for_each_clipboard_shape(EditorState& ed, auto&& fn) {
 
 void rewrite_clipboard_material_binding(EditorState& ed, std::string_view old_id, std::string_view new_id) {
     for_each_clipboard_shape(ed, [&](Shape& shape) {
-        if (shape_material_id(shape) == old_id)
-            shape_material_id(shape) = std::string(new_id);
+        if (material_ref_id(shape_binding(shape)) == old_id)
+            shape_binding(shape) = std::string(new_id);
     });
 }
 
 void detach_clipboard_material_binding(EditorState& ed, std::string_view material_id) {
     for_each_clipboard_shape(ed, [&](Shape& shape) {
-        if (shape_material_id(shape) == material_id)
-            shape_material_id(shape).clear();
+        if (material_ref_id(shape_binding(shape)) == material_id)
+            detach_material(shape, ed.shot.scene.materials);
     });
 }
 
@@ -127,6 +127,10 @@ std::string group_display_name(const Group& group, int index) {
 
 const Shot& current_authored_shot(const EditorState& ed, const CompareSnapshot& compare_ab) {
     return (compare_ab.active && compare_ab.showing_a) ? compare_ab.shot : ed.shot;
+}
+
+int current_output_frame_index(const EditorState& ed, const CompareSnapshot& compare_ab) {
+    return (compare_ab.active && compare_ab.showing_a) ? compare_ab.frame_index : ed.session.frame_index;
 }
 
 } // namespace
@@ -365,7 +369,7 @@ void draw_controls_panel(
             }
             ImGui::PopID();
             ImGui::SameLine();
-            ImVec4 mc = std::visit([](const auto& s) { return material_color(s.material); }, shape);
+            ImVec4 mc = material_color(resolve_shape_material(shape, ed.shot.scene.materials));
             ImGui::PushID(i);
             ImGui::ColorButton("##sw", mc, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoPicker, ImVec2(10, 10));
             ImGui::PopID();
@@ -489,7 +493,6 @@ void draw_controls_panel(
             const Shot& diagnostic_shot = current_authored_shot(ed, compare_ab);
             Shot diagnostic_copy = diagnostic_shot;
             ensure_scene_entity_ids(diagnostic_copy.scene);
-            sync_material_bindings(diagnostic_copy.scene);
             auto scene_warnings = diagnose_scene(diagnostic_copy.scene);
             if (!scene_warnings.empty()) {
                 ImGui::Text("Scene Warnings:");
@@ -505,11 +508,10 @@ void draw_controls_panel(
                     Bounds scene_bounds = scene_default_bounds(diagnostic_copy.scene);
                     Bounds view = diagnostic_copy.camera.resolve(
                         diagnostic_copy.canvas.aspect(), scene_bounds);
-                    TraceConfig tcfg{
-                        std::min(diagnostic_copy.trace.batch, 100000),
-                        std::min(diagnostic_copy.trace.depth, 12),
-                        diagnostic_copy.trace.intensity,
-                    };
+                    TraceConfig tcfg = diagnostic_copy.trace.to_trace_config();
+                    tcfg.batch_size = std::min(tcfg.batch_size, 100000);
+                    tcfg.max_depth = std::min(tcfg.max_depth, 12);
+                    tcfg.frame_index = ed.session.frame_index;
                     int analysis_dispatches =
                         std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
 
@@ -617,12 +619,12 @@ void draw_controls_panel(
         };
         auto edit_shape_material_binding = [&](Shape& shape) {
             bool local_changed = false;
-            std::string& mid = shape_material_id(shape);
-            Material& inline_material = shape_material(shape);
+            auto ref = material_ref_id(shape_binding(shape));
+            std::string mid(ref);
             const char* preview = mid.empty() ? "(inline custom)" : mid.c_str();
             if (ImGui::BeginCombo("Material", preview)) {
                 if (ImGui::Selectable("(inline custom)", mid.empty()) && !mid.empty()) {
-                    detach_material(shape);
+                    detach_material(shape, ed.shot.scene.materials);
                     local_changed = true;
                 }
                 for (const auto& [name, _] : ed.shot.scene.materials) {
@@ -639,7 +641,7 @@ void draw_controls_panel(
                 ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
                     "Editing shared material asset '%s'", mid.c_str());
                 if (ImGui::SmallButton("Detach to Inline")) {
-                    detach_material(shape);
+                    detach_material(shape, ed.shot.scene.materials);
                     local_changed = true;
                 }
                 if (auto it = ed.shot.scene.materials.find(mid); it != ed.shot.scene.materials.end()) {
@@ -650,7 +652,8 @@ void draw_controls_panel(
                 }
             } else {
                 ImGui::TextDisabled("Editing inline custom material");
-                local_changed |= edit_material(inline_material);
+                if (auto* mat = std::get_if<Material>(&shape_binding(shape)))
+                    local_changed |= edit_material(*mat);
             }
             return local_changed;
         };
@@ -937,6 +940,20 @@ void draw_controls_panel(
         ImGui::SliderInt("Max depth", &ed.shot.trace.depth, 1, 30);
         ImGui::SliderFloat("Intensity", &ed.shot.trace.intensity, 0.001f, 10.0f, "%.3f",
                            ImGuiSliderFlags_Logarithmic);
+        int seed_mode = (int)ed.shot.trace.seed_mode;
+        if (ImGui::Combo("Seed mode", &seed_mode, "Deterministic\0Decorrelated\0")) {
+            ed.shot.trace.seed_mode = (SeedMode)seed_mode;
+            renderer.clear();
+            panel.light_analysis_valid = false;
+            force_live_metrics_refresh = true;
+        }
+        int frame_index = ed.session.frame_index;
+        if (ImGui::InputInt("Frame index", &frame_index)) {
+            ed.session.frame_index = std::max(frame_index, 0);
+            renderer.clear();
+            panel.light_analysis_valid = false;
+            force_live_metrics_refresh = true;
+        }
         ImGui::Checkbox("Paused", &panel.paused);
         ImGui::PopID();
     }
@@ -979,8 +996,8 @@ void draw_controls_panel(
             std::vector<uint8_t> snapshot_rgba;
             renderer.read_display_rgba(snapshot_rgba);
             compare_ab.shot = ed.shot;
+            compare_ab.frame_index = ed.session.frame_index;
             ensure_scene_entity_ids(compare_ab.shot.scene);
-            sync_material_bindings(compare_ab.shot.scene);
             compare_ab.view_bounds = current_display_view(ed, compare_ab, win_w, win_h);
             compare_ab.metrics = renderer.compute_frame_metrics();
             compare_ab.metrics_valid = true;
@@ -1006,6 +1023,7 @@ void draw_controls_panel(
                 compare_ab.active = false;
                 compare_ab.showing_a = false;
                 compare_ab.metrics_valid = false;
+                compare_ab.frame_index = 0;
                 if (was_showing_a)
                     reload(false);
                 force_live_metrics_refresh = true;
@@ -1060,6 +1078,7 @@ void draw_controls_panel(
         char ray_str[32];
         int64_t tr = renderer.total_rays();
         const Shot& output_shot = current_authored_shot(ed, compare_ab);
+        int output_frame_index = current_output_frame_index(ed, compare_ab);
         const Look& output_look = output_shot.look;
         if (tr >= 1'000'000)
             std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
@@ -1081,7 +1100,7 @@ void draw_controls_panel(
         ImGui::SameLine();
         if (ImGui::Button("Export PNG")) {
             std::string filename = output_shot.name + ".png";
-            if (export_authored_png(output_shot))
+            if (export_authored_png(output_shot, output_frame_index))
                 std::cerr << "Exported: " << filename << "\n";
         }
         ImGui::PopID();

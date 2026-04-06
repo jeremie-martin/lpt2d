@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
+import _lpt2d
+
 import numpy as np
 
 from .types import (
@@ -335,8 +337,8 @@ def _aabb_overlap(
     return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
 
 
-def _shape_material(shape: Shape) -> Material:
-    return shape.material  # type: ignore[union-attr]
+def _shape_material(shape: Shape, scene: Scene) -> Material:
+    return _lpt2d.resolve_material(shape, scene)  # type: ignore[arg-type]
 
 
 def _transform_point(p: list[float], t: Transform2D) -> list[float]:
@@ -475,7 +477,7 @@ def diagnose_scene(scene: Scene) -> list[str]:
     glass_no_absorb = [
         shape
         for shape in all_shapes
-        for material in [_shape_material(shape)]
+        for material in [_shape_material(shape, scene)]
         if material.transmission > 0.5 and material.absorption < 0.01
     ]
     if len(glass_no_absorb) > 5:
@@ -500,7 +502,7 @@ def diagnose_scene(scene: Scene) -> list[str]:
     all_lights = list(scene.lights)
     for group in scene.groups:
         all_lights.extend(group.lights)
-    emissive_sources = sum(1 for shape in all_shapes if _shape_material(shape).emission > 0.0)
+    emissive_sources = sum(1 for shape in all_shapes if _shape_material(shape, scene).emission > 0.0)
 
     total_sources = len(all_lights) + emissive_sources
     if total_sources > 10:

@@ -62,6 +62,15 @@ static NormalizeMode parse_normalize_arg(nb::object obj) {
     return nb::cast<NormalizeMode>(obj);
 }
 
+static SeedMode parse_seed_mode_arg(nb::object obj) {
+    if (nb::isinstance<nb::str>(obj)) {
+        auto s = nb::cast<std::string>(obj);
+        if (auto mode = parse_seed_mode(s)) return *mode;
+        throw nb::value_error(("invalid seed mode: " + s).c_str());
+    }
+    return nb::cast<SeedMode>(obj);
+}
+
 // ─── Module ──────────────────────────────────────────────────────
 
 NB_MODULE(_lpt2d, m) {
@@ -84,6 +93,10 @@ NB_MODULE(_lpt2d, m) {
         .value("rays", NormalizeMode::Rays)
         .value("fixed", NormalizeMode::Fixed)
         .value("off", NormalizeMode::Off);
+
+    nb::enum_<SeedMode>(m, "SeedMode")
+        .value("deterministic", SeedMode::Deterministic)
+        .value("decorrelated", SeedMode::Decorrelated);
 
     // ── Material ─────────────────────────────────────────────────
     nb::class_<Material>(m, "Material")
@@ -122,90 +135,140 @@ NB_MODULE(_lpt2d, m) {
     m.def("beam_splitter", &mat_mirror, "reflectance"_a, "roughness"_a = 0.0f);
 
     // ── Shape types ──────────────────────────────────────────────
+
+    // Helper: build MaterialBinding from Python material + material_id kwargs.
+    // material_id takes precedence if non-empty.
+    auto make_binding = [](nb::object material, std::string material_id) -> MaterialBinding {
+        if (!material_id.empty())
+            return material_id;
+        if (!material.is_none() && nb::isinstance<Material>(material))
+            return nb::cast<Material>(material);
+        return Material{};
+    };
+
+    // Material property helpers — present material/material_id as separate Python properties
+    auto mat_getter = [](const auto& s) -> Material {
+        if (auto* mat = std::get_if<Material>(&s.binding)) return *mat;
+        return Material{};
+    };
+    auto mat_setter = [](auto& s, const Material& mat) { s.binding = mat; };
+    auto mid_getter = [](const auto& s) -> std::string {
+        if (auto* str = std::get_if<std::string>(&s.binding)) return *str;
+        return {};
+    };
+    auto mid_setter = [](auto& s, std::string id) {
+        if (id.empty()) { if (is_material_ref(s.binding)) s.binding = Material{}; }
+        else s.binding = std::move(id);
+    };
+
     nb::class_<Circle>(m, "Circle")
-        .def("__init__", [](Circle* c, std::string id, Vec2 center, float radius,
-                            Material material, std::string material_id) {
-            new (c) Circle{std::move(id), center, radius, std::move(material), std::move(material_id)};
+        .def("__init__", [=](Circle* c, std::string id, Vec2 center, float radius,
+                             nb::object material, std::string material_id) {
+            new (c) Circle{std::move(id), center, radius, make_binding(material, std::move(material_id))};
         }, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f,
-           "material"_a = Material{}, "material_id"_a = "")
+           "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Circle::id)
         .def_rw("center", &Circle::center)
         .def_rw("radius", &Circle::radius)
-        .def_rw("material", &Circle::material)
-        .def_rw("material_id", &Circle::material_id)
+        .def_prop_rw("material",
+            [=](const Circle& c) { return mat_getter(c); },
+            [=](Circle& c, const Material& m) { mat_setter(c, m); })
+        .def_prop_rw("material_id",
+            [=](const Circle& c) { return mid_getter(c); },
+            [=](Circle& c, std::string id) { mid_setter(c, std::move(id)); })
         .def("__repr__", [](const Circle& c) {
             return "Circle(id='" + c.id + "', center=(" + std::to_string(c.center.x) + ", "
                    + std::to_string(c.center.y) + "), radius=" + std::to_string(c.radius) + ")";
         });
 
     nb::class_<Segment>(m, "Segment")
-        .def("__init__", [](Segment* s, std::string id, Vec2 a, Vec2 b,
-                            Material material, std::string material_id) {
-            new (s) Segment{std::move(id), a, b, std::move(material), std::move(material_id)};
+        .def("__init__", [=](Segment* s, std::string id, Vec2 a, Vec2 b,
+                             nb::object material, std::string material_id) {
+            new (s) Segment{std::move(id), a, b, make_binding(material, std::move(material_id))};
         }, "id"_a = "", "a"_a = Vec2{}, "b"_a = Vec2{},
-           "material"_a = Material{}, "material_id"_a = "")
+           "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Segment::id)
         .def_rw("a", &Segment::a)
         .def_rw("b", &Segment::b)
-        .def_rw("material", &Segment::material)
-        .def_rw("material_id", &Segment::material_id);
+        .def_prop_rw("material",
+            [=](const Segment& s) { return mat_getter(s); },
+            [=](Segment& s, const Material& m) { mat_setter(s, m); })
+        .def_prop_rw("material_id",
+            [=](const Segment& s) { return mid_getter(s); },
+            [=](Segment& s, std::string id) { mid_setter(s, std::move(id)); });
 
     nb::class_<Arc>(m, "Arc")
-        .def("__init__", [](Arc* a, std::string id, Vec2 center, float radius,
-                            float angle_start, float sweep,
-                            Material material, std::string material_id) {
+        .def("__init__", [=](Arc* a, std::string id, Vec2 center, float radius,
+                             float angle_start, float sweep,
+                             nb::object material, std::string material_id) {
             new (a) Arc{std::move(id), center, radius, angle_start, sweep,
-                        std::move(material), std::move(material_id)};
+                        make_binding(material, std::move(material_id))};
         }, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f,
            "angle_start"_a = 0.0f, "sweep"_a = TWO_PI,
-           "material"_a = Material{}, "material_id"_a = "")
+           "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Arc::id)
         .def_rw("center", &Arc::center)
         .def_rw("radius", &Arc::radius)
         .def_rw("angle_start", &Arc::angle_start)
         .def_rw("sweep", &Arc::sweep)
-        .def_rw("material", &Arc::material)
-        .def_rw("material_id", &Arc::material_id);
+        .def_prop_rw("material",
+            [=](const Arc& a) { return mat_getter(a); },
+            [=](Arc& a, const Material& m) { mat_setter(a, m); })
+        .def_prop_rw("material_id",
+            [=](const Arc& a) { return mid_getter(a); },
+            [=](Arc& a, std::string id) { mid_setter(a, std::move(id)); });
 
     nb::class_<Bezier>(m, "Bezier")
-        .def("__init__", [](Bezier* b, std::string id, Vec2 p0, Vec2 p1, Vec2 p2,
-                            Material material, std::string material_id) {
-            new (b) Bezier{std::move(id), p0, p1, p2, std::move(material), std::move(material_id)};
+        .def("__init__", [=](Bezier* b, std::string id, Vec2 p0, Vec2 p1, Vec2 p2,
+                             nb::object material, std::string material_id) {
+            new (b) Bezier{std::move(id), p0, p1, p2, make_binding(material, std::move(material_id))};
         }, "id"_a = "", "p0"_a = Vec2{}, "p1"_a = Vec2{0.5f, 0.5f}, "p2"_a = Vec2{1.0f, 0.0f},
-           "material"_a = Material{}, "material_id"_a = "")
+           "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Bezier::id)
         .def_rw("p0", &Bezier::p0)
         .def_rw("p1", &Bezier::p1)
         .def_rw("p2", &Bezier::p2)
-        .def_rw("material", &Bezier::material)
-        .def_rw("material_id", &Bezier::material_id);
+        .def_prop_rw("material",
+            [=](const Bezier& b) { return mat_getter(b); },
+            [=](Bezier& b, const Material& m) { mat_setter(b, m); })
+        .def_prop_rw("material_id",
+            [=](const Bezier& b) { return mid_getter(b); },
+            [=](Bezier& b, std::string id) { mid_setter(b, std::move(id)); });
 
     nb::class_<Polygon>(m, "Polygon")
-        .def("__init__", [](Polygon* p, std::string id, std::vector<Vec2> vertices,
-                            Material material, std::string material_id) {
-            new (p) Polygon{std::move(id), std::move(vertices), std::move(material), std::move(material_id)};
+        .def("__init__", [=](Polygon* p, std::string id, std::vector<Vec2> vertices,
+                             nb::object material, std::string material_id) {
+            new (p) Polygon{std::move(id), std::move(vertices), make_binding(material, std::move(material_id))};
         }, "id"_a = "", "vertices"_a = std::vector<Vec2>{},
-           "material"_a = Material{}, "material_id"_a = "")
+           "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Polygon::id)
         .def_rw("vertices", &Polygon::vertices)
-        .def_rw("material", &Polygon::material)
-        .def_rw("material_id", &Polygon::material_id);
+        .def_prop_rw("material",
+            [=](const Polygon& p) { return mat_getter(p); },
+            [=](Polygon& p, const Material& m) { mat_setter(p, m); })
+        .def_prop_rw("material_id",
+            [=](const Polygon& p) { return mid_getter(p); },
+            [=](Polygon& p, std::string id) { mid_setter(p, std::move(id)); });
 
     nb::class_<Ellipse>(m, "Ellipse")
-        .def("__init__", [](Ellipse* e, std::string id, Vec2 center,
-                            float semi_a, float semi_b, float rotation,
-                            Material material, std::string material_id) {
+        .def("__init__", [=](Ellipse* e, std::string id, Vec2 center,
+                             float semi_a, float semi_b, float rotation,
+                             nb::object material, std::string material_id) {
             new (e) Ellipse{std::move(id), center, semi_a, semi_b, rotation,
-                            std::move(material), std::move(material_id)};
+                            make_binding(material, std::move(material_id))};
         }, "id"_a = "", "center"_a = Vec2{}, "semi_a"_a = 0.2f, "semi_b"_a = 0.1f,
-           "rotation"_a = 0.0f, "material"_a = Material{}, "material_id"_a = "")
+           "rotation"_a = 0.0f, "material"_a = nb::none(), "material_id"_a = "")
         .def_rw("id", &Ellipse::id)
         .def_rw("center", &Ellipse::center)
         .def_rw("semi_a", &Ellipse::semi_a)
         .def_rw("semi_b", &Ellipse::semi_b)
         .def_rw("rotation", &Ellipse::rotation)
-        .def_rw("material", &Ellipse::material)
-        .def_rw("material_id", &Ellipse::material_id);
+        .def_prop_rw("material",
+            [=](const Ellipse& e) { return mat_getter(e); },
+            [=](Ellipse& e, const Material& m) { mat_setter(e, m); })
+        .def_prop_rw("material_id",
+            [=](const Ellipse& e) { return mid_getter(e); },
+            [=](Ellipse& e, std::string id) { mid_setter(e, std::move(id)); });
 
     // ── Light types ──────────────────────────────────────────────
     nb::class_<PointLight>(m, "PointLight")
@@ -401,13 +464,18 @@ NB_MODULE(_lpt2d, m) {
 
     // ── TraceDefaults ────────────────────────────────────────────
     nb::class_<TraceDefaults>(m, "TraceDefaults")
-        .def("__init__", [](TraceDefaults* t, int64_t rays, int batch, int depth, float intensity) {
-            new (t) TraceDefaults{rays, batch, depth, intensity};
-        }, "rays"_a = 10'000'000, "batch"_a = 200'000, "depth"_a = 12, "intensity"_a = 1.0f)
+        .def("__init__", [](TraceDefaults* t, int64_t rays, int batch, int depth, float intensity,
+                            nb::object seed_mode_obj) {
+            new (t) TraceDefaults{rays, batch, depth, intensity, parse_seed_mode_arg(seed_mode_obj)};
+        }, "rays"_a = 10'000'000, "batch"_a = 200'000, "depth"_a = 12, "intensity"_a = 1.0f,
+           "seed_mode"_a = nb::cast("deterministic"))
         .def_rw("rays", &TraceDefaults::rays)
         .def_rw("batch", &TraceDefaults::batch)
         .def_rw("depth", &TraceDefaults::depth)
         .def_rw("intensity", &TraceDefaults::intensity)
+        .def_prop_rw("seed_mode",
+            [](const TraceDefaults& t) { return seed_mode_to_string(t.seed_mode); },
+            [](TraceDefaults& t, nb::object obj) { t.seed_mode = parse_seed_mode_arg(obj); })
         .def("to_trace_config", &TraceDefaults::to_trace_config);
 
     // ── TraceConfig (runtime) ────────────────────────────────────
@@ -415,7 +483,11 @@ NB_MODULE(_lpt2d, m) {
         .def(nb::init<>())
         .def_rw("batch_size", &TraceConfig::batch_size)
         .def_rw("max_depth", &TraceConfig::max_depth)
-        .def_rw("intensity", &TraceConfig::intensity);
+        .def_rw("intensity", &TraceConfig::intensity)
+        .def_prop_rw("seed_mode",
+            [](const TraceConfig& cfg) { return seed_mode_to_string(cfg.seed_mode); },
+            [](TraceConfig& cfg, nb::object obj) { cfg.seed_mode = parse_seed_mode_arg(obj); })
+        .def_rw("frame_index", &TraceConfig::frame_index);
 
     // ── PostProcess (runtime) ────────────────────────────────────
     nb::class_<PostProcess>(m, "PostProcess")
@@ -468,6 +540,11 @@ NB_MODULE(_lpt2d, m) {
             throw std::runtime_error("Failed to save shot to " + path);
     }, "shot"_a, "path"_a);
 
+    // ── Material resolution ─────────────────────────────────────
+    m.def("resolve_material", [](const Shape& shape, const Scene& scene) -> Material {
+        return resolve_shape_material(shape, scene.materials);
+    }, "shape"_a, "scene"_a);
+
     // ── Geometry utilities ───────────────────────────────────────
     m.def("compute_bounds", &compute_bounds, "scene"_a, "padding"_a = 0.05f);
     m.def("validate_scene", [](const Scene& scene) {
@@ -507,7 +584,7 @@ NB_MODULE(_lpt2d, m) {
     // ── RenderSession ────────────────────────────────────────────
     nb::class_<RenderSession>(m, "RenderSession")
         .def(nb::init<int, int, bool>(), "width"_a, "height"_a, "half_float"_a = false)
-        .def("render_shot", &RenderSession::render_shot, "shot"_a)
+        .def("render_shot", &RenderSession::render_shot, "shot"_a, "frame_index"_a = 0)
         .def("render_frame", &RenderSession::render_frame,
              "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a)
         .def("resize", &RenderSession::resize, "width"_a, "height"_a)

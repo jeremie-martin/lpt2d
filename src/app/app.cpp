@@ -150,7 +150,7 @@ int App::run(const AppConfig& config) {
         arc.radius = std::max(delta.length(), 0.02f);
         arc.angle_start = normalize_angle(angle - 0.5f * PI);
         arc.sweep = PI;
-        arc.material = mat_glass(1.5f, 20000.0f, 0.3f);
+        arc.binding = mat_glass(1.5f, 20000.0f, 0.3f);
         return arc;
     };
 
@@ -167,9 +167,9 @@ int App::run(const AppConfig& config) {
                 for (auto& shape : group.shapes) fn(shape);
         };
         for_each([&](Shape& shape) {
-            const std::string& mid = shape_material_id(shape);
-            if (!mid.empty() && !ed.shot.scene.materials.contains(mid))
-                shape_material_id(shape).clear();
+            auto ref = material_ref_id(shape_binding(shape));
+            if (!ref.empty() && !ed.shot.scene.materials.contains(std::string(ref)))
+                shape_binding(shape) = Material{};
         });
     };
 
@@ -216,7 +216,9 @@ int App::run(const AppConfig& config) {
         // Trace
         auto t0 = std::chrono::steady_clock::now();
         if (!showing_snapshot_a && !panel.paused && renderer.num_lights() > 0) {
-            renderer.trace_and_draw(ed.shot.trace.to_trace_config());
+            TraceConfig trace_cfg = ed.shot.trace.to_trace_config();
+            trace_cfg.frame_index = ed.session.frame_index;
+            renderer.trace_and_draw(trace_cfg);
             glFinish();
         }
         if (!showing_snapshot_a) {
@@ -912,7 +914,7 @@ int App::run(const AppConfig& config) {
                     circle.id = next_scene_entity_id(ed.shot.scene, "circle");
                     circle.center = ed.interaction.create_start;
                     circle.radius = r;
-                    circle.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    circle.binding = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(circle);
                     ed.clear_selection();
                     ed.select({SelectionRef::Shape, circle.id, ""});
@@ -922,7 +924,7 @@ int App::run(const AppConfig& config) {
                     segment.id = next_scene_entity_id(ed.shot.scene, "segment");
                     segment.a = ed.interaction.create_start;
                     segment.b = end;
-                    segment.material = mat_mirror(0.95f);
+                    segment.binding = mat_mirror(0.95f);
                     ed.shot.scene.shapes.push_back(segment);
                     ed.clear_selection();
                     ed.select({SelectionRef::Shape, segment.id, ""});
@@ -941,7 +943,7 @@ int App::run(const AppConfig& config) {
                     bezier.p0 = ed.interaction.create_start;
                     bezier.p1 = mid;
                     bezier.p2 = end;
-                    bezier.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    bezier.binding = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(bezier);
                     ed.clear_selection();
                     ed.select({SelectionRef::Shape, bezier.id, ""});
@@ -953,7 +955,7 @@ int App::run(const AppConfig& config) {
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
                     if (!polygon_is_clockwise(p))
                         std::reverse(p.vertices.begin(), p.vertices.end());
-                    p.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    p.binding = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(p);
                     ed.clear_selection();
                     ed.select({SelectionRef::Shape, p.id, ""});
@@ -968,7 +970,7 @@ int App::run(const AppConfig& config) {
                     ellipse.semi_a = sa;
                     ellipse.semi_b = sb;
                     ellipse.rotation = 0.0f;
-                    ellipse.material = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ellipse.binding = mat_glass(1.5f, 20000.0f, 0.3f);
                     ed.shot.scene.shapes.push_back(ellipse);
                     ed.clear_selection();
                     ed.select({SelectionRef::Shape, ellipse.id, ""});

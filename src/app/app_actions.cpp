@@ -28,6 +28,7 @@ void destroy_compare_snapshot(CompareSnapshot& snap) {
         glDeleteTextures(1, &snap.texture);
         snap.texture = 0;
     }
+    snap.frame_index = 0;
     snap.texture_width = 0;
     snap.texture_height = 0;
 }
@@ -71,14 +72,16 @@ bool group_visible(const RenderFilterState& filters, const std::string& id) {
 } // namespace
 
 Scene build_render_scene_for(const Shot& shot, const RenderFilterState& filters) {
-    auto strip_shape_emission = [](Shape shape) -> Shape {
-        std::visit([](auto& value) {
-            if (value.material.emission > 0.0f)
-                value.material.emission = 0.0f;
-        }, shape);
+    auto strip_shape_emission = [&](Shape shape) -> Shape {
+        Material mat = resolve_shape_material(shape, shot.scene.materials);
+        if (mat.emission > 0.0f) {
+            mat.emission = 0.0f;
+            shape_binding(shape) = mat;
+        }
         return shape;
     };
     Scene filtered;
+    filtered.materials = shot.scene.materials;
     bool any_solo = !filters.solo_light_id.empty();
     for (const auto& s : shot.scene.shapes)
         if (shape_visible(filters, shape_id(s)))
@@ -138,7 +141,7 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
                   bool& light_analysis_valid, bool& force_live_metrics_refresh,
                   int win_w, int win_h, bool mark_dirty) {
     ensure_scene_entity_ids(ed.shot.scene);
-    sync_material_bindings(ed.shot.scene);
+
     ed.view.scene_bounds = scene_default_bounds(ed.shot.scene);
     Bounds view = current_display_view(ed, compare_ab, win_w, win_h);
     renderer.upload_scene(build_render_scene_for(ed.shot, capture_render_filters(ed)), view);
@@ -149,10 +152,9 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
     force_live_metrics_refresh = true;
 }
 
-bool export_authored_png(const Shot& source_shot) {
+bool export_authored_png(const Shot& source_shot, int frame_index) {
     Shot output_shot = source_shot;
     ensure_scene_entity_ids(output_shot.scene);
-    sync_material_bindings(output_shot.scene);
 
     Renderer export_renderer;
     if (!export_renderer.init(output_shot.canvas.width, output_shot.canvas.height))
@@ -164,6 +166,7 @@ bool export_authored_png(const Shot& source_shot) {
     export_renderer.clear();
 
     TraceConfig tcfg = output_shot.trace.to_trace_config();
+    tcfg.frame_index = frame_index;
     int64_t total_rays = output_shot.trace.rays;
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
     const int dispatches_per_draw = 4;
@@ -245,10 +248,12 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
     compare_ab.active = false;
     compare_ab.showing_a = false;
     compare_ab.metrics_valid = false;
+    compare_ab.frame_index = 0;
     ed.session.undo.clear();
     ed.session.undo.push(ed.shot.scene);
+    ed.session.frame_index = 0;
     ensure_scene_entity_ids(ed.shot.scene);
-    sync_material_bindings(ed.shot.scene);
+
     ed.view.scene_bounds = scene_default_bounds(ed.shot.scene);
     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
     reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h, false);

@@ -275,7 +275,7 @@ std::vector<std::string> diagnose_scene(const Scene& scene) {
     int glass_no_absorb = 0;
     int emissive_sources = 0;
     for (const auto& shape : all_shapes) {
-        const Material& mat = shape_material(shape);
+        const Material& mat = resolve_shape_material(shape, scene.materials);
         if (mat.transmission > 0.5f && mat.absorption < 0.01f)
             ++glass_no_absorb;
         if (mat.emission > 0.0f)
@@ -315,7 +315,7 @@ std::vector<std::string> diagnose_scene(const Scene& scene) {
 
 // ─── Intersection testing ─────────────────────────────────────────
 
-std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
+std::optional<Hit> intersect(const Ray& ray, const Circle& circle, const MaterialMap& materials) {
     Vec2 oc = ray.origin - circle.center;
     float a = ray.dir.dot(ray.dir);
     float b = 2.0f * oc.dot(ray.dir);
@@ -336,10 +336,10 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle) {
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = (point - circle.center).normalized();
 
-    return Hit{t, point, normal, &circle.material};
+    return Hit{t, point, normal, &resolve_binding(circle.binding, materials)};
 }
 
-std::optional<Hit> intersect(const Ray& ray, const Segment& seg) {
+std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialMap& materials) {
     Vec2 d = seg.b - seg.a;
     Vec2 e = ray.dir;
     Vec2 f = ray.origin - seg.a;
@@ -357,10 +357,10 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg) {
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = d.perp().normalized();
 
-    return Hit{t, point, normal, &seg.material};
+    return Hit{t, point, normal, &resolve_binding(seg.binding, materials)};
 }
 
-std::optional<Hit> intersect(const Ray& ray, const Arc& arc) {
+std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& materials) {
     Vec2 oc = ray.origin - arc.center;
     float a = ray.dir.dot(ray.dir);
     float b = 2.0f * oc.dot(ray.dir);
@@ -381,13 +381,13 @@ std::optional<Hit> intersect(const Ray& ray, const Arc& arc) {
         float angle = std::atan2(point.y - arc.center.y, point.x - arc.center.x);
         if (angle_in_arc(angle, arc)) {
             Vec2 normal = (point - arc.center).normalized();
-            return Hit{t, point, normal, &arc.material};
+            return Hit{t, point, normal, &resolve_binding(arc.binding, materials)};
         }
     }
     return std::nullopt;
 }
 
-std::optional<Hit> intersect(const Ray& ray, const Bezier& bez) {
+std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMap& materials) {
     Vec2 A = bez.p0 - bez.p1 * 2.0f + bez.p2;
     Vec2 B_coeff = (bez.p1 - bez.p0) * 2.0f;
     Vec2 C = bez.p0;
@@ -429,12 +429,12 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez) {
         Vec2 normal = tangent.perp().normalized();
         if (normal.dot(rd) > 0.0f) normal = -normal;
 
-        best = Hit{s, point, normal, &bez.material};
+        best = Hit{s, point, normal, &resolve_binding(bez.binding, materials)};
     }
     return best;
 }
 
-std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
+std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials) {
     std::optional<Hit> best;
     int n = (int)poly.vertices.size();
     bool clockwise = polygon_is_clockwise(poly);
@@ -444,17 +444,16 @@ std::optional<Hit> intersect(const Ray& ray, const Polygon& poly) {
         Segment edge;
         edge.a = clockwise ? a : b;
         edge.b = clockwise ? b : a;
-        edge.material = poly.material;
-        auto hit = intersect(ray, edge);
+        auto hit = intersect(ray, edge, materials);
         if (hit && (!best || hit->t < best->t)) {
             best = hit;
-            best->material = &poly.material;
+            best->material = &resolve_binding(poly.binding, materials);
         }
     }
     return best;
 }
 
-std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse) {
+std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const MaterialMap& materials) {
     float cr = std::cos(ellipse.rotation), sr = std::sin(ellipse.rotation);
     Vec2 oc = ray.origin - ellipse.center;
     Vec2 lo{oc.x * cr + oc.y * sr, -oc.x * sr + oc.y * cr};
@@ -487,7 +486,7 @@ std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse) {
     Vec2 normal{ln.x * cr - ln.y * sr, ln.x * sr + ln.y * cr};
 
     Vec2 point = ray.origin + ray.dir * t;
-    return Hit{t, point, normal, &ellipse.material};
+    return Hit{t, point, normal, &resolve_binding(ellipse.binding, materials)};
 }
 
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
@@ -495,12 +494,12 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
 
     for (const auto& shape : scene.shapes) {
         auto hit = std::visit(overloaded{
-                                  [&](const Circle& c) { return intersect(ray, c); },
-                                  [&](const Segment& s) { return intersect(ray, s); },
-                                  [&](const Arc& a) { return intersect(ray, a); },
-                                  [&](const Bezier& b) { return intersect(ray, b); },
-                                  [&](const Polygon& p) { return intersect(ray, p); },
-                                  [&](const Ellipse& e) { return intersect(ray, e); },
+                                  [&](const Circle& c) { return intersect(ray, c, scene.materials); },
+                                  [&](const Segment& s) { return intersect(ray, s, scene.materials); },
+                                  [&](const Arc& a) { return intersect(ray, a, scene.materials); },
+                                  [&](const Bezier& b) { return intersect(ray, b, scene.materials); },
+                                  [&](const Polygon& p) { return intersect(ray, p, scene.materials); },
+                                  [&](const Ellipse& e) { return intersect(ray, e, scene.materials); },
                               },
                               shape);
 
@@ -661,8 +660,8 @@ static int emission_point_count(float perimeter) {
     return std::min(n, EMISSION_MAX_POINTS);
 }
 
-std::vector<Light> emission_light(const Shape& s) {
-    const Material& mat = shape_material(s);
+std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) {
+    const Material& mat = resolve_shape_material(s, materials);
     if (mat.emission <= 0.0f) return {};
 
     float perimeter = shape_perimeter(s);

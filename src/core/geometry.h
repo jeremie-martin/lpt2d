@@ -35,12 +35,12 @@ std::vector<std::string> diagnose_scene(const Scene& scene);
 
 // ─── Intersection testing ─────────────────────────────────────────
 
-std::optional<Hit> intersect(const Ray& ray, const Circle& circle);
-std::optional<Hit> intersect(const Ray& ray, const Segment& seg);
-std::optional<Hit> intersect(const Ray& ray, const Arc& arc);
-std::optional<Hit> intersect(const Ray& ray, const Bezier& bez);
-std::optional<Hit> intersect(const Ray& ray, const Polygon& poly);
-std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse);
+std::optional<Hit> intersect(const Ray& ray, const Circle& circle, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const MaterialMap& materials);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // ─── Transform helpers ───────────────────────────────────────────
@@ -56,4 +56,4 @@ Vec2 light_centroid(const Light& l);
 // ─── Perimeter and emission ──────────────────────────────────────
 
 float shape_perimeter(const Shape& s);
-std::vector<Light> emission_light(const Shape& s);
+std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials);

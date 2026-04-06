@@ -69,6 +69,24 @@ static GLuint link_compute(GLuint cs) {
     return prog;
 }
 
+static uint32_t mix_seed_component(uint32_t value) {
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value;
+}
+
+static uint32_t trace_dispatch_seed(const TraceConfig& cfg, uint32_t batch_counter) {
+    uint32_t seed = batch_counter * 1000003u + 42u;
+    if (cfg.seed_mode == SeedMode::Deterministic)
+        return seed;
+
+    uint32_t frame_salt = mix_seed_component(static_cast<uint32_t>(cfg.frame_index) + 0x9e3779b9u);
+    return seed ^ frame_salt;
+}
+
 // ─── GPU data structures (must match GLSL layout under std430) ───────
 
 struct GPUCircle {
@@ -457,14 +475,14 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gc.center[0] = c.center.x;
                 gc.center[1] = c.center.y;
                 gc.radius = c.radius;
-                fill_material(gc, c.material);
+                fill_material(gc, resolve_binding(c.binding, scene.materials));
                 circles.push_back(gc);
             },
             [&](const Segment& s) {
                 GPUSegment gs{};
                 gs.a[0] = s.a.x; gs.a[1] = s.a.y;
                 gs.b[0] = s.b.x; gs.b[1] = s.b.y;
-                fill_material(gs, s.material);
+                fill_material(gs, resolve_binding(s.binding, scene.materials));
                 segs.push_back(gs);
             },
             [&](const Arc& a) {
@@ -473,7 +491,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.radius = a.radius;
                 ga.angle_start = a.angle_start;
                 ga.sweep = a.sweep;
-                fill_material(ga, a.material);
+                fill_material(ga, resolve_binding(a.binding, scene.materials));
                 gpu_arcs.push_back(ga);
             },
             [&](const Bezier& b) {
@@ -481,12 +499,13 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gb.p0[0] = b.p0.x; gb.p0[1] = b.p0.y;
                 gb.p1[0] = b.p1.x; gb.p1[1] = b.p1.y;
                 gb.p2[0] = b.p2.x; gb.p2[1] = b.p2.y;
-                fill_material(gb, b.material);
+                fill_material(gb, resolve_binding(b.binding, scene.materials));
                 gpu_beziers.push_back(gb);
             },
             [&](const Polygon& p) {
                 int n = (int)p.vertices.size();
                 if (n < 2) return;
+                const Material& mat = resolve_binding(p.binding, scene.materials);
                 bool clockwise = polygon_is_clockwise(p);
                 for (int i = 0; i < n; ++i) {
                     Vec2 a = p.vertices[i];
@@ -496,7 +515,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                     Vec2 edge_b = clockwise ? b : a;
                     gs.a[0] = edge_a.x; gs.a[1] = edge_a.y;
                     gs.b[0] = edge_b.x; gs.b[1] = edge_b.y;
-                    fill_material(gs, p.material);
+                    fill_material(gs, mat);
                     segs.push_back(gs);
                 }
             },
@@ -506,7 +525,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ge.semi_a = e.semi_a;
                 ge.semi_b = e.semi_b;
                 ge.rotation = e.rotation;
-                fill_material(ge, e.material);
+                fill_material(ge, resolve_binding(e.binding, scene.materials));
                 gpu_ellipses.push_back(ge);
             },
         }, shape);
@@ -519,7 +538,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
             all_lights.push_back(transform_light(light, group.transform));
 
     for (const auto& shape : all_shapes) {
-        auto el = emission_light(shape);
+        auto el = emission_light(shape, scene.materials);
         all_lights.insert(all_lights.end(), el.begin(), el.end());
     }
 
@@ -693,7 +712,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     GLuint groups = (cfg.batch_size + 63) / 64;
 
     for (int d = 0; d < num_dispatches; d++) {
-        glUniform1ui(trace_loc_seed_, batch_counter_ * 1000003u + 42u);
+        glUniform1ui(trace_loc_seed_, trace_dispatch_seed(cfg, batch_counter_));
         glDispatchCompute(groups, 1, 1);
         // Barrier between dispatches to ensure atomic counter is visible
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
