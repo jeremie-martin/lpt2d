@@ -492,9 +492,6 @@ void main() {
         float absorption_eff = current_absorption * (1.0 + 2.0 * (1.0 - vol_response));
         color *= exp(-absorption_eff * h.t);
 
-        // Terminate rays with negligible energy — remaining bounces are invisible
-        if (color.a < 1e-4) return;
-
         emit(ro, h.point, color);
 
         // Emissive surface: adds energy at the current wavelength (spectrally selective)
