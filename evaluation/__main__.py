@@ -28,7 +28,7 @@ SCENES_DIR = Path(__file__).resolve().parent / "scenes"
 BASELINES_DIR = PROJECT_DIR / "baselines"
 RUNS_DIR = PROJECT_DIR / "runs"
 
-DEFAULT_REPEATS = 5
+DEFAULT_REPEATS = 10
 DEFAULT_WARMUP = 1
 
 
