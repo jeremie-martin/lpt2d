@@ -24,7 +24,7 @@ struct RenderResult {
 
 class RenderSession {
 public:
-    RenderSession(int width, int height, bool half_float = false);
+    RenderSession(int width, int height, bool half_float = true);
     ~RenderSession();
 
     RenderSession(const RenderSession&) = delete;
