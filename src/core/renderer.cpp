@@ -112,7 +112,8 @@ struct GPUCircle {
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad0, _pad1; // std430: stride must be multiple of 8 (vec2 alignment)
+    float radius_sq;
+    float inv_radius;
 };
 static_assert(sizeof(GPUCircle) == 64);
 
@@ -147,12 +148,12 @@ struct GPUArc {
     float radius;
     float angle_start;
     float sweep;
-    float _pad0;
+    float radius_sq;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad1;
+    float inv_radius;
 };
 static_assert(sizeof(GPUArc) == 72);
 
@@ -566,6 +567,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gc.center[0] = c.center.x;
                 gc.center[1] = c.center.y;
                 gc.radius = c.radius;
+                gc.radius_sq = c.radius * c.radius;
+                gc.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
                 fill_material(gc, resolve_binding(c.binding, scene.materials));
                 circles.push_back(gc);
             },
@@ -585,6 +588,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.radius = a.radius;
                 ga.angle_start = a.angle_start;
                 ga.sweep = a.sweep;
+                ga.radius_sq = a.radius * a.radius;
+                ga.inv_radius = a.radius > 0.0f ? 1.0f / a.radius : 0.0f;
                 fill_material(ga, resolve_binding(a.binding, scene.materials));
                 gpu_arcs.push_back(ga);
             },
@@ -620,6 +625,8 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                             ga.radius = c.radius;
                             ga.angle_start = c.angle_start;
                             ga.sweep = c.sweep;
+                            ga.radius_sq = c.radius * c.radius;
+                            ga.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
                             fill_material(ga, mat);
                             gpu_arcs.push_back(ga);
                         }

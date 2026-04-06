@@ -8,7 +8,8 @@ struct GPUCircle {
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad0, _pad1;
+    float radius_sq;
+    float inv_radius;
 };
 
 struct GPUSeg {
@@ -58,12 +59,12 @@ struct GPUArc {
     float radius;
     float angle_start;
     float sweep;
-    float _pad0;
+    float radius_sq;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
-    float _pad1;
+    float inv_radius;
 };
 
 struct GPUBezier {
@@ -214,7 +215,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     // All ray directions are normalized before tracing, so this quadratic
     // can use the cheaper unit-length form.
     float b = dot(oc, rd);
-    float cc = dot(oc, oc) - c.radius * c.radius;
+    float cc = dot(oc, oc) - c.radius_sq;
     float disc = b * b - cc;
     if (disc < 0.0) return NO_HIT;
 
@@ -225,7 +226,7 @@ Hit hit_circle(vec2 ro, vec2 rd, GPUCircle c) {
     if (t < INTERSECT_EPS) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    return Hit(t, p, normalize(p - c.center), c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.spectral_c0, c.spectral_c1, c.spectral_c2);
+    return Hit(t, p, (p - c.center) * c.inv_radius, c.ior, c.roughness, c.metallic, c.transmission, c.absorption, c.cauchy_b, c.albedo, c.emission, c.spectral_c0, c.spectral_c1, c.spectral_c2);
 }
 
 Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s) {
@@ -255,7 +256,7 @@ bool in_arc(float angle, float start, float sweep) {
 Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
     vec2 oc = ro - a.center;
     float qb = dot(oc, rd);
-    float qc = dot(oc, oc) - a.radius * a.radius;
+    float qc = dot(oc, oc) - a.radius_sq;
     float disc = qb * qb - qc;
     if (disc < 0.0) return NO_HIT;
 
@@ -271,7 +272,7 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a) {
         if (angle < 0.0) angle += 2.0 * PI;
         if (angle >= 2.0 * PI) angle -= 2.0 * PI;
         if (in_arc(angle, a.angle_start, a.sweep)) {
-            return Hit(t, p, normalize(p - a.center),
+            return Hit(t, p, (p - a.center) * a.inv_radius,
                        a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.spectral_c0, a.spectral_c1, a.spectral_c2);
         }
     }
