@@ -789,6 +789,15 @@ float shape_perimeter(const Shape& s) {
             return len;
         },
         [](const Polygon& p) {
+            if (p.corner_radius > 0.0f && (int)p.vertices.size() >= 3) {
+                auto parts = decompose_rounded_polygon(p);
+                if (!parts.edges.empty() || !parts.corners.empty()) {
+                    float sum = 0;
+                    for (auto& e : parts.edges) sum += (e.b - e.a).length();
+                    for (auto& c : parts.corners) sum += c.radius * c.sweep;
+                    return sum;
+                }
+            }
             float sum = 0;
             int n = (int)p.vertices.size();
             for (int i = 0; i < n; ++i)
@@ -877,14 +886,47 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
         [&](const Polygon& p) {
             int n = (int)p.vertices.size();
             if (n < 2) return;
+
+            if (p.corner_radius > 0.0f && n >= 3) {
+                auto parts = decompose_rounded_polygon(p);
+                if (!parts.edges.empty() || !parts.corners.empty()) {
+                    for (auto& e : parts.edges) {
+                        SegmentLight sl;
+                        sl.a = e.a;
+                        sl.b = e.b;
+                        sl.intensity = mat.emission * (e.b - e.a).length();
+                        lights.push_back(sl);
+                    }
+                    for (auto& c : parts.corners) {
+                        float arc_len = c.radius * c.sweep;
+                        int arc_n = std::clamp((int)std::round(arc_len / EMISSION_SAMPLE_SPACING),
+                                               2, EMISSION_MAX_POINTS);
+                        float seg_i = mat.emission * arc_len / std::max(1, arc_n - 1);
+                        Vec2 prev{c.center.x + c.radius * std::cos(c.angle_start),
+                                  c.center.y + c.radius * std::sin(c.angle_start)};
+                        for (int i = 1; i < arc_n; ++i) {
+                            float angle = c.angle_start + c.sweep * (float)i / (arc_n - 1);
+                            Vec2 cur{c.center.x + c.radius * std::cos(angle),
+                                     c.center.y + c.radius * std::sin(angle)};
+                            SegmentLight sl;
+                            sl.a = prev;
+                            sl.b = cur;
+                            sl.intensity = seg_i;
+                            lights.push_back(sl);
+                            prev = cur;
+                        }
+                    }
+                    return;
+                }
+            }
+
             for (int i = 0; i < n; ++i) {
                 Vec2 a = p.vertices[i], b = p.vertices[(i + 1) % n];
-                float edge_len = (b - a).length();
-                SegmentLight light;
-                light.a = a;
-                light.b = b;
-                light.intensity = mat.emission * edge_len;
-                lights.push_back(light);
+                SegmentLight sl;
+                sl.a = a;
+                sl.b = b;
+                sl.intensity = mat.emission * (b - a).length();
+                lights.push_back(sl);
             }
         },
         [&](const Ellipse& e) {

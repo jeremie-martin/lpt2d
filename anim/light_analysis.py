@@ -9,6 +9,7 @@ from .stats import (
     LightContribution,
     StatsDiff,
     StructureReport,
+    _copy_shape,
 )
 from .types import (
     Camera2D,
@@ -63,24 +64,7 @@ def _zero_emission_material(mat: Material) -> Material:
 
 def _copy_shape_with_material(shape, mat: Material):
     """Copy a shape with a new inline material (drops any material_id binding)."""
-    t = type(shape)
-    if t is _lpt2d.Circle:
-        return _lpt2d.Circle(id=shape.id, center=shape.center, radius=shape.radius, material=mat)
-    if t is _lpt2d.Segment:
-        return _lpt2d.Segment(id=shape.id, a=shape.a, b=shape.b, material=mat)
-    if t is _lpt2d.Arc:
-        return _lpt2d.Arc(id=shape.id, center=shape.center, radius=shape.radius,
-                          angle_start=shape.angle_start, sweep=shape.sweep, material=mat)
-    if t is _lpt2d.Polygon:
-        return _lpt2d.Polygon(id=shape.id, vertices=list(shape.vertices),
-                              material=mat, corner_radius=shape.corner_radius)
-    if t is _lpt2d.Ellipse:
-        return _lpt2d.Ellipse(id=shape.id, center=shape.center,
-                              semi_a=shape.semi_a, semi_b=shape.semi_b,
-                              rotation=shape.rotation, material=mat)
-    if t is _lpt2d.Bezier:
-        return _lpt2d.Bezier(id=shape.id, p0=shape.p0, p1=shape.p1, p2=shape.p2, material=mat)
-    return shape
+    return _copy_shape(shape, material=mat)
 
 
 def _zero_emission(shape, scene: Scene):

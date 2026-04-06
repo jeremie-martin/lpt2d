@@ -433,19 +433,27 @@ def _shape_binding_kwargs(shape: Shape) -> dict[str, object]:
 
 
 def _copy_shape(shape: Shape, **overrides) -> Shape:
+    # Material binding: explicit override takes priority over original
+    if "material" in overrides:
+        binding: dict[str, object] = {"material": overrides.pop("material")}
+    elif "material_id" in overrides:
+        binding = {"material_id": overrides.pop("material_id")}
+    else:
+        binding = _shape_binding_kwargs(shape)
+
     if isinstance(shape, Circle):
         return Circle(
             id=overrides.get("id", shape.id),
             center=overrides.get("center", shape.center),
             radius=overrides.get("radius", shape.radius),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     if isinstance(shape, Segment):
         return Segment(
             id=overrides.get("id", shape.id),
             a=overrides.get("a", shape.a),
             b=overrides.get("b", shape.b),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     if isinstance(shape, Arc):
         return Arc(
@@ -454,7 +462,7 @@ def _copy_shape(shape: Shape, **overrides) -> Shape:
             radius=overrides.get("radius", shape.radius),
             angle_start=overrides.get("angle_start", shape.angle_start),
             sweep=overrides.get("sweep", shape.sweep),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     if isinstance(shape, Bezier):
         return Bezier(
@@ -462,14 +470,14 @@ def _copy_shape(shape: Shape, **overrides) -> Shape:
             p0=overrides.get("p0", shape.p0),
             p1=overrides.get("p1", shape.p1),
             p2=overrides.get("p2", shape.p2),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     if isinstance(shape, Polygon):
         return Polygon(
             id=overrides.get("id", shape.id),
             vertices=overrides.get("vertices", shape.vertices),
             corner_radius=overrides.get("corner_radius", shape.corner_radius),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     if isinstance(shape, Ellipse):
         return Ellipse(
@@ -478,7 +486,7 @@ def _copy_shape(shape: Shape, **overrides) -> Shape:
             semi_a=overrides.get("semi_a", shape.semi_a),
             semi_b=overrides.get("semi_b", shape.semi_b),
             rotation=overrides.get("rotation", shape.rotation),
-            **_shape_binding_kwargs(shape),
+            **binding,
         )
     return shape
 
