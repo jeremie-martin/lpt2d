@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-// Save shot to JSON file (current v5 authored format). Returns true on success.
+// Save shot to JSON file (current v6 authored format). Returns true on success.
 bool save_shot_json(const Shot& shot, const std::string& path);
 
 // Try to load a shot from a JSON file in the current authored format.

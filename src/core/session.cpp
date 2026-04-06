@@ -37,7 +37,7 @@ RenderSession::~RenderSession() {
 RenderSession::RenderSession(RenderSession&&) noexcept = default;
 RenderSession& RenderSession::operator=(RenderSession&&) noexcept = default;
 
-RenderResult RenderSession::render_shot(const Shot& shot) {
+RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
     // Resize if canvas dimensions changed
     if (shot.canvas.width != impl_->width || shot.canvas.height != impl_->height)
         resize(shot.canvas.width, shot.canvas.height);
@@ -48,6 +48,7 @@ RenderResult RenderSession::render_shot(const Shot& shot) {
 
     // Convert authored types to runtime types
     TraceConfig tcfg = shot.trace.to_trace_config();
+    tcfg.frame_index = frame_index;
     PostProcess pp = shot.look.to_post_process();
     int64_t total_rays = shot.trace.rays;
 

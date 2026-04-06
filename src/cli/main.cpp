@@ -19,12 +19,14 @@ static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
-              << "  --save-shot <path>       Save the resolved v5 shot JSON via the C++ serializer and exit\n"
+              << "  --save-shot <path>       Save the resolved v6 shot JSON via the C++ serializer and exit\n"
               << "  --width <int>            Width (overrides shot canvas)\n"
               << "  --height <int>           Height (overrides shot canvas)\n"
               << "  --rays <int>             Total rays (overrides shot trace)\n"
               << "  --batch <int>            Rays per batch (overrides shot trace)\n"
               << "  --depth <int>            Max ray depth (overrides shot trace)\n"
+              << "  --seed-mode <mode>       deterministic|decorrelated (overrides shot trace)\n"
+              << "  --frame-index <int>      Runtime frame index for decorrelated seed mode (default: 0)\n"
               << "  --exposure <float>       Exposure in stops (overrides shot look)\n"
               << "  --contrast <float>       Contrast (overrides shot look)\n"
               << "  --gamma <float>          Gamma (overrides shot look)\n"
@@ -78,6 +80,7 @@ int main(int argc, char** argv) {
     std::string output = "output.png";
     std::string save_shot_path;
     bool fast_mode = false;
+    int frame_index = 0;
 
     // Deferred overrides: parse flags first, apply to shot after loading.
     // Using lambdas to capture the override actions.
@@ -86,6 +89,7 @@ int main(int argc, char** argv) {
         std::optional<int64_t> rays;
         std::optional<int> batch, depth;
         std::optional<float> exposure, contrast, gamma, white_point;
+        std::optional<SeedMode> seed_mode;
         std::optional<ToneMap> tonemap;
         std::optional<NormalizeMode> normalize;
         std::optional<float> normalize_ref, normalize_pct;
@@ -100,6 +104,7 @@ int main(int argc, char** argv) {
             if (batch) shot.trace.batch = *batch;
             if (depth) shot.trace.depth = *depth;
             if (intensity) shot.trace.intensity = *intensity;
+            if (seed_mode) shot.trace.seed_mode = *seed_mode;
             if (exposure) shot.look.exposure = *exposure;
             if (contrast) shot.look.contrast = *contrast;
             if (gamma) shot.look.gamma = *gamma;
@@ -138,6 +143,20 @@ int main(int argc, char** argv) {
             overrides.batch = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
             overrides.depth = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--seed-mode") == 0 && i + 1 < argc) {
+            const char* value = argv[++i];
+            if (auto mode = parse_seed_mode(value)) overrides.seed_mode = *mode;
+            else {
+                std::cerr << "Invalid seed mode: " << value << "\n";
+                return 1;
+            }
+        } else if (std::strcmp(argv[i], "--frame-index") == 0 && i + 1 < argc) {
+            frame_index = std::atoi(argv[++i]);
+            if (frame_index < 0) {
+                std::cerr << "Frame index must be >= 0\n";
+                return 1;
+            }
+        }
         else if (std::strcmp(argv[i], "--exposure") == 0 && i + 1 < argc)
             overrides.exposure = (float)std::atof(argv[++i]);
         else if (std::strcmp(argv[i], "--gamma") == 0 && i + 1 < argc)
@@ -211,7 +230,7 @@ int main(int argc, char** argv) {
 
     // Render using RenderSession
     RenderSession session(shot.canvas.width, shot.canvas.height, fast_mode);
-    auto result = session.render_shot(shot);
+    auto result = session.render_shot(shot, frame_index);
 
     std::cerr << shot.trace.rays << "/" << shot.trace.rays << " rays\n";
 

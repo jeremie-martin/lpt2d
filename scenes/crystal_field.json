@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "name": "crystal_field",
   "camera": {
     "bounds": [
@@ -37,7 +37,8 @@
     "rays": 10000000,
     "batch": 200000,
     "depth": 12,
-    "intensity": 1.0
+    "intensity": 1.0,
+    "seed_mode": "deterministic"
   },
   "materials": {
     "crystal_glass_130": {

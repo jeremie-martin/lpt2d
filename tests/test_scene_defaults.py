@@ -38,6 +38,7 @@ DEFAULT_TRACE = {
     "batch": 200_000,
     "depth": 12,
     "intensity": 1.0,
+    "seed_mode": "deterministic",
 }
 
 
@@ -57,7 +58,9 @@ def _assert_authored_shape(
     material_ids: set[str],
 ) -> None:
     shape_id = shape.get("id")
-    assert isinstance(shape_id, str) and shape_id, f"{path} {context} is missing a non-empty shape id"
+    assert isinstance(shape_id, str) and shape_id, (
+        f"{path} {context} is missing a non-empty shape id"
+    )
     assert not shape_id.startswith("root_"), f"{path} still uses legacy shape id {shape_id!r}"
     assert shape_id not in entity_ids, f"{path} has duplicate entity id {shape_id!r}"
     entity_ids.add(shape_id)
@@ -71,7 +74,9 @@ def _assert_authored_shape(
 
 def _assert_authored_light(path: Path, light: dict, context: str, entity_ids: set[str]) -> None:
     light_id = light.get("id")
-    assert isinstance(light_id, str) and light_id, f"{path} {context} is missing a non-empty light id"
+    assert isinstance(light_id, str) and light_id, (
+        f"{path} {context} is missing a non-empty light id"
+    )
     assert not light_id.startswith("root_"), f"{path} still uses legacy light id {light_id!r}"
     assert light_id not in entity_ids, f"{path} has duplicate entity id {light_id!r}"
     entity_ids.add(light_id)
@@ -80,23 +85,29 @@ def _assert_authored_light(path: Path, light: dict, context: str, entity_ids: se
 def test_authored_json_uses_explicit_look_trace_and_groups():
     for path in _iter_scene_paths():
         data = _load(path)
-        assert data.get("look") == DEFAULT_LOOK, f"{path} should store the full canonical look block"
-        assert data.get("trace") == DEFAULT_TRACE, f"{path} should store the full canonical trace block"
+        assert data.get("look") == DEFAULT_LOOK, (
+            f"{path} should store the full canonical look block"
+        )
+        assert data.get("trace") == DEFAULT_TRACE, (
+            f"{path} should store the full canonical trace block"
+        )
         assert "groups" in data, f"{path} should include groups explicitly"
         assert isinstance(data["groups"], list), f"{path} groups must be an array"
 
 
-def test_repo_authored_json_is_strict_v5_and_id_coherent():
+def test_repo_authored_json_is_strict_v6_and_id_coherent():
     for path in _iter_scene_paths():
         data = _load(path)
-        assert data.get("version") == 5, f"{path} must declare version 5"
+        assert data.get("version") == 6, f"{path} must declare version 6"
         assert "camera" in data, f"{path} must include an explicit camera block"
         assert "canvas" in data, f"{path} must include an explicit canvas block"
 
         material_ids = set(data.get("materials", {}))
         assert material_ids, f"{path} must define a named materials library"
         for material_id, material in data["materials"].items():
-            assert "emission" in material, f"{path} material {material_id!r} must store explicit emission"
+            assert "emission" in material, (
+                f"{path} material {material_id!r} must store explicit emission"
+            )
 
         entity_ids: set[str] = set()
 
@@ -106,13 +117,21 @@ def test_repo_authored_json_is_strict_v5_and_id_coherent():
             _assert_authored_light(path, light, "root light", entity_ids)
         for group in data.get("groups", []):
             group_id = group.get("id")
-            assert isinstance(group_id, str) and group_id, f"{path} has a group without a non-empty id"
-            assert not group_id.startswith("group_"), f"{path} still uses legacy group id {group_id!r}"
+            assert isinstance(group_id, str) and group_id, (
+                f"{path} has a group without a non-empty id"
+            )
+            assert not group_id.startswith("group_"), (
+                f"{path} still uses legacy group id {group_id!r}"
+            )
             assert group_id not in entity_ids, f"{path} has duplicate entity id {group_id!r}"
             entity_ids.add(group_id)
-            assert set(group) == {"id", "transform", "shapes", "lights"}, f"{path} group {group_id!r} has non-canonical keys"
+            assert set(group) == {"id", "transform", "shapes", "lights"}, (
+                f"{path} group {group_id!r} has non-canonical keys"
+            )
             for shape in group.get("shapes", []):
-                _assert_authored_shape(path, shape, f"group {group_id!r} shape", entity_ids, material_ids)
+                _assert_authored_shape(
+                    path, shape, f"group {group_id!r} shape", entity_ids, material_ids
+                )
             for light in group.get("lights", []):
                 _assert_authored_light(path, light, f"group {group_id!r} light", entity_ids)
 

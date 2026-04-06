@@ -15,6 +15,7 @@ from anim.types import (
     Group,
     Look,
     Material,
+    RenderSession,
     Scene,
     Segment,
     Shot,
@@ -61,9 +62,9 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _make_valid_shot_json(**overrides) -> dict:
-    """Return a minimal valid v5 shot JSON dict."""
+    """Return a minimal valid v6 shot JSON dict."""
     base = {
-        "version": 5,
+        "version": 6,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -83,7 +84,13 @@ def _make_valid_shot_json(**overrides) -> dict:
             "vignette": 0.0,
             "vignette_radius": 0.7,
         },
-        "trace": {"rays": 10000000, "batch": 200000, "depth": 12, "intensity": 1.0},
+        "trace": {
+            "rays": 10000000,
+            "batch": 200000,
+            "depth": 12,
+            "intensity": 1.0,
+            "seed_mode": "deterministic",
+        },
         "materials": {},
         "shapes": [],
         "lights": [],
@@ -93,12 +100,45 @@ def _make_valid_shot_json(**overrides) -> dict:
     return base
 
 
+def _make_seed_behavior_shot(seed_mode: str) -> Shot:
+    return Shot(
+        name=f"seed_{seed_mode}",
+        scene=Scene(
+            shapes=[
+                Circle(
+                    id="lens",
+                    center=[0.0, 0.0],
+                    radius=0.25,
+                    material=Material(ior=1.5, transmission=1.0),
+                )
+            ],
+            lights=[
+                BeamLight(
+                    id="beam",
+                    origin=[-0.8, 0.05],
+                    direction=[1.0, 0.0],
+                    angular_width=0.08,
+                    intensity=1.0,
+                )
+            ],
+        ),
+        canvas=Canvas(64, 64),
+        look=Look(exposure=8.0, gamma=1.0, tonemap="none", normalize="off"),
+        trace=TraceDefaults(rays=64, batch=64, depth=8, seed_mode=seed_mode),
+    )
+
+
+def _render_pixels(shot: Shot, frame_index: int) -> bytes:
+    session = RenderSession(shot.canvas.width, shot.canvas.height, False)
+    return session.render_shot(shot.to_cpp(), frame_index).pixels
+
+
 # ─── Round-trip serialization via C++ ──────────────────────────────────
 
 
-def test_v5_round_trip_preserves_ids_and_material_bindings(tmp_path):
+def test_v6_round_trip_preserves_ids_and_material_bindings(tmp_path):
     path = tmp_path / "roundtrip.json"
-    shot = Shot(name="authored_v5", scene=_make_bound_scene())
+    shot = Shot(name="authored_v6", scene=_make_bound_scene())
     shot.save(path)
 
     loaded = Shot.load(path)
@@ -113,7 +153,7 @@ def test_v5_round_trip_preserves_ids_and_material_bindings(tmp_path):
 # ─── Scene validation via C++ ──────────────────────────────────────────
 
 
-def test_v5_rejects_duplicate_entity_ids():
+def test_v6_rejects_duplicate_entity_ids():
     scene = Scene(
         shapes=[
             Circle(id="dup", radius=0.2),
@@ -125,14 +165,14 @@ def test_v5_rejects_duplicate_entity_ids():
         _lpt2d.validate_scene(scene)
 
 
-def test_v5_rejects_unknown_material_id():
+def test_v6_rejects_unknown_material_id():
     scene = Scene(shapes=[Circle(id="lens", radius=0.2, material_id="missing")])
 
     with pytest.raises(RuntimeError, match="unknown material_id: missing"):
         _lpt2d.validate_scene(scene)
 
 
-def test_v5_rejects_shape_without_material_payload(tmp_path):
+def test_v6_rejects_shape_without_material_payload(tmp_path):
     path = tmp_path / "bad.json"
     data = _make_valid_shot_json(
         name="bad",
@@ -191,7 +231,7 @@ def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
 # ─── Authored JSON format validation ──────────────────────────────────
 
 
-def test_v5_rejects_older_shot_version(tmp_path):
+def test_v6_rejects_older_shot_version(tmp_path):
     path = tmp_path / "outdated.json"
     data = _make_valid_shot_json(version=4)
     _write_json(path, data)
@@ -200,10 +240,10 @@ def test_v5_rejects_older_shot_version(tmp_path):
         Shot.load(path)
 
 
-def test_v5_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
+def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 5,
+        "version": 6,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -216,7 +256,7 @@ def test_v5_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
         Shot.load(path)
 
 
-def test_v5_authored_json_is_fully_explicit_for_defaults(tmp_path):
+def test_v6_authored_json_is_fully_explicit_for_defaults(tmp_path):
     path = tmp_path / "defaults.json"
     shot = Shot(name="explicit_defaults")
     shot.save(path)
@@ -240,9 +280,36 @@ def test_v5_authored_json_is_fully_explicit_for_defaults(tmp_path):
         "vignette",
         "vignette_radius",
     }
-    assert set(data["trace"]) == {"rays", "batch", "depth", "intensity"}
+    assert set(data["trace"]) == {"rays", "batch", "depth", "intensity", "seed_mode"}
     assert data["materials"] == {}
     assert data["groups"] == []
+
+
+def test_v6_round_trip_preserves_seed_mode(tmp_path):
+    path = tmp_path / "seed_mode.json"
+    shot = Shot(name="seed_mode", trace=TraceDefaults(seed_mode="decorrelated"), scene=_make_bound_scene())
+    shot.save(path)
+
+    data = json.loads(path.read_text())
+    loaded = Shot.load(path)
+
+    assert data["trace"]["seed_mode"] == "decorrelated"
+    assert loaded.trace.seed_mode == "decorrelated"
+
+
+def test_render_session_seed_mode_uses_repeatable_frame_index():
+    deterministic = _make_seed_behavior_shot("deterministic")
+    decorrelated = _make_seed_behavior_shot("decorrelated")
+
+    det_frame0 = _render_pixels(deterministic, 0)
+    det_frame1 = _render_pixels(deterministic, 1)
+    dec_frame0_a = _render_pixels(decorrelated, 0)
+    dec_frame0_b = _render_pixels(decorrelated, 0)
+    dec_frame1 = _render_pixels(decorrelated, 1)
+
+    assert det_frame0 == det_frame1
+    assert dec_frame0_a == dec_frame0_b
+    assert dec_frame0_a != dec_frame1
 
 
 # ─── CLI rejection tests ──────────────────────────────────────────────
@@ -262,14 +329,14 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 5)" in result.stderr
+    assert "Unsupported shot version (expected 6)" in result.stderr
     assert not output.exists()
 
 
 def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
     bad_path = tmp_path / "trailing_garbage.json"
     output = tmp_path / "trailing_garbage.png"
-    bad_path.write_text('{"version":5,"shapes":[],"lights":[],"groups":[]} trailing')
+    bad_path.write_text('{"version":6,"shapes":[],"lights":[],"groups":[]} trailing')
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
@@ -328,7 +395,7 @@ def test_cpp_cli_rejects_noncanonical_tonemap_alias():
 # ─── CLI save-shot round-trip ──────────────────────────────────────────
 
 
-def test_cpp_save_shot_round_trip_preserves_v5_ids_and_material_bindings(tmp_path):
+def test_cpp_save_shot_round_trip_preserves_v6_ids_and_material_bindings(tmp_path):
     source_path = tmp_path / "source.json"
     saved_path = tmp_path / "saved.json"
 
@@ -396,6 +463,38 @@ def test_cpp_save_shot_round_trip_preserves_phase2_look_fields(tmp_path):
     assert saved.look.saturation == pytest.approx(1.7)
     assert saved.look.vignette == pytest.approx(0.3)
     assert saved.look.vignette_radius == pytest.approx(0.9)
+
+
+def test_cpp_save_shot_round_trip_preserves_seed_mode(tmp_path):
+    source_path = tmp_path / "source_seed.json"
+    saved_path = tmp_path / "saved_seed.json"
+
+    shot = Shot(
+        name="cpp_save_seed",
+        trace=TraceDefaults(seed_mode="deterministic"),
+        scene=_make_bound_scene(),
+    )
+    shot.save(source_path)
+
+    result = subprocess.run(
+        [
+            str(CLI_BINARY),
+            "--scene",
+            str(source_path),
+            "--save-shot",
+            str(saved_path),
+            "--seed-mode",
+            "decorrelated",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert result.returncode == 0, result.stderr
+    saved = Shot.load(saved_path)
+    assert saved.trace.seed_mode == "decorrelated"
 
 
 # ─── Save/load/modify round-trip ──────────────────────────────────────

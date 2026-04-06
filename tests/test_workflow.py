@@ -60,11 +60,21 @@ def test_shot_with_look():
 
 
 def test_shot_with_trace():
-    shot = Shot(trace=TraceDefaults(rays=10_000_000))
+    shot = Shot(trace=TraceDefaults(rays=10_000_000, seed_mode="decorrelated"))
     new_shot = shot.with_trace(rays=50_000_000, depth=16)
     assert shot.trace.rays == 10_000_000
+    assert shot.trace.seed_mode == "decorrelated"
     assert new_shot.trace.rays == 50_000_000
     assert new_shot.trace.depth == 16
+    assert new_shot.trace.seed_mode == "decorrelated"
+
+
+def test_shot_with_trace_can_override_seed_mode():
+    shot = Shot(trace=TraceDefaults(seed_mode="deterministic"))
+    new_shot = shot.with_trace(seed_mode="decorrelated")
+
+    assert shot.trace.seed_mode == "deterministic"
+    assert new_shot.trace.seed_mode == "decorrelated"
 
 
 def test_shot_preset_returns_isolated_mutable_state():

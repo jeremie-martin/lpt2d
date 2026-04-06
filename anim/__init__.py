@@ -67,6 +67,7 @@ from .types import PointLight as PointLight
 from .types import Polygon as Polygon
 from .types import Quality as Quality
 from .types import Scene as Scene
+from .types import SeedMode as SeedMode
 from .types import Segment as Segment
 from .types import SegmentLight as SegmentLight
 from .types import Shot as Shot
@@ -106,6 +107,7 @@ __all__ = [
     "Polygon",
     "Quality",
     "Scene",
+    "SeedMode",
     "Segment",
     "SegmentLight",
     "Shot",

@@ -189,7 +189,7 @@ def mirror_box_walls(half=0.9):
 
 def make_scene(shapes, lights, bounds):
     return {
-        "version": 5,
+        "version": 6,
         "name": "test",
         "camera": {"bounds": bounds},
         "shapes": shapes,
@@ -850,7 +850,7 @@ def test_grouped_ellipse_matches_direct_ellipse():
     material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1}
 
     grouped_scene = {
-        "version": 5,
+        "version": 6,
         "name": "grouped-ellipse",
         "camera": {"bounds": bounds},
         "shapes": collectors,

@@ -100,8 +100,10 @@ python examples/python/beam_chamber_starter.py
   Strategic project direction.
 - [docs/README.md](/home/holo/prog/lpt2d/docs/README.md)
   Documentation index.
-- [docs/AUTHORED_V5.md](/home/holo/prog/lpt2d/docs/AUTHORED_V5.md)
-  Strict v5 authored-scene policy and committed scene conventions.
+- [docs/AUTHORED_V6.md](/home/holo/prog/lpt2d/docs/AUTHORED_V6.md)
+  Strict v6 authored-scene policy and committed scene conventions.
+- [docs/SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
+  Shared frame-seed semantics across renderer, CLI, Python, and GUI.
 - [docs/VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Shot-aware look development, clutter diagnostics, and GUI comparison workflows.
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
@@ -127,8 +129,8 @@ scene set remains important because it still drives runtime discovery and the
 general `benchmark.sh` performance workflow.
 
 Built-in authored JSON, the Python API, the CLI, and the GUI all target one
-strict v5 authored format. Older authored versions are intentionally rejected;
-the project no longer carries fallback compatibility for pre-v5 shot JSON.
+strict v6 authored format. Older authored versions are intentionally rejected;
+the project no longer carries fallback compatibility for pre-v6 shot JSON.
 
 ## Visual Iteration
 

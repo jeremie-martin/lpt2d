@@ -222,7 +222,7 @@ def render(
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, camera)
         t0 = time.monotonic()
-        render_result = session.render_shot(cpp_shot)
+        render_result = session.render_shot(cpp_shot, i)
         ms = (time.monotonic() - t0) * 1000
         last_report = _report_from_result(render_result, i, ms)
         return render_result.pixels
@@ -280,7 +280,7 @@ def render_still(
     ctx = timeline.context_at(frame)
     result = animate(ctx)
     cpp_shot = _resolve_frame_shot(shot, result, camera)
-    render_result = session.render_shot(cpp_shot)
+    render_result = session.render_shot(cpp_shot, frame)
     _save_image(output, render_result.pixels, shot.canvas.width, shot.canvas.height)
     sys.stderr.write(
         f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n"
@@ -313,7 +313,7 @@ def render_contact_sheet(
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, camera)
-        render_result = session.render_shot(cpp_shot)
+        render_result = session.render_shot(cpp_shot, fi)
         frames_rgb.append(render_result.pixels)
         sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
         sys.stderr.flush()
@@ -361,7 +361,7 @@ def render_stats(
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, camera)
         t0 = time.monotonic()
-        render_result = session.render_shot(cpp_shot)
+        render_result = session.render_shot(cpp_shot, fi)
         ms = (time.monotonic() - t0) * 1000
         report = _report_from_result(render_result, fi, ms)
         stats = frame_stats_from_report(report, w, h)

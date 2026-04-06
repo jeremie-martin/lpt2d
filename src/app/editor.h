@@ -148,6 +148,7 @@ struct EditorState {
         Clipboard clipboard;
         bool dirty = false;
         std::string save_path;
+        int frame_index = 0;
     } session;
 
     // View state (camera, display flags — not serialized)

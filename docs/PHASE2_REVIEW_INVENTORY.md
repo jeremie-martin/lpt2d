@@ -57,7 +57,7 @@ Each reviewer should return:
 - Postprocess additions:
   saturation and vignette
 - Test additions:
-  workflow, stats, and authored-v5 round-trip coverage
+  workflow, stats, and authored-v6 round-trip coverage
 
 ## Review Groups
 
@@ -228,7 +228,7 @@ Primary files:
 
 - `tests/test_workflow.py`
 - `tests/test_stats.py`
-- `tests/test_authored_v5.py`
+- `tests/test_authored_v6.py`
 - `README.md`
 - `docs/README.md`
 - `docs/VISUAL_ITERATION.md`
@@ -333,7 +333,7 @@ Scope:
 
 - `tests/test_workflow.py`
 - `tests/test_stats.py`
-- `tests/test_authored_v5.py`
+- `tests/test_authored_v6.py`
 - `README.md`
 - `docs/README.md`
 - `docs/VISUAL_ITERATION.md`

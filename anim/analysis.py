@@ -53,6 +53,7 @@ def _analysis_trace(base: TraceDefaults | None, *, rays: int | None = None) -> T
         batch=min(ref.batch, _ANALYSIS_TRACE.batch),
         depth=min(ref.depth, _ANALYSIS_TRACE.depth),
         intensity=ref.intensity,
+        seed_mode=ref.seed_mode,
     )
 
 
@@ -258,7 +259,7 @@ def calibrate_normalize_ref(
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = renderer_mod._resolve_frame_shot(cal_shot, result, camera)
-        render_result = session.render_shot(cpp_shot)
+        render_result = session.render_shot(cpp_shot, fi)
         if render_result.max_hdr <= 0:
             raise RuntimeError("Calibration failed: no max_hdr")
         max_hdr = max(max_hdr, render_result.max_hdr)

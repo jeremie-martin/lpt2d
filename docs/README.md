@@ -5,8 +5,10 @@ and should not be buried inside implementation-specific files.
 
 ## Core Documents
 
-- [AUTHORED_V5.md](/home/holo/prog/lpt2d/docs/AUTHORED_V5.md)
-  The strict authored-scene v5 policy and committed scene conventions.
+- [AUTHORED_V6.md](/home/holo/prog/lpt2d/docs/AUTHORED_V6.md)
+  The strict authored-scene v6 policy and committed scene conventions.
+- [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
+  Shared frame-seed semantics and the authored/runtime split for seed control.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   The current Phase 2 visual-iteration surface across Python and the GUI.
 - [PHASE2_REVIEW_INVENTORY.md](/home/holo/prog/lpt2d/docs/PHASE2_REVIEW_INVENTORY.md)

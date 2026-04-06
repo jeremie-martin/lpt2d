@@ -39,6 +39,7 @@ TraceDefaults = _lpt2d.TraceDefaults
 Bounds = _lpt2d.Bounds
 ToneMap = _lpt2d.ToneMap
 NormalizeMode = _lpt2d.NormalizeMode
+SeedMode = _lpt2d.SeedMode
 RenderSession = _lpt2d.RenderSession
 RenderResult = _lpt2d.RenderResult
 FrameMetrics = _lpt2d.FrameMetrics
@@ -256,7 +257,7 @@ class Shot:
         for key, val in overrides.items():
             if key in ("width", "height"):
                 setattr(shot.canvas, key, val)
-            elif key in ("rays", "batch", "depth", "intensity"):
+            elif key in ("rays", "batch", "depth", "intensity", "seed_mode"):
                 setattr(shot.trace, key, val)
             elif hasattr(shot.look, key):
                 setattr(shot.look, key, val)
@@ -283,6 +284,7 @@ class Shot:
             batch=overrides.get("batch", self.trace.batch),
             depth=overrides.get("depth", self.trace.depth),
             intensity=overrides.get("intensity", self.trace.intensity),
+            seed_mode=overrides.get("seed_mode", self.trace.seed_mode),
         )
         return Shot(
             name=self.name,
@@ -340,6 +342,7 @@ def _apply_trace_override(
             batch=override.get("batch", base.batch),
             depth=override.get("depth", base.depth),
             intensity=override.get("intensity", base.intensity),
+            seed_mode=override.get("seed_mode", base.seed_mode),
         )
     raise TypeError(f"Trace override must be TraceDefaults, dict, or None, got {type(override)}")
 

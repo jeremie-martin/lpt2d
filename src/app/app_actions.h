@@ -34,6 +34,7 @@ struct CompareSnapshot {
     bool showing_a = false;
     bool metrics_valid = false;
     Shot shot;
+    int frame_index = 0;
     Bounds view_bounds{{-1, -1}, {1, 1}};
     FrameMetrics metrics{};
     GLuint texture = 0;
@@ -67,8 +68,8 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
                   bool& light_analysis_valid, bool& force_live_metrics_refresh,
                   int win_w, int win_h, bool mark_dirty = true);
 
-// Export a high-quality PNG render of the given shot.
-bool export_authored_png(const Shot& source_shot);
+// Export a high-quality PNG render of the given shot at a specific runtime frame index.
+bool export_authored_png(const Shot& source_shot, int frame_index = 0);
 
 // Save the current shot to JSON.
 void do_save(EditorState& ed);

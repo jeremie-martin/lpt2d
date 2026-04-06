@@ -33,7 +33,7 @@ public:
 
     // Render a complete frame from a Shot.
     // Resolves camera bounds, converts Look → PostProcess, traces rays, post-processes.
-    RenderResult render_shot(const Shot& shot);
+    RenderResult render_shot(const Shot& shot, int frame_index = 0);
 
     // Render with pre-resolved parameters (for animation loops).
     RenderResult render_frame(const Scene& scene, const Bounds& bounds,
