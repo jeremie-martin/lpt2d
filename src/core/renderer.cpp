@@ -154,13 +154,8 @@ struct GPUArc {
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
     float inv_radius;
-    // Precomputed direction vectors for fast arc-containment test (avoids atan)
-    float start_dir[2]; // (cos(angle_start), sin(angle_start))
-    float end_dir[2];   // (cos(angle_start + sweep), sin(angle_start + sweep))
-    float sweep_gt_pi;  // 1.0 if sweep > PI, 0.0 otherwise
-    float _pad;         // pad to 96 bytes for alignment
 };
-static_assert(sizeof(GPUArc) == 96);
+static_assert(sizeof(GPUArc) == 72);
 
 struct GPUBezier {
     float p0[2];
@@ -597,12 +592,6 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.sweep = a.sweep;
                 ga.radius_sq = a.radius * a.radius;
                 ga.inv_radius = a.radius > 0.0f ? 1.0f / a.radius : 0.0f;
-                ga.start_dir[0] = std::cos(a.angle_start);
-                ga.start_dir[1] = std::sin(a.angle_start);
-                float end_angle = a.angle_start + a.sweep;
-                ga.end_dir[0] = std::cos(end_angle);
-                ga.end_dir[1] = std::sin(end_angle);
-                ga.sweep_gt_pi = (a.sweep > 3.14159265f) ? 1.0f : 0.0f;
                 fill_material(ga, resolve_binding(a.binding, scene.materials));
                 gpu_arcs.push_back(ga);
             },
@@ -640,12 +629,6 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                             ga.sweep = c.sweep;
                             ga.radius_sq = c.radius * c.radius;
                             ga.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
-                            ga.start_dir[0] = std::cos(c.angle_start);
-                            ga.start_dir[1] = std::sin(c.angle_start);
-                            float end_angle = c.angle_start + c.sweep;
-                            ga.end_dir[0] = std::cos(end_angle);
-                            ga.end_dir[1] = std::sin(end_angle);
-                            ga.sweep_gt_pi = (c.sweep > 3.14159265f) ? 1.0f : 0.0f;
                             fill_material(ga, mat);
                             gpu_arcs.push_back(ga);
                         }

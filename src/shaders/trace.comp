@@ -65,10 +65,6 @@ struct GPUArc {
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
     float inv_radius;
-    vec2 start_dir;     // precomputed (cos(start), sin(start))
-    vec2 end_dir;       // precomputed (cos(start+sweep), sin(start+sweep))
-    float sweep_gt_pi;  // 1.0 if sweep > PI
-    float _pad;
 };
 
 struct GPUBezier {
@@ -250,15 +246,21 @@ Hit hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
     return Hit(t, p, n, s.ior, s.roughness, s.metallic, s.transmission, s.absorption, s.cauchy_b, s.albedo, s.emission, s.spectral_c0, s.spectral_c1, s.spectral_c2);
 }
 
+bool in_arc(float angle, float start, float sweep) {
+    float arc_sweep = clamp(sweep, 0.0, 2.0 * PI);
+    if (arc_sweep >= 2.0 * PI - INTERSECT_EPS)
+        return true;
+    float delta = mod(angle - start, 2.0 * PI);
+    if (delta < 0.0) delta += 2.0 * PI;
+    return delta <= arc_sweep + INTERSECT_EPS;
+}
+
 Hit hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
     vec2 oc = ro - a.center;
     float qb = dot(oc, rd);
     float qc = dot(oc, oc) - a.radius_sq;
     float disc = qb * qb - qc;
     if (disc < 0.0) return NO_HIT;
-
-    // Full circle fast path (skip angle test)
-    bool full_circle = (a.sweep >= TWO_PI - INTERSECT_EPS);
 
     float sq = sqrt(disc);
     float t1 = -qb - sq;
@@ -268,20 +270,13 @@ Hit hit_arc(vec2 ro, vec2 rd, GPUArc a, float max_t) {
         float t = (i == 0) ? t1 : t2;
         if (t < INTERSECT_EPS || t >= max_t) continue;
         vec2 p = ro + rd * t;
-
-        if (!full_circle) {
-            // Cross-product arc containment test (replaces atan)
-            vec2 d = p - a.center;
-            float cross_s = d.x * a.start_dir.y - d.y * a.start_dir.x;
-            float cross_e = d.x * a.end_dir.y - d.y * a.end_dir.x;
-            bool inside = (a.sweep_gt_pi > 0.5)
-                ? (cross_s >= -INTERSECT_EPS || cross_e <= INTERSECT_EPS)
-                : (cross_s >= -INTERSECT_EPS && cross_e <= INTERSECT_EPS);
-            if (!inside) continue;
+        float angle = atan(p.y - a.center.y, p.x - a.center.x);
+        if (angle < 0.0) angle += 2.0 * PI;
+        if (angle >= 2.0 * PI) angle -= 2.0 * PI;
+        if (in_arc(angle, a.angle_start, a.sweep)) {
+            return Hit(t, p, (p - a.center) * a.inv_radius,
+                       a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.spectral_c0, a.spectral_c1, a.spectral_c2);
         }
-
-        return Hit(t, p, (p - a.center) * a.inv_radius,
-                   a.ior, a.roughness, a.metallic, a.transmission, a.absorption, a.cauchy_b, a.albedo, a.emission, a.spectral_c0, a.spectral_c1, a.spectral_c2);
     }
     return NO_HIT;
 }
