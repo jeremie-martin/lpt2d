@@ -149,8 +149,10 @@ private:
     GLuint fill_vao_ = 0;
     GLuint fill_vbo_ = 0;
     int fill_vertex_count_ = 0;
-    GLuint fill_fbo_ = 0;
-    GLuint fill_texture_ = 0; // GL_RGB16F, same size as accumulation buffer
+    GLuint fill_fbo_ = 0;         // Resolve target (regular texture for post-process sampling)
+    GLuint fill_texture_ = 0;     // GL_RGB16F, sampled in postprocess.frag
+    GLuint fill_ms_fbo_ = 0;      // Multisample render target (4x MSAA)
+    GLuint fill_ms_rbo_ = 0;      // GL_RGB16F multisample renderbuffer
     GLint fill_loc_bounds_min_ = -1;
     GLint fill_loc_view_scale_ = -1;
     GLint fill_loc_view_offset_ = -1;

@@ -318,7 +318,7 @@ bool Renderer::create_framebuffers() {
         return false;
     }
 
-    // Fill texture (RGB16F for shape interior fills)
+    // Fill texture (RGB16F for shape interior fills, sampled in post-process)
     glGenTextures(1, &fill_texture_);
     glBindTexture(GL_TEXTURE_2D, fill_texture_);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width_, height_, 0, GL_RGB, GL_FLOAT, nullptr);
@@ -335,6 +335,19 @@ bool Renderer::create_framebuffers() {
         return false;
     }
 
+    // Multisample fill renderbuffer (4x MSAA for antialiased fill edges)
+    glGenRenderbuffers(1, &fill_ms_rbo_);
+    glBindRenderbuffer(GL_RENDERBUFFER, fill_ms_rbo_);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGB16F, width_, height_);
+
+    glGenFramebuffers(1, &fill_ms_fbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_ms_fbo_);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, fill_ms_rbo_);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "Fill MSAA FBO incomplete\n";
+        return false;
+    }
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     return true;
 }
@@ -343,6 +356,8 @@ void Renderer::delete_framebuffers() {
     if (fbo_) { glDeleteFramebuffers(1, &fbo_); fbo_ = 0; }
     if (display_fbo_) { glDeleteFramebuffers(1, &display_fbo_); display_fbo_ = 0; }
     if (fill_fbo_) { glDeleteFramebuffers(1, &fill_fbo_); fill_fbo_ = 0; }
+    if (fill_ms_fbo_) { glDeleteFramebuffers(1, &fill_ms_fbo_); fill_ms_fbo_ = 0; }
+    if (fill_ms_rbo_) { glDeleteRenderbuffers(1, &fill_ms_rbo_); fill_ms_rbo_ = 0; }
     if (float_texture_) { glDeleteTextures(1, &float_texture_); float_texture_ = 0; }
     if (display_texture_) { glDeleteTextures(1, &display_texture_); display_texture_ = 0; }
     if (fill_texture_) { glDeleteTextures(1, &fill_texture_); fill_texture_ = 0; }
@@ -861,12 +876,15 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
 }
 
 void Renderer::redraw_fills(const Bounds& bounds) {
-    if (!fill_fbo_) return;
+    if (!fill_ms_fbo_ || !fill_fbo_) return;
 
-    // Always clear the fill texture (prevents stale data when scene changes)
-    glBindFramebuffer(GL_FRAMEBUFFER, fill_fbo_);
+    // Clear both FBOs (prevents stale data when scene changes)
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_ms_fbo_);
     glViewport(0, 0, width_, height_);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_fbo_);
     glClear(GL_COLOR_BUFFER_BIT);
 
     if (fill_vertex_count_ <= 0) {
@@ -874,6 +892,8 @@ void Renderer::redraw_fills(const Bounds& bounds) {
         return;
     }
 
+    // Render fills into MSAA FBO (4x antialiasing)
+    glBindFramebuffer(GL_FRAMEBUFFER, fill_ms_fbo_);
     auto vp = compute_viewport_xform(bounds, width_, height_);
 
     glEnable(GL_BLEND);
@@ -890,6 +910,12 @@ void Renderer::redraw_fills(const Bounds& bounds) {
     glBindVertexArray(0);
 
     glDisable(GL_BLEND);
+
+    // Resolve MSAA → regular fill texture for post-process sampling
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fill_ms_fbo_);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fill_fbo_);
+    glBlitFramebuffer(0, 0, width_, height_, 0, 0, width_, height_,
+                      GL_COLOR_BUFFER_BIT, GL_LINEAR);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
