@@ -405,13 +405,20 @@ void main() {
     // Choose light (weighted, binary search over cumulative weights)
     float total_w = light_cum_weights[uNumLights - 1u];
     float r = rand01() * total_w;
-    uint lo = 0u, hi = uNumLights - 1u;
-    while (lo < hi) {
-        uint mid = (lo + hi) / 2u;
-        if (light_cum_weights[mid] < r) lo = mid + 1u;
-        else hi = mid;
+    uint li = 0u;
+    if (uNumLights <= 4u) {
+        if (uNumLights > 1u && r > light_cum_weights[0u]) li = 1u;
+        if (uNumLights > 2u && r > light_cum_weights[1u]) li = 2u;
+        if (uNumLights > 3u && r > light_cum_weights[2u]) li = 3u;
+    } else {
+        uint lo = 0u, hi = uNumLights - 1u;
+        while (lo < hi) {
+            uint mid = (lo + hi) / 2u;
+            if (light_cum_weights[mid] < r) lo = mid + 1u;
+            else hi = mid;
+        }
+        li = lo;
     }
-    uint li = lo;
     GPULight lt = lights[li];
 
     // Generate ray
