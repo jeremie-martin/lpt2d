@@ -71,6 +71,10 @@ def max_abs_diff(a: np.ndarray, b: np.ndarray) -> int:
 
 
 def pct_pixels_changed(a: np.ndarray, b: np.ndarray, threshold: int = 1) -> float:
-    """Fraction of pixels where any channel differs by more than threshold."""
+    """Fraction of pixels where any channel differs by more than ``threshold``.
+
+    The comparison is strict: with the default ``threshold=1``, an absolute
+    channel delta of exactly 1 does not count as changed.
+    """
     diff = np.abs(a.astype(np.int16) - b.astype(np.int16))
     return float(np.mean(np.any(diff > threshold, axis=2)))

@@ -63,7 +63,7 @@ class RatioSummary:
 
 @dataclass(frozen=True)
 class TimedFrame:
-    """One timed frame measurement from a specific launch."""
+    """One timed case measurement from a specific launch."""
 
     launch_index: int
     frame_index: int
@@ -74,7 +74,10 @@ class TimedFrame:
 
 @dataclass(frozen=True)
 class CaseBenchmark:
-    """Timing for one benchmark case (one deterministic frame) across launches."""
+    """Timing for one benchmark case across launches.
+
+    A case is one deterministic scene variant identified by a frame index.
+    """
 
     frame_index: int
     samples: list[TimedFrame]
@@ -88,7 +91,11 @@ class CaseBenchmark:
 
 @dataclass(frozen=True)
 class SceneBenchmark:
-    """Detailed timing for one scene across launches and benchmark cases."""
+    """Detailed timing for one scene across launches and benchmark cases.
+
+    ``pooled_*`` summaries cover every raw sample and are diagnostic only.
+    ``case_*`` summaries cover per-case medians.
+    """
 
     samples: list[TimedFrame]
     cases: dict[int, CaseBenchmark]
@@ -154,18 +161,21 @@ def benchmark(
     warmup: int = 1,
     frame_index: int = 0,
 ):
-    """Render a shot repeatedly and return timing statistics.
+    """Render a shot repeatedly inside one existing session.
 
     Args:
         session: ``_lpt2d.RenderSession`` instance.
         shot: ``_lpt2d.Shot`` to render.
-        repeats: Number of timed renders (default 5).
-        warmup: Number of warm-up renders to discard (default 1).
+        repeats: Number of timed renders of the same shot (default 5).
+        warmup: Number of untimed renders of the same shot to discard (default 1).
         frame_index: Frame index passed to ``render_shot``.
 
     Returns:
         ``(TimingSummary, RenderResult)`` — the summary covers timing only;
         the RenderResult is from the last timed render (for fidelity comparison).
+
+    This helper is lower-level than ``benchmark_scene()``: ``repeats`` are not
+    harness ``launches``, and warm-up here does not recreate the session.
     """
     # Warm-up renders (discard results, prime GPU pipeline)
     for _ in range(warmup):
@@ -266,12 +276,15 @@ def benchmark_scene(
     height: int | None = None,
     rays: int | None = None,
 ) -> SceneBenchmark:
-    """Measure one scene across multiple fresh sessions and deterministic frames.
+    """Measure one scene across multiple fresh sessions and deterministic cases.
 
     The primary metric remains the engine-reported ``RenderResult.time_ms``.
     We also record a wall-clock timing around each ``render_shot()`` call so
     the evaluation report can show how closely the Python-side timing tracks
     the engine timing.
+
+    A launch is one fresh ``RenderSession`` sweep over all cases for the scene.
+    It is not a new process launch.
     """
     import _lpt2d
 
@@ -348,32 +361,6 @@ def benchmark_scene(
         frames_per_launch=frames,
         warmup=warmup,
     )
-
-
-def benchmark_animated(
-    scene_path: str,
-    *,
-    frames: int = 5,
-    warmup: int = 1,
-):
-    """Render an animated sequence and return timing statistics.
-
-    Each frame applies gentle transforms to scene groups so the GPU cannot
-    cache across frames. This gives more representative timing on hardware
-    with variable clocks (laptops, thermal throttling).
-
-    Args:
-        scene_path: Path to the scene JSON file.
-        frames: Number of animated frames to render and time.
-        warmup: Number of warm-up renders to discard.
-
-    Returns:
-        ``(TimingSummary, RenderResult)`` — the summary covers per-frame
-        timing; the RenderResult is from frame 0 (static, for fidelity).
-    """
-    benchmark_result = benchmark_scene(scene_path, frames=frames, launches=1, warmup=warmup)
-    fidelity_result = benchmark_result.samples[0].result
-    return benchmark_result.case_render_summary, fidelity_result
 
 
 def classify_speedup(baseline: TimingSummary, candidate: TimingSummary) -> SpeedupResult:

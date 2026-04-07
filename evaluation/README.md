@@ -1,29 +1,38 @@
 # evaluation/
 
-Fidelity comparison and timing measurement for lpt2d. This module provides
-the measurement surface for autonomous optimization — render a frame, compare
-it against a reference, get a machine-readable verdict.
+Evaluation harness for `lpt2d`: fidelity comparison and timing measurement.
+Render a case, compare it against a reference, and emit a machine-readable
+verdict.
 
 ## Purpose
 
-This is the authoritative evaluation surface for `lpt2d` renderer work.
+This is the default evaluation harness for `lpt2d` renderer work.
 
 - It measures renderer speed in a way that is stable enough for benchmarking
   and optimization loops.
 - It measures renderer fidelity in a way that can reject meaningful visual
   regressions.
 - It aims to stay representative of real Python animation usage by timing
-  multiple deterministic frames across multiple repeated launches.
+  a fixed sweep of deterministic scene variants inside multiple fresh sessions.
 
-The benchmark unit is a benchmark case:
+## Glossary
+
+- `base scene`: the original scene JSON before per-case animation is applied
+- `case`: one deterministic scene variant identified by a frame index
+- `frame`: the frame index used to generate a case
+- `launch`: one fresh `RenderSession` sweep over all cases for a scene; not a new process
+- `repeat`: repeated renders of the same shot within one existing session, used by `benchmark()`
+
+Scoring is case-based:
 
 - one scene
-- at one deterministic frame
-- measured across repeated launches
+- at one deterministic frame index / scene variant
+- measured across repeated launches (`launches`), where each launch is one fresh session
 
-Each case gets its own median render time. Evaluation then normalizes each
-case median against the captured baseline case median and aggregates those
-ratios with a geometric mean.
+In the full harness, each case is rendered once per launch. Case medians are
+taken across launches, not repeated renders within one session. Evaluation
+then normalizes each case median against the captured baseline case median and
+aggregates those ratios with a geometric mean.
 
 The primary optimization target is therefore `render_ratio_gmean`. Lower is
 better. The reciprocal `render_speedup_gmean` is also reported for readability.
@@ -56,7 +65,7 @@ scenes:     3
 cases:      15
 frames:     5
 launches:   5
-warmup:     1 base-scene render(s) per launch
+warmup:     1 base-scene render per fresh session
 samples:    75
 render_sample_total_ms: 30187.5
 baseline_render_sample_total_ms: 31020.4
@@ -70,6 +79,11 @@ wall_speedup_gmean: 1.019366
 
 Exit code `0` = all scenes pass, `1` = any fidelity `warn` or `fail`,
 `2` = setup/build/baseline contract error, `3` = no baseline directory.
+`warn` is therefore not severe enough to count as `FAIL` under the fidelity
+thresholds, but it still makes the evaluation fail for automation purposes.
+
+The optimization target is `render_ratio_gmean`. The raw sample totals in the
+summary are diagnostic accounting, not the optimization score.
 
 ## Build
 
@@ -82,8 +96,9 @@ uv pip install -e .
 
 Both steps are required — the C++ build produces the shared library, and
 `uv pip install -e .` makes it importable as `_lpt2d`. Skipping the reinstall
-means Python will use a stale binary. `python -m evaluation` handles both
-steps automatically unless `--skip-build` is passed.
+can leave Python importing a stale or missing extension, depending on the
+current editable-install state. `python -m evaluation` handles both steps
+automatically unless `--skip-build` is passed.
 
 ## Quick start
 
@@ -93,9 +108,9 @@ from evaluation import compare_render_results, save_baseline, load_baseline, com
 
 # Render a scene
 shot = _lpt2d.load_shot("evaluation/scenes/solid_surface_gallery.json")
-session = _lpt2d.RenderSession(1920, 1080)
+session = _lpt2d.RenderSession(1280, 720)
 
-# Warm-up render (first frame includes shader compilation overhead)
+# Warm-up render (may include one-time session costs such as shader compilation)
 _ = session.render_shot(shot)
 
 # Timed render
@@ -116,8 +131,7 @@ warm-up on the base scene before the timed case sweep.
 
 ## Benchmarking (repeated timing)
 
-For statistically sound timing, use `benchmark()` which handles warm-up and
-repeated measurement:
+For repeated timing of one shot inside one existing session, use `benchmark()`:
 
 ```python
 from evaluation import benchmark, classify_speedup
@@ -136,9 +150,17 @@ print(f"{speedup.speedup:.3f}x ({speedup.confidence})")
 # confidence: "confirmed", "likely", "noise", "regression", "confirmed_regression"
 ```
 
-This is the right primitive for repeated measurement, but the full evaluation
-harness should compare per-case medians against a fixed baseline instead of
-pooling raw samples across different cases.
+Here, `repeats` means repeated timed renders of the same shot within one
+existing `RenderSession`. It does not mean evaluation `launches`.
+
+`benchmark()` warm-up also differs from the full harness warm-up:
+
+- `benchmark()`: repeated warm-up renders of the same shot in the current session
+- `benchmark_scene()`: untimed base-scene renders in each fresh session before the case sweep
+
+`benchmark()` is the right primitive for local repeated measurement, but the
+full evaluation harness should compare per-case medians against a fixed
+baseline instead of pooling raw samples across different cases.
 
 ## Scene evaluation contract
 
@@ -153,19 +175,23 @@ measurement = benchmark_scene(
     launches=5,
     warmup=1,
 )
-print(measurement.cases[0].render_summary.median_ms)   # frame 0 across launches
+print(measurement.cases[0].render_summary.median_ms)   # case 0 median across launches
 print(sum(measurement.cases[0].render_summary.times_ms))  # total ms for case 0 samples
-print(measurement.pooled_render_summary.median_ms)     # pooled raw samples (diagnostic only)
-print(measurement.sample_count)                        # launches * frames
+print(measurement.pooled_render_summary.median_ms)     # pooled raw-sample summary (diagnostic only)
+print(measurement.sample_count)                        # total timed case renders
 ```
 
 This matches the CLI contract:
 
 - `frames`: deterministic benchmark cases per scene
-- `launches`: repeated measurements per case
+- `launches`: repeated measurements per case, implemented as fresh `RenderSession` sweeps
 - `warmup`: untimed base-scene renders inside each fresh session
 - `resolution`: evaluation render resolution, default `1280x720`
 - `rays`: evaluation ray count, default `2000000`
+
+The code still uses `frame_index` in several APIs because that integer is
+passed through to `render_shot()`. In scoring terms, each `frame_index`
+identifies one benchmark case.
 
 The harness is strict by design:
 
@@ -190,23 +216,25 @@ The benchmark score is computed as:
 2. divide by the baseline case median
 3. aggregate all case ratios with a geometric mean
 
-That score is the single optimization metric. Pooled raw sample medians remain
-available in JSON for diagnostics only.
+That score is the single optimization metric. Pooled raw-sample summaries and
+sample totals remain available in JSON and terminal output for diagnostics only.
 
 The scene corpus is explicit and ordered via
-[`evaluation/scenes/manifest.json`](/home/holo/prog/lpt2d/evaluation/scenes/manifest.json).
-That file defines the benchmark set on purpose; the harness does not treat the
-directory as an open-ended wildcard corpus.
+[`evaluation/scenes/manifest.json`](evaluation/scenes/manifest.json). That
+file defines the benchmark set on purpose; the harness does not treat the
+directory as an open-ended wildcard corpus. Manifest order controls traversal,
+terminal/log ordering, and artifact layout; the geometric-mean score itself is
+order-independent.
 
 ## Build Contract
 
-The evaluation command is intended to be the central validation command for
+The evaluation command is intended to be the standard validation command for
 rendering work. It explicitly configures the build tree with
 `-DCMAKE_BUILD_TYPE=Release` and builds with `--config Release` before running
 evaluation.
 
-The report records that requested build contract directly instead of trying to
-reverse-engineer every CMake generator detail from cache files.
+The report records that requested build configuration directly instead of
+trying to infer every realized generator detail from CMake cache files.
 
 ## Terminal Summary
 
@@ -224,7 +252,9 @@ keeps the key corpus-level lines:
 - `wall_ratio_gmean:`
 - `wall_speedup_gmean:`
 
-The JSON report stays detailed; the terminal report stays concise.
+`render_ratio_gmean` remains the optimization score. The total-ms lines are
+there to show benchmark accounting and to make baseline/candidate time budgets
+easy to compare.
 
 ## Benchmark Hygiene
 
@@ -258,6 +288,9 @@ if cr.metrics:
 
 ## Comparing against a saved baseline
 
+This section covers the generic baseline helpers. The full evaluation harness
+uses the baseline-set layout documented in the next section.
+
 ```python
 # Save a baseline
 save_baseline("baselines/gallery", result, metadata={"commit": "abc123"})
@@ -268,7 +301,9 @@ cr = compare_to_baseline(new_result, baseline)
 print(cr.verdict, cr.psnr)
 ```
 
-For multi-frame scene baselines:
+## Full Harness Baseline Sets
+
+For multi-case scene baselines:
 
 ```python
 from evaluation import load_baseline_set, save_baseline_set
@@ -314,6 +349,8 @@ b = np.asarray(Image.open("after.png").convert("RGB"))
 cr = compare_images(a, b)
 ```
 
+`compare_images()` expects same-shape `(H, W, 3)` `uint8` RGB arrays.
+
 ## Verdict thresholds
 
 | Verdict | PSNR     | SSIM    | Max diff |
@@ -352,12 +389,13 @@ light types, groups, transforms).
 ## Individual metrics
 
 ```python
-from evaluation import compute_psnr, compute_ssim, compute_mse, max_abs_diff
+from evaluation import compute_psnr, compute_ssim, compute_mse, max_abs_diff, pct_pixels_changed
 
 psnr = compute_psnr(a, b)   # dB
 ssim = compute_ssim(a, b)   # 0-1
 mse  = compute_mse(a, b)    # float
 md   = max_abs_diff(a, b)   # int 0-255
+pc   = pct_pixels_changed(a, b)  # fraction of changed pixels
 ```
 
 All metric functions take `(H, W, 3)` uint8 numpy arrays.

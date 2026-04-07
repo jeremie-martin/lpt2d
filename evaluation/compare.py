@@ -243,9 +243,10 @@ def compare_to_baseline(
 ) -> CompareResult:
     """Compare a RenderResult against a loaded baseline dict.
 
-    The baseline should come from ``load_baseline()``. This bridges the gap
-    between the persisted baseline format (dict with ndarray pixels) and the
-    live render result.
+    The baseline may come from ``load_baseline()`` or from one case entry in
+    ``load_baseline_set()["cases"]``. This bridges the gap between the
+    persisted baseline format (dict with ndarray pixels) and the live render
+    result.
     """
     result_pixels = np.frombuffer(result.pixels, dtype=np.uint8).reshape(
         result.height, result.width, 3

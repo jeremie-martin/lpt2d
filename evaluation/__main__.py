@@ -5,8 +5,8 @@ Usage:
     python -m evaluation capture          Build + save current as baseline
     python -m evaluation --skip-build     Evaluate without rebuilding
     python -m evaluation --frames 5       Timed deterministic benchmark cases
-    python -m evaluation --launches 5     Repeated launches per benchmark case
-    python -m evaluation --warmup 1       Base-scene warm-up renders per launch
+    python -m evaluation --launches 5     Fresh RenderSession sweeps per scene
+    python -m evaluation --warmup 1       Base-scene warm-up renders per session
     python -m evaluation --resolution 1280x720 --rays 2000000
 
 Artifacts are saved to runs/<timestamp>/ with rendered images, a JSON report,
@@ -43,6 +43,11 @@ DEFAULT_RAYS = 2_000_000
 WARMUP_MODE = "base_scene"
 
 
+def _warmup_label(warmup: int) -> str:
+    render_word = "render" if warmup == 1 else "renders"
+    return f"{warmup} base-scene {render_word} per fresh session"
+
+
 # ── Build ────────────────────────────────────────────────────────────────
 
 
@@ -61,8 +66,8 @@ def _build() -> bool:
     print("  BUILD")
     print("=" * 60)
 
-    # Configure explicitly so this command remains the authoritative path and
-    # enforces a Release-grade build on single-config generators.
+    # Configure explicitly so this command stays consistent and enforces a
+    # Release-grade build on single-config generators.
     print("\n[cmake] Configuring C++ build...\n", flush=True)
     r = subprocess.run(build_contract["configure_command"], cwd=str(PROJECT_DIR))
     if r.returncode != 0:
@@ -420,7 +425,7 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, widt
     print(f"  manifest:  {SCENE_MANIFEST}")
     print(f"  frames:    {frames}")
     print(f"  launches:  {launches}")
-    print(f"  warmup:    {warmup} base-scene render(s) per launch")
+    print(f"  warmup:    {_warmup_label(warmup)}")
     print(f"  render:    {settings['resolution']} @ {settings['rays']} rays")
     print(f"  build:     {build_contract['requested_configuration']} requested")
     print("=" * 60)
@@ -569,7 +574,7 @@ def _run_evaluate(
     print(f"  manifest: {SCENE_MANIFEST}")
     print(f"  frames:   {frames}")
     print(f"  launches: {launches}")
-    print(f"  warmup:   {warmup} base-scene render(s) per launch")
+    print(f"  warmup:   {_warmup_label(warmup)}")
     print(f"  render:   {settings['resolution']} @ {settings['rays']} rays")
     print(f"  build:    {build_contract['requested_configuration']} requested")
     print(f"  run_dir:  {final_run_dir}/")
@@ -888,7 +893,7 @@ def _run_evaluate(
     print(f"cases:      {len(all_render_case_ratios)}")
     print(f"frames:     {frames}")
     print(f"launches:   {launches}")
-    print(f"warmup:     {warmup} base-scene render(s) per launch")
+    print(f"warmup:     {_warmup_label(warmup)}")
     print(f"resolution: {settings['resolution']}")
     print(f"rays:       {settings['rays']}")
     print(f"samples:    {len(all_pooled_render_times)}")

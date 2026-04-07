@@ -1,4 +1,4 @@
-"""lpt2d evaluation infrastructure — fidelity comparison and timing measurement."""
+"""Evaluation harness for ``lpt2d``: fidelity comparison and timing measurement."""
 
 from .baseline import load_baseline, load_baseline_set, save_baseline, save_baseline_set
 from .compare import (
