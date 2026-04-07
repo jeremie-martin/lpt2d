@@ -1,6 +1,6 @@
 #version 430 core
 flat in vec3 vColor;
-in float vLineDist;
+noperspective in float vLineDist;
 out vec4 FragColor;
 
 void main() {

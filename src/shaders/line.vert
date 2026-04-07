@@ -12,7 +12,7 @@ uniform vec2 uResolution;
 uniform float uThickness;
 
 flat out vec3 vColor;
-out float vLineDist;
+noperspective out float vLineDist;
 
 void main() {
     uint seg_id = gl_InstanceID;
