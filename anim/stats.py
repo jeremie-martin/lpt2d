@@ -77,16 +77,26 @@ class ColorStats:
 
     Measures color richness via HSV analysis — useful for evaluating
     dispersion quality in spectral scenes.
+
+    ``mean_saturation`` averages over chromatic pixels only (those above
+    the saturation threshold).  ``chromatic_fraction`` is the share of
+    total pixels that are chromatic.  ``color_richness`` combines all
+    three factors so it answers "how spectrally rich is the whole image"
+    rather than "how colorful are the colorful parts."
     """
 
     mean_saturation: float  # mean HSV saturation across chromatic pixels
     hue_entropy: float  # Shannon entropy of 36-bin hue histogram (bits)
-    color_richness: float  # hue_entropy * mean_saturation
-    n_chromatic: int  # pixels above saturation threshold
+    chromatic_fraction: float  # fraction of pixels above saturation threshold
+    color_richness: float  # hue_entropy * mean_saturation * chromatic_fraction
+    n_chromatic: int  # pixel count above saturation threshold
 
     def summary(self) -> str:
         """One-line human-readable summary."""
-        return f"sat={self.mean_saturation:.3f} entropy={self.hue_entropy:.3f} richness={self.color_richness:.3f} chromatic={self.n_chromatic}"
+        return (
+            f"sat={self.mean_saturation:.3f} entropy={self.hue_entropy:.3f} "
+            f"richness={self.color_richness:.3f} chromatic={self.chromatic_fraction:.1%}"
+        )
 
 
 def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05) -> ColorStats:
@@ -120,8 +130,10 @@ def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05
     mask = sat > sat_threshold
     n_chromatic = int(np.count_nonzero(mask))
 
+    chromatic_frac = n_chromatic / n_pixels
+
     if n_chromatic == 0:
-        return ColorStats(mean_saturation=0.0, hue_entropy=0.0, color_richness=0.0, n_chromatic=0)
+        return ColorStats(mean_saturation=0.0, hue_entropy=0.0, chromatic_fraction=0.0, color_richness=0.0, n_chromatic=0)
 
     mean_sat = float(np.mean(sat[mask]))
 
@@ -148,7 +160,8 @@ def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05
     return ColorStats(
         mean_saturation=mean_sat,
         hue_entropy=entropy,
-        color_richness=entropy * mean_sat,
+        chromatic_fraction=chromatic_frac,
+        color_richness=entropy * mean_sat * chromatic_frac,
         n_chromatic=n_chromatic,
     )
 
