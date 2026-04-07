@@ -306,6 +306,9 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                 path.points.push_back(read_vec2(json["points"][i],
                                                  std::string(context) + ".points[" + std::to_string(i) + "]"));
         }
+        if (schema == Schema::Authored && (path.points.size() < 3 || path.points.size() % 2 == 0))
+            fail(std::string(context) + ".points must have 2N+1 entries (N >= 1), got " +
+                 std::to_string(path.points.size()));
         if (json.contains("closed"))
             path.closed = json["closed"].get<bool>();
         path.binding = std::move(binding);

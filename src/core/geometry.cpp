@@ -612,15 +612,14 @@ Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBindi
 
     // B-spline midpoint method: samples become control points,
     // midpoints between consecutive samples become on-curve points.
-    // Bezier i: p0 = mid(si, si+1), ctrl = si+1, p2 = mid(si+1, si+2)
-    // First on-curve = s0, last on-curve = sN-1 (clamped endpoints).
-    path.points.push_back(samples[0]); // first on-curve
-    path.points.push_back(samples[1]); // first control
+    // First/last on-curve are clamped to first/last samples.
+    path.points.push_back(samples[0]);
+    path.points.push_back(samples[1]);
     for (int i = 1; i < n - 2; ++i) {
-        path.points.push_back((samples[i] + samples[i + 1]) * 0.5f); // on-curve midpoint
-        path.points.push_back(samples[i + 1]); // control
+        path.points.push_back((samples[i] + samples[i + 1]) * 0.5f);
+        path.points.push_back(samples[i + 1]);
     }
-    path.points.push_back(samples[n - 1]); // last on-curve
+    path.points.push_back(samples[n - 1]);
 
     return path;
 }
@@ -1055,9 +1054,10 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
         [&](const Path& path) {
             auto parts = decompose_path(path);
             int N = emission_point_count(perimeter);
-            float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
+            int curve_n = std::max(2, N / std::max(1, (int)parts.curves.size()));
+            int total_segs = (int)parts.curves.size() * (curve_n - 1);
+            float seg_intensity = mat.emission * perimeter / std::max(1, total_segs);
             for (auto& curve : parts.curves) {
-                int curve_n = std::max(2, N / std::max(1, (int)parts.curves.size()));
                 Vec2 prev = bezier_eval(curve, 0.0f);
                 for (int i = 1; i < curve_n; ++i) {
                     float t = (float)i / (curve_n - 1);

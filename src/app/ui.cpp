@@ -150,10 +150,8 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
         [&](const Bezier& b) {
             constexpr int N = 32;
             for (int j = 0; j < N; ++j) {
-                float t0 = (float)j / N, t1 = (float)(j + 1) / N;
-                float u0 = 1.0f - t0, u1 = 1.0f - t1;
-                Vec2 p0 = b.p0 * (u0*u0) + b.p1 * (2.0f*u0*t0) + b.p2 * (t0*t0);
-                Vec2 p1 = b.p0 * (u1*u1) + b.p1 * (2.0f*u1*t1) + b.p2 * (t1*t1);
+                Vec2 p0 = bezier_eval(b, (float)j / N);
+                Vec2 p1 = bezier_eval(b, (float)(j + 1) / N);
                 dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
             }
             dl->AddCircleFilled(cv.to_screen(b.p1), 3.0f, col);

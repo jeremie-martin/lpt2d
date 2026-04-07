@@ -121,9 +121,7 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
         [&](const Bezier& b) -> float {
             float best = 1e30f;
             for (int j = 0; j <= 20; ++j) {
-                float t = j / 20.0f;
-                float u = 1.0f - t;
-                Vec2 p = b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
+                Vec2 p = bezier_eval(b, j / 20.0f);
                 best = std::min(best, (wp - p).length());
             }
             return best;

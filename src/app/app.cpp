@@ -807,6 +807,22 @@ int App::run(const AppConfig& config) {
 
         bool panning = (io.KeyAlt && ImGui::IsMouseDown(0)) || ImGui::IsMouseDown(2);
 
+        auto finalize_path_creation = [&]() {
+            if (ed.interaction.path_create_points.size() < 2) {
+                ed.interaction.path_create_points.clear();
+                return;
+            }
+            ed.session.undo.push(ed.shot.scene);
+            Path path = fit_path_from_samples(ed.interaction.path_create_points,
+                                              mat_glass(1.5f, 20000.0f, 0.3f));
+            path.id = next_scene_entity_id(ed.shot.scene, "path");
+            ed.shot.scene.shapes.push_back(path);
+            ed.clear_selection();
+            ed.select({SelectionRef::Shape, path.id, ""});
+            ed.interaction.path_create_points.clear();
+            reload();
+        };
+
         if (!showing_snapshot_a && vp_hovered && !panning && !ed.interaction.transform.active()
             && ed.interaction.cam_handle_dragging == CameraHandle::None) {
             // Double-click: enter group editing mode
@@ -906,16 +922,7 @@ int App::run(const AppConfig& config) {
                     reload();
                 } else if (ed.interaction.tool == EditTool::Path) {
                     if (ImGui::IsMouseDoubleClicked(0) && ed.interaction.path_create_points.size() >= 2) {
-                        // Finalize path on double-click
-                        ed.session.undo.push(ed.shot.scene);
-                        Path path = fit_path_from_samples(ed.interaction.path_create_points,
-                                                          mat_glass(1.5f, 20000.0f, 0.3f));
-                        path.id = next_scene_entity_id(ed.shot.scene, "path");
-                        ed.shot.scene.shapes.push_back(path);
-                        ed.clear_selection();
-                        ed.select({SelectionRef::Shape, path.id, ""});
-                        ed.interaction.path_create_points.clear();
-                        reload();
+                        finalize_path_creation();
                     } else if (!ImGui::IsMouseDoubleClicked(0)) {
                         ed.interaction.path_create_points.push_back(mw);
                     }
@@ -1369,17 +1376,7 @@ int App::run(const AppConfig& config) {
 
                 // Enter finalizes path creation
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) && !ed.interaction.path_create_points.empty()) {
-                    if (ed.interaction.path_create_points.size() >= 2) {
-                        ed.session.undo.push(ed.shot.scene);
-                        Path path = fit_path_from_samples(ed.interaction.path_create_points,
-                                                          mat_glass(1.5f, 20000.0f, 0.3f));
-                        path.id = next_scene_entity_id(ed.shot.scene, "path");
-                        ed.shot.scene.shapes.push_back(path);
-                        ed.clear_selection();
-                        ed.select({SelectionRef::Shape, path.id, ""});
-                        reload();
-                    }
-                    ed.interaction.path_create_points.clear();
+                    finalize_path_creation();
                 }
 
                 // Escape cascade
