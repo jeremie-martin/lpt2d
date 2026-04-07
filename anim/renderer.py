@@ -6,7 +6,10 @@ import math
 import subprocess
 import sys
 import time
+import warnings
 from pathlib import Path
+
+import _lpt2d
 
 from .stats import (
     FrameStats,
@@ -18,7 +21,6 @@ from .types import (
     AnimateFn,
     Camera2D,
     Frame,
-    FrameContext,
     FrameReport,
     Quality,
     RenderSession,
@@ -30,7 +32,7 @@ from .types import (
     _report_from_result,
 )
 
-import _lpt2d
+_aspect_warned: set[tuple[float, float]] = set()
 
 
 # ─── Output backends ─────────────────────────────────────────────
@@ -139,6 +141,7 @@ def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
 
 # ─── Core rendering ──────────────────────────────────────────────
 
+
 def _resolve_args(
     timeline: Timeline | float, settings: Shot | Quality | str | None
 ) -> tuple[Timeline, Shot]:
@@ -176,6 +179,25 @@ def _resolve_frame_shot(
     # Camera precedence: per-frame > explicit arg > shot camera > auto-fit
     effective_camera = f.camera or camera or shot.camera
     cpp_camera = effective_camera if effective_camera is not None else Camera2D()
+
+    # Warn once if explicit camera bounds don't match canvas aspect ratio
+    canvas = shot.canvas
+    if cpp_camera.bounds is not None and canvas is not None:
+        cam_bounds = cpp_camera.bounds
+        cam_w = cam_bounds.max[0] - cam_bounds.min[0]
+        cam_h = cam_bounds.max[1] - cam_bounds.min[1]
+        if cam_h > 0:
+            cam_aspect = cam_w / cam_h
+            canvas_aspect = canvas.width / canvas.height
+            key = (round(cam_aspect, 4), round(canvas_aspect, 4))
+            if key not in _aspect_warned and abs(cam_aspect - canvas_aspect) / canvas_aspect > 0.01:
+                _aspect_warned.add(key)
+                warnings.warn(
+                    f"Camera aspect ratio ({cam_aspect:.3f}) does not match canvas "
+                    f"aspect ratio ({canvas_aspect:.3f}). This will produce black bars. "
+                    f"Consider using Camera2D(width=...) to derive height from the canvas.",
+                    stacklevel=2,
+                )
 
     return _lpt2d.Shot(
         name=shot.name,
@@ -282,9 +304,7 @@ def render_still(
     cpp_shot = _resolve_frame_shot(shot, result, camera)
     render_result = session.render_shot(cpp_shot, frame)
     _save_image(output, render_result.pixels, shot.canvas.width, shot.canvas.height)
-    sys.stderr.write(
-        f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n"
-    )
+    sys.stderr.write(f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n")
 
 
 def render_contact_sheet(

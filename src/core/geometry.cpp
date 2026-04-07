@@ -353,7 +353,7 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle, const Materia
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = (point - circle.center).normalized();
 
-    return Hit{t, point, normal, &resolve_binding(circle.binding, materials)};
+    return Hit{t, point, normal, &resolve_binding(circle.binding, materials), {}};
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialMap& materials) {
@@ -374,7 +374,7 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialM
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = d.perp().normalized();
 
-    return Hit{t, point, normal, &resolve_binding(seg.binding, materials)};
+    return Hit{t, point, normal, &resolve_binding(seg.binding, materials), {}}; // shape_id set by intersect_scene
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& materials) {
@@ -398,7 +398,7 @@ std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& 
         float angle = std::atan2(point.y - arc.center.y, point.x - arc.center.x);
         if (angle_in_arc(angle, arc)) {
             Vec2 normal = (point - arc.center).normalized();
-            return Hit{t, point, normal, &resolve_binding(arc.binding, materials)};
+            return Hit{t, point, normal, &resolve_binding(arc.binding, materials), {}};
         }
     }
     return std::nullopt;
@@ -446,7 +446,7 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMa
         Vec2 normal = tangent.perp().normalized();
         if (normal.dot(rd) > 0.0f) normal = -normal;
 
-        best = Hit{s, point, normal, &resolve_binding(bez.binding, materials)};
+        best = Hit{s, point, normal, &resolve_binding(bez.binding, materials), {}};
     }
     return best;
 }
@@ -713,7 +713,7 @@ std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const Mater
     Vec2 normal{ln.x * cr - ln.y * sr, ln.x * sr + ln.y * cr};
 
     Vec2 point = ray.origin + ray.dir * t;
-    return Hit{t, point, normal, &resolve_binding(ellipse.binding, materials)};
+    return Hit{t, point, normal, &resolve_binding(ellipse.binding, materials), {}};
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Path& path, const MaterialMap& materials) {
@@ -733,7 +733,7 @@ std::optional<Hit> intersect(const Ray& ray, const Path& path, const MaterialMap
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
     std::optional<Hit> closest;
 
-    for (const auto& shape : scene.shapes) {
+    auto test_shape = [&](const Shape& shape, const std::string& id_prefix) {
         auto hit = std::visit(overloaded{
                                   [&](const Circle& c) { return intersect(ray, c, scene.materials); },
                                   [&](const Segment& s) { return intersect(ray, s, scene.materials); },
@@ -746,7 +746,19 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
                               shape);
 
         if (hit && (!closest || hit->t < closest->t)) {
+            hit->shape_id = id_prefix.empty() ? shape_id(shape) : id_prefix + "/" + shape_id(shape);
             closest = hit;
+        }
+    };
+
+    for (const auto& shape : scene.shapes) {
+        test_shape(shape, "");
+    }
+
+    for (const auto& group : scene.groups) {
+        for (const auto& shape : group.shapes) {
+            Shape ws = transform_shape(shape, group.transform);
+            test_shape(ws, group.id);
         }
     }
 

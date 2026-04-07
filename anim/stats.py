@@ -10,7 +10,6 @@ import math
 from dataclasses import dataclass
 
 import _lpt2d
-
 import numpy as np
 
 from .types import (
@@ -70,6 +69,88 @@ class FrameStats:
     def is_overexposed(self, threshold: float = 0.1) -> bool:
         """True if significant portion of the frame is clipped to white."""
         return self.pct_clipped > threshold
+
+
+@dataclass(frozen=True)
+class ColorStats:
+    """Spectral diversity summary of a rendered frame.
+
+    Measures color richness via HSV analysis — useful for evaluating
+    dispersion quality in spectral scenes.
+    """
+
+    mean_saturation: float  # mean HSV saturation across chromatic pixels
+    hue_entropy: float  # Shannon entropy of 36-bin hue histogram (bits)
+    color_richness: float  # hue_entropy * mean_saturation
+    n_chromatic: int  # pixels above saturation threshold
+
+    def summary(self) -> str:
+        """One-line human-readable summary."""
+        return f"sat={self.mean_saturation:.3f} entropy={self.hue_entropy:.3f} richness={self.color_richness:.3f} chromatic={self.n_chromatic}"
+
+
+def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05) -> ColorStats:
+    """Compute color diversity statistics from raw RGB8 pixel data.
+
+    Args:
+        rgb: Raw RGB8 bytes (width * height * 3).
+        width: Frame width in pixels.
+        height: Frame height in pixels.
+        sat_threshold: Minimum HSV saturation to count a pixel as chromatic.
+
+    Returns:
+        ColorStats with saturation, hue entropy, and composite richness.
+    """
+    n_pixels = width * height
+    if n_pixels == 0:
+        raise ValueError("Cannot compute stats for a 0-pixel frame")
+    if len(rgb) != n_pixels * 3:
+        raise ValueError(f"Expected {n_pixels * 3} bytes, got {len(rgb)}")
+
+    arr = np.frombuffer(rgb, dtype=np.uint8).reshape(n_pixels, 3).astype(np.float32) / 255.0
+    r, g, b = arr[:, 0], arr[:, 1], arr[:, 2]
+
+    cmax = np.maximum(np.maximum(r, g), b)
+    cmin = np.minimum(np.minimum(r, g), b)
+    delta = cmax - cmin
+
+    # Saturation: S = delta / cmax (0 where cmax == 0)
+    safe_cmax = np.where(cmax > 0, cmax, 1.0)
+    sat = np.where(cmax > 0, delta / safe_cmax, 0.0)
+    mask = sat > sat_threshold
+    n_chromatic = int(np.count_nonzero(mask))
+
+    if n_chromatic == 0:
+        return ColorStats(mean_saturation=0.0, hue_entropy=0.0, color_richness=0.0, n_chromatic=0)
+
+    mean_sat = float(np.mean(sat[mask]))
+
+    # Hue (normalized to [0, 1))
+    d_mask = delta > 0
+    rc = np.where(d_mask, (cmax - r) / np.where(d_mask, delta, 1.0), 0.0)
+    gc = np.where(d_mask, (cmax - g) / np.where(d_mask, delta, 1.0), 0.0)
+    bc = np.where(d_mask, (cmax - b) / np.where(d_mask, delta, 1.0), 0.0)
+
+    hue = np.where(r == cmax, bc - gc, np.where(g == cmax, 2.0 + rc - bc, 4.0 + gc - rc))
+    hue = (hue / 6.0) % 1.0  # normalize to [0, 1)
+
+    # 36-bin hue histogram over chromatic pixels only
+    hue_chromatic = hue[mask]
+    bins = np.floor(hue_chromatic * 36.0).astype(np.int32)
+    bins = np.clip(bins, 0, 35)
+    hist = np.bincount(bins, minlength=36).astype(np.float64)
+    hist = hist / hist.sum()
+
+    # Shannon entropy (bits)
+    nonzero = hist > 0
+    entropy = float(-np.sum(hist[nonzero] * np.log2(hist[nonzero])))
+
+    return ColorStats(
+        mean_saturation=mean_sat,
+        hue_entropy=entropy,
+        color_richness=entropy * mean_sat,
+        n_chromatic=n_chromatic,
+    )
 
 
 def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
@@ -522,8 +603,11 @@ def _transform_shape(shape: Shape, t: Transform2D) -> Shape:
     if isinstance(shape, Polygon):
         cr = shape.corner_radius
         scaled_cr = max(cr * uniform_scale, 0.0) if cr > 0.0 else 0.0
-        return _copy_shape(shape, vertices=[_transform_point(v, t) for v in shape.vertices],
-                           corner_radius=scaled_cr)
+        return _copy_shape(
+            shape,
+            vertices=[_transform_point(v, t) for v in shape.vertices],
+            corner_radius=scaled_cr,
+        )
     if isinstance(shape, Ellipse):
         return _transform_ellipse_affine(shape, t)
     return shape
@@ -571,7 +655,9 @@ def diagnose_scene(scene: Scene) -> list[str]:
     all_lights = list(scene.lights)
     for group in scene.groups:
         all_lights.extend(group.lights)
-    emissive_sources = sum(1 for shape in all_shapes if _shape_material(shape, scene).emission > 0.0)
+    emissive_sources = sum(
+        1 for shape in all_shapes if _shape_material(shape, scene).emission > 0.0
+    )
 
     total_sources = len(all_lights) + emissive_sources
     if total_sources > 10:

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from .easing import resolve_easing
+from .easing import resolve_easing, resolve_easing_derivative
 
 
 class Wrap(Enum):
@@ -40,7 +40,7 @@ class Track:
     Scalar tracks return float, N-dimensional tracks return tuple[float, ...].
     """
 
-    __slots__ = ("_times", "_values", "_eases", "_dim", "_wrap")
+    __slots__ = ("_times", "_values", "_eases", "_ease_derivs", "_dim", "_wrap")
 
     def __init__(self, keys: Sequence[Key], wrap: Wrap | str = Wrap.CLAMP) -> None:
         if not keys:
@@ -65,10 +65,12 @@ class Track:
         times: list[float] = []
         values: list[float | tuple[float, ...]] = []
         eases: list[Callable[[float], float]] = []
+        ease_derivs: list[Callable[[float], float]] = []
 
         for k in sorted_keys:
             times.append(k.t)
             eases.append(resolve_easing(k.ease))
+            ease_derivs.append(resolve_easing_derivative(k.ease))
 
             if self._dim == 0:
                 if not isinstance(k.value, (int, float)):
@@ -89,6 +91,7 @@ class Track:
         self._times = tuple(times)
         self._values = tuple(values)
         self._eases = tuple(eases)
+        self._ease_derivs = tuple(ease_derivs)
 
     @property
     def dim(self) -> int:
@@ -131,21 +134,55 @@ class Track:
             return v0 + (v1 - v0) * p  # type: ignore[operator]
         return tuple(a + (b - a) * p for a, b in zip(v0, v1, strict=True))  # type: ignore[arg-type]
 
+    def velocity_at(self, t: float) -> float | tuple[float, ...]:
+        """Analytical velocity (world-space units/second) at time *t*.
+
+        Returns the derivative of the track value with respect to time,
+        accounting for the easing function on each segment.
+        """
+        times = self._times
+        n = len(times)
+
+        if n == 1:
+            return 0.0 if self._dim == 0 else tuple(0.0 for _ in range(self._dim))
+
+        remapped, sign = self._remap_time_with_sign(t)
+
+        # Outside the track range → velocity is zero (clamped)
+        if remapped <= times[0] or remapped >= times[-1]:
+            return 0.0 if self._dim == 0 else tuple(0.0 for _ in range(self._dim))
+
+        i = bisect.bisect_right(times, remapped) - 1
+        t0, t1 = times[i], times[i + 1]
+        dt = t1 - t0
+        local_t = (remapped - t0) / dt
+        dp = self._ease_derivs[i + 1](local_t)
+
+        v0, v1 = self._values[i], self._values[i + 1]
+        if self._dim == 0:
+            return (v1 - v0) * dp * sign / dt  # type: ignore[operator]
+        return tuple((b - a) * dp * sign / dt for a, b in zip(v0, v1, strict=True))  # type: ignore[arg-type]
+
     def _remap_time(self, t: float) -> float:
+        return self._remap_time_with_sign(t)[0]
+
+    def _remap_time_with_sign(self, t: float) -> tuple[float, float]:
+        """Remap time according to wrap mode. Returns (remapped_t, direction_sign)."""
         if self._wrap == Wrap.CLAMP:
-            return t
+            return t, 1.0
         t_start = self._times[0]
         span = self._times[-1] - t_start
         if span <= 0:
-            return t_start
+            return t_start, 1.0
         rel = t - t_start
         if self._wrap == Wrap.LOOP:
-            return t_start + rel % span
+            return t_start + rel % span, 1.0
         # PINGPONG
         cycle = rel % (2.0 * span)
         if cycle > span:
             cycle = 2.0 * span - cycle
-        return t_start + cycle
+            return t_start + cycle, -1.0
+        return t_start + cycle, 1.0
 
     def __repr__(self) -> str:
         return f"Track({len(self._times)} keys, dim={self._dim}, wrap={self._wrap.value})"

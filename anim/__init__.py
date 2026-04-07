@@ -4,6 +4,8 @@ from .analysis import auto_look as auto_look
 from .analysis import calibrate_normalize_ref as calibrate_normalize_ref
 from .analysis import compare_looks as compare_looks
 from .analysis import look_report as look_report
+from .analysis import projector_target as projector_target
+from .analysis import ray_intersect as ray_intersect
 from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
 from .builders import double_slit as double_slit
@@ -26,7 +28,9 @@ from .builders import thick_segment as thick_segment
 from .builders import waveguide as waveguide
 from .colors import fill_rgb as fill_rgb
 from .colors import resolve_color as resolve_color
+from .easing import EASING_DERIVATIVES as EASING_DERIVATIVES
 from .easing import EASINGS as EASINGS
+from .easing import resolve_easing_derivative as resolve_easing_derivative
 from .easing import smoothstep as smoothstep
 from .light_analysis import light_contributions as light_contributions
 from .light_analysis import scene_light_report as scene_light_report
@@ -36,6 +40,7 @@ from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
+from .stats import ColorStats as ColorStats
 from .stats import FrameStats as FrameStats
 from .stats import LightContribution as LightContribution
 from .stats import LookComparison as LookComparison
@@ -45,6 +50,7 @@ from .stats import QualityGate as QualityGate
 from .stats import StatsDiff as StatsDiff
 from .stats import StructureReport as StructureReport
 from .stats import check_quality as check_quality
+from .stats import color_stats as color_stats
 from .stats import compare_stats as compare_stats
 from .stats import compare_summary as compare_summary
 from .stats import diagnose_scene as diagnose_scene
@@ -95,7 +101,9 @@ __all__ = [
     "Camera2D",
     "Canvas",
     "Circle",
+    "ColorStats",
     "Ellipse",
+    "EASING_DERIVATIVES",
     "EASINGS",
     "FFmpegOutput",
     "Frame",
@@ -138,6 +146,7 @@ __all__ = [
     "beam_splitter",
     "biconvex_lens",
     "calibrate_normalize_ref",
+    "color_stats",
     "diagnose_scene",
     "light_contributions",
     "LightContribution",
@@ -157,17 +166,20 @@ __all__ = [
     "mirror_block",
     "mirror_box",
     "opaque_mirror",
+    "projector_target",
     "plano_convex_lens",
     "path",
     "path_from_samples",
     "polygon",
     "rectangle",
     "regular_polygon",
+    "ray_intersect",
     "render",
     "render_contact_sheet",
     "render_stats",
     "render_still",
     "resolve_color",
+    "resolve_easing_derivative",
     "smoothstep",
     "double_slit",
     "elliptical_lens",

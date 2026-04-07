@@ -566,10 +566,11 @@ void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat
 
 Bounds Camera2D::resolve(float aspect, const Bounds& fallback) const {
     if (bounds) return *bounds;
-    if (center && width) {
+    if (width) {
+        Vec2 c = center.value_or(Vec2{0, 0});
         float hw = *width / 2.0f;
         float hh = hw / aspect;
-        return {{center->x - hw, center->y - hh}, {center->x + hw, center->y + hh}};
+        return {{c.x - hw, c.y - hh}, {c.x + hw, c.y + hh}};
     }
     return fallback;
 }

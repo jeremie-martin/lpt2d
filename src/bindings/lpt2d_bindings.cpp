@@ -637,6 +637,17 @@ NB_MODULE(_lpt2d, m) {
         if (!normalize_scene(scene, &error))
             throw std::runtime_error(error);
     }, "scene"_a);
+    m.def("ray_intersect", [](const Scene& scene, Vec2 origin, Vec2 direction) -> nb::object {
+        Ray ray{origin, direction.normalized()};
+        auto hit = intersect_scene(ray, scene);
+        if (!hit) return nb::none();
+        return nb::make_tuple(
+            hit->t,
+            nb::make_tuple(hit->point.x, hit->point.y),
+            nb::make_tuple(hit->normal.x, hit->normal.y),
+            hit->shape_id
+        );
+    }, "scene"_a, "origin"_a, "direction"_a);
 
     // ── FrameMetrics ─────────────────────────────────────────────
     nb::class_<FrameMetrics>(m, "FrameMetrics")

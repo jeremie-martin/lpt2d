@@ -1,9 +1,11 @@
-"""Scene analysis utilities: auto_look, compare_looks, look_report."""
+"""Scene analysis utilities: auto_look, compare_looks, look_report, projector_target."""
 
 from __future__ import annotations
 
 import math
 from typing import cast
+
+import _lpt2d
 
 from . import renderer as renderer_mod
 from .stats import (
@@ -19,6 +21,7 @@ from .types import (
     Frame,
     FrameContext,
     Look,
+    ProjectorLight,
     Quality,
     RenderSession,
     Scene,
@@ -121,17 +124,41 @@ def _resolve_static_scene_subject(
         shot = Shot(scene=subject)
         scene = subject
     if camera is not None:
-        shot = Shot(name=shot.name, scene=shot.scene, camera=camera, canvas=shot.canvas,
-                    look=shot.look, trace=shot.trace)
+        shot = Shot(
+            name=shot.name,
+            scene=shot.scene,
+            camera=camera,
+            canvas=shot.canvas,
+            look=shot.look,
+            trace=shot.trace,
+        )
     if canvas is not None:
-        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=canvas,
-                    look=shot.look, trace=shot.trace)
+        shot = Shot(
+            name=shot.name,
+            scene=shot.scene,
+            camera=shot.camera,
+            canvas=canvas,
+            look=shot.look,
+            trace=shot.trace,
+        )
     if look is not None:
-        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=shot.canvas,
-                    look=look, trace=shot.trace)
+        shot = Shot(
+            name=shot.name,
+            scene=shot.scene,
+            camera=shot.camera,
+            canvas=shot.canvas,
+            look=look,
+            trace=shot.trace,
+        )
     if trace is not None:
-        shot = Shot(name=shot.name, scene=shot.scene, camera=shot.camera, canvas=shot.canvas,
-                    look=shot.look, trace=trace)
+        shot = Shot(
+            name=shot.name,
+            scene=shot.scene,
+            camera=shot.camera,
+            canvas=shot.canvas,
+            look=shot.look,
+            trace=trace,
+        )
     return scene, shot
 
 
@@ -221,9 +248,7 @@ def auto_look(
             best_exposure = low
             for _ in range(8):
                 mid = (low + high) * 0.5
-                mid_stats = measure_per_frame(
-                    _apply_look_override(result_base, {"exposure": mid})
-                )
+                mid_stats = measure_per_frame(_apply_look_override(result_base, {"exposure": mid}))
                 if not mid_stats:
                     high = mid
                     continue
@@ -366,3 +391,40 @@ def look_report(
         clip_threshold=clip_threshold,
         contrast_threshold=contrast_threshold,
     )
+
+
+def projector_target(scene: Scene, light: ProjectorLight) -> str | None:
+    """Return the shape ID hit by a projector's center ray, or None.
+
+    The light must be in world coordinates. For lights inside a Group,
+    transform the light first (apply the group's transform to position
+    and direction) before calling this function.
+
+    Args:
+        scene: Resolved scene with shapes and materials.
+        light: A ProjectorLight in world coordinates.
+
+    Returns:
+        The ``id`` of the closest shape hit, or None if the ray hits nothing.
+        For shapes inside groups, returns ``"group_id/shape_id"``.
+    """
+    result = _lpt2d.ray_intersect(scene, light.position, light.direction)
+    if result is None:
+        return None
+    return result[3]
+
+
+def ray_intersect(
+    scene: Scene, origin: tuple[float, float], direction: tuple[float, float]
+) -> tuple[float, tuple[float, float], tuple[float, float], str] | None:
+    """Cast a ray through the scene and return the closest hit.
+
+    Args:
+        scene: Resolved scene with shapes and materials.
+        origin: Ray origin (x, y).
+        direction: Ray direction (x, y) — will be normalized.
+
+    Returns:
+        ``(t, point, normal, shape_id)`` for the closest hit, or None.
+    """
+    return _lpt2d.ray_intersect(scene, origin, direction)

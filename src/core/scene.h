@@ -340,6 +340,7 @@ struct Hit {
     Vec2 point;
     Vec2 normal;
     const Material* material;
+    std::string shape_id;
 };
 
 // --- Scene ---
