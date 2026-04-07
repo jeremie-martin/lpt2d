@@ -45,3 +45,6 @@ line-ending = "auto"
 include = ["anim", "evaluation"]
 pythonVersion = "3.10"
 typeCheckingMode = "basic"
+
+[tool.uv]
+exclude-newer = "7 days"
