@@ -82,6 +82,15 @@ static ProjectorProfile parse_projector_profile_arg(nb::object obj) {
     return nb::cast<ProjectorProfile>(obj);
 }
 
+static ProjectorSource parse_projector_source_arg(nb::object obj) {
+    if (nb::isinstance<nb::str>(obj)) {
+        auto s = nb::cast<std::string>(obj);
+        if (auto source = parse_projector_source(s)) return *source;
+        throw nb::value_error(("invalid projector source: " + s).c_str());
+    }
+    return nb::cast<ProjectorSource>(obj);
+}
+
 // ─── Module ──────────────────────────────────────────────────────
 
 NB_MODULE(_lpt2d, m) {
@@ -113,6 +122,10 @@ NB_MODULE(_lpt2d, m) {
         .value("uniform", ProjectorProfile::Uniform)
         .value("soft", ProjectorProfile::Soft)
         .value("gaussian", ProjectorProfile::Gaussian);
+
+    nb::enum_<ProjectorSource>(m, "ProjectorSource")
+        .value("line", ProjectorSource::Line)
+        .value("ball", ProjectorSource::Ball);
 
     // ── Material ─────────────────────────────────────────────────
     nb::class_<Material>(m, "Material")
@@ -320,6 +333,23 @@ NB_MODULE(_lpt2d, m) {
             [=](const Ellipse& e) { return mid_getter(e); },
             [=](Ellipse& e, std::string id) { mid_setter(e, std::move(id)); });
 
+    nb::class_<Path>(m, "Path")
+        .def("__init__", [=](Path* p, std::string id, std::vector<Vec2> points,
+                             nb::object material, std::string material_id, bool closed) {
+            new (p) Path{std::move(id), std::move(points),
+                         make_binding(material, std::move(material_id)), closed};
+        }, "id"_a = "", "points"_a = std::vector<Vec2>{},
+           "material"_a = nb::none(), "material_id"_a = "", "closed"_a = false)
+        .def_rw("id", &Path::id)
+        .def_rw("points", &Path::points)
+        .def_rw("closed", &Path::closed)
+        .def_prop_rw("material",
+            [=](const Path& p) { return mat_getter(p); },
+            [=](Path& p, const Material& m) { mat_setter(p, m); })
+        .def_prop_rw("material_id",
+            [=](const Path& p) { return mid_getter(p); },
+            [=](Path& p, std::string id) { mid_setter(p, std::move(id)); });
+
     // ── Light types ──────────────────────────────────────────────
     nb::class_<PointLight>(m, "PointLight")
         .def("__init__", [](PointLight* l, std::string id, Vec2 pos, float intensity,
@@ -349,13 +379,15 @@ NB_MODULE(_lpt2d, m) {
     nb::class_<ProjectorLight>(m, "ProjectorLight")
         .def("__init__", [](ProjectorLight* l, std::string id, Vec2 position, Vec2 direction,
                             float source_radius, float spread, nb::object profile_obj,
-                            float softness, float intensity, float wl_min, float wl_max) {
+                            nb::object source_obj, float softness, float intensity,
+                            float wl_min, float wl_max) {
             new (l) ProjectorLight{std::move(id), position, direction, source_radius, spread,
-                                   parse_projector_profile_arg(profile_obj), softness,
-                                   intensity, wl_min, wl_max};
+                                   parse_projector_profile_arg(profile_obj),
+                                   parse_projector_source_arg(source_obj),
+                                   softness, intensity, wl_min, wl_max};
         }, "id"_a = "", "position"_a = Vec2{}, "direction"_a = Vec2{1.0f, 0.0f},
            "source_radius"_a = 0.03f, "spread"_a = 0.1f, "profile"_a = nb::cast("uniform"),
-           "softness"_a = 0.0f, "intensity"_a = 1.0f,
+           "source"_a = nb::cast("line"), "softness"_a = 0.0f, "intensity"_a = 1.0f,
            "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
         .def_rw("id", &ProjectorLight::id)
         .def_rw("position", &ProjectorLight::position)
@@ -365,6 +397,9 @@ NB_MODULE(_lpt2d, m) {
         .def_prop_rw("profile",
             [](const ProjectorLight& l) { return projector_profile_to_string(l.profile); },
             [](ProjectorLight& l, nb::object obj) { l.profile = parse_projector_profile_arg(obj); })
+        .def_prop_rw("source",
+            [](const ProjectorLight& l) { return projector_source_to_string(l.source); },
+            [](ProjectorLight& l, nb::object obj) { l.source = parse_projector_source_arg(obj); })
         .def_rw("softness", &ProjectorLight::softness)
         .def_rw("intensity", &ProjectorLight::intensity)
         .def_rw("wavelength_min", &ProjectorLight::wavelength_min)

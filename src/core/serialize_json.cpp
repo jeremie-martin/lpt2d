@@ -26,7 +26,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 8;
+constexpr int SHOT_JSON_VERSION = 9;
 enum class Schema { Authored, Stream };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
@@ -144,6 +144,12 @@ ProjectorProfile read_projector_profile(const Json& json, std::string_view conte
     const std::string value = read_string(json, context);
     if (auto parsed = parse_projector_profile(value)) return *parsed;
     fail("invalid projector profile: " + value);
+}
+
+ProjectorSource read_projector_source(const Json& json, std::string_view context) {
+    const std::string value = read_string(json, context);
+    if (auto parsed = parse_projector_source(value)) return *parsed;
+    fail("invalid projector source: " + value);
 }
 
 Material read_material(const Json& json, Schema schema, std::string_view context) {
@@ -290,6 +296,21 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
             ellipse.rotation = read_required_float(json, "rotation", context);
         return ellipse;
     }
+    if (type == "path") {
+        reject_unknown_keys(json, {"id", "type", "points", "closed", "material", "material_id"}, context);
+        Path path;
+        path.id = id;
+        if (schema == Schema::Authored || json.contains("points")) {
+            expect_array(require_key(json, "points", context), std::string(context) + ".points");
+            for (size_t i = 0; i < json["points"].size(); ++i)
+                path.points.push_back(read_vec2(json["points"][i],
+                                                 std::string(context) + ".points[" + std::to_string(i) + "]"));
+        }
+        if (json.contains("closed"))
+            path.closed = json["closed"].get<bool>();
+        path.binding = std::move(binding);
+        return path;
+    }
     fail("unknown shape type: " + type);
 }
 
@@ -342,6 +363,15 @@ Json write_shape(const Shape& shape) {
             write_binding(json, value.binding);
             return json;
         },
+        [&](const Path& value) {
+            Json points = Json::array();
+            for (Vec2 p : value.points) points.push_back(vec2_json(p));
+            Json json = {{"id", value.id}, {"type", "path"}, {"points", std::move(points)}};
+            if (value.closed)
+                json["closed"] = true;
+            write_binding(json, value.binding);
+            return json;
+        },
     }, shape);
 }
 
@@ -379,8 +409,8 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
     }
     if (type == "projector") {
         reject_unknown_keys(json, {"id", "type", "position", "direction", "source_radius", "spread",
-                                   "profile", "softness", "intensity", "wavelength_min", "wavelength_max"}, context);
-        ProjectorLight light{id, {}, {1.0f, 0.0f}, 0.03f, 0.1f, ProjectorProfile::Uniform, 0.0f, 1.0f, 380.0f, 780.0f};
+                                   "profile", "source", "softness", "intensity", "wavelength_min", "wavelength_max"}, context);
+        ProjectorLight light{id, {}, {1.0f, 0.0f}, 0.03f, 0.1f, ProjectorProfile::Uniform, ProjectorSource::Line, 0.0f, 1.0f, 380.0f, 780.0f};
         if (schema == Schema::Authored || json.contains("position"))
             light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
         if (schema == Schema::Authored || json.contains("direction"))
@@ -391,6 +421,8 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
             light.spread = read_required_float(json, "spread", context);
         if (schema == Schema::Authored || json.contains("profile"))
             light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
+        if (json.contains("source"))
+            light.source = read_projector_source(require_key(json, "source", context), std::string(context) + ".source");
         if (schema == Schema::Authored || json.contains("softness"))
             light.softness = read_required_float(json, "softness", context);
         if (schema == Schema::Authored || json.contains("intensity"))
@@ -422,6 +454,7 @@ Json write_light(const Light& light) {
             return Json{{"id", value.id}, {"type", "projector"}, {"position", vec2_json(value.position)},
                         {"direction", vec2_json(value.direction)}, {"source_radius", value.source_radius},
                         {"spread", value.spread}, {"profile", projector_profile_to_string(value.profile)},
+                        {"source", projector_source_to_string(value.source)},
                         {"softness", value.softness}, {"intensity", value.intensity},
                         {"wavelength_min", value.wavelength_min}, {"wavelength_max", value.wavelength_max}};
         },

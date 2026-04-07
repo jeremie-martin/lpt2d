@@ -8,9 +8,9 @@ Timeline, FrameContext, Quality, FrameReport) are defined here.
 from __future__ import annotations
 
 import math
+import pathlib
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable
 
 import _lpt2d
@@ -24,9 +24,11 @@ Arc = _lpt2d.Arc
 Bezier = _lpt2d.Bezier
 Polygon = _lpt2d.Polygon
 Ellipse = _lpt2d.Ellipse
+Path = _lpt2d.Path
 PointLight = _lpt2d.PointLight
 SegmentLight = _lpt2d.SegmentLight
 ProjectorLight = _lpt2d.ProjectorLight
+ProjectorSource = _lpt2d.ProjectorSource
 Transform2D = _lpt2d.Transform2D
 Group = _lpt2d.Group
 Scene = _lpt2d.Scene
@@ -142,7 +144,7 @@ def light_type_name(light) -> str:
 
 # ─── Type aliases ────────────────────────────────────────────────
 
-Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse
+Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse | Path
 Light = PointLight | SegmentLight | ProjectorLight
 
 
@@ -283,7 +285,7 @@ class Shot:
         )
 
     @staticmethod
-    def load(path: str | Path) -> Shot:
+    def load(path: str | pathlib.Path) -> Shot:
         """Load shot from a JSON file (via C++ serializer)."""
         cpp = _lpt2d.load_shot(str(path))
         return Shot(
@@ -295,7 +297,7 @@ class Shot:
             trace=cpp.trace,
         )
 
-    def save(self, path: str | Path) -> None:
+    def save(self, path: str | pathlib.Path) -> None:
         """Save shot to a JSON file (via C++ serializer)."""
         _lpt2d.save_shot(self.to_cpp(), str(path))
 

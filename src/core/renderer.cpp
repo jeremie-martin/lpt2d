@@ -675,6 +675,18 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 fill_material(ge, resolve_binding(e.binding, scene.materials));
                 gpu_ellipses.push_back(ge);
             },
+            [&](const Path& path) {
+                auto parts = decompose_path(path);
+                const Material& mat = resolve_binding(path.binding, scene.materials);
+                for (auto& curve : parts.curves) {
+                    GPUBezier gb{};
+                    gb.p0[0] = curve.p0.x; gb.p0[1] = curve.p0.y;
+                    gb.p1[0] = curve.p1.x; gb.p1[1] = curve.p1.y;
+                    gb.p2[0] = curve.p2.x; gb.p2[1] = curve.p2.y;
+                    fill_material(gb, mat);
+                    gpu_beziers.push_back(gb);
+                }
+            },
         }, shape);
     }
 
@@ -717,6 +729,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.intensity = l.intensity;
                 gl.softness = l.softness;
                 gl.pos_a[0] = l.position.x; gl.pos_a[1] = l.position.y;
+                gl.pos_b[0] = (l.source == ProjectorSource::Ball) ? 1.0f : 0.0f;
                 Vec2 d = l.direction.normalized();
                 gl.dir[0] = d.x; gl.dir[1] = d.y;
                 gl.spread = l.spread * 0.5f; // store half-angle

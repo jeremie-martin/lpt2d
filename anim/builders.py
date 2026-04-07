@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Literal
 
-from .types import Arc, Circle, Ellipse, Material, Polygon, Segment, Shape
+from .types import Arc, Circle, Ellipse, Material, Path, Polygon, Segment, Shape
 
 
 def _shape_id(id_prefix: str | None, suffix: str) -> str:
@@ -591,3 +591,95 @@ def waveguide(
     for i, shape in enumerate(shapes):
         shape.id = _shape_id(id_prefix, f"segment_{i}")
     return shapes
+
+
+# ─── Path builders ───────────────────────────────────────────────
+
+
+def path(
+    points: list[list[float]],
+    material: Material,
+    *,
+    closed: bool = False,
+    id_prefix: str | None = None,
+) -> Path:
+    """Quadratic Bezier chain from explicit control points.
+
+    *points* must have 2N+1 entries for N Bezier segments.
+    Even-indexed points are on-curve, odd-indexed are control points.
+    """
+    if len(points) < 3 or len(points) % 2 == 0:
+        raise ValueError("points must have 2N+1 entries (N >= 1)")
+    return Path(
+        id=_shape_id(id_prefix, "body"),
+        points=[list(p) for p in points],
+        material=material,
+        closed=closed,
+    )
+
+
+def path_from_samples(
+    points: list[list[float]] | list[tuple[float, float]],
+    material: Material,
+    *,
+    closed: bool = False,
+    id_prefix: str | None = None,
+) -> Path:
+    """Fit a smooth quadratic Bezier chain through sample points.
+
+    Uses B-spline midpoint method: original samples become control points,
+    midpoints between consecutive samples become on-curve points.
+    C1 continuous at interior joints.
+    """
+    import numpy as np
+
+    pts = np.asarray(points, dtype=float)
+    n = len(pts)
+    if n < 2:
+        raise ValueError("need at least 2 sample points")
+    if n == 2:
+        mid = ((pts[0] + pts[1]) / 2).tolist()
+        chain = [pts[0].tolist(), mid, pts[1].tolist()]
+        return Path(
+            id=_shape_id(id_prefix, "body"),
+            points=chain,
+            material=material,
+            closed=closed,
+        )
+
+    # B-spline midpoint: samples are control points,
+    # midpoints between consecutive samples are on-curve.
+    # First and last on-curve points are clamped to first/last samples.
+    chain: list[list[float]] = [pts[0].tolist()]  # first on-curve
+    chain.append(pts[1].tolist())  # first control
+    for i in range(1, n - 2):
+        chain.append(((pts[i] + pts[i + 1]) / 2).tolist())  # on-curve midpoint
+        chain.append(pts[i + 1].tolist())  # control
+    chain.append(pts[n - 1].tolist())  # last on-curve
+
+    return Path(
+        id=_shape_id(id_prefix, "body"),
+        points=chain,
+        material=material,
+        closed=closed,
+    )
+
+
+def function_curve(
+    fn,
+    x_range: tuple[float, float],
+    material: Material,
+    *,
+    samples: int = 64,
+    id_prefix: str | None = None,
+) -> Path:
+    """Arbitrary f(x) as a smooth Bezier chain.
+
+    *fn* — callable ``float -> float``.
+    """
+    import numpy as np
+
+    xs = np.linspace(x_range[0], x_range[1], samples)
+    ys = np.array([fn(x) for x in xs])
+    pts = np.column_stack([xs, ys]).tolist()
+    return path_from_samples(pts, material, id_prefix=id_prefix)

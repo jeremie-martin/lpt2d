@@ -145,6 +145,18 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
             Vec2 closest{e.semi_a * std::cos(angle), e.semi_b * std::sin(angle)};
             return (local - closest).length();
         },
+        [&](const Path& path) -> float {
+            auto parts = decompose_path(path);
+            float best = 1e30f;
+            for (auto& curve : parts.curves) {
+                for (int j = 0; j <= 20; ++j) {
+                    float t = j / 20.0f;
+                    Vec2 p = bezier_eval(curve, t);
+                    best = std::min(best, (wp - p).length());
+                }
+            }
+            return best;
+        },
     }, shape);
 }
 
@@ -153,6 +165,10 @@ static float light_distance(Vec2 wp, const Light& light) {
         [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
         [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
         [&](const ProjectorLight& l) -> float {
+            if (l.source == ProjectorSource::Ball && l.source_radius > 0.0f) {
+                float d = (wp - l.position).length();
+                return std::min(d, std::abs(d - l.source_radius));
+            }
             Vec2 dir = l.direction.length_sq() > 1e-6f ? l.direction.normalized() : Vec2{1.0f, 0.0f};
             Vec2 tangent = dir.perp() * l.source_radius;
             Vec2 a = l.position - tangent;
@@ -295,6 +311,7 @@ void translate_shape(Shape& s, Vec2 delta) {
         [&](Bezier& b) { b.p0 = b.p0 + delta; b.p1 = b.p1 + delta; b.p2 = b.p2 + delta; },
         [&](Polygon& p) { for (auto& v : p.vertices) v = v + delta; },
         [&](Ellipse& e) { e.center = e.center + delta; },
+        [&](Path& p) { for (auto& v : p.points) v = v + delta; },
     }, s);
 }
 
@@ -325,6 +342,7 @@ static void rotate_shape(Shape& s, Vec2 pivot, float angle) {
             e.center = rotate_around(e.center, pivot, angle);
             e.rotation += angle;
         },
+        [&](Path& p) { for (auto& v : p.points) v = rotate_around(v, pivot, angle); },
     }, s);
 }
 
@@ -367,6 +385,7 @@ static void scale_shape(Shape& s, Vec2 pivot, float fx, float fy) {
             e.semi_a = std::max(e.semi_a * uniform, 0.01f);
             e.semi_b = std::max(e.semi_b * uniform, 0.01f);
         },
+        [&](Path& p) { for (auto& v : p.points) v = scale_around(v, pivot, fx, fy); },
     }, s);
 }
 
@@ -489,6 +508,10 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<SelectionR
                     handles.push_back({Handle::Radius, id, 0, e.center + Vec2{e.semi_a * cr, e.semi_a * sr}});
                     handles.push_back({Handle::Radius, id, 1, e.center + Vec2{-e.semi_b * sr, e.semi_b * cr}});
                 },
+                [&](const Path& p) {
+                    for (int i = 0; i < (int)p.points.size(); ++i)
+                        handles.push_back({Handle::Position, id, i, p.points[i]});
+                },
             }, *shape);
         }
         if (const Light* light = resolve_light(scene, id)) {
@@ -585,6 +608,10 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
                     else
                         e.semi_b = std::max(-d.x * sr + d.y * cr, 0.01f);
                 }
+            },
+            [&](Path& p) {
+                if (handle.param_index >= 0 && handle.param_index < (int)p.points.size())
+                    p.points[handle.param_index] = wp;
             },
         }, *shape);
     }

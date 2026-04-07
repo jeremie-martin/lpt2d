@@ -175,6 +175,17 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
                 dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
             }
         },
+        [&](const Path& path) {
+            auto parts = decompose_path(path);
+            constexpr int N = 16;
+            for (auto& curve : parts.curves) {
+                for (int j = 0; j < N; ++j) {
+                    Vec2 p0 = bezier_eval(curve, (float)j / N);
+                    Vec2 p1 = bezier_eval(curve, (float)(j + 1) / N);
+                    dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
+                }
+            }
+        },
     }, shape);
 }
 
@@ -192,16 +203,21 @@ static void draw_direction_cone(ImDrawList* dl, const CameraView& cv, Vec2 origi
 
 static void draw_projector_aperture(ImDrawList* dl, const CameraView& cv, const ProjectorLight& light,
                                     ImU32 col, float th, float dpi) {
-    Vec2 dir = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1.0f, 0.0f};
-    Vec2 tangent = dir.perp() * light.source_radius;
-    Vec2 a = light.position - tangent;
-    Vec2 b = light.position + tangent;
     dl->AddCircleFilled(cv.to_screen(light.position), 4.0f * dpi, col);
     if (light.source_radius > 0.0f) {
-        ImVec2 sa = cv.to_screen(a), sb = cv.to_screen(b);
-        dl->AddLine(sa, sb, col, th);
-        dl->AddCircleFilled(sa, 2.5f * dpi, col);
-        dl->AddCircleFilled(sb, 2.5f * dpi, col);
+        if (light.source == ProjectorSource::Ball) {
+            float screen_radius = cv.cam.zoom * light.source_radius;
+            dl->AddCircle(cv.to_screen(light.position), screen_radius, col, 32, th);
+        } else {
+            Vec2 dir = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1.0f, 0.0f};
+            Vec2 tangent = dir.perp() * light.source_radius;
+            Vec2 a = light.position - tangent;
+            Vec2 b = light.position + tangent;
+            ImVec2 sa = cv.to_screen(a), sb = cv.to_screen(b);
+            dl->AddLine(sa, sb, col, th);
+            dl->AddCircleFilled(sa, 2.5f * dpi, col);
+            dl->AddCircleFilled(sb, 2.5f * dpi, col);
+        }
     }
 }
 

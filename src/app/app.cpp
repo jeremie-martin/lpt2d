@@ -554,6 +554,19 @@ int App::run(const AppConfig& config) {
                 }
             }
 
+            // Path multi-click preview
+            if (!ed.interaction.path_create_points.empty()) {
+                auto& pts = ed.interaction.path_create_points;
+                for (size_t i = 0; i + 1 < pts.size(); ++i)
+                    dl->AddLine(cv.to_screen(pts[i]), cv.to_screen(pts[i + 1]), COL_PREVIEW, 1.5f * dpi_scale);
+                dl->AddLine(cv.to_screen(pts.back()), io.MousePos, COL_PREVIEW, 1.5f * dpi_scale);
+                for (auto& pt : pts) {
+                    ImVec2 sp = cv.to_screen(pt);
+                    float r = 3.0f * dpi_scale;
+                    dl->AddCircleFilled(sp, r, COL_PREVIEW);
+                }
+            }
+
             // Box selection preview
             if (ed.interaction.box_selecting) {
                 ImVec2 cur = io.MousePos;
@@ -840,6 +853,10 @@ int App::run(const AppConfig& config) {
                                         [&](const Bezier& b) { ed.interaction.drag_offsets.push_back({b.p0 - mw_raw, b.p2 - mw_raw}); },
                                         [&](const Polygon& p) { ed.interaction.drag_offsets.push_back({p.centroid() - mw_raw, {}}); },
                                         [&](const Ellipse& e) { ed.interaction.drag_offsets.push_back({e.center - mw_raw, {}}); },
+                                        [&](const Path& p) {
+                                            Vec2 c = shape_centroid(Shape{p});
+                                            ed.interaction.drag_offsets.push_back({c - mw_raw, {}});
+                                        },
                                     }, *shape);
                                 } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                                     std::visit(overloaded{
@@ -887,6 +904,21 @@ int App::run(const AppConfig& config) {
                     ed.clear_selection();
                     ed.select({SelectionRef::Light, light.id, ""});
                     reload();
+                } else if (ed.interaction.tool == EditTool::Path) {
+                    if (ImGui::IsMouseDoubleClicked(0) && ed.interaction.path_create_points.size() >= 2) {
+                        // Finalize path on double-click
+                        ed.session.undo.push(ed.shot.scene);
+                        Path path = fit_path_from_samples(ed.interaction.path_create_points,
+                                                          mat_glass(1.5f, 20000.0f, 0.3f));
+                        path.id = next_scene_entity_id(ed.shot.scene, "path");
+                        ed.shot.scene.shapes.push_back(path);
+                        ed.clear_selection();
+                        ed.select({SelectionRef::Shape, path.id, ""});
+                        ed.interaction.path_create_points.clear();
+                        reload();
+                    } else if (!ImGui::IsMouseDoubleClicked(0)) {
+                        ed.interaction.path_create_points.push_back(mw);
+                    }
                 } else if (ed.interaction.tool == EditTool::Measure) {
                     if (!ed.interaction.measure_active) {
                         ed.interaction.measure_start = mw;
@@ -928,6 +960,12 @@ int App::run(const AppConfig& config) {
                             for (auto& v : p.vertices) v = v + delta;
                         },
                         [&](Ellipse& e) { e.center = mw + off.a; },
+                        [&](Path& p) {
+                            if (p.points.empty()) return;
+                            Vec2 c = shape_centroid(Shape{p});
+                            Vec2 delta = (mw + off.a) - c;
+                            for (auto& v : p.points) v = v + delta;
+                        },
                     }, *shape);
                 } else if (Light* light = resolve_light(ed.shot.scene, sid)) {
                     std::visit(overloaded{
@@ -1264,6 +1302,7 @@ int App::run(const AppConfig& config) {
                 if (!io.KeyCtrl && !io.KeyAlt) {
                     auto switch_tool = [&](EditTool t) {
                         if (ed.interaction.tool == EditTool::Measure) ed.interaction.measure_active = false;
+                        ed.interaction.path_create_points.clear();
                         ed.interaction.tool = t;
                     };
                     if (ImGui::IsKeyPressed(ImGuiKey_Q)) switch_tool(EditTool::Select);
@@ -1272,6 +1311,7 @@ int App::run(const AppConfig& config) {
                     if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) switch_tool(EditTool::Arc);
                     if (ImGui::IsKeyPressed(ImGuiKey_B)) switch_tool(EditTool::Bezier);
                     if (ImGui::IsKeyPressed(ImGuiKey_E)) switch_tool(EditTool::Ellipse);
+                    if (ImGui::IsKeyPressed(ImGuiKey_D)) switch_tool(EditTool::Path);
                     if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.interaction.transform.active()) switch_tool(EditTool::Erase);
                     if (ImGui::IsKeyPressed(ImGuiKey_P)) switch_tool(EditTool::PointLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);
@@ -1327,9 +1367,26 @@ int App::run(const AppConfig& config) {
                 // Space: pause
                 if (ImGui::IsKeyPressed(ImGuiKey_Space)) panel.paused = !panel.paused;
 
+                // Enter finalizes path creation
+                if (ImGui::IsKeyPressed(ImGuiKey_Enter) && !ed.interaction.path_create_points.empty()) {
+                    if (ed.interaction.path_create_points.size() >= 2) {
+                        ed.session.undo.push(ed.shot.scene);
+                        Path path = fit_path_from_samples(ed.interaction.path_create_points,
+                                                          mat_glass(1.5f, 20000.0f, 0.3f));
+                        path.id = next_scene_entity_id(ed.shot.scene, "path");
+                        ed.shot.scene.shapes.push_back(path);
+                        ed.clear_selection();
+                        ed.select({SelectionRef::Shape, path.id, ""});
+                        reload();
+                    }
+                    ed.interaction.path_create_points.clear();
+                }
+
                 // Escape cascade
                 if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                    if (ed.interaction.tool == EditTool::Measure && ed.interaction.measure_active) {
+                    if (!ed.interaction.path_create_points.empty()) {
+                        ed.interaction.path_create_points.clear();
+                    } else if (ed.interaction.tool == EditTool::Measure && ed.interaction.measure_active) {
                         ed.interaction.measure_active = false;
                     } else if (ed.interaction.creating) {
                         ed.interaction.creating = false;

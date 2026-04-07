@@ -98,25 +98,36 @@ void apply_projector_preset(ProjectorLight& light, int preset) {
             light.source_radius = 0.03f;
             light.spread = 0.10f;
             light.profile = ProjectorProfile::Uniform;
+            light.source = ProjectorSource::Line;
             light.softness = 0.0f;
             break;
         case 2:
             light.source_radius = 0.03f;
             light.spread = 0.50f;
             light.profile = ProjectorProfile::Soft;
+            light.source = ProjectorSource::Line;
             light.softness = 0.5f;
             break;
         case 3:
             light.source_radius = 0.015f;
             light.spread = 0.02f;
             light.profile = ProjectorProfile::Gaussian;
+            light.source = ProjectorSource::Line;
             light.softness = 0.8f;
             break;
         case 4:
             light.source_radius = 0.15f;
             light.spread = 0.0f;
             light.profile = ProjectorProfile::Uniform;
+            light.source = ProjectorSource::Line;
             light.softness = 0.0f;
+            break;
+        case 5:
+            light.source_radius = 0.05f;
+            light.spread = 0.50f;
+            light.profile = ProjectorProfile::Soft;
+            light.source = ProjectorSource::Ball;
+            light.softness = 0.3f;
             break;
         default:
             break;
@@ -280,7 +291,7 @@ void draw_controls_panel(
                 ImGui::PushStyleColor(ImGuiCol_Button, accent);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_h);
             }
-            if (ImGui::Button(lbl)) { ed.interaction.tool = t; ed.interaction.creating = false; }
+            if (ImGui::Button(lbl)) { ed.interaction.tool = t; ed.interaction.creating = false; ed.interaction.path_create_points.clear(); }
             if (active) ImGui::PopStyleColor(2);
         };
         tbtn("Select", EditTool::Select); ImGui::SameLine();
@@ -290,6 +301,7 @@ void draw_controls_panel(
         tbtn("Bezier", EditTool::Bezier); ImGui::SameLine();
         tbtn("Polygon", EditTool::Polygon);
         tbtn("Ellipse", EditTool::Ellipse); ImGui::SameLine();
+        tbtn("Path", EditTool::Path);
         tbtn("Erase", EditTool::Erase);
         tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
         tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
@@ -738,6 +750,17 @@ void draw_controls_panel(
                     changed |= ImGui::SliderAngle("Rotation", &e.rotation, -180.0f, 180.0f);
                     changed |= edit_shape_material_binding(shape);
                 },
+                [&](Path& p) {
+                    ImGui::Text("Points: %d  (%d segments)", (int)p.points.size(),
+                                p.points.size() >= 3 ? (int)(p.points.size() - 1) / 2 : 0);
+                    changed |= ImGui::Checkbox("Closed", &p.closed);
+                    for (int pi = 0; pi < (int)p.points.size(); ++pi) {
+                        char plbl[16];
+                        std::snprintf(plbl, sizeof(plbl), pi % 2 == 0 ? "P%d" : "C%d", pi);
+                        changed |= ImGui::DragFloat2(plbl, &p.points[pi].x, 0.01f);
+                    }
+                    changed |= edit_shape_material_binding(shape);
+                },
             }, shape);
         }
 
@@ -765,9 +788,9 @@ void draw_controls_panel(
                     edit_wavelength(l.wavelength_min, l.wavelength_max);
                 },
                 [&](ProjectorLight& l) {
-                    const char* presets[] = {"(apply)", "Beam", "Spot", "Laser", "Parallel"};
+                    const char* presets[] = {"(apply)", "Beam", "Spot", "Laser", "Parallel", "Bulb"};
                     int preset = 0;
-                    if (ImGui::Combo("Preset", &preset, presets, 5) && preset > 0) {
+                    if (ImGui::Combo("Preset", &preset, presets, 6) && preset > 0) {
                         apply_projector_preset(l, preset);
                         changed = true;
                     }
@@ -780,6 +803,11 @@ void draw_controls_panel(
                     int profile = static_cast<int>(l.profile);
                     if (ImGui::Combo("Profile", &profile, "Uniform\0Soft\0Gaussian\0")) {
                         l.profile = static_cast<ProjectorProfile>(profile);
+                        changed = true;
+                    }
+                    int source = static_cast<int>(l.source);
+                    if (ImGui::Combo("Source", &source, "Line\0Ball\0")) {
+                        l.source = static_cast<ProjectorSource>(source);
                         changed = true;
                     }
                     if (l.profile == ProjectorProfile::Uniform) ImGui::BeginDisabled();

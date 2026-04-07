@@ -8,10 +8,13 @@ from .builders import ball_lens as ball_lens
 from .builders import biconvex_lens as biconvex_lens
 from .builders import double_slit as double_slit
 from .builders import elliptical_lens as elliptical_lens
+from .builders import function_curve as function_curve
 from .builders import grating as grating
 from .builders import hemispherical_lens as hemispherical_lens
 from .builders import mirror_block as mirror_block
 from .builders import mirror_box as mirror_box
+from .builders import path as path
+from .builders import path_from_samples as path_from_samples
 from .builders import plano_convex_lens as plano_convex_lens
 from .builders import polygon as polygon
 from .builders import prism as prism
@@ -21,6 +24,8 @@ from .builders import slit as slit
 from .builders import thick_arc as thick_arc
 from .builders import thick_segment as thick_segment
 from .builders import waveguide as waveguide
+from .colors import fill_rgb as fill_rgb
+from .colors import resolve_color as resolve_color
 from .easing import EASINGS as EASINGS
 from .easing import smoothstep as smoothstep
 from .light_analysis import light_contributions as light_contributions
@@ -61,10 +66,12 @@ from .types import FrameReport as FrameReport
 from .types import Group as Group
 from .types import Look as Look
 from .types import Material as Material
+from .types import Path as Path
 from .types import PointLight as PointLight
+from .types import Polygon as Polygon
 from .types import ProjectorLight as ProjectorLight
 from .types import ProjectorProfile as ProjectorProfile
-from .types import Polygon as Polygon
+from .types import ProjectorSource as ProjectorSource
 from .types import Quality as Quality
 from .types import Scene as Scene
 from .types import SeedMode as SeedMode
@@ -81,8 +88,6 @@ from .types import emissive as emissive
 from .types import glass as glass
 from .types import mirror as mirror
 from .types import opaque_mirror as opaque_mirror
-from .colors import resolve_color as resolve_color
-from .colors import fill_rgb as fill_rgb
 
 __all__ = [
     "Arc",
@@ -104,6 +109,8 @@ __all__ = [
     "PointLight",
     "ProjectorLight",
     "ProjectorProfile",
+    "ProjectorSource",
+    "Path",
     "Polygon",
     "Quality",
     "Scene",
@@ -151,6 +158,8 @@ __all__ = [
     "mirror_box",
     "opaque_mirror",
     "plano_convex_lens",
+    "path",
+    "path_from_samples",
     "polygon",
     "rectangle",
     "regular_polygon",
@@ -162,6 +171,7 @@ __all__ = [
     "smoothstep",
     "double_slit",
     "elliptical_lens",
+    "function_curve",
     "grating",
     "prism",
     "slit",

@@ -228,7 +228,15 @@ struct Ellipse {
     MaterialBinding binding;
 };
 
-using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse>;
+struct Path {
+    std::string id;
+    std::vector<Vec2> points; // 2N+1 points for N quadratic Bezier segments;
+                              // even-indexed are on-curve, odd-indexed are control points
+    MaterialBinding binding;
+    bool closed = false;      // if true, auto-close with extra Bezier back to start
+};
+
+using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse, Path>;
 
 // --- Lights ---
 
@@ -270,6 +278,25 @@ inline const char* projector_profile_to_string(ProjectorProfile profile) {
     return "uniform";
 }
 
+enum class ProjectorSource : int {
+    Line,
+    Ball,
+};
+
+inline std::optional<ProjectorSource> parse_projector_source(const std::string& s) {
+    if (s == "line") return ProjectorSource::Line;
+    if (s == "ball") return ProjectorSource::Ball;
+    return std::nullopt;
+}
+
+inline const char* projector_source_to_string(ProjectorSource source) {
+    switch (source) {
+        case ProjectorSource::Line: return "line";
+        case ProjectorSource::Ball: return "ball";
+    }
+    return "line";
+}
+
 struct ProjectorLight {
     std::string id;
     Vec2 position;
@@ -277,6 +304,7 @@ struct ProjectorLight {
     float source_radius = 0.03f;      // world-space radius; aperture length = 2 * radius
     float spread = 0.1f;              // full cone angle in radians; 0 = perfectly collimated
     ProjectorProfile profile = ProjectorProfile::Uniform;
+    ProjectorSource source = ProjectorSource::Line; // ray origin shape: line aperture or circle boundary
     float softness = 0.0f;            // normalized [0, 1], ignored for uniform profile
     float intensity = 1.0f;           // total emitted power
     float wavelength_min = 380.0f;

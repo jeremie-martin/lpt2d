@@ -104,7 +104,7 @@ def test_authored_json_uses_explicit_look_trace_and_groups():
 def test_repo_authored_json_is_strict_v6_and_id_coherent():
     for path in _iter_scene_paths():
         data = _load(path)
-        assert data.get("version") == 8, f"{path} must declare version 8"
+        assert data.get("version") == 9, f"{path} must declare version 9"
         assert "camera" in data, f"{path} must include an explicit camera block"
         assert "canvas" in data, f"{path} must include an explicit canvas block"
 

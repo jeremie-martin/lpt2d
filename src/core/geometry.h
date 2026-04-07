@@ -31,6 +31,15 @@ struct RoundedPolygonParts {
 
 RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly);
 
+// ─── Path decomposition ────────────────────────────────────────────
+
+struct PathParts {
+    std::vector<Bezier> curves; // decomposed Bezier segments (id/binding unused)
+};
+
+PathParts decompose_path(const Path& path);
+Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBinding& binding, bool closed = false);
+
 // ─── Primitive bounds ─────────────────────────────────────────────
 
 Bounds shape_bounds(const Shape& s);
@@ -52,6 +61,7 @@ std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& 
 std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMap& materials);
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials);
 std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const MaterialMap& materials);
+std::optional<Hit> intersect(const Ray& ray, const Path& path, const MaterialMap& materials);
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene);
 
 // ─── Transform helpers ───────────────────────────────────────────

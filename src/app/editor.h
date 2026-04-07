@@ -129,7 +129,7 @@ struct Clipboard {
 
 // ─── Editor tools ──────────────────────────────────────────────────────
 
-enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, Ellipse, PointLight, SegmentLight, ProjectorLight, Erase, Measure };
+enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, Ellipse, Path, PointLight, SegmentLight, ProjectorLight, Erase, Measure };
 
 // Camera handle identifiers for interactive frame editing
 enum class CameraHandle : int {
@@ -183,6 +183,7 @@ struct EditorState {
         Bounds cam_drag_start_bounds{};
         bool measure_active = false;
         Vec2 measure_start{};
+        std::vector<Vec2> path_create_points; // multi-click path accumulator
     } interaction;
 
     // Visibility filters (transient, not serialized, not undone)

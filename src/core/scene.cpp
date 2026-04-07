@@ -92,6 +92,7 @@ std::string shape_type_name(const Shape& shape) {
         [](const Bezier&) { return std::string{"bezier"}; },
         [](const Polygon&) { return std::string{"polygon"}; },
         [](const Ellipse&) { return std::string{"ellipse"}; },
+        [](const Path&) { return std::string{"path"}; },
     }, shape);
 }
 
@@ -503,6 +504,7 @@ std::string shape_display_name(const Shape& s, int fallback_index) {
         [](const Bezier&) { return std::string{"Bezier"}; },
         [](const Polygon&) { return std::string{"Polygon"}; },
         [](const Ellipse&) { return std::string{"Ellipse"}; },
+        [](const Path&) { return std::string{"Path"}; },
     }, s);
     return kind + " " + std::to_string(fallback_index);
 }

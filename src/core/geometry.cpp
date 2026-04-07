@@ -176,6 +176,16 @@ Bounds shape_bounds(const Shape& s) {
                               float hy = std::sqrt(e.semi_a * e.semi_a * sr * sr + e.semi_b * e.semi_b * cr * cr);
                               return Bounds{e.center - Vec2{hx, hy}, e.center + Vec2{hx, hy}};
                           },
+                          [](const Path& path) {
+                              if (path.points.empty()) return Bounds{{0, 0}, {0, 0}};
+                              float inf = std::numeric_limits<float>::max();
+                              Vec2 lo{inf, inf}, hi{-inf, -inf};
+                              for (auto& p : path.points) {
+                                  lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y);
+                                  hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y);
+                              }
+                              return Bounds{lo, hi};
+                          },
                       },
                       s);
 }
@@ -192,6 +202,13 @@ Bounds light_bounds(const Light& l) {
                               };
                           },
                           [](const ProjectorLight& light) {
+                              if (light.source == ProjectorSource::Ball) {
+                                  float r = light.source_radius;
+                                  return Bounds{
+                                      {light.position.x - r, light.position.y - r},
+                                      {light.position.x + r, light.position.y + r},
+                                  };
+                              }
                               Vec2 dir = light.direction.length_sq() > 1e-6f
                                   ? light.direction.normalized()
                                   : Vec2{1.0f, 0.0f};
@@ -547,6 +564,67 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
     return parts;
 }
 
+// ─── Path decomposition ────────────────────────────────────────
+
+PathParts decompose_path(const Path& path) {
+    PathParts parts;
+    int n = (int)path.points.size();
+    if (n < 3) return parts;
+
+    int num_segments = (n - 1) / 2;
+    for (int i = 0; i < num_segments; ++i) {
+        Bezier b;
+        b.p0 = path.points[2 * i];
+        b.p1 = path.points[2 * i + 1];
+        b.p2 = path.points[2 * i + 2];
+        b.binding = path.binding;
+        parts.curves.push_back(b);
+    }
+
+    if (path.closed && num_segments > 0) {
+        Vec2 last = path.points[2 * num_segments];
+        Vec2 first = path.points[0];
+        Bezier closing;
+        closing.p0 = last;
+        closing.p1 = (last + first) * 0.5f; // midpoint = straight line
+        closing.p2 = first;
+        closing.binding = path.binding;
+        parts.curves.push_back(closing);
+    }
+
+    return parts;
+}
+
+Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBinding& binding, bool closed) {
+    Path path;
+    path.binding = binding;
+    path.closed = closed;
+    int n = (int)samples.size();
+
+    if (n < 2) {
+        if (n == 1) path.points = {samples[0], samples[0], samples[0]};
+        return path;
+    }
+    if (n == 2) {
+        path.points = {samples[0], (samples[0] + samples[1]) * 0.5f, samples[1]};
+        return path;
+    }
+
+    // B-spline midpoint method: samples become control points,
+    // midpoints between consecutive samples become on-curve points.
+    // Bezier i: p0 = mid(si, si+1), ctrl = si+1, p2 = mid(si+1, si+2)
+    // First on-curve = s0, last on-curve = sN-1 (clamped endpoints).
+    path.points.push_back(samples[0]); // first on-curve
+    path.points.push_back(samples[1]); // first control
+    for (int i = 1; i < n - 2; ++i) {
+        path.points.push_back((samples[i] + samples[i + 1]) * 0.5f); // on-curve midpoint
+        path.points.push_back(samples[i + 1]); // control
+    }
+    path.points.push_back(samples[n - 1]); // last on-curve
+
+    return path;
+}
+
 // ─── Polygon intersection ───────────────────────────────────────
 
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials) {
@@ -639,6 +717,20 @@ std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const Mater
     return Hit{t, point, normal, &resolve_binding(ellipse.binding, materials)};
 }
 
+std::optional<Hit> intersect(const Ray& ray, const Path& path, const MaterialMap& materials) {
+    auto parts = decompose_path(path);
+    std::optional<Hit> best;
+    const Material* mat = &resolve_binding(path.binding, materials);
+    for (auto& curve : parts.curves) {
+        auto hit = intersect(ray, curve, materials);
+        if (hit && (!best || hit->t < best->t)) {
+            best = hit;
+            best->material = mat;
+        }
+    }
+    return best;
+}
+
 std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
     std::optional<Hit> closest;
 
@@ -650,6 +742,7 @@ std::optional<Hit> intersect_scene(const Ray& ray, const Scene& scene) {
                                   [&](const Bezier& b) { return intersect(ray, b, scene.materials); },
                                   [&](const Polygon& p) { return intersect(ray, p, scene.materials); },
                                   [&](const Ellipse& e) { return intersect(ray, e, scene.materials); },
+                                  [&](const Path& p) { return intersect(ray, p, scene.materials); },
                               },
                               shape);
 
@@ -704,6 +797,11 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
         [&](const Ellipse& e) -> Shape {
             return transform_ellipse_affine(e, t);
         },
+        [&](const Path& p) -> Shape {
+            Path r = p;
+            for (auto& v : r.points) v = t.apply(v);
+            return r;
+        },
     }, s);
 }
 
@@ -744,6 +842,12 @@ Vec2 shape_centroid(const Shape& s) {
         [](const Bezier& b) { return (b.p0 + b.p1 + b.p2) * (1.0f / 3.0f); },
         [](const Polygon& p) { return p.centroid(); },
         [](const Ellipse& e) { return e.center; },
+        [](const Path& path) {
+            if (path.points.empty()) return Vec2{0, 0};
+            Vec2 sum{0, 0};
+            for (auto& v : path.points) sum = sum + v;
+            return sum * (1.0f / path.points.size());
+        },
     }, s);
 }
 
@@ -792,6 +896,19 @@ float shape_perimeter(const Shape& s) {
             float a = e.semi_a, b = e.semi_b;
             float h = (a - b) * (a - b) / ((a + b) * (a + b));
             return PI * (a + b) * (1.0f + 3.0f * h / (10.0f + std::sqrt(4.0f - 3.0f * h)));
+        },
+        [](const Path& path) {
+            auto parts = decompose_path(path);
+            float total = 0;
+            for (auto& curve : parts.curves) {
+                Vec2 prev = curve.p0;
+                for (int i = 1; i <= 32; ++i) {
+                    Vec2 cur = bezier_eval(curve, (float)i / 32.0f);
+                    total += (cur - prev).length();
+                    prev = cur;
+                }
+            }
+            return total;
         },
     }, s);
 }
@@ -933,6 +1050,25 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 light.intensity = per_point;
 
                 lights.push_back(light);
+            }
+        },
+        [&](const Path& path) {
+            auto parts = decompose_path(path);
+            int N = emission_point_count(perimeter);
+            float seg_intensity = mat.emission * perimeter / std::max(1, N - 1);
+            for (auto& curve : parts.curves) {
+                int curve_n = std::max(2, N / std::max(1, (int)parts.curves.size()));
+                Vec2 prev = bezier_eval(curve, 0.0f);
+                for (int i = 1; i < curve_n; ++i) {
+                    float t = (float)i / (curve_n - 1);
+                    Vec2 cur = bezier_eval(curve, t);
+                    SegmentLight sl;
+                    sl.a = prev;
+                    sl.b = cur;
+                    sl.intensity = seg_intensity;
+                    lights.push_back(sl);
+                    prev = cur;
+                }
             }
         },
     }, s);
