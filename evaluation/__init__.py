@@ -12,6 +12,8 @@ from .compare import (
 )
 from .image_metrics import compute_mse, compute_psnr, compute_ssim, max_abs_diff, pct_pixels_changed
 from .timing import (
+    CaseBenchmark,
+    RatioSummary,
     SceneBenchmark,
     SpeedupResult,
     TimedFrame,
@@ -39,6 +41,8 @@ __all__ = [
     "pct_pixels_changed",
     "save_baseline",
     "save_baseline_set",
+    "CaseBenchmark",
+    "RatioSummary",
     "SceneBenchmark",
     "SpeedupResult",
     "TimedFrame",

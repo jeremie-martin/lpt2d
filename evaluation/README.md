@@ -13,11 +13,22 @@ This is the authoritative evaluation surface for `lpt2d` renderer work.
 - It measures renderer fidelity in a way that can reject meaningful visual
   regressions.
 - It aims to stay representative of real Python animation usage by timing
-  multiple deterministic frames across multiple fresh render sessions.
+  multiple deterministic frames across multiple repeated launches.
 
-The primary optimization target is the reported render median. A lower
-`render_median_ms` should correspond to a real renderer improvement, not a
-scene-specific trick or a noisy measurement artifact.
+The benchmark unit is a benchmark case:
+
+- one scene
+- at one deterministic frame
+- measured across repeated launches
+
+Each case gets its own median render time. Evaluation then normalizes each
+case median against the captured baseline case median and aggregates those
+ratios with a geometric mean.
+
+The primary optimization target is therefore `render_ratio_gmean`. Lower is
+better. The reciprocal `render_speedup_gmean` is also reported for readability.
+This avoids letting a single heavy case dominate the score just because its raw
+milliseconds are larger.
 
 ## Command-line usage
 
@@ -32,21 +43,24 @@ python -m evaluation
 python -m evaluation --skip-build
 
 # Control the evaluation contract explicitly
-python -m evaluation --frames 5 --launches 3 --warmup 1
+python -m evaluation --frames 5 --launches 5 --warmup 1
 python -m evaluation --resolution 1280x720 --rays 2000000
 ```
 
 Output:
 ```
-overall:    PASS render=565.7ms wall=566.2ms scenes=3 samples=45
+overall:    PASS ratio=0.9731 speedup=1.0276x render_case=402.5ms scenes=3 cases=15 samples=75
 
 verdict:    pass
+fidelity_verdict: pass
 scenes:     3
+cases:      15
 frames:     5
-launches:   3
-samples:    45
-median_ms:  565.7
-wall_ms:    566.2
+launches:   5
+samples:    75
+render_case_median_ms: 402.5
+render_ratio_gmean: 0.973125
+render_speedup_gmean: 1.027617
 ```
 
 Exit code 0 = all scenes pass, 1 = fidelity failure, 2 = setup error,
@@ -116,7 +130,9 @@ print(f"{speedup.speedup:.3f}x ({speedup.confidence})")
 # confidence: "confirmed", "likely", "noise", "regression", "confirmed_regression"
 ```
 
-This is what an optimization loop should use — not raw `time_ms`.
+This is the right primitive for repeated measurement, but the full evaluation
+harness should compare per-case medians against a fixed baseline instead of
+pooling raw samples across different cases.
 
 ## Scene evaluation contract
 
@@ -128,18 +144,19 @@ from evaluation import benchmark_scene
 measurement = benchmark_scene(
     "evaluation/scenes/solid_surface_gallery.json",
     frames=5,
-    launches=3,
+    launches=5,
     warmup=1,
 )
-print(measurement.render_summary.median_ms)
-print(measurement.wall_summary.median_ms)
-print(measurement.sample_count)  # launches * frames
+print(measurement.cases[0].render_summary.median_ms)   # frame 0 across launches
+print(measurement.case_render_summary.median_ms)       # summary across case medians
+print(measurement.pooled_render_summary.median_ms)     # pooled raw samples (diagnostic only)
+print(measurement.sample_count)                        # launches * frames
 ```
 
 This matches the CLI contract:
 
-- `frames`: deterministic frames compared against matching baseline frames
-- `launches`: fresh `RenderSession` instances per scene
+- `frames`: deterministic benchmark cases per scene
+- `launches`: repeated measurements per case
 - `warmup`: discarded frames inside each fresh session
 - `resolution`: evaluation render resolution, default `1280x720`
 - `rays`: evaluation ray count, default `2000000`
@@ -148,6 +165,15 @@ The primary speed metric remains `RenderResult.time_ms`. The harness also
 records a Python wall-clock timing around each `render_shot()` call so the
 report can show whether the engine timing and end-to-end call timing stay
 aligned.
+
+The benchmark score is computed as:
+
+1. for each case, take the median across launches
+2. divide by the baseline case median
+3. aggregate all case ratios with a geometric mean
+
+That score is the single optimization metric. Pooled raw sample medians remain
+available in JSON for diagnostics only.
 
 The scene corpus is explicit and ordered via
 [`evaluation/scenes/manifest.json`](/home/holo/prog/lpt2d/evaluation/scenes/manifest.json).
@@ -169,8 +195,11 @@ reverse-engineer every CMake generator detail from cache files.
 The terminal output is intentionally grep-friendly. The key summary lines are:
 
 - `fidelity_verdict:`
-- `render_median_ms:`
-- `wall_median_ms:`
+- `render_case_median_ms:`
+- `render_ratio_gmean:`
+- `render_speedup_gmean:`
+- `wall_ratio_gmean:`
+- `wall_speedup_gmean:`
 
 The JSON report stays detailed; the terminal report stays concise.
 
@@ -184,6 +213,7 @@ practical:
 - avoid thermal drift when comparing runs
 - keep the scene corpus, frame count, launch count, and warm-up count fixed
 - compare only runs captured under the same evaluation contract
+- keep a fixed baseline capture as the anchor for the whole optimization loop
 
 ## Comparing two renders
 

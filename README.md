@@ -52,7 +52,9 @@ python -m evaluation
 
 `python -m evaluation` is the central render-speed and render-fidelity
 validation command. It builds the project, runs the explicit evaluation scene
-corpus, reports grep-friendly summary keys, and writes a detailed JSON report.
+corpus, scores performance with a baseline-normalized geometric mean across
+benchmark cases, reports grep-friendly summary keys, and writes a detailed
+JSON report.
 
 ## Test
 

@@ -31,7 +31,7 @@ def _result_metadata(result) -> dict:
 def _baseline_record(image_path: Path, meta: dict, metadata: dict | None = None) -> dict:
     img = Image.open(image_path).convert("RGB")
     pixels = np.asarray(img, dtype=np.uint8)
-    return {
+    record = {
         "pixels": pixels,
         "width": meta["width"],
         "height": meta["height"],
@@ -41,6 +41,11 @@ def _baseline_record(image_path: Path, meta: dict, metadata: dict | None = None)
         "metrics": meta.get("metrics"),
         "metadata": metadata,
     }
+    if "render_timing" in meta:
+        record["render_timing"] = meta["render_timing"]
+    if "wall_timing" in meta:
+        record["wall_timing"] = meta["wall_timing"]
+    return record
 
 
 def save_baseline(
@@ -71,6 +76,7 @@ def save_baseline_set(
     results_by_frame: dict[int, object],
     *,
     metadata: dict | None = None,
+    timing_by_frame: dict[int, dict] | None = None,
 ) -> None:
     """Save multiple frame baselines for one scene directory."""
     path = Path(path)
@@ -84,6 +90,8 @@ def save_baseline_set(
 
         frame_meta = _result_metadata(result)
         frame_meta["image"] = image_name
+        if timing_by_frame and frame_index in timing_by_frame:
+            frame_meta.update(timing_by_frame[frame_index])
         frames_meta[str(frame_index)] = frame_meta
 
     doc = {"frames": frames_meta}

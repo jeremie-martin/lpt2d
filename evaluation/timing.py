@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 from statistics import mean, median, stdev
 import json
@@ -42,6 +43,25 @@ class SpeedupResult:
 
 
 @dataclass(frozen=True)
+class RatioSummary:
+    """Summary of normalized timing ratios against a fixed baseline."""
+
+    ratios: list[float]
+    geometric_mean: float
+    median: float
+    min: float
+    max: float
+    count: int
+
+    @property
+    def speedup_gmean(self) -> float:
+        """Reciprocal of the geometric mean ratio (>1 = faster than baseline)."""
+        if self.geometric_mean <= 0:
+            return 0.0
+        return 1.0 / self.geometric_mean
+
+
+@dataclass(frozen=True)
 class TimedFrame:
     """One timed frame measurement from a specific launch."""
 
@@ -53,12 +73,29 @@ class TimedFrame:
 
 
 @dataclass(frozen=True)
-class SceneBenchmark:
-    """Detailed timing for one scene across launches and frames."""
+class CaseBenchmark:
+    """Timing for one benchmark case (one deterministic frame) across launches."""
 
+    frame_index: int
     samples: list[TimedFrame]
     render_summary: TimingSummary
     wall_summary: TimingSummary
+
+    @property
+    def repeats(self) -> int:
+        return len(self.samples)
+
+
+@dataclass(frozen=True)
+class SceneBenchmark:
+    """Detailed timing for one scene across launches and benchmark cases."""
+
+    samples: list[TimedFrame]
+    cases: dict[int, CaseBenchmark]
+    pooled_render_summary: TimingSummary
+    pooled_wall_summary: TimingSummary
+    case_render_summary: TimingSummary
+    case_wall_summary: TimingSummary
     launches: int
     frames_per_launch: int
     warmup: int
@@ -66,6 +103,10 @@ class SceneBenchmark:
     @property
     def sample_count(self) -> int:
         return len(self.samples)
+
+    @property
+    def case_count(self) -> int:
+        return len(self.cases)
 
 
 def summarize_times(times: list[float]) -> TimingSummary:
@@ -82,6 +123,24 @@ def summarize_times(times: list[float]) -> TimingSummary:
         min_ms=min(times),
         max_ms=max(times),
         repeats=len(times),
+    )
+
+
+def summarize_ratios(ratios: list[float]) -> RatioSummary:
+    """Build a RatioSummary from normalized candidate/baseline ratios."""
+    if not ratios:
+        raise ValueError("At least one ratio is required")
+    if any(ratio <= 0 for ratio in ratios):
+        raise ValueError("Ratios must be > 0")
+
+    log_mean = sum(math.log(ratio) for ratio in ratios) / len(ratios)
+    return RatioSummary(
+        ratios=ratios,
+        geometric_mean=math.exp(log_mean),
+        median=median(ratios),
+        min=min(ratios),
+        max=max(ratios),
+        count=len(ratios),
     )
 
 
@@ -244,10 +303,31 @@ def benchmark_scene(
             _close_session(session)
             del session
 
+    case_samples: dict[int, list[TimedFrame]] = {frame_index: [] for frame_index in range(frames)}
+    for sample in samples:
+        case_samples[sample.frame_index].append(sample)
+
+    cases: dict[int, CaseBenchmark] = {}
+    for frame_index in range(frames):
+        frame_samples = case_samples[frame_index]
+        cases[frame_index] = CaseBenchmark(
+            frame_index=frame_index,
+            samples=frame_samples,
+            render_summary=summarize_times([sample.render_time_ms for sample in frame_samples]),
+            wall_summary=summarize_times([sample.wall_time_ms for sample in frame_samples]),
+        )
+
     return SceneBenchmark(
         samples=samples,
-        render_summary=summarize_times([sample.render_time_ms for sample in samples]),
-        wall_summary=summarize_times([sample.wall_time_ms for sample in samples]),
+        cases=cases,
+        pooled_render_summary=summarize_times([sample.render_time_ms for sample in samples]),
+        pooled_wall_summary=summarize_times([sample.wall_time_ms for sample in samples]),
+        case_render_summary=summarize_times(
+            [case.render_summary.median_ms for case in cases.values()]
+        ),
+        case_wall_summary=summarize_times(
+            [case.wall_summary.median_ms for case in cases.values()]
+        ),
         launches=launches,
         frames_per_launch=frames,
         warmup=warmup,
@@ -277,7 +357,7 @@ def benchmark_animated(
     """
     benchmark_result = benchmark_scene(scene_path, frames=frames, launches=1, warmup=warmup)
     fidelity_result = benchmark_result.samples[0].result
-    return benchmark_result.render_summary, fidelity_result
+    return benchmark_result.case_render_summary, fidelity_result
 
 
 def classify_speedup(baseline: TimingSummary, candidate: TimingSummary) -> SpeedupResult:

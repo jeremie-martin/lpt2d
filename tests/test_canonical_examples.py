@@ -18,6 +18,8 @@ BINARY = REPO_ROOT / "build" / "lpt2d-cli"
 EXPECTED_CANONICAL = {
     "beam_chamber_starter.py",
     "prism_crown_builder.py",
+    "solid_surface_gallery.py",
+    "three_spheres_center_zoom.py",
     "twin_prisms_scene_patch.py",
 }
 EXPECTED_SECONDARY = {
@@ -39,6 +41,7 @@ EXPECTED_BENCHMARK_SCENES = [
     "crystal_field",
     "mirrors",
 ]
+
 
 @cache
 def _load_module(path: Path):
@@ -135,3 +138,40 @@ def test_canonical_examples_render_frame_zero(tmp_path: Path, filename: str):
     )
     assert output.exists(), f"{filename} did not produce {output.name}"
     assert output.stat().st_size > 0, f"{filename} produced an empty PNG"
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "beam_chamber_starter.py",
+        "prism_crown_builder.py",
+        "solid_surface_gallery.py",
+    ],
+)
+def test_canonical_examples_save_json_builds_authored_scene(tmp_path: Path, filename: str):
+    script = CANONICAL_DIR / filename
+    output = tmp_path / f"{script.stem}.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--save-json",
+            str(output),
+        ],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=180,
+    )
+    assert result.returncode == 0, (
+        f"{filename} failed\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
+    assert output.exists(), f"{filename} did not produce {output.name}"
+
+    shot = Shot.load(output)
+    assert (
+        len(shot.scene.shapes) > 0
+        or len(shot.scene.lights) > 0
+        or len(shot.scene.groups) > 0
+    ), f"{filename} saved an empty scene"

@@ -25,9 +25,18 @@ from evaluation import (
     save_baseline_set,
 )
 from evaluation.animate import animate_scene
-from evaluation.__main__ import _parse_resolution
+from evaluation.__main__ import _parse_resolution, _run_evaluate
 from evaluation.compare import compare_metrics
-from evaluation.timing import TimingSummary, benchmark_scene, classify_speedup
+from evaluation.timing import (
+    CaseBenchmark,
+    SceneBenchmark,
+    TimedFrame,
+    TimingSummary,
+    benchmark_scene,
+    classify_speedup,
+    summarize_ratios,
+    summarize_times,
+)
 
 # ── Image metrics ────────────────────────────────────────────────────────
 
@@ -270,6 +279,10 @@ class TestBaseline:
                 3: _FakeResult(fill=120, time_ms=44.0),
             },
             metadata={"scene": "test", "frames": 4},
+            timing_by_frame={
+                0: {"render_timing": {"times_ms": [40.0, 41.0]}, "wall_timing": {"times_ms": [42.0, 43.0]}},
+                3: {"render_timing": {"times_ms": [44.0, 45.0]}},
+            },
         )
         loaded = load_baseline_set(tmp_path / "set")
 
@@ -279,6 +292,9 @@ class TestBaseline:
         assert loaded["frames"][3]["time_ms"] == pytest.approx(44.0)
         assert np.all(loaded["frames"][0]["pixels"] == 100)
         assert np.all(loaded["frames"][3]["pixels"] == 120)
+        assert loaded["frames"][0]["render_timing"]["times_ms"] == [40.0, 41.0]
+        assert loaded["frames"][0]["wall_timing"]["times_ms"] == [42.0, 43.0]
+        assert loaded["frames"][3]["render_timing"]["times_ms"] == [44.0, 45.0]
 
     def test_baseline_set_reads_legacy_single_frame_baseline(self, tmp_path):
         save_baseline(tmp_path / "legacy", _FakeResult(), metadata={"scene": "legacy"})
@@ -390,8 +406,22 @@ class TestTimingSummary:
         bench = benchmark_scene("fake.json", frames=2, launches=3, warmup=1)
 
         assert bench.sample_count == 6
+        assert bench.case_count == 2
+        assert bench.cases[0].render_summary.median_ms == pytest.approx(10.0)
+        assert bench.cases[1].render_summary.median_ms == pytest.approx(11.0)
+        assert bench.case_render_summary.median_ms == pytest.approx(10.5)
         assert _FakeSession.close_calls == 3
         assert _FakeSession.active_sessions == 0
+
+
+class TestRatioSummary:
+    def test_summarize_ratios_geometric_mean(self):
+        summary = summarize_ratios([0.5, 1.0, 2.0])
+
+        assert summary.geometric_mean == pytest.approx(1.0)
+        assert summary.speedup_gmean == pytest.approx(1.0)
+        assert summary.median == pytest.approx(1.0)
+        assert summary.count == 3
 
 
 class TestClassifySpeedup:
@@ -480,3 +510,79 @@ class TestEvaluationCliHelpers:
     def test_parse_resolution_rejects_invalid_input(self):
         with pytest.raises(ValueError):
             _parse_resolution("720p")
+
+
+class TestEvaluationBackCompat:
+    def test_evaluate_preserves_fidelity_when_baseline_lacks_case_timing(self, tmp_path, monkeypatch, capsys):
+        baselines_dir = tmp_path / "baselines"
+        runs_dir = tmp_path / "runs"
+        scenes_dir = tmp_path / "scenes"
+        scene_path = scenes_dir / "legacy_scene.json"
+        manifest_path = scenes_dir / "manifest.json"
+        baselines_dir.mkdir()
+        runs_dir.mkdir()
+        scenes_dir.mkdir()
+        scene_path.write_text("{}\n")
+        manifest_path.write_text(
+            json.dumps({"scenes": [{"name": "legacy_scene", "file": "legacy_scene.json"}]})
+        )
+
+        save_baseline_set(
+            baselines_dir / "legacy_scene",
+            {0: _FakeResult(fill=100, time_ms=40.0)},
+            metadata={"scene": "legacy_scene", "frames": 1, "launches": 1, "warmup": 0},
+        )
+
+        measurement = SceneBenchmark(
+            samples=[
+                TimedFrame(
+                    launch_index=0,
+                    frame_index=0,
+                    render_time_ms=42.0,
+                    wall_time_ms=43.0,
+                    result=_FakeResult(fill=100, time_ms=42.0),
+                )
+            ],
+            cases={
+                0: CaseBenchmark(
+                    frame_index=0,
+                    samples=[],
+                    render_summary=summarize_times([42.0]),
+                    wall_summary=summarize_times([43.0]),
+                )
+            },
+            pooled_render_summary=summarize_times([42.0]),
+            pooled_wall_summary=summarize_times([43.0]),
+            case_render_summary=summarize_times([42.0]),
+            case_wall_summary=summarize_times([43.0]),
+            launches=1,
+            frames_per_launch=1,
+            warmup=0,
+        )
+
+        fake_module = SimpleNamespace(load_shot=lambda path: object())
+        monkeypatch.setitem(sys.modules, "_lpt2d", fake_module)
+        monkeypatch.setattr("evaluation.__main__.BASELINES_DIR", baselines_dir)
+        monkeypatch.setattr("evaluation.__main__.RUNS_DIR", runs_dir)
+        monkeypatch.setattr("evaluation.__main__.SCENE_MANIFEST", manifest_path)
+        monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
+        monkeypatch.setattr("evaluation.__main__._git_info", lambda: {"commit": "abc123", "branch": "test", "dirty": False})
+        monkeypatch.setattr("evaluation.__main__.benchmark_scene", None, raising=False)
+        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+
+        with pytest.raises(SystemExit) as excinfo:
+            _run_evaluate(
+                skip_build=True,
+                frames=1,
+                launches=1,
+                warmup=0,
+                width=32,
+                height=32,
+                rays=1_000_000,
+            )
+
+        assert excinfo.value.code == 0
+        out = capsys.readouterr().out
+        assert "fidelity_verdict: pass" in out
+        assert "benchmark_score_available: no" in out
+        assert "render_ratio_gmean: unavailable" in out
