@@ -21,7 +21,12 @@ __pycache__/
 *.webm
 /middle_frame.json
 /twin_prisms.json
+/prism_sweep_frame0.json
 /renders/archive/
+/renders/prism_sweep_gen/
+
+# External tool configs
+/.codex/
 
 # Local benchmark/evaluation outputs
 /benchmarks/
