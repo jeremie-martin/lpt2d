@@ -78,6 +78,7 @@ def run_example(
         authored = _authored_shot(settings, animate, timeline.context_at(frame_number))
         authored.save(args.save_json)
         print(f"saved {args.save_json}")
+        return
 
     if args.frame is not None:
         output = args.output or (REPO_ROOT / f"{name}_{mode}_{args.frame:04d}.png")

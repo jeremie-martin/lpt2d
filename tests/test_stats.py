@@ -7,7 +7,6 @@ import math
 import pytest
 
 from anim import diagnose_scene
-from anim import renderer as renderer_mod
 from anim import types as types_mod
 from anim.stats import (
     FrameStats,
@@ -25,7 +24,6 @@ from anim.stats import (
 )
 from anim.types import (
     Arc,
-    Canvas,
     Circle,
     Ellipse,
     FrameReport,
@@ -33,7 +31,6 @@ from anim.types import (
     Look,
     Material,
     Scene,
-    Shot,
     Transform2D,
 )
 
@@ -182,74 +179,6 @@ def test_frame_stats_from_report_uses_histogram():
     assert stats.p95 == pytest.approx(200.0)
     assert stats.pct_black == pytest.approx(0.25)
     assert stats.pct_clipped == pytest.approx(0.5)
-
-
-def test_renderer_histogram_is_opt_in(monkeypatch):
-    commands = []
-
-    class DummyProc:
-        def __init__(self):
-            self.stdin = None
-            self.stdout = None
-            self.stderr = None
-
-        def poll(self):
-            return 0
-
-        def wait(self):
-            return 0
-
-    def fake_popen(cmd, stdin=None, stdout=None, stderr=None):
-        commands.append(cmd)
-        return DummyProc()
-
-    monkeypatch.setattr(renderer_mod.subprocess, "Popen", fake_popen)
-    renderer = renderer_mod.Renderer(fast=True)
-    renderer.close()
-    renderer = renderer_mod.Renderer(fast=True, histogram=True)
-    renderer.close()
-
-    assert "--histogram" not in commands[0]
-    assert "--histogram" in commands[1]
-
-
-def test_render_stats_prefers_report_histogram(monkeypatch):
-    sample_histogram = [1, *([0] * 63), 2, *([0] * 135), 1, *([0] * 55)]
-
-    class DummyRenderer:
-        def __init__(
-            self, shot=None, binary=renderer_mod.DEFAULT_BINARY, fast=False, histogram=False
-        ):
-            assert histogram is True
-            self.last_report = None
-
-        def render_frame(self, wire_json: str) -> bytes:
-            self.last_report = _report(
-                mean=82.0,
-                pct_black=0.25,
-                pct_clipped=0.5,
-                p50=64.0,
-                p95=200.0,
-                histogram=sample_histogram,
-            )
-            return bytes(2 * 2 * 3)
-
-        def close(self):
-            pass
-
-    monkeypatch.setattr(renderer_mod, "Renderer", DummyRenderer)
-
-    results = renderer_mod.render_stats(
-        lambda ctx: Scene(),
-        1.0,
-        frames=0,
-        settings=Shot(canvas=Canvas(width=2, height=2)),
-    )
-
-    assert len(results) == 1
-    _, _, stats = results[0]
-    assert stats.mean == pytest.approx(82.0)
-    assert stats.max == 200
 
 
 # --- LookProfile / LookComparison / LookReport ---

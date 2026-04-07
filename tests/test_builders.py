@@ -45,10 +45,10 @@ def test_mirror_block_returns_clockwise_per_face_segments():
 
     assert [type(shape) for shape in shapes] == [Segment, Segment, Segment, Segment]
     assert [(shape.a, shape.b) for shape in shapes] == [
-        ([-1.0, -3.0], [-1.0, -1.0]),
-        ([-1.0, -1.0], [3.0, -1.0]),
-        ([3.0, -1.0], [3.0, -3.0]),
-        ([3.0, -3.0], [-1.0, -3.0]),
+        ((-1.0, -3.0), (-1.0, -1.0)),
+        ((-1.0, -1.0), (3.0, -1.0)),
+        ((3.0, -1.0), (3.0, -3.0)),
+        ((3.0, -3.0), (-1.0, -3.0)),
     ]
     assert all(shape.material == default for shape in shapes)
 

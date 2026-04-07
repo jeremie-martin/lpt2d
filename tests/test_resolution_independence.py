@@ -284,7 +284,7 @@ def _skip_if_missing():
 
 
 def _effective_look(scene: dict) -> Look:
-    return Look.from_dict(scene.get("look", {}))
+    return Look(**scene.get("look", {}))
 
 
 # ── Resolution independence: normalize=rays ──────────────────────────
