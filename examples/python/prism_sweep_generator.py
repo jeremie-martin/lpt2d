@@ -312,7 +312,12 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         cs = color_stats(render_result.pixels, PROBE_W, PROBE_H)
-        if cs.color_richness > RICHNESS_THRESHOLD:
+        # Weight by chromatic fraction: library mean_saturation is over
+        # chromatic pixels only, but we need whole-image saturation to
+        # avoid passing mostly-grey frames with a few colored pixels.
+        chromatic_frac = cs.n_chromatic / (PROBE_W * PROBE_H)
+        effective_richness = cs.hue_entropy * cs.mean_saturation * chromatic_frac
+        if effective_richness > RICHNESS_THRESHOLD:
             colorful += 1
 
     min_colorful_frames = int(MIN_COLORFUL_SECONDS * PROBE_FPS)
@@ -325,7 +330,7 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
 
 
 def make_hq_shot() -> Shot:
-    shot = Shot.preset("preview", width=480, height=270, rays=2_000_000, depth=10)
+    shot = Shot.preset("preview", width=320, height=180, rays=2_000_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
         exposure=-4.5, gamma=2.0, tonemap="reinhardx",
