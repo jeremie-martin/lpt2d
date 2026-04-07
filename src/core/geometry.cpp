@@ -90,6 +90,123 @@ float point_arc_distance(Vec2 p, const Arc& arc) {
                     (p - arc_end_point(arc)).length());
 }
 
+namespace {
+
+float cross(Vec2 a, Vec2 b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+struct RoundedCornerBuild {
+    bool has_fillet = false;
+    float cut = 0.0f;
+    Vec2 tangent_prev;
+    Vec2 tangent_next;
+    RoundedPolygonParts::Corner corner{};
+};
+
+std::vector<RoundedCornerBuild> compute_rounded_polygon_vertices(const Polygon& poly) {
+    int n = (int)poly.vertices.size();
+    std::vector<RoundedCornerBuild> corners(n);
+    if (n < 3 || poly.corner_radius <= 0.0f) return corners;
+
+    bool cw = polygon_is_clockwise(poly);
+    for (int i = 0; i < n; ++i) {
+        Vec2 prev = poly.vertices[(i - 1 + n) % n];
+        Vec2 curr = poly.vertices[i];
+        Vec2 next = poly.vertices[(i + 1) % n];
+
+        Vec2 to_prev = prev - curr;
+        Vec2 to_next = next - curr;
+        float len_prev = to_prev.length();
+        float len_next = to_next.length();
+        if (len_prev < 1e-6f || len_next < 1e-6f) continue;
+
+        Vec2 dp = to_prev * (1.0f / len_prev);
+        Vec2 dn = to_next * (1.0f / len_next);
+
+        float cos_a = std::clamp(dp.dot(dn), -1.0f, 1.0f);
+        if (cos_a > 0.999f || cos_a < -0.999f) continue;
+
+        float turn = cross(dp, dn);
+        bool convex = cw ? (turn > 0.0f) : (turn < 0.0f);
+        if (!convex) continue;
+
+        float half_a = std::acos(cos_a) * 0.5f;
+        float tan_ha = std::tan(half_a);
+        float sin_ha = std::sin(half_a);
+        if (tan_ha < 1e-6f || sin_ha < 1e-6f) continue;
+
+        float max_cut = std::min(len_prev * 0.5f, len_next * 0.5f);
+        float cut = std::min(poly.corner_radius / tan_ha, max_cut);
+        float eff_r = cut * tan_ha;
+        if (eff_r < 1e-6f) continue;
+
+        Vec2 bisect = dp + dn;
+        float bl = bisect.length();
+        if (bl < 1e-6f) continue;
+        bisect = bisect * (1.0f / bl);
+
+        Vec2 center = curr + bisect * (eff_r / sin_ha);
+        Vec2 tp_prev = curr + dp * cut;
+        Vec2 tp_next = curr + dn * cut;
+
+        float a_prev = std::atan2(tp_prev.y - center.y, tp_prev.x - center.x);
+        float a_next = std::atan2(tp_next.y - center.y, tp_next.x - center.x);
+
+        float angle_start;
+        float sweep;
+        if (cw) {
+            angle_start = normalize_angle(a_next);
+            sweep = normalize_angle(a_prev - a_next);
+        } else {
+            angle_start = normalize_angle(a_prev);
+            sweep = normalize_angle(a_next - a_prev);
+        }
+
+        corners[i] = {
+            true,
+            cut,
+            tp_prev,
+            tp_next,
+            {center, eff_r, angle_start, sweep},
+        };
+    }
+
+    return corners;
+}
+
+void append_polygon_point(std::vector<Vec2>& points, Vec2 point) {
+    constexpr float DUPLICATE_EPS_SQ = 1e-12f;
+    if (!points.empty() && (points.back() - point).length_sq() <= DUPLICATE_EPS_SQ)
+        return;
+    points.push_back(point);
+}
+
+void sanitize_polygon_boundary(std::vector<Vec2>& points) {
+    if (points.empty()) return;
+
+    std::vector<Vec2> unique;
+    unique.reserve(points.size());
+    for (Vec2 point : points)
+        append_polygon_point(unique, point);
+
+    if (unique.size() > 1 && (unique.front() - unique.back()).length_sq() <= 1e-12f)
+        unique.pop_back();
+
+    points = std::move(unique);
+}
+
+bool point_in_triangle(Vec2 p, Vec2 a, Vec2 b, Vec2 c, float eps) {
+    float c0 = cross(b - a, p - a);
+    float c1 = cross(c - b, p - b);
+    float c2 = cross(a - c, p - c);
+    bool has_neg = (c0 < -eps) || (c1 < -eps) || (c2 < -eps);
+    bool has_pos = (c0 > eps) || (c1 > eps) || (c2 > eps);
+    return !(has_neg && has_pos);
+}
+
+} // namespace
+
 // ─── Ellipse affine transform ─────────────────────────────────────
 
 static Ellipse transform_ellipse_affine(const Ellipse& ellipse, const Transform2D& t) {
@@ -459,80 +576,7 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
     if (n < 3 || poly.corner_radius <= 0.0f) return parts;
 
     bool cw = polygon_is_clockwise(poly);
-
-    // Per-vertex cut distance and arc info
-    std::vector<float> cuts(n, 0.0f);
-    std::vector<bool> has_fillet(n, false);
-
-    struct CornerCalc {
-        Vec2 center;
-        float radius;
-        float angle_start;
-        float sweep;
-    };
-    std::vector<CornerCalc> corner_calc(n);
-
-    for (int i = 0; i < n; ++i) {
-        Vec2 prev = poly.vertices[(i - 1 + n) % n];
-        Vec2 curr = poly.vertices[i];
-        Vec2 next = poly.vertices[(i + 1) % n];
-
-        Vec2 to_prev = prev - curr;
-        Vec2 to_next = next - curr;
-        float len_prev = to_prev.length();
-        float len_next = to_next.length();
-        if (len_prev < 1e-6f || len_next < 1e-6f) continue;
-
-        Vec2 dp = to_prev * (1.0f / len_prev);
-        Vec2 dn = to_next * (1.0f / len_next);
-
-        float cos_a = std::clamp(dp.dot(dn), -1.0f, 1.0f);
-        if (cos_a > 0.999f || cos_a < -0.999f) continue; // ~straight or ~reflex
-
-        // Skip concave vertices
-        float cross = dp.x * dn.y - dp.y * dn.x;
-        bool convex = cw ? (cross > 0.0f) : (cross < 0.0f);
-        if (!convex) continue;
-
-        float half_a = std::acos(cos_a) * 0.5f;
-        float tan_ha = std::tan(half_a);
-        float sin_ha = std::sin(half_a);
-        if (tan_ha < 1e-6f || sin_ha < 1e-6f) continue;
-
-        float max_cut = std::min(len_prev * 0.5f, len_next * 0.5f);
-        float cut = std::min(poly.corner_radius / tan_ha, max_cut);
-        float eff_r = cut * tan_ha;
-        if (eff_r < 1e-6f) continue;
-
-        // Arc center on the bisector, inward
-        Vec2 bisect = dp + dn;
-        float bl = bisect.length();
-        if (bl < 1e-6f) continue;
-        bisect = bisect * (1.0f / bl);
-        Vec2 center = curr + bisect * (eff_r / sin_ha);
-
-        // Tangent points on each edge
-        Vec2 tp_prev = curr + dp * cut;
-        Vec2 tp_next = curr + dn * cut;
-
-        float a_p = std::atan2(tp_prev.y - center.y, tp_prev.x - center.x);
-        float a_n = std::atan2(tp_next.y - center.y, tp_next.x - center.x);
-
-        // CW polygon: arc goes CCW from a_next to a_prev
-        // CCW polygon: arc goes CCW from a_prev to a_next
-        float as, sw;
-        if (cw) {
-            as = normalize_angle(a_n);
-            sw = normalize_angle(a_p - a_n);
-        } else {
-            as = normalize_angle(a_p);
-            sw = normalize_angle(a_n - a_p);
-        }
-
-        cuts[i] = cut;
-        has_fillet[i] = true;
-        corner_calc[i] = {center, eff_r, as, sw};
-    }
+    auto rounded = compute_rounded_polygon_vertices(poly);
 
     // Emit shortened edges
     for (int i = 0; i < n; ++i) {
@@ -544,8 +588,8 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
         if (len < 1e-6f) continue;
         Vec2 dir = d * (1.0f / len);
 
-        float trim_a = has_fillet[i] ? cuts[i] : 0.0f;
-        float trim_b = has_fillet[j] ? cuts[j] : 0.0f;
+        float trim_a = rounded[i].has_fillet ? rounded[i].cut : 0.0f;
+        float trim_b = rounded[j].has_fillet ? rounded[j].cut : 0.0f;
         if (trim_a + trim_b >= len - 1e-6f) continue; // edge consumed
 
         Vec2 ea = a + dir * trim_a;
@@ -556,12 +600,143 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
 
     // Emit corner arcs
     for (int i = 0; i < n; ++i) {
-        if (!has_fillet[i]) continue;
-        auto& c = corner_calc[i];
-        parts.corners.push_back({c.center, c.radius, c.angle_start, c.sweep});
+        if (!rounded[i].has_fillet) continue;
+        parts.corners.push_back(rounded[i].corner);
     }
 
     return parts;
+}
+
+std::vector<Vec2> polygon_fill_boundary(const Polygon& poly, int arc_segments) {
+    std::vector<Vec2> boundary;
+    int n = (int)poly.vertices.size();
+    if (n < 3) return boundary;
+
+    int segments = std::max(1, arc_segments);
+    bool cw = polygon_is_clockwise(poly);
+    auto rounded = compute_rounded_polygon_vertices(poly);
+
+    for (int i = 0; i < n; ++i) {
+        if (!rounded[i].has_fillet) {
+            append_polygon_point(boundary, poly.vertices[i]);
+            continue;
+        }
+
+        const Vec2 center = rounded[i].corner.center;
+        float radius = rounded[i].corner.radius;
+        float a_prev = std::atan2(rounded[i].tangent_prev.y - center.y,
+                                  rounded[i].tangent_prev.x - center.x);
+        float a_next = std::atan2(rounded[i].tangent_next.y - center.y,
+                                  rounded[i].tangent_next.x - center.x);
+        float sweep = cw ? normalize_angle(a_prev - a_next)
+                         : normalize_angle(a_next - a_prev);
+
+        append_polygon_point(boundary, rounded[i].tangent_prev);
+        for (int j = 1; j < segments; ++j) {
+            float t = (float)j / (float)segments;
+            float angle = cw ? (a_prev - sweep * t)
+                             : (a_prev + sweep * t);
+            append_polygon_point(boundary, {
+                center.x + radius * std::cos(angle),
+                center.y + radius * std::sin(angle),
+            });
+        }
+        append_polygon_point(boundary, rounded[i].tangent_next);
+    }
+
+    sanitize_polygon_boundary(boundary);
+    return boundary;
+}
+
+std::vector<uint32_t> triangulate_simple_polygon(const std::vector<Vec2>& vertices) {
+    constexpr float TRI_EPS = 1e-8f;
+    int n = (int)vertices.size();
+    if (n < 3) return {};
+
+    float area2 = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const Vec2& a = vertices[i];
+        const Vec2& b = vertices[(i + 1) % n];
+        area2 += a.x * b.y - b.x * a.y;
+    }
+    if (std::abs(area2) <= TRI_EPS) return {};
+
+    bool ccw = area2 > 0.0f;
+    std::vector<uint32_t> remaining;
+    remaining.reserve(vertices.size());
+    for (uint32_t i = 0; i < vertices.size(); ++i)
+        remaining.push_back(i);
+
+    std::vector<uint32_t> indices;
+    indices.reserve((vertices.size() - 2) * 3);
+
+    bool failed = false;
+    size_t guard = 0;
+    size_t guard_limit = vertices.size() * vertices.size();
+    while (remaining.size() > 3 && guard++ < guard_limit) {
+        bool found_ear = false;
+        size_t flattest = remaining.size();
+        float flattest_turn = std::numeric_limits<float>::max();
+
+        for (size_t i = 0; i < remaining.size(); ++i) {
+            uint32_t ia = remaining[(i + remaining.size() - 1) % remaining.size()];
+            uint32_t ib = remaining[i];
+            uint32_t ic = remaining[(i + 1) % remaining.size()];
+            const Vec2& a = vertices[ia];
+            const Vec2& b = vertices[ib];
+            const Vec2& c = vertices[ic];
+
+            float turn = cross(b - a, c - a);
+            if (std::abs(turn) < flattest_turn) {
+                flattest_turn = std::abs(turn);
+                flattest = i;
+            }
+
+            bool convex = ccw ? (turn > TRI_EPS) : (turn < -TRI_EPS);
+            if (!convex) continue;
+
+            bool contains_vertex = false;
+            for (uint32_t idx : remaining) {
+                if (idx == ia || idx == ib || idx == ic) continue;
+                if (point_in_triangle(vertices[idx], a, b, c, TRI_EPS)) {
+                    contains_vertex = true;
+                    break;
+                }
+            }
+            if (contains_vertex) continue;
+
+            indices.push_back(ia);
+            indices.push_back(ib);
+            indices.push_back(ic);
+            remaining.erase(remaining.begin() + (ptrdiff_t)i);
+            found_ear = true;
+            break;
+        }
+
+        if (found_ear) continue;
+
+        if (flattest < remaining.size() && flattest_turn <= TRI_EPS) {
+            remaining.erase(remaining.begin() + (ptrdiff_t)flattest);
+            continue;
+        }
+
+        failed = true;
+        break;
+    }
+
+    if (failed || remaining.size() != 3)
+        return {};
+
+    const Vec2& a = vertices[remaining[0]];
+    const Vec2& b = vertices[remaining[1]];
+    const Vec2& c = vertices[remaining[2]];
+    if (std::abs(cross(b - a, c - a)) <= TRI_EPS)
+        return {};
+
+    indices.push_back(remaining[0]);
+    indices.push_back(remaining[1]);
+    indices.push_back(remaining[2]);
+    return indices;
 }
 
 // ─── Path decomposition ────────────────────────────────────────

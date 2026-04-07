@@ -30,6 +30,8 @@ struct RoundedPolygonParts {
 };
 
 RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly);
+std::vector<Vec2> polygon_fill_boundary(const Polygon& poly, int arc_segments = 8);
+std::vector<uint32_t> triangulate_simple_polygon(const std::vector<Vec2>& vertices);
 
 // ─── Path decomposition ────────────────────────────────────────────
 

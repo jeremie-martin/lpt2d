@@ -858,45 +858,16 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
                 if (!fc) return;
                 float fr = fc->r, fg = fc->g, fb = fc->b;
 
-                if (p.corner_radius > 0.0f) {
-                    // Build rounded boundary, then fan-triangulate from centroid
-                    auto parts = decompose_rounded_polygon(p);
-                    std::vector<Vec2> boundary;
-                    // Walk edges and corners in order
-                    int n = (int)p.vertices.size();
-                    for (int i = 0; i < n; ++i) {
-                        // Edge i: straight segment start
-                        if (i < (int)parts.edges.size()) {
-                            boundary.push_back(parts.edges[i].a);
-                        }
-                        // Corner i: arc samples
-                        if (i < (int)parts.corners.size()) {
-                            const auto& arc = parts.corners[i];
-                            constexpr int ARC_SAMPLES = 8;
-                            for (int j = 0; j <= ARC_SAMPLES; ++j) {
-                                float angle = arc.angle_start + arc.sweep * j / ARC_SAMPLES;
-                                boundary.push_back({arc.center.x + arc.radius * cosf(angle),
-                                                    arc.center.y + arc.radius * sinf(angle)});
-                            }
-                        }
-                    }
-                    if (boundary.size() >= 3) {
-                        Vec2 centroid = p.centroid();
-                        for (size_t i = 0; i < boundary.size(); ++i) {
-                            size_t j = (i + 1) % boundary.size();
-                            vertices.push_back({{centroid.x, centroid.y}, {fr, fg, fb}});
-                            vertices.push_back({{boundary[i].x, boundary[i].y}, {fr, fg, fb}});
-                            vertices.push_back({{boundary[j].x, boundary[j].y}, {fr, fg, fb}});
-                        }
-                    }
-                } else {
-                    // Fan triangulation from first vertex (works for convex)
-                    Vec2 v0 = p.vertices[0];
-                    for (size_t i = 1; i + 1 < p.vertices.size(); ++i) {
-                        vertices.push_back({{v0.x, v0.y}, {fr, fg, fb}});
-                        vertices.push_back({{p.vertices[i].x, p.vertices[i].y}, {fr, fg, fb}});
-                        vertices.push_back({{p.vertices[i+1].x, p.vertices[i+1].y}, {fr, fg, fb}});
-                    }
+                constexpr int ARC_SAMPLES = 8;
+                std::vector<Vec2> boundary = polygon_fill_boundary(p, ARC_SAMPLES);
+                std::vector<uint32_t> tris = triangulate_simple_polygon(boundary);
+                for (size_t i = 0; i + 2 < tris.size(); i += 3) {
+                    const Vec2& a = boundary[tris[i]];
+                    const Vec2& b = boundary[tris[i + 1]];
+                    const Vec2& c = boundary[tris[i + 2]];
+                    vertices.push_back({{a.x, a.y}, {fr, fg, fb}});
+                    vertices.push_back({{b.x, b.y}, {fr, fg, fb}});
+                    vertices.push_back({{c.x, c.y}, {fr, fg, fb}});
                 }
             },
             [&](const Ellipse& e) {

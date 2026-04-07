@@ -313,6 +313,11 @@ NB_MODULE(_lpt2d, m) {
             [=](const Polygon& p) { return mid_getter(p); },
             [=](Polygon& p, std::string id) { mid_setter(p, std::move(id)); });
 
+    m.def("_polygon_fill_boundary", &polygon_fill_boundary,
+          "polygon"_a, "arc_segments"_a = 8);
+    m.def("_triangulate_simple_polygon", &triangulate_simple_polygon,
+          "vertices"_a);
+
     nb::class_<Ellipse>(m, "Ellipse")
         .def("__init__", [=](Ellipse* e, std::string id, Vec2 center,
                              float semi_a, float semi_b, float rotation,
