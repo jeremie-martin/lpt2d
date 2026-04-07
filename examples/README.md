@@ -11,6 +11,8 @@ is meant to be used now.
   Procedural-from-scratch authoring.
 - [prism_crown_builder.py](/home/holo/prog/lpt2d/examples/python/prism_crown_builder.py)
   Builder- and composition-driven authoring.
+- [solid_surface_gallery.py](/home/holo/prog/lpt2d/examples/python/solid_surface_gallery.py)
+  A compact survey of solid-object surface authoring and simple group animation.
 - [twin_prisms_scene_patch.py](/home/holo/prog/lpt2d/examples/python/twin_prisms_scene_patch.py)
   Load, patch, and animate an authored shot.
 - [three_spheres_center_zoom.py](/home/holo/prog/lpt2d/examples/python/three_spheres_center_zoom.py)
@@ -21,6 +23,7 @@ Run examples from the repo root:
 ```bash
 python examples/python/beam_chamber_starter.py
 python examples/python/prism_crown_builder.py --hq
+python examples/python/solid_surface_gallery.py --fast
 python examples/python/twin_prisms_scene_patch.py --frame 0
 python examples/python/three_spheres_center_zoom.py --fast
 ```
