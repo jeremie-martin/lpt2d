@@ -444,9 +444,16 @@ void main() {
         ro = lt.pos_a;
         vec2 dir = lt.dir;
         if (lt.source_radius > 0.0) {
-            vec2 tangent = vec2(-dir.y, dir.x);
-            float offset = (rand01() - 0.5) * 2.0 * lt.source_radius;
-            ro += tangent * offset;
+            if (lt.pos_b.x > 0.5) {
+                // Ball source: sample circle boundary
+                float a = rand01() * 2.0 * PI;
+                ro += lt.source_radius * vec2(cos(a), sin(a));
+            } else {
+                // Line source: sample perpendicular segment
+                vec2 tangent = vec2(-dir.y, dir.x);
+                float offset = (rand01() - 0.5) * 2.0 * lt.source_radius;
+                ro += tangent * offset;
+            }
         }
         float spread = sample_projector_angle(lt);
         rd = rotate_2d(dir, spread);
