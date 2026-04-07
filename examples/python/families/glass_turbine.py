@@ -1,12 +1,12 @@
-"""Glass Turbine — rotating dispersive glass wheel with colored projectors.
+"""Glass Turbine — rotating dispersive glass wheel with a single white projector.
 
 A turbine-like structure (hub + radial spokes) made of high-dispersion glass
-rotates slowly inside a mirror box.  Two projector beams — one white, one warm —
-illuminate the turbine from opposite sides, creating continuously shifting
-refraction and rainbow patterns as the spokes pass through the beams.
+rotates slowly inside a mirror box.  A single full-spectrum white beam
+illuminates the turbine from a randomly chosen side, creating continuously
+shifting refraction and rainbow patterns as the spokes pass through the beam.
 
 The animation is meditative: the rotation speed eases in and out, and the
-beams have a gentle angular drift to prevent static illumination.
+beam has a gentle angular drift to prevent static illumination.
 """
 
 from __future__ import annotations
@@ -117,11 +117,10 @@ class AnimParams:
     spoke_width: float  # spoke thickness
     rotation_start: float  # initial rotation (rad)
     rotation_speed: float  # total rotation over duration (rad, signed)
-    beam_left_y: float  # left beam vertical position
-    beam_right_y: float  # right beam vertical position
-    beam_left_angle: float  # left beam base angle
-    beam_right_angle: float  # right beam base angle
-    beam_drift: float  # angular drift amplitude for beams
+    beam_x: float  # beam source x
+    beam_y: float  # beam source y
+    beam_angle: float  # beam base angle (toward center)
+    beam_drift: float  # angular drift amplitude for beam
 
 
 # ---------------------------------------------------------------------------
@@ -160,13 +159,11 @@ def beam_drift_track(base_angle: float, drift: float) -> Track:
 def build_animate(p: AnimParams):
     """Return an animate(ctx) -> Frame callable."""
     rot_trk = rotation_track(p)
-    left_angle_trk = beam_drift_track(p.beam_left_angle, p.beam_drift)
-    right_angle_trk = beam_drift_track(p.beam_right_angle, p.beam_drift)
+    angle_trk = beam_drift_track(p.beam_angle, p.beam_drift)
 
     def animate(ctx: FrameContext) -> Frame:
         rot = float(rot_trk(ctx.time))
-        left_angle = float(left_angle_trk(ctx.time))
-        right_angle = float(right_angle_trk(ctx.time))
+        beam_angle = float(angle_trk(ctx.time))
 
         turbine_shapes = build_turbine(
             center=(0.0, 0.0),
@@ -185,28 +182,17 @@ def build_animate(p: AnimParams):
             ],
             lights=[
                 ProjectorLight(
-                    id="beam_left",
-                    position=[-1.4, p.beam_left_y],
-                    direction=[math.cos(left_angle), math.sin(left_angle)],
-                    source_radius=0.01,
-                    spread=0.05,
+                    id="beam",
+                    position=[p.beam_x, p.beam_y],
+                    direction=[math.cos(beam_angle), math.sin(beam_angle)],
+                    source_radius=0.015,
+                    spread=0.10,
                     source="ball",
                     intensity=1.0,
                 ),
-                ProjectorLight(
-                    id="beam_right",
-                    position=[1.4, p.beam_right_y],
-                    direction=[math.cos(right_angle), math.sin(right_angle)],
-                    source_radius=0.01,
-                    spread=0.05,
-                    source="ball",
-                    intensity=0.7,
-                    wavelength_min=590,
-                    wavelength_max=780,
-                ),
             ],
         )
-        return Frame(scene=scene, look=Look(exposure=-5.5))
+        return Frame(scene=scene, look=Look(exposure=-5.0))
 
     return animate
 
@@ -216,7 +202,7 @@ def build_animate(p: AnimParams):
 # ---------------------------------------------------------------------------
 
 MAX_ATTEMPTS = 500
-RICHNESS_THRESHOLD = 0.45
+RICHNESS_THRESHOLD = 0.20
 MIN_COLORFUL_SECONDS = 3.0
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
@@ -236,12 +222,26 @@ def random_params(rng: random.Random) -> AnimParams:
     rotation_start = rng.uniform(0, math.tau)
     rotation_speed = rng.choice([-1, 1]) * rng.uniform(math.pi * 0.5, math.pi * 2.0)
 
-    beam_left_y = rng.uniform(-0.4, 0.4)
-    beam_right_y = rng.uniform(-0.4, 0.4)
+    # Beam enters from a random side of the mirror box
+    side = rng.choice(["left", "right", "top", "bottom"])
+    jitter = rng.uniform(-0.08, 0.08)
 
-    # Beams aimed roughly toward center
-    beam_left_angle = math.atan2(-beam_left_y, 1.4) + rng.uniform(-0.15, 0.15)
-    beam_right_angle = math.pi + math.atan2(-beam_right_y, 1.4) + rng.uniform(-0.15, 0.15)
+    if side == "left":
+        beam_x = -1.45
+        beam_y = rng.uniform(-0.5, 0.5)
+        beam_angle = math.atan2(-beam_y, -beam_x) + jitter  # aimed right toward center
+    elif side == "right":
+        beam_x = 1.45
+        beam_y = rng.uniform(-0.5, 0.5)
+        beam_angle = math.atan2(-beam_y, -beam_x) + jitter  # aimed left toward center
+    elif side == "top":
+        beam_x = rng.uniform(-0.8, 0.8)
+        beam_y = 0.85
+        beam_angle = math.atan2(-beam_y, -beam_x) + jitter  # aimed down toward center
+    else:  # bottom
+        beam_x = rng.uniform(-0.8, 0.8)
+        beam_y = -0.85
+        beam_angle = math.atan2(-beam_y, -beam_x) + jitter  # aimed up toward center
 
     beam_drift = rng.uniform(0.05, 0.2)
 
@@ -252,10 +252,9 @@ def random_params(rng: random.Random) -> AnimParams:
         spoke_width=spoke_width,
         rotation_start=rotation_start,
         rotation_speed=rotation_speed,
-        beam_left_y=beam_left_y,
-        beam_right_y=beam_right_y,
-        beam_left_angle=beam_left_angle,
-        beam_right_angle=beam_right_angle,
+        beam_x=beam_x,
+        beam_y=beam_y,
+        beam_angle=beam_angle,
         beam_drift=beam_drift,
     )
 
@@ -270,7 +269,7 @@ def make_probe_shot() -> Shot:
     shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-5.5, gamma=2.0, tonemap="reinhardx",
+        exposure=-5.0, gamma=2.0, tonemap="reinhardx",
         white_point=0.5, normalize="rays", temperature=0.1,
     )
     return shot
@@ -311,7 +310,7 @@ def make_hq_shot(width: int = 1920, height: int = 1080, rays: int = 5_000_000) -
     shot = Shot.preset("production", width=width, height=height, rays=rays, depth=12)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-5.5, gamma=2.0, tonemap="reinhardx",
+        exposure=-5.0, gamma=2.0, tonemap="reinhardx",
         white_point=0.5, normalize="rays", temperature=0.1,
     )
     return shot

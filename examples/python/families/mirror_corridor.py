@@ -1,12 +1,10 @@
-"""Mirror Corridor — beam bouncing through angled mirrors.
+"""Mirror Constellation — dense arc of shattered mirror fragments.
 
-A series of small angled mirror segments placed inside the mirror box create
-a zigzag corridor for a projector beam to bounce through. No glass, no
-dispersion — pure metallic reflections creating geometric light paths.
-
-The beam slowly rotates, causing the reflection pattern to shift and
-evolve. Some configurations produce intricate multi-bounce patterns
-that fill the room with crossing light rays.
+Many small mirror segments (30-80) arranged roughly along an arc or partial
+disc. Each mirror has a slight random offset from the perfect arc position,
+creating a shattered-mirror field. A projector light positioned inside or
+near the arc rotates slowly, sweeping across the fragments and producing a
+dense web of geometric reflections that shift as the beam moves.
 """
 
 from __future__ import annotations
@@ -16,7 +14,7 @@ import math
 import random
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 from anim import (
@@ -44,7 +42,6 @@ from anim.renderer import RenderSession, _resolve_frame_shot
 # ---------------------------------------------------------------------------
 
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
-# Interior mirrors: slightly different from walls — higher albedo, less roughness
 MIRROR = Material(metallic=1.0, roughness=0.02, transmission=0.0, cauchy_b=0.0, albedo=0.95)
 CAMERA = Camera2D(center=[0, 0], width=3.2)
 DURATION = 8.0
@@ -56,8 +53,8 @@ DURATION = 8.0
 
 
 @dataclass
-class MirrorSegment:
-    """A positioned angled mirror."""
+class MirrorFragment:
+    """A single mirror shard along the constellation arc."""
 
     cx: float
     cy: float
@@ -67,9 +64,16 @@ class MirrorSegment:
 
 @dataclass
 class AnimParams:
-    """Degrees of freedom for one mirror corridor variant."""
+    """Degrees of freedom for one mirror constellation variant."""
 
-    mirrors: list[MirrorSegment]
+    arc_center_x: float
+    arc_center_y: float
+    arc_radius: float
+    arc_start_angle: float
+    arc_sweep: float
+    n_mirrors: int
+    mirror_scatter: float
+    mirrors: list[MirrorFragment]
     beam_x: float
     beam_y: float
     beam_angle_start: float
@@ -83,7 +87,7 @@ class AnimParams:
 
 
 def beam_angle_track(p: AnimParams) -> Track:
-    """Back-and-forth beam rotation."""
+    """Back-and-forth beam rotation with sinusoidal easing."""
     return Track(
         [
             Key(0.0, p.beam_angle_start),
@@ -99,8 +103,8 @@ def beam_angle_track(p: AnimParams) -> Track:
 # ---------------------------------------------------------------------------
 
 
-def build_mirror_shapes(mirrors: list[MirrorSegment]) -> list[Segment]:
-    """Convert mirror specifications to Segment shapes."""
+def build_mirror_shapes(mirrors: list[MirrorFragment]) -> list[Segment]:
+    """Convert mirror fragment specifications to Segment shapes."""
     shapes = []
     for i, m in enumerate(mirrors):
         half_len = m.length / 2
@@ -142,7 +146,7 @@ def build_animate(p: AnimParams):
                 ),
             ],
         )
-        return Frame(scene=scene, look=Look(exposure=-5.0))
+        return Frame(scene=scene, look=Look(exposure=-5.5))
 
     return animate
 
@@ -155,9 +159,11 @@ MAX_ATTEMPTS = 500
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
 
-# Mirror corridors: check for good brightness (beam reaches the mirrors and bounces)
-MIN_MEAN_LUM = 35
-MIN_BRIGHT_FRACTION = 0.7
+# Constellation check: good contrast (many reflections) and reasonable brightness
+MIN_MEAN_LUM = 30
+MAX_MEAN_LUM = 180
+MIN_STD_LUM = 15
+MIN_BRIGHT_FRACTION = 0.6
 
 
 # ---------------------------------------------------------------------------
@@ -166,33 +172,70 @@ MIN_BRIGHT_FRACTION = 0.7
 
 
 def random_params(rng: random.Random) -> AnimParams:
-    """Sample random mirror corridor parameters."""
-    n_mirrors = rng.randint(3, 6)
-    mirrors = []
+    """Sample random mirror constellation parameters."""
+    # Arc geometry
+    arc_center_x = rng.uniform(-0.3, 0.3)
+    arc_center_y = rng.uniform(-0.2, 0.2)
+    arc_radius = rng.uniform(0.4, 0.8)
+    arc_start_angle = rng.uniform(0, math.tau)
+    arc_sweep = rng.uniform(math.pi / 2, 3 * math.pi / 2)
 
-    for _ in range(n_mirrors):
-        cx = rng.uniform(-1.1, 1.1)
-        cy = rng.uniform(-0.6, 0.6)
-        length = rng.uniform(0.15, 0.40)
-        angle = rng.uniform(0, math.pi)
-        mirrors.append(MirrorSegment(cx=cx, cy=cy, length=length, angle=angle))
+    # Mirror count and scatter
+    n_mirrors = rng.randint(30, 80)
+    mirror_scatter = rng.uniform(0.02, 0.08)
 
-    # Beam from left side
-    beam_x = -1.45
-    beam_y = rng.uniform(-0.5, 0.5)
+    # Place mirror fragments along the arc with jitter
+    mirrors: list[MirrorFragment] = []
+    for i in range(n_mirrors):
+        # Evenly spaced along the arc, then scattered
+        t = i / max(n_mirrors - 1, 1)
+        theta = arc_start_angle + t * arc_sweep
 
-    # Aim roughly toward the mirror cluster
-    avg_x = sum(m.cx for m in mirrors) / n_mirrors
-    avg_y = sum(m.cy for m in mirrors) / n_mirrors
-    base_angle = math.atan2(avg_y - beam_y, avg_x - beam_x)
+        # Radial and tangential scatter
+        r_offset = rng.gauss(0, mirror_scatter)
+        t_offset = rng.gauss(0, mirror_scatter / arc_radius) if arc_radius > 0.01 else 0
+        actual_theta = theta + t_offset
 
-    sweep = rng.uniform(0.08, 0.25)
-    beam_angle_start = base_angle - sweep
-    beam_angle_end = base_angle + sweep
+        r = arc_radius + r_offset
+        cx = arc_center_x + r * math.cos(actual_theta)
+        cy = arc_center_y + r * math.sin(actual_theta)
 
-    beam_spread = rng.uniform(0.03, 0.06)
+        # Mirror orientation: roughly tangent to the arc, with some randomness
+        tangent_angle = actual_theta + math.pi / 2
+        angle_jitter = rng.gauss(0, 0.3)
+        angle = tangent_angle + angle_jitter
+
+        # Short mirror segments
+        length = rng.uniform(0.03, 0.06)
+
+        mirrors.append(MirrorFragment(cx=cx, cy=cy, length=length, angle=angle))
+
+    # Beam position: inside or near the arc center
+    beam_offset = rng.uniform(0, arc_radius * 0.5)
+    beam_theta = rng.uniform(0, math.tau)
+    beam_x = arc_center_x + beam_offset * math.cos(beam_theta)
+    beam_y = arc_center_y + beam_offset * math.sin(beam_theta)
+
+    # Clamp beam inside the mirror box
+    beam_x = max(-1.4, min(1.4, beam_x))
+    beam_y = max(-0.8, min(0.8, beam_y))
+
+    # Beam sweep: aim outward through the arc field
+    arc_mid_angle = arc_start_angle + arc_sweep / 2
+    sweep_half = rng.uniform(0.3, 0.8)
+    beam_angle_start = arc_mid_angle - sweep_half
+    beam_angle_end = arc_mid_angle + sweep_half
+
+    beam_spread = rng.uniform(0.04, 0.10)
 
     return AnimParams(
+        arc_center_x=arc_center_x,
+        arc_center_y=arc_center_y,
+        arc_radius=arc_radius,
+        arc_start_angle=arc_start_angle,
+        arc_sweep=arc_sweep,
+        n_mirrors=n_mirrors,
+        mirror_scatter=mirror_scatter,
         mirrors=mirrors,
         beam_x=beam_x,
         beam_y=beam_y,
@@ -208,17 +251,24 @@ def random_params(rng: random.Random) -> AnimParams:
 
 
 def make_probe_shot() -> Shot:
-    shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=12)
+    shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=14)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-5.0, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-5.5,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
 
-def check_beauty(p: AnimParams) -> tuple[bool, float]:
-    """Render low-res frames and check brightness. Returns (ok, avg_mean_lum)."""
+def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
+    """Render low-res frames and check brightness and contrast.
+
+    Returns (ok, avg_mean_lum, avg_std_lum).
+    """
     animate = build_animate(p)
     shot = make_probe_shot()
     timeline = Timeline(DURATION, fps=PROBE_FPS)
@@ -227,6 +277,7 @@ def check_beauty(p: AnimParams) -> tuple[bool, float]:
     n_frames = timeline.total_frames
     bright_count = 0
     total_mean = 0.0
+    total_std = 0.0
 
     for fi in range(n_frames):
         ctx = timeline.context_at(fi)
@@ -235,12 +286,21 @@ def check_beauty(p: AnimParams) -> tuple[bool, float]:
         render_result = session.render_shot(cpp_shot, fi)
         fs = frame_stats(render_result.pixels, PROBE_W, PROBE_H)
         total_mean += fs.mean
+        total_std += fs.std
         if fs.mean > MIN_MEAN_LUM:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0
+    avg_std = total_std / n_frames if n_frames > 0 else 0.0
     bright_frac = bright_count / n_frames if n_frames > 0 else 0.0
-    return bright_frac >= MIN_BRIGHT_FRACTION, avg_mean
+
+    ok = (
+        bright_frac >= MIN_BRIGHT_FRACTION
+        and avg_mean >= MIN_MEAN_LUM
+        and avg_mean <= MAX_MEAN_LUM
+        and avg_std >= MIN_STD_LUM
+    )
+    return ok, avg_mean, avg_std
 
 
 # ---------------------------------------------------------------------------
@@ -249,29 +309,43 @@ def check_beauty(p: AnimParams) -> tuple[bool, float]:
 
 
 def make_hq_shot(width: int = 1920, height: int = 1080, rays: int = 5_000_000) -> Shot:
-    shot = Shot.preset("production", width=width, height=height, rays=rays, depth=12)
+    shot = Shot.preset("production", width=width, height=height, rays=rays, depth=14)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-5.0, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-5.5,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
 
 def _params_to_dict(p: AnimParams) -> dict:
-    """Serialize AnimParams including nested MirrorSegments."""
-    d = {
+    """Serialize AnimParams for JSON output."""
+    return {
+        "arc_center_x": p.arc_center_x,
+        "arc_center_y": p.arc_center_y,
+        "arc_radius": p.arc_radius,
+        "arc_start_angle": p.arc_start_angle,
+        "arc_sweep": p.arc_sweep,
+        "n_mirrors": p.n_mirrors,
+        "mirror_scatter": p.mirror_scatter,
         "beam_x": p.beam_x,
         "beam_y": p.beam_y,
         "beam_angle_start": p.beam_angle_start,
         "beam_angle_end": p.beam_angle_end,
         "beam_spread": p.beam_spread,
-        "mirrors": [asdict(m) for m in p.mirrors],
+        "mirrors": [
+            {"cx": m.cx, "cy": m.cy, "length": m.length, "angle": m.angle} for m in p.mirrors
+        ],
     }
-    return d
 
 
-def render_and_save(p: AnimParams, out_dir: Path, width: int = 1920, height: int = 1080, rays: int = 5_000_000) -> None:
+def render_and_save(
+    p: AnimParams, out_dir: Path, width: int = 1920, height: int = 1080, rays: int = 5_000_000
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     params_path = out_dir / "params.json"
@@ -292,7 +366,11 @@ def render_and_save(p: AnimParams, out_dir: Path, width: int = 1920, height: int
 
 
 def main() -> None:
-    seed = int(time.time()) if "--seed" not in sys.argv else int(sys.argv[sys.argv.index("--seed") + 1])
+    seed = (
+        int(time.time())
+        if "--seed" not in sys.argv
+        else int(sys.argv[sys.argv.index("--seed") + 1])
+    )
     target_count = int(sys.argv[sys.argv.index("-n") + 1]) if "-n" in sys.argv else 1
     hq = "--hq" in sys.argv
     width = 1920 if hq else 320
@@ -308,12 +386,12 @@ def main() -> None:
         p = random_params(rng)
 
         print(
-            f"[{attempt}] mirrors={len(p.mirrors)} — checking...",
+            f"[{attempt}] n_mirrors={p.n_mirrors} arc_r={p.arc_radius:.2f} scatter={p.mirror_scatter:.3f} — checking...",
             flush=True,
         )
 
-        beauty_ok, avg_lum = check_beauty(p)
-        print(f"  avg_luminance={avg_lum:.1f}", flush=True)
+        beauty_ok, avg_lum, avg_std = check_beauty(p)
+        print(f"  avg_luminance={avg_lum:.1f}  avg_contrast={avg_std:.1f}", flush=True)
 
         if not beauty_ok:
             continue
@@ -322,7 +400,7 @@ def main() -> None:
         out_dir = base_dir / f"{found:03d}"
         print(f"  FOUND #{found} — rendering...")
         render_and_save(p, out_dir, width, height, rays)
-        print(f"  done.\n")
+        print("  done.\n")
 
         if found >= target_count:
             break

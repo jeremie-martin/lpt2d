@@ -45,7 +45,7 @@ from anim.renderer import RenderSession, _resolve_frame_shot
 # Scene constants
 # ---------------------------------------------------------------------------
 
-WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
+WALL = Material(metallic=1.0, roughness=0.15, transmission=0.3, cauchy_b=0.0, albedo=1.0)
 CAMERA = Camera2D(center=[0, 0], width=3.2)
 DURATION = 8.0
 
@@ -66,12 +66,16 @@ def build_tree(
     depth: int,
     thickness: float,
     material: Material,
+    seed: int = 42,
 ) -> list[Polygon]:
-    """Build a binary fractal tree from thick segments.
+    """Build an asymmetric binary fractal tree from thick segments.
 
-    Each branch splits into two children at `spread_angle` from parent direction.
-    Branch length and thickness shrink by `branch_ratio` each level.
+    Each branch splits into two children at ``spread_angle`` from parent
+    direction.  Small per-branch random variations in length (+-15%), angle
+    (+-10%), and thickness reduction rate make the tree look organic while
+    remaining deterministic for a given *seed*.
     """
+    rng = random.Random(seed)
     shapes: list[Polygon] = []
     idx = [0]
 
@@ -79,8 +83,12 @@ def build_tree(
         if level > depth or length < 0.005:
             return
 
-        ex = x + length * math.cos(angle)
-        ey = y + length * math.sin(angle)
+        # Per-branch random variations
+        len_factor = rng.uniform(0.85, 1.15)
+        actual_length = length * len_factor
+
+        ex = x + actual_length * math.cos(angle)
+        ey = y + actual_length * math.sin(angle)
 
         seg = thick_segment(
             (x, y), (ex, ey), thick, material,
@@ -90,11 +98,17 @@ def build_tree(
         shapes.append(seg)
         idx[0] += 1
 
-        child_len = length * branch_ratio
-        child_thick = thick * branch_ratio * 0.85
+        child_len = actual_length * branch_ratio
+        # Slight variation in thickness reduction (0.80 – 0.90 instead of fixed 0.85)
+        thick_decay = rng.uniform(0.80, 0.90)
+        child_thick = thick * branch_ratio * thick_decay
 
-        _branch(ex, ey, angle + spread_angle, child_len, child_thick, level + 1)
-        _branch(ex, ey, angle - spread_angle, child_len, child_thick, level + 1)
+        # Angle variation: +-10% of spread_angle per child
+        angle_var_l = spread_angle * rng.uniform(-0.10, 0.10)
+        angle_var_r = spread_angle * rng.uniform(-0.10, 0.10)
+
+        _branch(ex, ey, angle + spread_angle + angle_var_l, child_len, child_thick, level + 1)
+        _branch(ex, ey, angle - spread_angle + angle_var_r, child_len, child_thick, level + 1)
 
     _branch(*base, trunk_angle, trunk_length, thickness, 0)
     return shapes
@@ -117,6 +131,7 @@ class AnimParams:
     spread_angle: float  # half-angle between children
     depth: int  # recursion depth
     trunk_thickness: float  # initial thickness
+    tree_seed: int  # seed for deterministic asymmetric branching
     beam_x: float  # projector x position (left side of box)
     beam_y: float  # projector y position
     beam_angle_start: float  # beam angle at t=0
@@ -159,6 +174,7 @@ def build_animate(p: AnimParams):
         depth=p.depth,
         thickness=p.trunk_thickness,
         material=BRANCH_GLASS,
+        seed=p.tree_seed,
     )
 
     def animate(ctx: FrameContext) -> Frame:
@@ -212,8 +228,9 @@ def random_params(rng: random.Random) -> AnimParams:
     trunk_angle = math.pi / 2 + rng.uniform(-0.15, 0.15)
     branch_ratio = rng.uniform(0.62, 0.75)
     spread_angle = rng.uniform(0.30, 0.55)
-    depth = rng.randint(5, 7)
-    trunk_thickness = rng.uniform(0.035, 0.06)
+    depth = rng.randint(7, 9)
+    trunk_thickness = rng.uniform(0.04, 0.07)
+    tree_seed = rng.randint(0, 2**31)
 
     # Beam from left side, roughly level with tree canopy
     beam_x = -1.45
@@ -241,6 +258,7 @@ def random_params(rng: random.Random) -> AnimParams:
         spread_angle=spread_angle,
         depth=depth,
         trunk_thickness=trunk_thickness,
+        tree_seed=tree_seed,
         beam_x=beam_x,
         beam_y=beam_y,
         beam_angle_start=beam_angle_start,
