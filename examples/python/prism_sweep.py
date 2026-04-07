@@ -40,8 +40,8 @@ PRISM_GLASS = glass(1.52, cauchy_b=28_000, color=(0.968, 0.968, 0.968), fill=0.1
 # Walls: bright metallic reflector — catches and scatters the dispersed light.
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
 
-# Camera matches wall dimensions exactly — 16:9 aspect.
-CAMERA = Camera2D(bounds=[-1.6, -0.9, 1.6, 0.9])
+# Camera width auto-derives height from canvas aspect ratio.
+CAMERA = Camera2D(center=[0, 0], width=3.2)
 
 # --- Tracks ---
 
@@ -55,10 +55,7 @@ BEAM_ANGLE = Track(
     wrap=Wrap.LOOP,
 )
 
-# Prism rotation: counter-phase to the beam so the dispersive sweet spot
-# (rot≈-30deg, angle≈-0.4) is hit when the beam is in range.
-# When beam is steep (t=0), rotation is mild; when beam passes through
-# -0.4 (t≈1.5s), rotation is near -30deg.
+# Prism rotation centered on the dispersive zone.
 PRISM_ROTATION = Track(
     [
         Key(0.0, math.pi / 2 - 0.55),

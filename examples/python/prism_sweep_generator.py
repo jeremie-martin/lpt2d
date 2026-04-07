@@ -3,8 +3,9 @@
 Randomly samples animation parameters and verifies two constraints:
 
 1. **Geometric** (analytical): beam on prism for the majority of the animation.
-   Enters at t ∈ [0.5, 1.0]s, exits at t ∈ [9.0, 9.5]s.
-2. **Beauty** (render-based): ≥ 3 seconds of frames with high spectral color richness.
+   Enters at t in [0.5, 1.0]s, exits at t in [9.0, 9.5]s.
+2. **Beauty** (render-based): at least 3 seconds of frames with high spectral
+   color richness.
 
 When a valid animation is found, renders it in HQ and saves parameters + video.
 
@@ -12,17 +13,13 @@ Design
 ------
 The beam starts just outside the prism.  ease_in_out_sine means velocity is near
 zero at the endpoints — so the beam *lingers* as it enters and exits the prism,
-and rushes through the empty space at the midpoint.  This makes the on-prism
-portion feel slow and meditative.
+and rushes through the empty space at the midpoint.
 
 The beam sweep is back-and-forth (same start/end angle).  The prism rotates
 smoothly in one direction over the full duration (simple eased arc).
 
-Parameter space
----------------
-- beam position: top-left quadrant, Y spans most of the vertical range
-- beam angles: start just outside prism hit-range, peak well past it
-- prism rotation: random start, smooth arc to start + delta
+The beam angle range is constructed around the prism's analytical hit-range so
+that the geometric constraint is satisfied by construction, not by luck.
 """
 
 from __future__ import annotations
@@ -34,8 +31,6 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
-import numpy as np
 
 from anim import (
     Camera2D,
@@ -50,9 +45,12 @@ from anim import (
     Timeline,
     Track,
     Wrap,
+    color_stats,
     glass,
     mirror_box,
     prism,
+    projector_target,
+    ray_intersect,
     render,
 )
 from anim.renderer import RenderSession, _resolve_frame_shot
@@ -65,7 +63,7 @@ PRISM_CENTER = (0.0, 0.0)
 PRISM_SIZE = 0.35
 PRISM_GLASS = glass(1.52, cauchy_b=28_000, color=(0.968, 0.968, 0.968), fill=0.15)
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
-CAMERA = Camera2D(bounds=[-1.6, -0.9, 1.6, 0.9])
+CAMERA = Camera2D(center=[0, 0], width=3.2)
 
 DURATION = 10.0
 BEAM_BASE_X = -1.4
@@ -80,8 +78,6 @@ MIN_COLORFUL_SECONDS = 3.0
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
 
-# Geometry: beam enters prism at t ∈ [ENTER_MIN, ENTER_MAX],
-#           beam exits  prism at t ∈ [EXIT_MIN, EXIT_MAX].
 ENTER_MIN, ENTER_MAX = 0.5, 1.0
 EXIT_MIN, EXIT_MAX = 9.0, 9.5
 
@@ -99,105 +95,48 @@ class AnimParams:
     beam_angle_start: float  # angle at t=0 and t=10 (just outside prism)
     beam_angle_peak: float  # angle at t=5 (farthest from prism)
     prism_rot_start: float  # initial prism rotation (rad)
-    prism_rot_delta: float  # total rotation over 10 s (one direction)
+    prism_rot_delta: float  # total rotation over 10 s (one direction, eased)
 
 
-def hit_range(bx: float, by: float, rotation: float) -> tuple[float, float] | None:
-    """Find the angular range of beam directions that hit the prism.
+# ---------------------------------------------------------------------------
+# Geometry helpers — uses the engine's C++ ray-cast
+# ---------------------------------------------------------------------------
 
-    Returns (angle_lo, angle_hi) or None if no hit is possible.
-    """
-    verts = prism_vertices(rotation)
-    # Sweep angles, find which ones hit
+
+def _prism_only_scene(rotation: float) -> Scene:
+    """Build a minimal scene with just the prism (no walls) for ray queries."""
+    return Scene(
+        shapes=[
+            prism(
+                center=PRISM_CENTER,
+                size=PRISM_SIZE,
+                material=PRISM_GLASS,
+                rotation=rotation,
+                id_prefix="prism",
+            ),
+        ],
+    )
+
+
+def _beam_hits_prism(bx: float, by: float, angle: float, rotation: float) -> bool:
+    """Check if the beam center ray hits the prism at a given rotation."""
+    scene = _prism_only_scene(rotation)
+    result = ray_intersect(scene, (bx, by), (math.cos(angle), math.sin(angle)))
+    return result is not None
+
+
+def _hit_range(bx: float, by: float, rotation: float) -> tuple[float, float] | None:
+    """Find the angular range of beam directions that hit the prism."""
+    scene = _prism_only_scene(rotation)
     hits = []
     for i in range(2000):
         a = -math.pi + i * math.tau / 2000
-        dx, dy = math.cos(a), math.sin(a)
-        if ray_hits_triangle(bx, by, dx, dy, verts):
+        result = ray_intersect(scene, (bx, by), (math.cos(a), math.sin(a)))
+        if result is not None:
             hits.append(a)
     if not hits:
         return None
     return (hits[0], hits[-1])
-
-
-def random_params(rng: random.Random) -> AnimParams | None:
-    """Sample random params with beam angles constructed around the hit range."""
-    beam_x_offset = rng.uniform(-0.05, 0.05)
-    beam_y = rng.uniform(-0.7, 0.75)
-    prism_rot_start = rng.uniform(0, math.tau)
-    prism_rot_delta = rng.uniform(-0.5, 0.5)
-
-    bx = BEAM_BASE_X + beam_x_offset
-    # Check hit range at the initial rotation (approximate — rotation is slow)
-    hr = hit_range(bx, beam_y, prism_rot_start)
-    if hr is None:
-        return None
-    lo, hi = hr
-    width = hi - lo
-    if width < 0.05:
-        return None  # too narrow to be interesting
-
-    # beam_angle_start: just outside the hit range (beam enters prism early)
-    # Choose which side to start from
-    side = rng.choice([-1, 1])
-    margin = rng.uniform(0.03, 0.12)
-    if side < 0:
-        angle_start = lo - margin
-        angle_peak = hi + rng.uniform(0.05, 0.4)
-    else:
-        angle_start = hi + margin
-        angle_peak = lo - rng.uniform(0.05, 0.4)
-
-    return AnimParams(
-        beam_x_offset=beam_x_offset,
-        beam_y=beam_y,
-        beam_angle_start=angle_start,
-        beam_angle_peak=angle_peak,
-        prism_rot_start=prism_rot_start,
-        prism_rot_delta=prism_rot_delta,
-    )
-
-
-# ---------------------------------------------------------------------------
-# Geometry helpers
-# ---------------------------------------------------------------------------
-
-
-def prism_vertices(rotation: float) -> list[tuple[float, float]]:
-    """Equilateral triangle vertices inscribed in circle of PRISM_SIZE."""
-    cx, cy = PRISM_CENTER
-    return [
-        (
-            cx + PRISM_SIZE * math.cos(rotation - i * math.tau / 3),
-            cy + PRISM_SIZE * math.sin(rotation - i * math.tau / 3),
-        )
-        for i in range(3)
-    ]
-
-
-def ray_hits_segment(
-    px: float, py: float, dx: float, dy: float,
-    ax: float, ay: float, bx: float, by: float,
-) -> bool:
-    """Does ray from (px,py) in direction (dx,dy) intersect segment AB?"""
-    denom = dx * (by - ay) - dy * (bx - ax)
-    if abs(denom) < 1e-12:
-        return False
-    t = ((ax - px) * (by - ay) - (ay - py) * (bx - ax)) / denom
-    s = ((ax - px) * dy - (ay - py) * dx) / denom
-    return t > 0 and 0 <= s <= 1
-
-
-def ray_hits_triangle(
-    px: float, py: float, dx: float, dy: float,
-    verts: list[tuple[float, float]],
-) -> bool:
-    for i in range(3):
-        ax, ay = verts[i]
-        bx, by = verts[(i + 1) % 3]
-        if ray_hits_segment(px, py, dx, dy, ax, ay, bx, by):
-            return True
-    return False
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +145,7 @@ def ray_hits_triangle(
 
 
 def beam_angle_track(p: AnimParams) -> Track:
-    """Back-and-forth sweep: start → peak → start, eased."""
+    """Back-and-forth sweep: start -> peak -> start, eased."""
     return Track(
         [
             Key(0.0, p.beam_angle_start),
@@ -229,7 +168,46 @@ def prism_rot_track(p: AnimParams) -> Track:
 
 
 # ---------------------------------------------------------------------------
-# Constraint 1: geometric (analytical)
+# Smart parameter sampling
+# ---------------------------------------------------------------------------
+
+
+def random_params(rng: random.Random) -> AnimParams | None:
+    """Sample random params with beam angles constructed around the hit range."""
+    beam_x_offset = rng.uniform(-0.05, 0.05)
+    beam_y = rng.uniform(-0.7, 0.75)
+    prism_rot_start = rng.uniform(0, math.tau)
+    prism_rot_delta = rng.uniform(-0.5, 0.5)
+
+    bx = BEAM_BASE_X + beam_x_offset
+    hr = _hit_range(bx, beam_y, prism_rot_start)
+    if hr is None:
+        return None
+    lo, hi = hr
+    if hi - lo < 0.05:
+        return None
+
+    side = rng.choice([-1, 1])
+    margin = rng.uniform(0.03, 0.12)
+    if side < 0:
+        angle_start = lo - margin
+        angle_peak = hi + rng.uniform(0.05, 0.4)
+    else:
+        angle_start = hi + margin
+        angle_peak = lo - rng.uniform(0.05, 0.4)
+
+    return AnimParams(
+        beam_x_offset=beam_x_offset,
+        beam_y=beam_y,
+        beam_angle_start=angle_start,
+        beam_angle_peak=angle_peak,
+        prism_rot_start=prism_rot_start,
+        prism_rot_delta=prism_rot_delta,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Constraint 1: geometric (analytical via C++ ray-cast)
 # ---------------------------------------------------------------------------
 
 
@@ -246,9 +224,7 @@ def check_geometry(p: AnimParams) -> tuple[bool, float, float, float]:
         t = DURATION * i / n_steps
         angle = float(angle_trk(t))
         rot = float(rot_trk(t))
-        dx, dy = math.cos(angle), math.sin(angle)
-        verts = prism_vertices(rot)
-        if ray_hits_triangle(bx, by, dx, dy, verts):
+        if _beam_hits_prism(bx, by, angle, rot):
             hits.append(t)
 
     if not hits:
@@ -258,7 +234,6 @@ def check_geometry(p: AnimParams) -> tuple[bool, float, float, float]:
     t_exit = hits[-1]
     on_fraction = len(hits) / (n_steps + 1)
 
-    # Beam enters at [0.5, 1.0]s, exits at [9.0, 9.5]s, on prism majority.
     ok = (
         ENTER_MIN <= t_enter <= ENTER_MAX
         and EXIT_MIN <= t_exit <= EXIT_MAX
@@ -268,45 +243,8 @@ def check_geometry(p: AnimParams) -> tuple[bool, float, float, float]:
 
 
 # ---------------------------------------------------------------------------
-# Constraint 2: color richness (render-based)
+# Constraint 2: color richness (render-based, using library color_stats)
 # ---------------------------------------------------------------------------
-
-
-def color_richness(rgb_bytes: bytes, w: int, h: int) -> float:
-    """Spectral diversity: hue_entropy * mean_saturation."""
-    arr = np.frombuffer(rgb_bytes, dtype=np.uint8).reshape(h, w, 3).astype(np.float32) / 255.0
-    r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
-    cmax = np.maximum(np.maximum(r, g), b)
-    cmin = np.minimum(np.minimum(r, g), b)
-    delta = cmax - cmin
-
-    sat = np.where(cmax > 0.01, delta / cmax, 0.0)
-    mean_sat = float(np.mean(sat))
-
-    mask = sat > 0.05
-    if mask.sum() < 100:
-        return 0.0
-
-    rc, gc, bc = r[mask], g[mask], b[mask]
-    d = delta[mask]
-    cm = cmax[mask]
-
-    mr = cm == rc
-    mg = (cm == gc) & ~mr
-    mb = ~mr & ~mg
-
-    h_vals = np.zeros(d.shape)
-    h_vals[mr] = ((gc[mr] - bc[mr]) / d[mr]) % 6
-    h_vals[mg] = ((bc[mg] - rc[mg]) / d[mg]) + 2
-    h_vals[mb] = ((rc[mb] - gc[mb]) / d[mb]) + 4
-    h_vals = (h_vals / 6.0) % 1.0
-
-    hist, _ = np.histogram(h_vals, bins=36, range=(0, 1))
-    hist = hist / hist.sum()
-    hist = hist[hist > 0]
-    entropy = -float(np.sum(hist * np.log2(hist)))
-
-    return entropy * mean_sat
 
 
 def build_animate(p: AnimParams):
@@ -348,7 +286,7 @@ def build_animate(p: AnimParams):
 
 
 def make_probe_shot() -> Shot:
-    """Low-res fast shot for color evaluation."""
+    """Low-res shot for color evaluation."""
     shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
@@ -363,7 +301,7 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
     animate = build_animate(p)
     shot = make_probe_shot()
     timeline = Timeline(DURATION, fps=PROBE_FPS)
-    session = RenderSession(PROBE_W, PROBE_H, True)
+    session = RenderSession(PROBE_W, PROBE_H, False)
 
     n_frames = timeline.total_frames
     colorful = 0
@@ -373,8 +311,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
-        rich = color_richness(render_result.pixels, PROBE_W, PROBE_H)
-        if rich > RICHNESS_THRESHOLD:
+        cs = color_stats(render_result.pixels, PROBE_W, PROBE_H)
+        if cs.color_richness > RICHNESS_THRESHOLD:
             colorful += 1
 
     min_colorful_frames = int(MIN_COLORFUL_SECONDS * PROBE_FPS)
@@ -399,12 +337,10 @@ def make_hq_shot() -> Shot:
 def render_and_save(p: AnimParams, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save parameters
     params_path = out_dir / "params.json"
     params_path.write_text(json.dumps(asdict(p), indent=2))
     print(f"  params → {params_path}")
 
-    # Render HQ video
     animate = build_animate(p)
     settings = make_hq_shot()
     timeline = Timeline(DURATION, fps=60)
@@ -429,8 +365,9 @@ def main() -> None:
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         p = random_params(rng)
+        if p is None:
+            continue
 
-        # Constraint 1: geometry
         geo_ok, t_enter, t_exit, on_frac = check_geometry(p)
         if not geo_ok:
             continue
@@ -441,7 +378,6 @@ def main() -> None:
             flush=True,
         )
 
-        # Constraint 2: beauty
         beauty_ok, n_colorful = check_beauty(p)
         colorful_seconds = n_colorful / PROBE_FPS
         print(f"  colorful={colorful_seconds:.1f}s ({n_colorful} frames)", flush=True)
