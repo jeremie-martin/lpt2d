@@ -145,6 +145,27 @@ class TestTrackVelocity:
         vel_rev = track.velocity_at(1.5)
         assert vel_rev == pytest.approx(-10.0)
 
+    def test_loop_velocity_continuous(self):
+        track = Track([Key(0.0, 0.0), Key(1.0, 10.0)], wrap=Wrap.LOOP)
+        # Inside the track
+        assert track.velocity_at(0.5) == pytest.approx(10.0)
+        # After looping, velocity should be the same (continuous)
+        assert track.velocity_at(1.5) == pytest.approx(10.0)
+        # Near the loop boundary
+        assert track.velocity_at(0.999) == pytest.approx(10.0)
+        assert track.velocity_at(1.001) == pytest.approx(10.0)
+
+    def test_2d_track_velocity_with_easing(self):
+        track = Track([Key(0.0, (0.0, 0.0)), Key(1.0, (10.0, 20.0), ease="smoothstep")])
+        vel = track.velocity_at(0.5)
+        assert isinstance(vel, tuple)
+        # smoothstep derivative at 0.5 = 1.5, so velocity = (10, 20) * 1.5 / 1.0
+        assert vel[0] == pytest.approx(15.0)
+        assert vel[1] == pytest.approx(30.0)
+        # Zero velocity at endpoints
+        vel_start = track.velocity_at(0.001)
+        assert abs(vel_start[0]) < 0.1  # type: ignore[arg-type]
+
     def test_custom_easing_derivative_clamped_at_boundary(self):
         """Custom easing that would fail outside [0, 1] is handled gracefully."""
         import math as m
@@ -162,7 +183,8 @@ class TestTrackVelocity:
 
 def _make_rgb(pixels: list[tuple[int, int, int]], width: int, height: int) -> bytes:
     """Create RGB bytes from a list of (R, G, B) pixel values."""
-    assert len(pixels) == width * height
+    if len(pixels) != width * height:
+        raise ValueError(f"Expected {width * height} pixels, got {len(pixels)}")
     return bytes(c for pixel in pixels for c in pixel)
 
 

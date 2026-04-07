@@ -144,13 +144,19 @@ class Track:
         n = len(times)
 
         if n == 1:
-            return 0.0 if self._dim == 0 else tuple(0.0 for _ in range(self._dim))
+            return 0.0 if self._dim == 0 else (0.0,) * self._dim
 
         remapped, sign = self._remap_time_with_sign(t)
 
-        # Outside the track range → velocity is zero (clamped)
-        if remapped <= times[0] or remapped >= times[-1]:
-            return 0.0 if self._dim == 0 else tuple(0.0 for _ in range(self._dim))
+        # Outside the track range → velocity is zero (clamped).
+        # For LOOP, the boundary wraps so velocity is continuous.
+        if remapped >= times[-1]:
+            if self._wrap == Wrap.LOOP:
+                remapped = times[0]
+            else:
+                return 0.0 if self._dim == 0 else (0.0,) * self._dim
+        if remapped < times[0]:
+            return 0.0 if self._dim == 0 else (0.0,) * self._dim
 
         i = bisect.bisect_right(times, remapped) - 1
         t0, t1 = times[i], times[i + 1]

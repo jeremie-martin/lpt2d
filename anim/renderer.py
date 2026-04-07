@@ -32,9 +32,6 @@ from .types import (
     _report_from_result,
 )
 
-_aspect_warned: set[tuple[float, float]] = set()
-
-
 # ─── Output backends ─────────────────────────────────────────────
 
 
@@ -180,7 +177,8 @@ def _resolve_frame_shot(
     effective_camera = f.camera or camera or shot.camera
     cpp_camera = effective_camera if effective_camera is not None else Camera2D()
 
-    # Warn once if explicit camera bounds don't match canvas aspect ratio
+    # Warn if explicit camera bounds don't match canvas aspect ratio.
+    # Python's default warning filter deduplicates by message+location.
     canvas = shot.canvas
     if cpp_camera.bounds is not None and canvas is not None:
         cam_bounds = cpp_camera.bounds
@@ -189,9 +187,7 @@ def _resolve_frame_shot(
         if cam_h > 0:
             cam_aspect = cam_w / cam_h
             canvas_aspect = canvas.width / canvas.height
-            key = (round(cam_aspect, 4), round(canvas_aspect, 4))
-            if key not in _aspect_warned and abs(cam_aspect - canvas_aspect) / canvas_aspect > 0.01:
-                _aspect_warned.add(key)
+            if abs(cam_aspect - canvas_aspect) / canvas_aspect > 0.01:
                 warnings.warn(
                     f"Camera aspect ratio ({cam_aspect:.3f}) does not match canvas "
                     f"aspect ratio ({canvas_aspect:.3f}). This will produce black bars. "

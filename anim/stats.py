@@ -125,14 +125,14 @@ def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05
 
     mean_sat = float(np.mean(sat[mask]))
 
-    # Hue (normalized to [0, 1))
-    d_mask = delta > 0
-    rc = np.where(d_mask, (cmax - r) / np.where(d_mask, delta, 1.0), 0.0)
-    gc = np.where(d_mask, (cmax - g) / np.where(d_mask, delta, 1.0), 0.0)
-    bc = np.where(d_mask, (cmax - b) / np.where(d_mask, delta, 1.0), 0.0)
-
-    hue = np.where(r == cmax, bc - gc, np.where(g == cmax, 2.0 + rc - bc, 4.0 + gc - rc))
-    hue = (hue / 6.0) % 1.0  # normalize to [0, 1)
+    # Hue (standard RGB-to-HSV, normalized to [0, 1))
+    safe_delta = np.where(delta > 0, delta, 1.0)
+    hue = np.where(
+        r == cmax,
+        (g - b) / safe_delta,
+        np.where(g == cmax, 2.0 + (b - r) / safe_delta, 4.0 + (r - g) / safe_delta),
+    )
+    hue = (hue / 6.0) % 1.0
 
     # 36-bin hue histogram over chromatic pixels only
     hue_chromatic = hue[mask]

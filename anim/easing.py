@@ -147,11 +147,6 @@ EASING_DERIVATIVES: dict[str, Callable[[float], float]] = {
     "step": step_d,
 }
 
-_DERIVATIVE_REGISTRY: dict[Callable, Callable] = dict(
-    zip(EASINGS.values(), EASING_DERIVATIVES.values(), strict=True)
-)
-
-
 def resolve_easing(ease: str | Callable[[float], float]) -> Callable[[float], float]:
     """Resolve an easing name or callable. Raises ValueError on unknown names."""
     if callable(ease):
@@ -174,8 +169,10 @@ def resolve_easing_derivative(ease: str | Callable[[float], float]) -> Callable[
             )
         return EASING_DERIVATIVES[ease]
 
-    if ease in _DERIVATIVE_REGISTRY:
-        return _DERIVATIVE_REGISTRY[ease]
+    # Match callable against built-in easings
+    for name, func in EASINGS.items():
+        if func is ease:
+            return EASING_DERIVATIVES[name]
 
     # Fallback: central finite differences, clamped to [0, 1]
     def _numerical_derivative(t: float, _h: float = 1e-6) -> float:
