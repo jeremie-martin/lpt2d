@@ -11,8 +11,8 @@ layout(std430, binding = 3) readonly buffer OutputBuf { LineSeg segs[]; };
 uniform vec2 uResolution;
 uniform float uThickness;
 
-out vec4 vColor;
-out float vLineDist;
+flat out vec3 vColor;
+noperspective out float vLineDist;
 
 void main() {
     uint seg_id = gl_InstanceID;
@@ -38,6 +38,6 @@ void main() {
     vec2 ndc = (pos / uResolution) * 2.0 - 1.0;
     ndc.y = -ndc.y;
     gl_Position = vec4(ndc, 0.0, 1.0);
-    vColor = s.color;
+    vColor = s.color.rgb;
     vLineDist = dist;
 }

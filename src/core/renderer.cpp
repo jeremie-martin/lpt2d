@@ -1181,32 +1181,39 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
     int histogram[256] = {};
     size_t clipped = 0;
+    const bool need_metrics = out_metrics != nullptr;
     const size_t row_bytes = (size_t)width_ * 3;
     rgb_row_buffer_.resize(row_bytes);
+    auto accumulate_row_metrics = [&](const uint8_t* row) {
+        for (size_t off = 0; off < row_bytes; off += 3) {
+            uint8_t r = row[off];
+            uint8_t g = row[off + 1];
+            uint8_t b = row[off + 2];
+            uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
+            if (lum > 255) lum = 255;
+            histogram[lum]++;
+            if (r == 255 || g == 255 || b == 255) ++clipped;
+        }
+    };
 
     // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
     // match the world-space orientation seen in the interactive viewport.
     for (int y = 0; y < height_ / 2; ++y) {
         uint8_t* top = out_rgb.data() + (size_t)y * row_bytes;
         uint8_t* bottom = out_rgb.data() + (size_t)(height_ - 1 - y) * row_bytes;
+        if (need_metrics) {
+            accumulate_row_metrics(top);
+            accumulate_row_metrics(bottom);
+        }
         std::memcpy(rgb_row_buffer_.data(), top, row_bytes);
         std::memcpy(top, bottom, row_bytes);
         std::memcpy(bottom, rgb_row_buffer_.data(), row_bytes);
     }
 
-    if (!out_metrics)
+    if (!need_metrics)
         return;
-
-    for (size_t i = 0, n = (size_t)width_ * height_; i < n; ++i) {
-        size_t off = i * 3;
-        uint8_t r = out_rgb[off];
-        uint8_t g = out_rgb[off + 1];
-        uint8_t b = out_rgb[off + 2];
-        uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
-        if (lum > 255) lum = 255;
-        histogram[lum]++;
-        if (r == 255 || g == 255 || b == 255) ++clipped;
-    }
+    if ((height_ & 1) != 0)
+        accumulate_row_metrics(out_rgb.data() + (size_t)(height_ / 2) * row_bytes);
 
     const size_t n_pixels = (size_t)width_ * height_;
     if (n_pixels == 0) {
