@@ -1,6 +1,6 @@
 """lpt2d evaluation infrastructure — fidelity comparison and timing measurement."""
 
-from .baseline import load_baseline, save_baseline
+from .baseline import load_baseline, load_baseline_set, save_baseline, save_baseline_set
 from .compare import (
     CompareResult,
     MetricsComparison,
@@ -11,7 +11,16 @@ from .compare import (
     compare_to_baseline,
 )
 from .image_metrics import compute_mse, compute_psnr, compute_ssim, max_abs_diff, pct_pixels_changed
-from .timing import SpeedupResult, TimingSummary, benchmark, classify_speedup
+from .timing import (
+    SceneBenchmark,
+    SpeedupResult,
+    TimedFrame,
+    TimingSummary,
+    benchmark,
+    benchmark_scene,
+    classify_speedup,
+    summarize_times,
+)
 
 __all__ = [
     "CompareResult",
@@ -25,11 +34,17 @@ __all__ = [
     "compute_psnr",
     "compute_ssim",
     "load_baseline",
+    "load_baseline_set",
     "max_abs_diff",
     "pct_pixels_changed",
     "save_baseline",
+    "save_baseline_set",
+    "SceneBenchmark",
     "SpeedupResult",
+    "TimedFrame",
     "TimingSummary",
     "benchmark",
+    "benchmark_scene",
     "classify_speedup",
+    "summarize_times",
 ]

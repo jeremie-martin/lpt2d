@@ -13,10 +13,13 @@ from evaluation import (
     compute_psnr,
     compute_ssim,
     load_baseline,
+    load_baseline_set,
     max_abs_diff,
     pct_pixels_changed,
     save_baseline,
+    save_baseline_set,
 )
+from evaluation.animate import animate_scene
 from evaluation.compare import compare_metrics
 from evaluation.timing import TimingSummary, classify_speedup
 
@@ -216,13 +219,13 @@ class _FakeMetrics:
 
 
 class _FakeResult:
-    def __init__(self):
-        self.pixels = bytes(np.full((32, 32, 3), 100, dtype=np.uint8).tobytes())
+    def __init__(self, fill: int = 100, time_ms: float = 42.5):
+        self.pixels = bytes(np.full((32, 32, 3), fill, dtype=np.uint8).tobytes())
         self.width = 32
         self.height = 32
         self.total_rays = 1000000
         self.max_hdr = 10.5
-        self.time_ms = 42.5
+        self.time_ms = time_ms
         self.metrics = _FakeMetrics()
 
 
@@ -252,6 +255,32 @@ class TestBaseline:
         assert cr.metrics is not None
         assert cr.time_a_ms == pytest.approx(42.5)
         assert cr.time_b_ms == pytest.approx(42.5)
+
+    def test_baseline_set_roundtrip(self, tmp_path):
+        save_baseline_set(
+            tmp_path / "set",
+            {
+                0: _FakeResult(fill=100, time_ms=40.0),
+                3: _FakeResult(fill=120, time_ms=44.0),
+            },
+            metadata={"scene": "test", "frames": 4},
+        )
+        loaded = load_baseline_set(tmp_path / "set")
+
+        assert loaded["metadata"] == {"scene": "test", "frames": 4}
+        assert sorted(loaded["frames"]) == [0, 3]
+        assert loaded["frames"][0]["time_ms"] == pytest.approx(40.0)
+        assert loaded["frames"][3]["time_ms"] == pytest.approx(44.0)
+        assert np.all(loaded["frames"][0]["pixels"] == 100)
+        assert np.all(loaded["frames"][3]["pixels"] == 120)
+
+    def test_baseline_set_reads_legacy_single_frame_baseline(self, tmp_path):
+        save_baseline(tmp_path / "legacy", _FakeResult(), metadata={"scene": "legacy"})
+        loaded = load_baseline_set(tmp_path / "legacy")
+
+        assert sorted(loaded["frames"]) == [0]
+        assert loaded["metadata"] == {"scene": "legacy"}
+        assert loaded["frames"][0]["width"] == 32
 
 
 # ── RenderResult.time_ms (requires C++ build) ───────────────────────────
@@ -346,3 +375,25 @@ class TestClassifySpeedup:
         candidate = self._summary([85.0, 90.0, 102.0])
         result = classify_speedup(baseline, candidate)
         assert result.confidence == "likely"
+
+
+class TestAnimateScene:
+    def test_top_level_shapes_and_lights_move_without_groups(self):
+        scene = {
+            "groups": [],
+            "shapes": [
+                {"type": "circle", "center": [0.0, 0.0], "radius": 0.25},
+                {"type": "segment", "a": [0.0, 0.0], "b": [1.0, 0.0]},
+            ],
+            "lights": [
+                {"type": "point", "pos": [0.0, 0.0]},
+                {"type": "projector", "position": [1.0, 0.0], "direction": [0.0, -1.0]},
+            ],
+        }
+
+        animated = animate_scene(scene, frame=2, total_frames=5)
+
+        assert animated["shapes"][0]["center"] != [0.0, 0.0]
+        assert animated["shapes"][1]["a"] != [0.0, 0.0]
+        assert animated["lights"][0]["pos"] != [0.0, 0.0]
+        assert animated["lights"][1]["direction"] != [0.0, -1.0]

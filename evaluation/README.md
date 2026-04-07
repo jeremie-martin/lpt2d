@@ -15,16 +15,22 @@ python -m evaluation
 
 # Skip build if you already rebuilt
 python -m evaluation --skip-build
+
+# Control the evaluation contract explicitly
+python -m evaluation --frames 5 --launches 3 --warmup 1
 ```
 
 Output:
 ```
-  solid_surface_gallery: PASS  psnr=105.7dB ssim=1.000000  565.7ms  speedup=1.000x (noise)
+overall:    PASS render=565.7ms wall=566.2ms scenes=3 samples=45
 
 verdict:    pass
-scenes:     1
+scenes:     3
+frames:     5
+launches:   3
+samples:    45
 median_ms:  565.7
-total  speedup: 1.000x
+wall_ms:    566.2
 ```
 
 Exit code 0 = all scenes pass, 1 = fidelity failure, 2 = setup error,
@@ -96,6 +102,35 @@ print(f"{speedup.speedup:.3f}x ({speedup.confidence})")
 
 This is what an optimization loop should use — not raw `time_ms`.
 
+## Scene evaluation contract
+
+For the full evaluation harness, use `benchmark_scene()`:
+
+```python
+from evaluation import benchmark_scene
+
+measurement = benchmark_scene(
+    "evaluation/scenes/solid_surface_gallery.json",
+    frames=5,
+    launches=3,
+    warmup=1,
+)
+print(measurement.render_summary.median_ms)
+print(measurement.wall_summary.median_ms)
+print(measurement.sample_count)  # launches * frames
+```
+
+This matches the CLI contract:
+
+- `frames`: deterministic frames compared against matching baseline frames
+- `launches`: fresh `RenderSession` instances per scene
+- `warmup`: discarded frames inside each fresh session
+
+The primary speed metric remains `RenderResult.time_ms`. The harness also
+records a Python wall-clock timing around each `render_shot()` call so the
+report can show whether the engine timing and end-to-end call timing stay
+aligned.
+
 ## Comparing two renders
 
 ```python
@@ -126,11 +161,30 @@ cr = compare_to_baseline(new_result, baseline)
 print(cr.verdict, cr.psnr)
 ```
 
+For multi-frame scene baselines:
+
+```python
+from evaluation import load_baseline_set, save_baseline_set
+
+save_baseline_set(
+    "baselines/gallery",
+    {0: frame0_result, 1: frame1_result, 2: frame2_result},
+    metadata={"frames": 3, "launches": 3, "warmup": 1},
+)
+
+baseline_set = load_baseline_set("baselines/gallery")
+baseline_frame_1 = baseline_set["frames"][1]
+cr = compare_to_baseline(new_frame_1_result, baseline_frame_1)
+```
+
 Baseline directory layout:
 ```
 baselines/gallery/
-  image.png          # reference render
-  metadata.json      # metrics, timing, custom metadata
+  image.png          # legacy single-frame baseline
+  frame_0000.png     # multi-frame baseline image
+  frame_0001.png
+  ...
+  metadata.json      # metrics, timing, frame list, custom metadata
 ```
 
 ## Comparing numpy arrays directly
