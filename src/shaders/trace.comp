@@ -106,7 +106,7 @@ uniform uint uBatchRays;
 uniform uint uNumDispatches;
 uniform uint uMaxDepth;
 uniform uint uSeed;
-uniform uint uDispatchSeeds[4];
+uniform uint uDispatchSeeds[16];
 uniform float uIntensity;
 uniform uint uMaxSegments;
 uniform vec2 uBoundsMin;
@@ -405,20 +405,8 @@ void main() {
     uint gid = gl_GlobalInvocationID.x;
     uint total_rays = uBatchRays * uNumDispatches;
     if (gid >= total_rays) return;
-    uint batch_id = 0u;
-    uint ray_id = gid;
-    if (uNumDispatches > 1u && ray_id >= uBatchRays) {
-        batch_id = 1u;
-        ray_id -= uBatchRays;
-    }
-    if (uNumDispatches > 2u && ray_id >= uBatchRays) {
-        batch_id = 2u;
-        ray_id -= uBatchRays;
-    }
-    if (uNumDispatches > 3u && ray_id >= uBatchRays) {
-        batch_id = 3u;
-        ray_id -= uBatchRays;
-    }
+    uint batch_id = gid / uBatchRays;
+    uint ray_id = gid - batch_id * uBatchRays;
     rng_state = ray_id * 1099087573u + uDispatchSeeds[batch_id];
     pcg_next(); pcg_next();
 
@@ -479,7 +467,8 @@ void main() {
         HitGeo h = hit_scene(ro, rd, hit_type, hit_index);
 
         if (h.t >= 1e29) {
-            emit(ro, ro + rd * ESCAPE_DIST, color);
+            if (max(color.r, max(color.g, color.b)) >= 0.01)
+                emit(ro, ro + rd * ESCAPE_DIST, color);
             return;
         }
 
@@ -488,7 +477,8 @@ void main() {
         float absorption_eff = current_absorption * (1.0 + 2.0 * (1.0 - vol_response));
         color *= exp(-absorption_eff * h.t);
 
-        emit(ro, h.point, color);
+        if (max(color.r, max(color.g, color.b)) >= 0.2)
+            emit(ro, h.point, color);
 
         // Branchless material lookup from flat buffer
         GPUMaterial mat = flat_materials[uMaterialOffsets[hit_type] + hit_index];
@@ -503,6 +493,9 @@ void main() {
             color += vec4(rgb * mat_emission * emit_resp * uIntensity * total_w,
                           mat_emission * emit_resp * uIntensity * total_w);
         }
+
+        // Early termination: skip BSDF when ray contribution is negligible
+        if (max(color.r, max(color.g, color.b)) < 0.25) return;
 
         // ── Unified Principled BSDF ──
         {

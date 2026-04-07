@@ -1017,7 +1017,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
     glUniform1f(trace_loc_intensity_, cfg.intensity);
     glUniform1ui(trace_loc_max_segments_, max_segs);
-    GLuint dispatch_seeds[4] = {};
+    GLuint dispatch_seeds[16] = {};
     for (int d = 0; d < num_dispatches; ++d)
         dispatch_seeds[d] = trace_dispatch_seed(cfg, batch_counter_ + (uint32_t)d);
     glUniform1uiv(trace_loc_dispatch_seeds_, num_dispatches, dispatch_seeds);
