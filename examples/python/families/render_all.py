@@ -1,4 +1,4 @@
-"""Render all animation families — 4 variants each, HQ 1080p.
+"""Render selected animation families — 4 variants each, HQ 1080p.
 
 Usage:
     python examples/python/families/render_all.py          # low-res preview
@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+import importlib
 import random
 import sys
 import time
@@ -27,15 +28,16 @@ RAYS = 5_000_000 if HQ else 2_000_000
 BASE_DIR = Path("renders/families")
 
 # ---------------------------------------------------------------------------
-# Family registry
+# Selected families (top 6 from review panel)
 # ---------------------------------------------------------------------------
 
 FAMILIES = [
-    "glass_turbine",
+    "prism_scatter",
     "fractal_tree",
-    "lens_caustics",
+    "pendulum_prism",
+    "nested_arcs",
+    "glass_turbine",
     "mirror_corridor",
-    "crystal_pendulum",
 ]
 
 
@@ -45,19 +47,7 @@ def render_family(family_name: str, n: int, seed: int) -> None:
     print(f"FAMILY: {family_name} ({n} variants, seed={seed})")
     print(f"{'='*60}")
 
-    if family_name == "glass_turbine":
-        from families.glass_turbine import random_params, check_beauty, render_and_save
-    elif family_name == "fractal_tree":
-        from families.fractal_tree import random_params, check_beauty, render_and_save
-    elif family_name == "lens_caustics":
-        from families.lens_caustics import random_params, check_beauty, render_and_save
-    elif family_name == "mirror_corridor":
-        from families.mirror_corridor import random_params, check_beauty, render_and_save
-    elif family_name == "crystal_pendulum":
-        from families.crystal_pendulum import random_params, check_beauty, render_and_save
-    else:
-        print(f"Unknown family: {family_name}")
-        return
+    m = importlib.import_module(f"families.{family_name}")
 
     rng = random.Random(seed)
     out_base = BASE_DIR / family_name
@@ -65,19 +55,18 @@ def render_family(family_name: str, n: int, seed: int) -> None:
     max_attempts = 500
 
     for attempt in range(1, max_attempts + 1):
-        p = random_params(rng)
-        result = check_beauty(p)
+        p = m.random_params(rng)
+        result = m.check_beauty(p)
         ok = result[0]
 
         if not ok:
-            print(f"  [{attempt}] rejected")
             continue
 
         found += 1
         out_dir = out_base / f"{found:03d}"
         print(f"  [{attempt}] FOUND #{found} — rendering {WIDTH}x{HEIGHT} {RAYS/1e6:.0f}M rays...")
         t0 = time.monotonic()
-        render_and_save(p, out_dir, WIDTH, HEIGHT, RAYS)
+        m.render_and_save(p, out_dir, WIDTH, HEIGHT, RAYS)
         elapsed = time.monotonic() - t0
         print(f"  done in {elapsed:.0f}s")
 
@@ -89,7 +78,7 @@ def render_family(family_name: str, n: int, seed: int) -> None:
 
 
 def main() -> None:
-    print(f"Rendering all families: {VARIANTS_PER_FAMILY} variants each")
+    print(f"Rendering {len(FAMILIES)} families: {VARIANTS_PER_FAMILY} variants each")
     print(f"Resolution: {WIDTH}x{HEIGHT}, Rays: {RAYS/1e6:.0f}M, HQ={HQ}")
 
     total_start = time.monotonic()
@@ -100,7 +89,8 @@ def main() -> None:
 
     total_elapsed = time.monotonic() - total_start
     print(f"\n{'='*60}")
-    print(f"ALL DONE — {len(FAMILIES)} families x {VARIANTS_PER_FAMILY} variants = {len(FAMILIES)*VARIANTS_PER_FAMILY} videos")
+    n_videos = len(FAMILIES) * VARIANTS_PER_FAMILY
+    print(f"ALL DONE — {len(FAMILIES)} families x {VARIANTS_PER_FAMILY} variants = {n_videos} videos")
     print(f"Total time: {total_elapsed/60:.1f} minutes")
     print(f"Output: {BASE_DIR}/")
 
