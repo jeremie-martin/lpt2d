@@ -32,3 +32,4 @@ __pycache__/
 /imgui.ini
 /perf.data
 /perf.data.old
+autoresearch-results.tsv

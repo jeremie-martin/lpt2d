@@ -104,6 +104,20 @@
       "spectral_c2": 0.0,
       "fill": 0.0
     },
+    "crystal_glass_spectral": {
+      "ior": 1.600000023841858,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.20000000298023224,
+      "cauchy_b": 30000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 1.5,
+      "spectral_c1": -3.0,
+      "spectral_c2": 1.0,
+      "fill": 0.0
+    },
     "wall_mirror": {
       "ior": 1.0,
       "roughness": 0.10000000149011612,
@@ -122,13 +136,15 @@
   "shapes": [
     {
       "id": "crystal_r0_c0",
-      "type": "circle",
+      "type": "ellipse",
       "center": [
         -0.7199999690055847,
         -0.41569218039512634
       ],
-      "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_130"
+      "semi_a": 0.05000000074505806,
+      "semi_b": 0.08999999612569809,
+      "rotation": 0.30000001192092896,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "crystal_r0_c1",
@@ -182,13 +198,15 @@
     },
     {
       "id": "crystal_r0_c6",
-      "type": "circle",
+      "type": "ellipse",
       "center": [
         0.7199999690055847,
         -0.41569218039512634
       ],
-      "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_180"
+      "semi_a": 0.05000000074505806,
+      "semi_b": 0.08999999612569809,
+      "rotation": -0.30000001192092896,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "crystal_r1_c0",
@@ -272,13 +290,15 @@
     },
     {
       "id": "crystal_r2_c2",
-      "type": "circle",
+      "type": "arc",
       "center": [
         -0.23999999463558197,
         0.0
       ],
       "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_130"
+      "angle_start": 0.0,
+      "sweep": 3.1415927410125732,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "crystal_r2_c3",
@@ -292,13 +312,15 @@
     },
     {
       "id": "crystal_r2_c4",
-      "type": "circle",
+      "type": "arc",
       "center": [
         0.23999999463558197,
         0.0
       ],
       "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_180"
+      "angle_start": 3.1415927410125732,
+      "sweep": 3.1415927410125732,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "crystal_r2_c5",
@@ -382,13 +404,15 @@
     },
     {
       "id": "crystal_r4_c0",
-      "type": "circle",
+      "type": "ellipse",
       "center": [
         -0.7199999690055847,
         0.41569218039512634
       ],
-      "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_130"
+      "semi_a": 0.08999999612569809,
+      "semi_b": 0.05000000074505806,
+      "rotation": 0.6000000238418579,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "crystal_r4_c1",
@@ -442,13 +466,15 @@
     },
     {
       "id": "crystal_r4_c6",
-      "type": "circle",
+      "type": "ellipse",
       "center": [
         0.7199999690055847,
         0.41569218039512634
       ],
-      "radius": 0.07000000029802322,
-      "material_id": "crystal_glass_180"
+      "semi_a": 0.08999999612569809,
+      "semi_b": 0.05000000074505806,
+      "rotation": -0.6000000238418579,
+      "material_id": "crystal_glass_spectral"
     },
     {
       "id": "wall_floor",
@@ -525,6 +551,21 @@
       "intensity": 0.699999988079071,
       "wavelength_min": 380.0,
       "wavelength_max": 780.0
+    },
+    {
+      "id": "source_bar",
+      "type": "segment",
+      "a": [
+        -0.30000001192092896,
+        0.6000000238418579
+      ],
+      "b": [
+        0.30000001192092896,
+        0.6000000238418579
+      ],
+      "intensity": 0.5,
+      "wavelength_min": 500.0,
+      "wavelength_max": 600.0
     }
   ],
   "groups": []

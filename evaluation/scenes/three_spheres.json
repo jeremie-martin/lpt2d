@@ -62,14 +62,56 @@
       "spectral_c2": 0.0,
       "fill": 0.0
     },
-    "wall_mirror": {
+    "sphere_diffuse_red": {
       "ior": 1.0,
-      "roughness": 0.10000000149011612,
-      "metallic": 1.0,
-      "transmission": 1.0,
+      "roughness": 0.800000011920929,
+      "metallic": 0.0,
+      "transmission": 0.0,
       "absorption": 0.0,
       "cauchy_b": 0.0,
-      "albedo": 0.949999988079071,
+      "albedo": 0.699999988079071,
+      "emission": 0.0,
+      "spectral_c0": -3.0,
+      "spectral_c1": 6.0,
+      "spectral_c2": -1.0,
+      "fill": 0.0
+    },
+    "sphere_emissive_blue": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 5.0,
+      "spectral_c0": 2.0,
+      "spectral_c1": -8.0,
+      "spectral_c2": 4.0,
+      "fill": 1.0
+    },
+    "lens_glass": {
+      "ior": 1.7999999523162842,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 0.20000000298023224,
+      "cauchy_b": 40000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "wall_diffuse": {
+      "ior": 1.0,
+      "roughness": 0.8999999761581421,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 0.699999988079071,
       "emission": 0.0,
       "spectral_c0": 0.0,
       "spectral_c1": 0.0,
@@ -96,7 +138,7 @@
         0.0
       ],
       "radius": 0.20000000298023224,
-      "material_id": "sphere_glass"
+      "material_id": "sphere_diffuse_red"
     },
     {
       "id": "sphere_right",
@@ -106,7 +148,36 @@
         0.0
       ],
       "radius": 0.20000000298023224,
-      "material_id": "sphere_glass"
+      "material_id": "sphere_emissive_blue"
+    },
+    {
+      "id": "lens_bottom",
+      "type": "bezier",
+      "p0": [
+        -0.20000000298023224,
+        -0.4000000059604645
+      ],
+      "p1": [
+        0.0,
+        -0.550000011920929
+      ],
+      "p2": [
+        0.20000000298023224,
+        -0.4000000059604645
+      ],
+      "material_id": "lens_glass"
+    },
+    {
+      "id": "reflector_arc",
+      "type": "arc",
+      "center": [
+        0.0,
+        0.449999988079071
+      ],
+      "radius": 0.15000000596046448,
+      "angle_start": 0.5235987901687622,
+      "sweep": 2.094395160675049,
+      "material_id": "lens_glass"
     },
     {
       "id": "wall_floor",
@@ -119,7 +190,7 @@
         1.2000000476837158,
         -0.675000011920929
       ],
-      "material_id": "wall_mirror"
+      "material_id": "wall_diffuse"
     },
     {
       "id": "wall_ceiling",
@@ -132,7 +203,7 @@
         -1.2000000476837158,
         0.675000011920929
       ],
-      "material_id": "wall_mirror"
+      "material_id": "wall_diffuse"
     },
     {
       "id": "wall_left",
@@ -145,7 +216,7 @@
         -1.2000000476837158,
         -0.675000011920929
       ],
-      "material_id": "wall_mirror"
+      "material_id": "wall_diffuse"
     },
     {
       "id": "wall_right",
@@ -158,12 +229,12 @@
         1.2000000476837158,
         0.675000011920929
       ],
-      "material_id": "wall_mirror"
+      "material_id": "wall_diffuse"
     }
   ],
   "lights": [
     {
-      "id": "source_left",
+      "id": "source_point",
       "type": "point",
       "pos": [
         -0.800000011920929,
@@ -174,15 +245,19 @@
       "wavelength_max": 780.0
     },
     {
-      "id": "source_right",
-      "type": "point",
-      "pos": [
-        0.800000011920929,
-        -0.5
+      "id": "source_segment",
+      "type": "segment",
+      "a": [
+        -0.5,
+        -0.6000000238418579
       ],
-      "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "b": [
+        0.5,
+        -0.6000000238418579
+      ],
+      "intensity": 0.800000011920929,
+      "wavelength_min": 500.0,
+      "wavelength_max": 600.0
     }
   ],
   "groups": []

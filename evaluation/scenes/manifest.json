@@ -10,12 +10,12 @@
     {
       "name": "three_spheres",
       "file": "three_spheres.json",
-      "summary": "Small reflective room with refractive spheres and point emitters."
+      "summary": "Glass, diffuse, and emissive spheres with a bezier lens, arc, segment light, and diffuse walls."
     },
     {
       "name": "crystal_field",
       "file": "crystal_field.json",
-      "summary": "Dense refractive circle field in a mirrored enclosure."
+      "summary": "Dense refractive field of circles, ellipses, and arcs with spectral glass and a segment light."
     }
   ]
 }
