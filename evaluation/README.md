@@ -49,22 +49,27 @@ python -m evaluation --resolution 1280x720 --rays 2000000
 
 Output:
 ```
-overall:    PASS ratio=0.9731 speedup=1.0276x render_case=402.5ms scenes=3 cases=15 samples=75
+overall:    PASS ratio=0.9731 speedup=1.0276x scenes=3 cases=15 samples=75
 
 verdict:    pass
-fidelity_verdict: pass
 scenes:     3
 cases:      15
 frames:     5
 launches:   5
+warmup:     1 base-scene render(s) per launch
 samples:    75
-render_case_median_ms: 402.5
+render_sample_total_ms: 30187.5
+baseline_render_sample_total_ms: 31020.4
+wall_sample_total_ms: 30205.1
+baseline_wall_sample_total_ms: 31043.8
 render_ratio_gmean: 0.973125
 render_speedup_gmean: 1.027617
+wall_ratio_gmean: 0.981002
+wall_speedup_gmean: 1.019366
 ```
 
-Exit code 0 = all scenes pass, 1 = fidelity failure, 2 = setup error,
-3 = no baseline.
+Exit code `0` = all scenes pass, `1` = any fidelity `warn` or `fail`,
+`2` = setup/build/baseline contract error, `3` = no baseline directory.
 
 ## Build
 
@@ -106,7 +111,8 @@ post-processing, pixel readback, and metrics computation. The `glFinish()`
 inside `read_pixels()` ensures GPU work is drained before the clock stops.
 
 The first render after session creation includes one-time costs (shader
-compilation, buffer allocation). Always do a warm-up render before timing.
+compilation, buffer allocation). The harness treats warm-up as a session
+warm-up on the base scene before the timed case sweep.
 
 ## Benchmarking (repeated timing)
 
@@ -148,7 +154,7 @@ measurement = benchmark_scene(
     warmup=1,
 )
 print(measurement.cases[0].render_summary.median_ms)   # frame 0 across launches
-print(measurement.case_render_summary.median_ms)       # summary across case medians
+print(sum(measurement.cases[0].render_summary.times_ms))  # total ms for case 0 samples
 print(measurement.pooled_render_summary.median_ms)     # pooled raw samples (diagnostic only)
 print(measurement.sample_count)                        # launches * frames
 ```
@@ -157,9 +163,21 @@ This matches the CLI contract:
 
 - `frames`: deterministic benchmark cases per scene
 - `launches`: repeated measurements per case
-- `warmup`: discarded frames inside each fresh session
+- `warmup`: untimed base-scene renders inside each fresh session
 - `resolution`: evaluation render resolution, default `1280x720`
 - `rays`: evaluation ray count, default `2000000`
+
+The harness is strict by design:
+
+- baseline capture is all-or-nothing
+- evaluation is all-or-nothing
+- the baseline schema is explicit and versioned
+- there is no legacy fallback path for old baseline layouts
+- a successful evaluation always reports a complete benchmark score for the full corpus
+
+For reproducibility, capture and evaluation both copy the exact JSON used for
+the warm-up render and for each benchmark case into the corresponding
+`baselines/<scene>/` and `runs/<run>/<scene>/` directories.
 
 The primary speed metric remains `RenderResult.time_ms`. The harness also
 records a Python wall-clock timing around each `render_shot()` call so the
@@ -192,12 +210,17 @@ reverse-engineer every CMake generator detail from cache files.
 
 ## Terminal Summary
 
-The terminal output is intentionally grep-friendly. The key summary lines are:
+The terminal output is intentionally grep-friendly. Each scene prints one line
+per case with candidate median, baseline median, and ratio. The final summary
+keeps the key corpus-level lines:
 
-- `fidelity_verdict:`
-- `render_case_median_ms:`
+- `verdict:`
+- `render_sample_total_ms:`
+- `baseline_render_sample_total_ms:`
 - `render_ratio_gmean:`
 - `render_speedup_gmean:`
+- `wall_sample_total_ms:`
+- `baseline_wall_sample_total_ms:`
 - `wall_ratio_gmean:`
 - `wall_speedup_gmean:`
 
@@ -253,22 +276,30 @@ from evaluation import load_baseline_set, save_baseline_set
 save_baseline_set(
     "baselines/gallery",
     {0: frame0_result, 1: frame1_result, 2: frame2_result},
-    metadata={"frames": 3, "launches": 3, "warmup": 1},
+    metadata={"frames": 3, "launches": 3, "warmup": 1, "warmup_mode": "base_scene"},
+    scene_json_by_case={
+        0: case0_json_text,
+        1: case1_json_text,
+        2: case2_json_text,
+    },
+    warmup_scene_json=warmup_json_text,
 )
 
 baseline_set = load_baseline_set("baselines/gallery")
-baseline_frame_1 = baseline_set["frames"][1]
-cr = compare_to_baseline(new_frame_1_result, baseline_frame_1)
+baseline_case_1 = baseline_set["cases"][1]
+cr = compare_to_baseline(new_frame_1_result, baseline_case_1)
 ```
 
 Baseline directory layout:
 ```
 baselines/gallery/
-  image.png          # legacy single-frame baseline
-  frame_0000.png     # multi-frame baseline image
-  frame_0001.png
+  warmup.json
+  case_0000.json
+  case_0000.png
+  case_0001.json
+  case_0001.png
   ...
-  metadata.json      # metrics, timing, frame list, custom metadata
+  metadata.json      # schema version, case timing, custom metadata
 ```
 
 ## Comparing numpy arrays directly

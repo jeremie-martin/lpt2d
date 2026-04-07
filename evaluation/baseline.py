@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+BASELINE_SET_SCHEMA_VERSION = 3
+
 
 def _result_metadata(result) -> dict:
     m = result.metrics
@@ -73,28 +75,41 @@ def save_baseline(
 
 def save_baseline_set(
     path: Path,
-    results_by_frame: dict[int, object],
+    results_by_case: dict[int, object],
     *,
     metadata: dict | None = None,
-    timing_by_frame: dict[int, dict] | None = None,
+    timing_by_case: dict[int, dict] | None = None,
+    scene_json_by_case: dict[int, str] | None = None,
+    warmup_scene_json: str | None = None,
 ) -> None:
-    """Save multiple frame baselines for one scene directory."""
+    """Save multiple benchmark-case baselines for one scene directory."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 
-    frames_meta: dict[str, dict] = {}
-    for frame_index, result in sorted(results_by_frame.items()):
-        image_name = f"frame_{frame_index:04d}.png"
+    cases_meta: dict[str, dict] = {}
+    for case_index, result in sorted(results_by_case.items()):
+        image_name = f"case_{case_index:04d}.png"
         pixels = np.frombuffer(result.pixels, dtype=np.uint8).reshape(result.height, result.width, 3)
         Image.fromarray(pixels, "RGB").save(path / image_name)
 
-        frame_meta = _result_metadata(result)
-        frame_meta["image"] = image_name
-        if timing_by_frame and frame_index in timing_by_frame:
-            frame_meta.update(timing_by_frame[frame_index])
-        frames_meta[str(frame_index)] = frame_meta
+        case_meta = _result_metadata(result)
+        case_meta["image"] = image_name
+        if timing_by_case and case_index in timing_by_case:
+            case_meta.update(timing_by_case[case_index])
+        if scene_json_by_case and case_index in scene_json_by_case:
+            scene_json_name = f"case_{case_index:04d}.json"
+            (path / scene_json_name).write_text(scene_json_by_case[case_index])
+            case_meta["scene_json"] = scene_json_name
+        cases_meta[str(case_index)] = case_meta
 
-    doc = {"frames": frames_meta}
+    doc = {
+        "schema_version": BASELINE_SET_SCHEMA_VERSION,
+        "cases": cases_meta,
+    }
+    if warmup_scene_json is not None:
+        warmup_name = "warmup.json"
+        (path / warmup_name).write_text(warmup_scene_json)
+        doc["warmup_scene_json"] = warmup_name
     if metadata is not None:
         doc["metadata"] = metadata
 
@@ -113,23 +128,44 @@ def load_baseline(path: Path) -> dict:
 
 
 def load_baseline_set(path: Path) -> dict:
-    """Load a scene baseline with one or more reference frames.
+    """Load a scene baseline with one or more benchmark cases.
 
-    Returns ``{"frames": {frame_index: baseline_dict}, "metadata": metadata}``.
-    Legacy single-frame baselines are exposed as frame ``0``.
+    Returns ``{"cases": {case_index: baseline_dict}, "metadata": metadata}``.
     """
     path = Path(path)
     meta = json.loads((path / "metadata.json").read_text())
-
-    if "frames" not in meta:
-        baseline = load_baseline(path)
-        return {"frames": {0: baseline}, "metadata": baseline.get("metadata")}
+    if meta.get("schema_version") != BASELINE_SET_SCHEMA_VERSION:
+        raise ValueError(
+            f"baseline schema_version must be {BASELINE_SET_SCHEMA_VERSION},"
+            f" got {meta.get('schema_version')!r}"
+        )
+    if "cases" not in meta or not meta["cases"]:
+        raise ValueError("baseline metadata must contain a non-empty `cases` mapping")
 
     metadata = meta.get("metadata")
-    frames: dict[int, dict] = {}
-    for key, frame_meta in meta["frames"].items():
-        frame_index = int(key)
-        image_name = frame_meta.get("image", f"frame_{frame_index:04d}.png")
-        frames[frame_index] = _baseline_record(path / image_name, frame_meta, metadata)
+    cases: dict[int, dict] = {}
+    for key, case_meta in meta["cases"].items():
+        case_index = int(key)
+        image_name = case_meta.get("image")
+        if not image_name:
+            raise ValueError(f"case {case_index} missing `image` field")
+        record = _baseline_record(path / image_name, case_meta, metadata)
 
-    return {"frames": frames, "metadata": metadata}
+        scene_json_name = case_meta.get("scene_json")
+        if not scene_json_name:
+            raise ValueError(f"case {case_index} missing `scene_json` field")
+        record["scene_json"] = (path / scene_json_name).read_text()
+        record["scene_json_path"] = scene_json_name
+        cases[case_index] = record
+
+    warmup_scene_json_name = meta.get("warmup_scene_json")
+    if not warmup_scene_json_name:
+        raise ValueError("baseline metadata must contain `warmup_scene_json`")
+
+    return {
+        "schema_version": meta["schema_version"],
+        "cases": cases,
+        "metadata": metadata,
+        "warmup_scene_json": (path / warmup_scene_json_name).read_text(),
+        "warmup_scene_json_path": warmup_scene_json_name,
+    }

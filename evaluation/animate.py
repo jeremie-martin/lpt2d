@@ -10,6 +10,9 @@ import copy
 import math
 
 
+_STATIC_BOUNDARY_ID_PREFIXES = ("wall_", "room_")
+
+
 def _phase(index: int, total: int) -> float:
     return index * math.tau / max(total, 1)
 
@@ -21,16 +24,36 @@ def _offset(t: float, phase: float, dx: float = 0.015, dy: float = 0.01) -> tupl
     )
 
 
-def _rotate_vec(x: float, y: float, angle: float) -> list[float]:
-    c = math.cos(angle)
-    s = math.sin(angle)
-    return [x * c - y * s, x * s + y * c]
-
-
 def _translate_point(point: list[float], dx: float, dy: float) -> list[float]:
     if len(point) < 2:
         return point
     return [point[0] + dx, point[1] + dy]
+
+
+def _is_close(a: float, b: float, *, tol: float = 1e-6) -> bool:
+    return abs(a - b) <= tol
+
+
+def _is_static_boundary_shape(shape: dict, camera_bounds: list[float] | None) -> bool:
+    shape_id = str(shape.get("id", ""))
+    if shape_id.startswith(_STATIC_BOUNDARY_ID_PREFIXES):
+        return True
+
+    if shape.get("type") != "segment" or camera_bounds is None or len(camera_bounds) != 4:
+        return False
+
+    a = shape.get("a")
+    b = shape.get("b")
+    if not isinstance(a, list) or not isinstance(b, list) or len(a) < 2 or len(b) < 2:
+        return False
+
+    left, bottom, right, top = camera_bounds
+    x0, y0 = a[0], a[1]
+    x1, y1 = b[0], b[1]
+
+    horizontal = _is_close(y0, y1) and _is_close(min(x0, x1), left) and _is_close(max(x0, x1), right)
+    vertical = _is_close(x0, x1) and _is_close(min(y0, y1), bottom) and _is_close(max(y0, y1), top)
+    return horizontal or vertical
 
 
 def _animate_shape(shape: dict, t: float, phase: float) -> None:
@@ -58,32 +81,20 @@ def _animate_shape(shape: dict, t: float, phase: float) -> None:
         shape["angle_start"] = shape.get("angle_start", 0.0) + angle
 
 
-def _animate_light(light: dict, t: float, phase: float) -> None:
-    dx, dy = _offset(t, phase, dx=0.02, dy=0.014)
-    angle = math.sin(t * math.tau + phase) * math.radians(3.0)
-
-    if "pos" in light:
-        light["pos"] = _translate_point(list(light["pos"]), dx, dy)
-    if "position" in light:
-        light["position"] = _translate_point(list(light["position"]), dx, dy)
-    if "direction" in light:
-        direction = list(light["direction"])
-        if len(direction) >= 2:
-            light["direction"] = _rotate_vec(direction[0], direction[1], angle)
-
-
 def animate_scene(scene_dict: dict, frame: int, total_frames: int) -> dict:
     """Return a modified copy of *scene_dict* with per-frame group transforms.
 
-    Each group gets a gentle sinusoidal rotation (±3°) and translation
-    (±0.015 world units). Top-level shapes and lights also get tiny nudges so
-    scenes without authored groups still exercise multiple deterministic states.
+    The camera, enclosure walls, and top-level lights stay fixed. Only interior
+    objects get gentle deterministic motion so the benchmark remains
+    representative of frame-to-frame scene updates without exposing the
+    background outside the room bounds.
     """
     scene = copy.deepcopy(scene_dict)
     if total_frames <= 1:
         return scene
 
     t = frame / (total_frames - 1)  # 0..1
+    camera_bounds = scene.get("camera", {}).get("bounds")
 
     groups = scene.get("groups", [])
     for i, group in enumerate(groups):
@@ -101,10 +112,8 @@ def animate_scene(scene_dict: dict, frame: int, total_frames: int) -> dict:
 
     shapes = scene.get("shapes", [])
     for i, shape in enumerate(shapes):
+        if _is_static_boundary_shape(shape, camera_bounds):
+            continue
         _animate_shape(shape, t, _phase(i, len(shapes)))
-
-    lights = scene.get("lights", [])
-    for i, light in enumerate(lights):
-        _animate_light(light, t, _phase(i, len(lights)))
 
     return scene

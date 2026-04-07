@@ -25,7 +25,7 @@ from evaluation import (
     save_baseline_set,
 )
 from evaluation.animate import animate_scene
-from evaluation.__main__ import _parse_resolution, _run_evaluate
+from evaluation.__main__ import _parse_resolution, _run_capture, _run_evaluate
 from evaluation.compare import compare_metrics
 from evaluation.timing import (
     CaseBenchmark,
@@ -279,30 +279,34 @@ class TestBaseline:
                 3: _FakeResult(fill=120, time_ms=44.0),
             },
             metadata={"scene": "test", "frames": 4},
-            timing_by_frame={
+            timing_by_case={
                 0: {"render_timing": {"times_ms": [40.0, 41.0]}, "wall_timing": {"times_ms": [42.0, 43.0]}},
                 3: {"render_timing": {"times_ms": [44.0, 45.0]}},
             },
+            scene_json_by_case={
+                0: '{\n  "case": 0\n}\n',
+                3: '{\n  "case": 3\n}\n',
+            },
+            warmup_scene_json='{\n  "warmup": true\n}\n',
         )
         loaded = load_baseline_set(tmp_path / "set")
 
         assert loaded["metadata"] == {"scene": "test", "frames": 4}
-        assert sorted(loaded["frames"]) == [0, 3]
-        assert loaded["frames"][0]["time_ms"] == pytest.approx(40.0)
-        assert loaded["frames"][3]["time_ms"] == pytest.approx(44.0)
-        assert np.all(loaded["frames"][0]["pixels"] == 100)
-        assert np.all(loaded["frames"][3]["pixels"] == 120)
-        assert loaded["frames"][0]["render_timing"]["times_ms"] == [40.0, 41.0]
-        assert loaded["frames"][0]["wall_timing"]["times_ms"] == [42.0, 43.0]
-        assert loaded["frames"][3]["render_timing"]["times_ms"] == [44.0, 45.0]
+        assert sorted(loaded["cases"]) == [0, 3]
+        assert loaded["cases"][0]["time_ms"] == pytest.approx(40.0)
+        assert loaded["cases"][3]["time_ms"] == pytest.approx(44.0)
+        assert np.all(loaded["cases"][0]["pixels"] == 100)
+        assert np.all(loaded["cases"][3]["pixels"] == 120)
+        assert loaded["cases"][0]["render_timing"]["times_ms"] == [40.0, 41.0]
+        assert loaded["cases"][0]["wall_timing"]["times_ms"] == [42.0, 43.0]
+        assert loaded["cases"][3]["render_timing"]["times_ms"] == [44.0, 45.0]
+        assert loaded["cases"][0]["scene_json"] == '{\n  "case": 0\n}\n'
+        assert loaded["warmup_scene_json"] == '{\n  "warmup": true\n}\n'
 
-    def test_baseline_set_reads_legacy_single_frame_baseline(self, tmp_path):
+    def test_baseline_set_rejects_legacy_single_frame_baseline(self, tmp_path):
         save_baseline(tmp_path / "legacy", _FakeResult(), metadata={"scene": "legacy"})
-        loaded = load_baseline_set(tmp_path / "legacy")
-
-        assert sorted(loaded["frames"]) == [0]
-        assert loaded["metadata"] == {"scene": "legacy"}
-        assert loaded["frames"][0]["width"] == 32
+        with pytest.raises(ValueError, match="schema_version"):
+            load_baseline_set(tmp_path / "legacy")
 
 
 # ── RenderResult.time_ms (requires C++ build) ───────────────────────────
@@ -367,13 +371,15 @@ class TestTimingSummary:
                 self.rays = 1000
 
         class _FakeShot:
-            def __init__(self):
+            def __init__(self, kind: str):
                 self.canvas = _FakeCanvas()
                 self.trace = _FakeTrace()
+                self.kind = kind
 
         class _FakeSession:
             active_sessions = 0
             close_calls = 0
+            render_kinds: list[str] = []
 
             def __init__(self, width: int, height: int):
                 assert width == 320
@@ -384,6 +390,7 @@ class TestTimingSummary:
                 self._closed = False
 
             def render_shot(self, shot, frame_index=0):
+                _FakeSession.render_kinds.append(shot.kind)
                 return _FakeResult(time_ms=10.0 + frame_index)
 
             def close(self):
@@ -394,13 +401,18 @@ class TestTimingSummary:
                 _FakeSession.close_calls += 1
 
         fake_module = SimpleNamespace(
-            load_shot=lambda path: _FakeShot(),
+            load_shot=lambda path: _FakeShot("loaded"),
             RenderSession=_FakeSession,
         )
         monkeypatch.setitem(sys.modules, "_lpt2d", fake_module)
         monkeypatch.setattr(
-            "evaluation.timing._build_frame_shots",
-            lambda *args, **kwargs: [_FakeShot(), _FakeShot()],
+            "evaluation.timing._build_benchmark_inputs",
+            lambda *args, **kwargs: (
+                _FakeShot("warmup"),
+                '{\n  "warmup": true\n}\n',
+                [_FakeShot("case0"), _FakeShot("case1")],
+                {0: '{\n  "case": 0\n}\n', 1: '{\n  "case": 1\n}\n'},
+            ),
         )
 
         bench = benchmark_scene("fake.json", frames=2, launches=3, warmup=1)
@@ -412,6 +424,19 @@ class TestTimingSummary:
         assert bench.case_render_summary.median_ms == pytest.approx(10.5)
         assert _FakeSession.close_calls == 3
         assert _FakeSession.active_sessions == 0
+        assert _FakeSession.render_kinds == [
+            "warmup",
+            "case0",
+            "case1",
+            "warmup",
+            "case0",
+            "case1",
+            "warmup",
+            "case0",
+            "case1",
+        ]
+        assert bench.warmup_scene_json == '{\n  "warmup": true\n}\n'
+        assert bench.case_scene_jsons[1] == '{\n  "case": 1\n}\n'
 
 
 class TestRatioSummary:
@@ -467,12 +492,14 @@ class TestClassifySpeedup:
 
 
 class TestAnimateScene:
-    def test_top_level_shapes_and_lights_move_without_groups(self):
+    def test_only_interior_shapes_move_without_groups(self):
         scene = {
+            "camera": {"bounds": [-1.0, -0.5, 1.0, 0.5]},
             "groups": [],
             "shapes": [
-                {"type": "circle", "center": [0.0, 0.0], "radius": 0.25},
-                {"type": "segment", "a": [0.0, 0.0], "b": [1.0, 0.0]},
+                {"id": "object", "type": "circle", "center": [0.0, 0.0], "radius": 0.25},
+                {"id": "wall_left", "type": "segment", "a": [-1.0, 0.5], "b": [-1.0, -0.5]},
+                {"id": "interior_segment", "type": "segment", "a": [0.0, 0.0], "b": [0.5, 0.0]},
             ],
             "lights": [
                 {"type": "point", "pos": [0.0, 0.0]},
@@ -483,9 +510,11 @@ class TestAnimateScene:
         animated = animate_scene(scene, frame=2, total_frames=5)
 
         assert animated["shapes"][0]["center"] != [0.0, 0.0]
-        assert animated["shapes"][1]["a"] != [0.0, 0.0]
-        assert animated["lights"][0]["pos"] != [0.0, 0.0]
-        assert animated["lights"][1]["direction"] != [0.0, -1.0]
+        assert animated["shapes"][1]["a"] == [-1.0, 0.5]
+        assert animated["shapes"][1]["b"] == [-1.0, -0.5]
+        assert animated["shapes"][2]["a"] != [0.0, 0.0]
+        assert animated["lights"][0]["pos"] == [0.0, 0.0]
+        assert animated["lights"][1]["direction"] == [0.0, -1.0]
 
 
 class TestEvaluationCorpus:
@@ -512,8 +541,133 @@ class TestEvaluationCliHelpers:
             _parse_resolution("720p")
 
 
-class TestEvaluationBackCompat:
-    def test_evaluate_preserves_fidelity_when_baseline_lacks_case_timing(self, tmp_path, monkeypatch, capsys):
+class TestEvaluationStrictness:
+    def test_capture_is_all_or_nothing(self, tmp_path, monkeypatch):
+        baselines_dir = tmp_path / "baselines"
+        scenes_dir = tmp_path / "scenes"
+        scenes_dir.mkdir()
+        ok_scene = scenes_dir / "ok.json"
+        bad_scene = scenes_dir / "bad.json"
+        ok_scene.write_text("{}\n")
+        bad_scene.write_text("{}\n")
+
+        measurement = SceneBenchmark(
+            samples=[
+                TimedFrame(
+                    launch_index=0,
+                    frame_index=0,
+                    render_time_ms=42.0,
+                    wall_time_ms=43.0,
+                    result=_FakeResult(fill=100, time_ms=42.0),
+                )
+            ],
+            cases={
+                0: CaseBenchmark(
+                    frame_index=0,
+                    samples=[],
+                    render_summary=summarize_times([42.0]),
+                    wall_summary=summarize_times([43.0]),
+                )
+            },
+            case_scene_jsons={0: '{\n  "case": 0\n}\n'},
+            warmup_scene_json='{\n  "warmup": true\n}\n',
+            pooled_render_summary=summarize_times([42.0]),
+            pooled_wall_summary=summarize_times([43.0]),
+            case_render_summary=summarize_times([42.0]),
+            case_wall_summary=summarize_times([43.0]),
+            launches=1,
+            frames_per_launch=1,
+            warmup=0,
+        )
+
+        monkeypatch.setattr("evaluation.__main__.BASELINES_DIR", baselines_dir)
+        monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [ok_scene, bad_scene])
+        monkeypatch.setattr(
+            "evaluation.timing.benchmark_scene",
+            lambda path, **kwargs: measurement
+            if Path(path).stem == "ok"
+            else (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            _run_capture(
+                skip_build=True,
+                frames=1,
+                launches=1,
+                warmup=0,
+                width=32,
+                height=32,
+                rays=1_000_000,
+            )
+
+        assert excinfo.value.code == 2
+        assert not baselines_dir.exists()
+
+    def test_capture_reports_cases_and_totals(self, tmp_path, monkeypatch, capsys):
+        baselines_dir = tmp_path / "baselines"
+        scenes_dir = tmp_path / "scenes"
+        scenes_dir.mkdir()
+        scene_path = scenes_dir / "scene.json"
+        scene_path.write_text("{}\n")
+
+        measurement = SceneBenchmark(
+            samples=[
+                TimedFrame(0, 0, 42.0, 43.0, _FakeResult(fill=100, time_ms=42.0)),
+                TimedFrame(0, 1, 52.0, 53.0, _FakeResult(fill=100, time_ms=52.0)),
+                TimedFrame(1, 0, 44.0, 45.0, _FakeResult(fill=100, time_ms=44.0)),
+                TimedFrame(1, 1, 54.0, 55.0, _FakeResult(fill=100, time_ms=54.0)),
+            ],
+            cases={
+                0: CaseBenchmark(
+                    frame_index=0,
+                    samples=[
+                        TimedFrame(0, 0, 42.0, 43.0, _FakeResult(fill=100, time_ms=42.0)),
+                        TimedFrame(1, 0, 44.0, 45.0, _FakeResult(fill=100, time_ms=44.0)),
+                    ],
+                    render_summary=summarize_times([42.0, 44.0]),
+                    wall_summary=summarize_times([43.0, 45.0]),
+                ),
+                1: CaseBenchmark(
+                    frame_index=1,
+                    samples=[
+                        TimedFrame(0, 1, 52.0, 53.0, _FakeResult(fill=100, time_ms=52.0)),
+                        TimedFrame(1, 1, 54.0, 55.0, _FakeResult(fill=100, time_ms=54.0)),
+                    ],
+                    render_summary=summarize_times([52.0, 54.0]),
+                    wall_summary=summarize_times([53.0, 55.0]),
+                ),
+            },
+            case_scene_jsons={0: '{\n  "case": 0\n}\n', 1: '{\n  "case": 1\n}\n'},
+            warmup_scene_json='{\n  "warmup": true\n}\n',
+            pooled_render_summary=summarize_times([42.0, 52.0, 44.0, 54.0]),
+            pooled_wall_summary=summarize_times([43.0, 53.0, 45.0, 55.0]),
+            case_render_summary=summarize_times([43.0, 53.0]),
+            case_wall_summary=summarize_times([44.0, 54.0]),
+            launches=2,
+            frames_per_launch=2,
+            warmup=1,
+        )
+
+        monkeypatch.setattr("evaluation.__main__.BASELINES_DIR", baselines_dir)
+        monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
+        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+
+        _run_capture(
+            skip_build=True,
+            frames=2,
+            launches=2,
+            warmup=1,
+            width=32,
+            height=32,
+            rays=1_000_000,
+        )
+
+        out = capsys.readouterr().out
+        assert "case 00: render=43.0ms wall=44.0ms samples=2" in out
+        assert "case 01: render=53.0ms wall=54.0ms samples=2" in out
+        assert "totals:     render=192.0ms wall=196.0ms" in out
+
+    def test_evaluate_rejects_baseline_without_case_timing(self, tmp_path, monkeypatch, capsys):
         baselines_dir = tmp_path / "baselines"
         runs_dir = tmp_path / "runs"
         scenes_dir = tmp_path / "scenes"
@@ -530,7 +684,16 @@ class TestEvaluationBackCompat:
         save_baseline_set(
             baselines_dir / "legacy_scene",
             {0: _FakeResult(fill=100, time_ms=40.0)},
-            metadata={"scene": "legacy_scene", "frames": 1, "launches": 1, "warmup": 0},
+            metadata={
+                "scene": "legacy_scene",
+                "frames": 1,
+                "launches": 1,
+                "warmup": 0,
+                "warmup_mode": "base_scene",
+                "render_settings": {"width": 32, "height": 32, "resolution": "32x32", "rays": 1_000_000},
+            },
+            scene_json_by_case={0: '{\n  "case": 0\n}\n'},
+            warmup_scene_json='{\n  "warmup": true\n}\n',
         )
 
         measurement = SceneBenchmark(
@@ -551,6 +714,8 @@ class TestEvaluationBackCompat:
                     wall_summary=summarize_times([43.0]),
                 )
             },
+            case_scene_jsons={0: '{\n  "case": 0\n}\n'},
+            warmup_scene_json='{\n  "warmup": true\n}\n',
             pooled_render_summary=summarize_times([42.0]),
             pooled_wall_summary=summarize_times([43.0]),
             case_render_summary=summarize_times([42.0]),
@@ -567,7 +732,6 @@ class TestEvaluationBackCompat:
         monkeypatch.setattr("evaluation.__main__.SCENE_MANIFEST", manifest_path)
         monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
         monkeypatch.setattr("evaluation.__main__._git_info", lambda: {"commit": "abc123", "branch": "test", "dirty": False})
-        monkeypatch.setattr("evaluation.__main__.benchmark_scene", None, raising=False)
         monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
 
         with pytest.raises(SystemExit) as excinfo:
@@ -581,8 +745,123 @@ class TestEvaluationBackCompat:
                 rays=1_000_000,
             )
 
+        assert excinfo.value.code == 2
+        captured = capsys.readouterr()
+        out = captured.out
+        err = captured.err
+        assert out == ""
+        assert "missing render_timing" in err
+
+    def test_evaluate_reports_cases_and_totals(self, tmp_path, monkeypatch, capsys):
+        baselines_dir = tmp_path / "baselines"
+        runs_dir = tmp_path / "runs"
+        scenes_dir = tmp_path / "scenes"
+        scene_path = scenes_dir / "scene.json"
+        manifest_path = scenes_dir / "manifest.json"
+        baselines_dir.mkdir()
+        runs_dir.mkdir()
+        scenes_dir.mkdir()
+        scene_path.write_text("{}\n")
+        manifest_path.write_text(json.dumps({"scenes": [{"file": "scene.json"}]}))
+
+        save_baseline_set(
+            baselines_dir / "scene",
+            {
+                0: _FakeResult(fill=100, time_ms=40.0),
+                1: _FakeResult(fill=100, time_ms=50.0),
+            },
+            metadata={
+                "scene": "scene",
+                "frames": 2,
+                "launches": 2,
+                "warmup": 1,
+                "warmup_mode": "base_scene",
+                "render_settings": {"width": 32, "height": 32, "resolution": "32x32", "rays": 1_000_000},
+            },
+            timing_by_case={
+                0: {"render_timing": {"times_ms": [40.0, 41.0]}, "wall_timing": {"times_ms": [42.0, 43.0]}},
+                1: {"render_timing": {"times_ms": [50.0, 51.0]}, "wall_timing": {"times_ms": [52.0, 53.0]}},
+            },
+            scene_json_by_case={
+                0: '{\n  "case": 0\n}\n',
+                1: '{\n  "case": 1\n}\n',
+            },
+            warmup_scene_json='{\n  "warmup": true\n}\n',
+        )
+
+        measurement = SceneBenchmark(
+            samples=[
+                TimedFrame(0, 0, 44.0, 45.0, _FakeResult(fill=100, time_ms=44.0)),
+                TimedFrame(0, 1, 54.0, 55.0, _FakeResult(fill=100, time_ms=54.0)),
+                TimedFrame(1, 0, 46.0, 47.0, _FakeResult(fill=100, time_ms=46.0)),
+                TimedFrame(1, 1, 56.0, 57.0, _FakeResult(fill=100, time_ms=56.0)),
+            ],
+            cases={
+                0: CaseBenchmark(
+                    frame_index=0,
+                    samples=[],
+                    render_summary=summarize_times([44.0, 46.0]),
+                    wall_summary=summarize_times([45.0, 47.0]),
+                ),
+                1: CaseBenchmark(
+                    frame_index=1,
+                    samples=[],
+                    render_summary=summarize_times([54.0, 56.0]),
+                    wall_summary=summarize_times([55.0, 57.0]),
+                ),
+            },
+            case_scene_jsons={0: '{\n  "case": 0\n}\n', 1: '{\n  "case": 1\n}\n'},
+            warmup_scene_json='{\n  "warmup": true\n}\n',
+            pooled_render_summary=summarize_times([44.0, 54.0, 46.0, 56.0]),
+            pooled_wall_summary=summarize_times([45.0, 55.0, 47.0, 57.0]),
+            case_render_summary=summarize_times([45.0, 55.0]),
+            case_wall_summary=summarize_times([46.0, 56.0]),
+            launches=2,
+            frames_per_launch=2,
+            warmup=1,
+        )
+
+        fake_module = SimpleNamespace(load_shot=lambda path: object())
+        monkeypatch.setitem(sys.modules, "_lpt2d", fake_module)
+        monkeypatch.setattr("evaluation.__main__.BASELINES_DIR", baselines_dir)
+        monkeypatch.setattr("evaluation.__main__.RUNS_DIR", runs_dir)
+        monkeypatch.setattr("evaluation.__main__.SCENE_MANIFEST", manifest_path)
+        monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
+        monkeypatch.setattr(
+            "evaluation.__main__._git_info",
+            lambda: {"commit": "abc123", "branch": "test", "dirty": False},
+        )
+        monkeypatch.setattr(
+            "evaluation.__main__.datetime",
+            SimpleNamespace(now=lambda: SimpleNamespace(strftime=lambda fmt: "20260407-000000")),
+        )
+        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+
+        with pytest.raises(SystemExit) as excinfo:
+            _run_evaluate(
+                skip_build=True,
+                frames=2,
+                launches=2,
+                warmup=1,
+                width=32,
+                height=32,
+                rays=1_000_000,
+            )
+
         assert excinfo.value.code == 0
-        out = capsys.readouterr().out
-        assert "fidelity_verdict: pass" in out
-        assert "benchmark_score_available: no" in out
-        assert "render_ratio_gmean: unavailable" in out
+        captured = capsys.readouterr()
+        out = captured.out
+        assert "case 00: PASS render=45.0/40.5ms" in out
+        assert "case 01: PASS render=55.0/50.5ms" in out
+        assert "render_sample_total_ms: 200.0" in out
+        assert "baseline_render_sample_total_ms: 182.0" in out
+
+        report = json.loads((runs_dir / "20260407-000000_abc123" / "report.json").read_text())
+        assert report["totals"]["render_sample_total_ms"] == pytest.approx(200.0)
+        assert report["totals"]["baseline_render_sample_total_ms"] == pytest.approx(182.0)
+        assert len(report["all_cases"]) == 2
+        assert report["all_cases"][0]["baseline_render_median_ms"] == pytest.approx(40.5)
+        scene = report["scenes"]["scene"]
+        assert scene["totals"]["render_sample_total_ms"] == pytest.approx(200.0)
+        assert scene["cases"]["0"]["case_index"] == 0
+        assert scene["cases"]["0"]["render_sample_total_ms"] == pytest.approx(90.0)

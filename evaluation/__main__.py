@@ -6,7 +6,7 @@ Usage:
     python -m evaluation --skip-build     Evaluate without rebuilding
     python -m evaluation --frames 5       Timed deterministic benchmark cases
     python -m evaluation --launches 5     Repeated launches per benchmark case
-    python -m evaluation --warmup 1       Warm-up frames discarded per launch
+    python -m evaluation --warmup 1       Base-scene warm-up renders per launch
     python -m evaluation --resolution 1280x720 --rays 2000000
 
 Artifacts are saved to runs/<timestamp>/ with rendered images, a JSON report,
@@ -16,8 +16,10 @@ and a human-readable summary. The path is printed at the end.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -38,6 +40,7 @@ DEFAULT_WARMUP = 1
 DEFAULT_WIDTH = 1280
 DEFAULT_HEIGHT = 720
 DEFAULT_RAYS = 2_000_000
+WARMUP_MODE = "base_scene"
 
 
 # ── Build ────────────────────────────────────────────────────────────────
@@ -215,6 +218,10 @@ def _timing_dict(summary) -> dict:
     }
 
 
+def _timing_total_ms(summary) -> float:
+    return float(sum(summary.times_ms))
+
+
 def _combine_verdicts(verdicts: list[str]) -> str:
     lowered = [verdict.lower() for verdict in verdicts]
     if any(verdict == "fail" for verdict in lowered):
@@ -256,6 +263,142 @@ def _ratio_dict(summary) -> dict:
     }
 
 
+class EvaluationSetupError(RuntimeError):
+    """Raised when the evaluation harness contract is not satisfied."""
+
+
+def _replace_directory(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.move(str(source), str(target))
+
+
+def _write_case_json_artifacts(scene_dir: Path, *, case_scene_jsons: dict[int, str], warmup_scene_json: str) -> dict:
+    warmup_name = "warmup.json"
+    (scene_dir / warmup_name).write_text(warmup_scene_json)
+
+    case_paths: dict[str, str] = {}
+    for case_index, scene_json in sorted(case_scene_jsons.items()):
+        case_name = f"case_{case_index:04d}.json"
+        (scene_dir / case_name).write_text(scene_json)
+        case_paths[str(case_index)] = case_name
+
+    return {
+        "warmup": warmup_name,
+        "cases": case_paths,
+    }
+
+
+def _load_and_validate_baseline_corpus(
+    scenes: list[Path],
+    *,
+    frames: int,
+    launches: int,
+    warmup: int,
+    settings: dict,
+):
+    from .baseline import load_baseline_set
+
+    if not BASELINES_DIR.is_dir():
+        raise EvaluationSetupError(
+            "no baselines found. Run `python -m evaluation capture` first."
+        )
+
+    baseline_sets: dict[str, dict] = {}
+    errors: list[str] = []
+    expected_case_indexes = list(range(frames))
+
+    for scene_path in scenes:
+        name = scene_path.stem
+        baseline_path = BASELINES_DIR / name
+        if not baseline_path.is_dir():
+            errors.append(f"{name}: no baseline at {baseline_path}")
+            continue
+
+        try:
+            baseline_set = load_baseline_set(baseline_path)
+        except Exception as exc:
+            errors.append(f"{name}: failed to load baseline: {exc}")
+            continue
+
+        baseline_cases = baseline_set["cases"]
+        baseline_meta = baseline_set.get("metadata") or {}
+        config_mismatches: list[str] = []
+        for key, expected in (
+            ("frames", frames),
+            ("launches", launches),
+            ("warmup", warmup),
+            ("warmup_mode", WARMUP_MODE),
+        ):
+            actual = baseline_meta.get(key)
+            if actual != expected:
+                config_mismatches.append(f"{key}={actual!r} (expected {expected!r})")
+        if baseline_meta.get("render_settings") != settings:
+            config_mismatches.append(
+                f"render_settings={baseline_meta.get('render_settings')!r} (expected {settings!r})"
+            )
+        if config_mismatches:
+            errors.append(
+                f"{name}: baseline contract differs from requested evaluation contract: "
+                + ", ".join(config_mismatches)
+            )
+            continue
+
+        actual_case_indexes = sorted(baseline_cases)
+        if actual_case_indexes != expected_case_indexes:
+            errors.append(
+                f"{name}: baseline cases are {actual_case_indexes}, expected {expected_case_indexes}"
+            )
+            continue
+
+        baseline_render_summaries: dict[int, object] = {}
+        baseline_wall_summaries: dict[int, object] = {}
+        case_error = False
+        for case_index in expected_case_indexes:
+            baseline_case = baseline_cases[case_index]
+            if baseline_case["width"] != settings["width"] or baseline_case["height"] != settings["height"]:
+                errors.append(
+                    f"{name}: baseline case {case_index} resolution "
+                    f"{baseline_case['width']}x{baseline_case['height']}"
+                    f" does not match requested {settings['resolution']}"
+                )
+                case_error = True
+                break
+
+            render_summary = _summary_from_timing_dict(baseline_case.get("render_timing"))
+            if render_summary is None:
+                errors.append(
+                    f"{name}: baseline case {case_index} missing render_timing; "
+                    "recapture with `python -m evaluation capture`"
+                )
+                case_error = True
+                break
+            wall_summary = _summary_from_timing_dict(baseline_case.get("wall_timing"))
+            if wall_summary is None:
+                errors.append(
+                    f"{name}: baseline case {case_index} missing wall_timing; "
+                    "recapture with `python -m evaluation capture`"
+                )
+                case_error = True
+                break
+
+            baseline_render_summaries[case_index] = render_summary
+            baseline_wall_summaries[case_index] = wall_summary
+
+        if case_error:
+            continue
+
+        baseline_set["baseline_render_summaries"] = baseline_render_summaries
+        baseline_set["baseline_wall_summaries"] = baseline_wall_summaries
+        baseline_sets[name] = baseline_set
+
+    if errors:
+        raise EvaluationSetupError("\n".join(errors))
+
+    return baseline_sets
+
+
 # ── Capture ──────────────────────────────────────────────────────────────
 
 
@@ -264,13 +407,10 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, widt
         if not _build():
             sys.exit(2)
 
-    import _lpt2d
-
     from .baseline import save_baseline_set
     from .timing import benchmark_scene
 
     scenes = _discover_scenes()
-    BASELINES_DIR.mkdir(parents=True, exist_ok=True)
     build_contract = _build_contract()
     settings = _render_settings(width, height, rays)
 
@@ -280,82 +420,92 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, widt
     print(f"  manifest:  {SCENE_MANIFEST}")
     print(f"  frames:    {frames}")
     print(f"  launches:  {launches}")
-    print(f"  warmup:    {warmup} per launch")
+    print(f"  warmup:    {warmup} base-scene render(s) per launch")
     print(f"  render:    {settings['resolution']} @ {settings['rays']} rays")
     print(f"  build:     {build_contract['requested_configuration']} requested")
     print("=" * 60)
 
-    for scene_path in scenes:
-        name = scene_path.stem
-        print(f"\n  [{name}]", flush=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="evaluation-capture-", dir=str(PROJECT_DIR)) as tmpdir:
+            staging_root = Path(tmpdir)
 
-        try:
-            shot = _lpt2d.load_shot(str(scene_path))
-        except Exception as e:
-            print(f"    LOAD ERROR: {e}", file=sys.stderr)
-            continue
+            for scene_path in scenes:
+                name = scene_path.stem
+                print(f"\n  [{name}]", flush=True)
+                print(f"    resolution: {settings['resolution']}", flush=True)
+                print(f"    rays:       {settings['rays']}", flush=True)
+                print(f"    measuring:  {frames} case(s) x {launches} launch(es)...", flush=True)
 
-        print(f"    resolution: {settings['resolution']}", flush=True)
-        print(f"    rays:       {settings['rays']}", flush=True)
-        print(f"    measuring:  {frames} case(s) x {launches} launch(es)...", flush=True)
+                try:
+                    measurement = benchmark_scene(
+                        str(scene_path),
+                        frames=frames,
+                        launches=launches,
+                        warmup=warmup,
+                        width=width,
+                        height=height,
+                        rays=rays,
+                    )
+                except Exception as exc:
+                    raise EvaluationSetupError(f"{name}: capture failed: {exc}") from exc
 
-        try:
-            measurement = benchmark_scene(
-                str(scene_path),
-                frames=frames,
-                launches=launches,
-                warmup=warmup,
-                width=width,
-                height=height,
-                rays=rays,
-            )
-        except Exception as e:
-            print(f"    RENDER ERROR: {e}", file=sys.stderr)
-            continue
+                results_by_case: dict[int, object] = {}
+                for sample in measurement.samples:
+                    results_by_case.setdefault(sample.frame_index, sample.result)
 
-        print(
-            f"    render:     case medians {measurement.case_render_summary.median_ms:.1f} ms"
-            f" (mean={measurement.case_render_summary.mean_ms:.1f},"
-            f" min={measurement.case_render_summary.min_ms:.1f},"
-            f" max={measurement.case_render_summary.max_ms:.1f})"
-        )
-        print(
-            f"    wall:       case medians {measurement.case_wall_summary.median_ms:.1f} ms"
-            f" (mean={measurement.case_wall_summary.mean_ms:.1f},"
-            f" min={measurement.case_wall_summary.min_ms:.1f},"
-            f" max={measurement.case_wall_summary.max_ms:.1f})"
-        )
+                timing_by_case = {
+                    case_index: {
+                        "render_timing": _timing_dict(case_benchmark.render_summary),
+                        "wall_timing": _timing_dict(case_benchmark.wall_summary),
+                    }
+                    for case_index, case_benchmark in measurement.cases.items()
+                }
+                scene_render_sample_total_ms = _timing_total_ms(measurement.pooled_render_summary)
+                scene_wall_sample_total_ms = _timing_total_ms(measurement.pooled_wall_summary)
 
-        results_by_frame: dict[int, object] = {}
-        for sample in measurement.samples:
-            results_by_frame.setdefault(sample.frame_index, sample.result)
+                print("    cases:", flush=True)
+                for case_index in range(frames):
+                    case_benchmark = measurement.cases[case_index]
+                    print(
+                        f"    case {case_index:02d}:"
+                        f" render={case_benchmark.render_summary.median_ms:.1f}ms"
+                        f" wall={case_benchmark.wall_summary.median_ms:.1f}ms"
+                        f" samples={case_benchmark.repeats}"
+                    )
 
-        timing_by_frame = {
-            frame_index: {
-                "render_timing": _timing_dict(case_benchmark.render_summary),
-                "wall_timing": _timing_dict(case_benchmark.wall_summary),
-            }
-            for frame_index, case_benchmark in measurement.cases.items()
-        }
+                print(
+                    f"    totals:     render={scene_render_sample_total_ms:.1f}ms"
+                    f" wall={scene_wall_sample_total_ms:.1f}ms"
+                )
 
-        save_baseline_set(
-            BASELINES_DIR / name,
-            results_by_frame,
-            metadata={
-                "schema_version": 2,
-                "scene": name,
-                "frames": frames,
-                "launches": launches,
-                "warmup": warmup,
-                "render_settings": settings,
-                "case_render_timing": _timing_dict(measurement.case_render_summary),
-                "case_wall_timing": _timing_dict(measurement.case_wall_summary),
-                "pooled_render_timing": _timing_dict(measurement.pooled_render_summary),
-                "pooled_wall_timing": _timing_dict(measurement.pooled_wall_summary),
-            },
-            timing_by_frame=timing_by_frame,
-        )
-        print(f"    saved:      {BASELINES_DIR / name}/")
+                save_baseline_set(
+                    staging_root / name,
+                    results_by_case,
+                    metadata={
+                        "scene": name,
+                        "frames": frames,
+                        "launches": launches,
+                        "warmup": warmup,
+                        "warmup_mode": WARMUP_MODE,
+                        "render_settings": settings,
+                        "case_render_timing": _timing_dict(measurement.case_render_summary),
+                        "case_wall_timing": _timing_dict(measurement.case_wall_summary),
+                        "pooled_render_timing": _timing_dict(measurement.pooled_render_summary),
+                        "pooled_wall_timing": _timing_dict(measurement.pooled_wall_summary),
+                    },
+                    timing_by_case=timing_by_case,
+                    scene_json_by_case=measurement.case_scene_jsons,
+                    warmup_scene_json=measurement.warmup_scene_json,
+                )
+                print(f"    staged:     {name}/")
+
+            BASELINES_DIR.mkdir(parents=True, exist_ok=True)
+            for scene_path in scenes:
+                name = scene_path.stem
+                _replace_directory(staging_root / name, BASELINES_DIR / name)
+    except EvaluationSetupError as exc:
+        print(f"\nCapture failed: {exc}", file=sys.stderr)
+        sys.exit(2)
 
     print(f"\n{'=' * 60}")
     print(f"  Baselines saved to {BASELINES_DIR}/")
@@ -378,28 +528,37 @@ def _run_evaluate(
         if not _build():
             sys.exit(2)
 
-    import _lpt2d
-
-    from .baseline import load_baseline_set
     from .compare import compare_to_baseline
     from .timing import benchmark_scene, classify_speedup, summarize_ratios, summarize_times
 
     scenes = _discover_scenes()
+    build_contract = _build_contract()
+    settings = _render_settings(width, height, rays)
 
-    if not BASELINES_DIR.is_dir():
-        print(
-            "Error: no baselines found. Run `python -m evaluation capture` first.",
-            file=sys.stderr,
+    try:
+        baseline_sets = _load_and_validate_baseline_corpus(
+            scenes,
+            frames=frames,
+            launches=launches,
+            warmup=warmup,
+            settings=settings,
         )
-        sys.exit(3)
+    except EvaluationSetupError as exc:
+        message = str(exc)
+        if message.startswith("no baselines found."):
+            print(f"Error: {message}", file=sys.stderr)
+            sys.exit(3)
+
+        print("Evaluation setup error:", file=sys.stderr)
+        for line in message.splitlines():
+            print(f"  - {line}", file=sys.stderr)
+        sys.exit(2)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     git = _git_info()
     commit = git.get("commit", "unknown")
-    run_dir = RUNS_DIR / f"{timestamp}_{commit}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    build_contract = _build_contract()
-    settings = _render_settings(width, height, rays)
+    run_name = f"{timestamp}_{commit}"
+    final_run_dir = RUNS_DIR / run_name
 
     print("=" * 60)
     print("  EVALUATE")
@@ -410,467 +569,339 @@ def _run_evaluate(
     print(f"  manifest: {SCENE_MANIFEST}")
     print(f"  frames:   {frames}")
     print(f"  launches: {launches}")
-    print(f"  warmup:   {warmup} per launch")
+    print(f"  warmup:   {warmup} base-scene render(s) per launch")
     print(f"  render:   {settings['resolution']} @ {settings['rays']} rays")
     print(f"  build:    {build_contract['requested_configuration']} requested")
-    print(f"  run_dir:  {run_dir}/")
+    print(f"  run_dir:  {final_run_dir}/")
     print("=" * 60)
 
     report_scenes: dict = {}
-    errors: list[str] = []
-    notes: list[str] = []
+    all_cases_report: list[dict] = []
     scene_verdicts: list[str] = []
     all_render_case_ratios: list[float] = []
     all_wall_case_ratios: list[float] = []
-    all_render_case_medians: list[float] = []
-    all_wall_case_medians: list[float] = []
     all_pooled_render_times: list[float] = []
     all_pooled_wall_times: list[float] = []
-    score_cases = 0
+    all_baseline_render_sample_total_ms = 0.0
+    all_baseline_wall_sample_total_ms = 0.0
 
-    for scene_path in scenes:
-        name = scene_path.stem
-        baseline_path = BASELINES_DIR / name
+    try:
+        with tempfile.TemporaryDirectory(prefix="evaluation-run-", dir=str(PROJECT_DIR)) as tmpdir:
+            staging_run_dir = Path(tmpdir) / run_name
+            staging_run_dir.mkdir(parents=True, exist_ok=True)
 
-        if not baseline_path.is_dir():
-            msg = f"{name}: no baseline at {baseline_path}"
-            print(f"\n  [{name}] SKIP — no baseline", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
+            for scene_path in scenes:
+                name = scene_path.stem
+                baseline_set = baseline_sets[name]
+                baseline_cases = baseline_set["cases"]
+                baseline_render_summaries = baseline_set["baseline_render_summaries"]
+                baseline_wall_summaries = baseline_set["baseline_wall_summaries"]
 
-        print(f"\n  [{name}]", flush=True)
+                print(f"\n  [{name}]", flush=True)
+                print(f"    resolution: {settings['resolution']}", flush=True)
+                print(f"    rays:       {settings['rays']}", flush=True)
 
-        try:
-            _lpt2d.load_shot(str(scene_path))
-            print(f"    resolution: {settings['resolution']}", flush=True)
-            print(f"    rays:       {settings['rays']}", flush=True)
-        except Exception as e:
-            msg = f"{name}: failed to load scene: {e}"
-            print(f"    LOAD ERROR: {e}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
+                try:
+                    measurement = benchmark_scene(
+                        str(scene_path),
+                        frames=frames,
+                        launches=launches,
+                        warmup=warmup,
+                        width=width,
+                        height=height,
+                        rays=rays,
+                    )
+                except Exception as exc:
+                    raise EvaluationSetupError(f"{name}: render failed: {exc}") from exc
 
-        try:
-            baseline_set = load_baseline_set(baseline_path)
-            baseline_frames = baseline_set["frames"]
-            baseline_meta = baseline_set.get("metadata") or {}
-        except Exception as e:
-            msg = f"{name}: failed to load baseline: {e}"
-            print(f"    BASELINE ERROR: {e}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
-
-        config_mismatches: list[str] = []
-        for key, expected in (("frames", frames), ("launches", launches), ("warmup", warmup)):
-            actual = baseline_meta.get(key)
-            if actual is not None and actual != expected:
-                config_mismatches.append(f"{key}={actual} (expected {expected})")
-        baseline_render_settings = baseline_meta.get("render_settings")
-        if baseline_render_settings is not None and baseline_render_settings != settings:
-            config_mismatches.append(
-                "render_settings="
-                f"{baseline_render_settings.get('resolution', 'unknown')} / {baseline_render_settings.get('rays', 'unknown')} rays"
-            )
-        if config_mismatches:
-            msg = (
-                f"{name}: baseline contract differs from requested evaluation contract: "
-                + ", ".join(config_mismatches)
-            )
-            print(f"    BASELINE ERROR: {msg}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
-
-        missing_frames = [frame_index for frame_index in range(frames) if frame_index not in baseline_frames]
-        if missing_frames:
-            msg = f"{name}: baseline missing frame(s) {missing_frames}"
-            print(f"    BASELINE ERROR: missing frame(s) {missing_frames}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
-        baseline_frame_zero = baseline_frames[min(baseline_frames)]
-        if (
-            baseline_frame_zero["width"] != width
-            or baseline_frame_zero["height"] != height
-        ):
-            msg = (
-                f"{name}: baseline resolution {baseline_frame_zero['width']}x{baseline_frame_zero['height']}"
-                f" does not match requested {width}x{height}"
-            )
-            print(f"    BASELINE ERROR: {msg}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
-
-        try:
-            measurement = benchmark_scene(
-                str(scene_path),
-                frames=frames,
-                launches=launches,
-                warmup=warmup,
-                width=width,
-                height=height,
-                rays=rays,
-            )
-        except Exception as e:
-            msg = f"{name}: render failed: {e}"
-            print(f"    RENDER ERROR: {e}", file=sys.stderr)
-            errors.append(msg)
-            scene_verdicts.append("fail")
-            continue
-
-        baseline_case_render_summaries: dict[int, object] = {}
-        baseline_case_wall_summaries: dict[int, object] = {}
-        scene_score_note = None
-        for frame_index in range(frames):
-            baseline_render_summary = _summary_from_timing_dict(
-                baseline_frames[frame_index].get("render_timing")
-            )
-            if baseline_render_summary is None:
-                scene_score_note = (
-                    f"{name}: baseline missing per-case render timing for frame {frame_index}; "
-                    "recapture with `python -m evaluation capture`"
-                )
-                break
-            baseline_case_render_summaries[frame_index] = baseline_render_summary
-
-            baseline_wall_summary = _summary_from_timing_dict(
-                baseline_frames[frame_index].get("wall_timing")
-            )
-            if baseline_wall_summary is not None:
-                baseline_case_wall_summaries[frame_index] = baseline_wall_summary
-
-        scene_score_available = scene_score_note is None
-        if scene_score_note is not None:
-            notes.append(scene_score_note)
-
-        all_render_case_medians.extend(
-            case_benchmark.render_summary.median_ms for case_benchmark in measurement.cases.values()
-        )
-        all_wall_case_medians.extend(
-            case_benchmark.wall_summary.median_ms for case_benchmark in measurement.cases.values()
-        )
-        all_pooled_render_times.extend(measurement.pooled_render_summary.times_ms)
-        all_pooled_wall_times.extend(measurement.pooled_wall_summary.times_ms)
-
-        print(
-            f"    render:     case medians {measurement.case_render_summary.median_ms:.1f} ms"
-            f" (mean={measurement.case_render_summary.mean_ms:.1f},"
-            f" min={measurement.case_render_summary.min_ms:.1f},"
-            f" max={measurement.case_render_summary.max_ms:.1f})"
-        )
-        print(
-            f"    wall:       case medians {measurement.case_wall_summary.median_ms:.1f} ms"
-            f" (mean={measurement.case_wall_summary.mean_ms:.1f},"
-            f" min={measurement.case_wall_summary.min_ms:.1f},"
-            f" max={measurement.case_wall_summary.max_ms:.1f})"
-        )
-
-        scene_dir = run_dir / name
-        scene_dir.mkdir(parents=True, exist_ok=True)
-        frame_samples: dict[int, list[dict]] = {frame_index: [] for frame_index in range(frames)}
-        frame_verdicts: dict[int, list[str]] = {frame_index: [] for frame_index in range(frames)}
-        sample_verdicts: list[str] = []
-        sample_non_pass: list[str] = []
-
-        for sample in measurement.samples:
-            img_name = f"launch_{sample.launch_index:02d}_frame_{sample.frame_index:04d}.png"
-            img_path = scene_dir / img_name
-            _save_image(sample.result.pixels, sample.result.width, sample.result.height, img_path)
-
-            fidelity = compare_to_baseline(sample.result, baseline_frames[sample.frame_index])
-            verdict_value = fidelity.verdict.value
-            sample_verdicts.append(verdict_value)
-            frame_verdicts[sample.frame_index].append(verdict_value)
-
-            sample_entry: dict = {
-                "launch_index": sample.launch_index,
-                "frame_index": sample.frame_index,
-                "image": f"{name}/{img_name}",
-                "verdict": verdict_value,
-                "render_time_ms": sample.render_time_ms,
-                "wall_time_ms": sample.wall_time_ms,
-                "psnr": fidelity.psnr if not fidelity.byte_identical else "inf",
-                "ssim": fidelity.ssim,
-                "max_diff": fidelity.max_diff,
-                "byte_identical": fidelity.byte_identical,
-                "pct_changed": fidelity.pct_changed,
-            }
-            if fidelity.metrics:
-                sample_entry["metrics"] = {
-                    "mean_lum_delta": fidelity.metrics.mean_lum_delta,
-                    "histogram_overlap": fidelity.metrics.histogram_overlap,
-                    "p50_delta": fidelity.metrics.p50_delta,
-                    "p95_delta": fidelity.metrics.p95_delta,
-                    "pct_black_delta": fidelity.metrics.pct_black_delta,
-                    "pct_clipped_delta": fidelity.metrics.pct_clipped_delta,
-                    "warnings": fidelity.metrics.warnings,
-                }
-            frame_samples[sample.frame_index].append(sample_entry)
-
-            if verdict_value != "pass":
-                sample_non_pass.append(
-                    f"launch={sample.launch_index} frame={sample.frame_index} verdict={verdict_value}"
+                scene_dir = staging_run_dir / name
+                scene_dir.mkdir(parents=True, exist_ok=True)
+                scene_json_artifacts = _write_case_json_artifacts(
+                    scene_dir,
+                    case_scene_jsons=measurement.case_scene_jsons,
+                    warmup_scene_json=measurement.warmup_scene_json,
                 )
 
-        scene_verdict = _combine_verdicts(sample_verdicts)
-        scene_verdicts.append(scene_verdict)
-        frame_reports: dict[str, dict] = {}
-        scene_render_case_ratios: list[float] = []
-        scene_wall_case_ratios: list[float] = []
-        scene_wall_score_available = scene_score_available
+                case_samples: dict[int, list[dict]] = {case_index: [] for case_index in range(frames)}
+                case_verdicts: dict[int, list[str]] = {case_index: [] for case_index in range(frames)}
+                sample_verdicts: list[str] = []
+                sample_non_pass: list[str] = []
 
-        for frame_index in range(frames):
-            case_benchmark = measurement.cases[frame_index]
-            frame_report: dict = {
-                "verdict": _combine_verdicts(frame_verdicts[frame_index]),
-                "render_timing": _timing_dict(case_benchmark.render_summary),
-                "wall_timing": _timing_dict(case_benchmark.wall_summary),
-                "samples": frame_samples[frame_index],
-            }
+                for sample in measurement.samples:
+                    img_name = f"launch_{sample.launch_index:02d}_case_{sample.frame_index:04d}.png"
+                    img_path = scene_dir / img_name
+                    _save_image(sample.result.pixels, sample.result.width, sample.result.height, img_path)
 
-            if scene_score_available:
-                baseline_render_summary = baseline_case_render_summaries[frame_index]
-                render_ratio = case_benchmark.render_summary.median_ms / baseline_render_summary.median_ms
-                scene_render_case_ratios.append(render_ratio)
-                all_render_case_ratios.append(render_ratio)
-                render_speedup = classify_speedup(baseline_render_summary, case_benchmark.render_summary)
-                frame_report["baseline_render_timing"] = _timing_dict(baseline_render_summary)
-                frame_report["render_ratio"] = render_ratio
-                frame_report["render_speedup"] = render_speedup.speedup
-                frame_report["render_comparison"] = _speedup_dict(render_speedup)
+                    fidelity = compare_to_baseline(sample.result, baseline_cases[sample.frame_index])
+                    verdict_value = fidelity.verdict.value
+                    sample_verdicts.append(verdict_value)
+                    case_verdicts[sample.frame_index].append(verdict_value)
 
-                baseline_wall_summary = baseline_case_wall_summaries.get(frame_index)
-                if baseline_wall_summary is not None:
+                    sample_entry: dict = {
+                        "launch_index": sample.launch_index,
+                        "case_index": sample.frame_index,
+                        "image": f"{name}/{img_name}",
+                        "verdict": verdict_value,
+                        "render_time_ms": sample.render_time_ms,
+                        "wall_time_ms": sample.wall_time_ms,
+                        "psnr": fidelity.psnr if not fidelity.byte_identical else "inf",
+                        "ssim": fidelity.ssim,
+                        "max_diff": fidelity.max_diff,
+                        "byte_identical": fidelity.byte_identical,
+                        "pct_changed": fidelity.pct_changed,
+                    }
+                    if fidelity.metrics:
+                        sample_entry["metrics"] = {
+                            "mean_lum_delta": fidelity.metrics.mean_lum_delta,
+                            "histogram_overlap": fidelity.metrics.histogram_overlap,
+                            "p50_delta": fidelity.metrics.p50_delta,
+                            "p95_delta": fidelity.metrics.p95_delta,
+                            "pct_black_delta": fidelity.metrics.pct_black_delta,
+                            "pct_clipped_delta": fidelity.metrics.pct_clipped_delta,
+                            "warnings": fidelity.metrics.warnings,
+                        }
+                    case_samples[sample.frame_index].append(sample_entry)
+
+                    if verdict_value != "pass":
+                        sample_non_pass.append(
+                            f"launch={sample.launch_index} case={sample.frame_index} verdict={verdict_value}"
+                        )
+
+                scene_verdict = _combine_verdicts(sample_verdicts)
+                scene_verdicts.append(scene_verdict)
+
+                all_pooled_render_times.extend(measurement.pooled_render_summary.times_ms)
+                all_pooled_wall_times.extend(measurement.pooled_wall_summary.times_ms)
+                scene_render_sample_total_ms = _timing_total_ms(measurement.pooled_render_summary)
+                scene_wall_sample_total_ms = _timing_total_ms(measurement.pooled_wall_summary)
+                scene_baseline_render_sample_total_ms = sum(
+                    _timing_total_ms(summary) for summary in baseline_render_summaries.values()
+                )
+                scene_baseline_wall_sample_total_ms = sum(
+                    _timing_total_ms(summary) for summary in baseline_wall_summaries.values()
+                )
+                all_baseline_render_sample_total_ms += scene_baseline_render_sample_total_ms
+                all_baseline_wall_sample_total_ms += scene_baseline_wall_sample_total_ms
+
+                case_reports: dict[str, dict] = {}
+                scene_render_case_ratios: list[float] = []
+                scene_wall_case_ratios: list[float] = []
+                print("    cases:", flush=True)
+                for case_index in range(frames):
+                    case_benchmark = measurement.cases[case_index]
+                    baseline_render_summary = baseline_render_summaries[case_index]
+                    baseline_wall_summary = baseline_wall_summaries[case_index]
+                    case_verdict = _combine_verdicts(case_verdicts[case_index])
+                    render_ratio = case_benchmark.render_summary.median_ms / baseline_render_summary.median_ms
                     wall_ratio = case_benchmark.wall_summary.median_ms / baseline_wall_summary.median_ms
+                    scene_render_case_ratios.append(render_ratio)
                     scene_wall_case_ratios.append(wall_ratio)
+                    all_render_case_ratios.append(render_ratio)
                     all_wall_case_ratios.append(wall_ratio)
+
+                    render_speedup = classify_speedup(baseline_render_summary, case_benchmark.render_summary)
                     wall_speedup = classify_speedup(baseline_wall_summary, case_benchmark.wall_summary)
-                    frame_report["baseline_wall_timing"] = _timing_dict(baseline_wall_summary)
-                    frame_report["wall_ratio"] = wall_ratio
-                    frame_report["wall_speedup"] = wall_speedup.speedup
-                    frame_report["wall_comparison"] = _speedup_dict(wall_speedup)
-                else:
-                    scene_wall_score_available = False
+                    render_sample_total_ms = _timing_total_ms(case_benchmark.render_summary)
+                    baseline_render_sample_total_ms = _timing_total_ms(baseline_render_summary)
+                    wall_sample_total_ms = _timing_total_ms(case_benchmark.wall_summary)
+                    baseline_wall_sample_total_ms = _timing_total_ms(baseline_wall_summary)
 
-            frame_reports[str(frame_index)] = frame_report
+                    print(
+                        f"    case {case_index:02d}: {case_verdict.upper()}"
+                        f" render={case_benchmark.render_summary.median_ms:.1f}/{baseline_render_summary.median_ms:.1f}ms"
+                        f" ratio={render_ratio:.4f}"
+                        f" wall={case_benchmark.wall_summary.median_ms:.1f}/{baseline_wall_summary.median_ms:.1f}ms"
+                    )
 
-        comparison_counts = {
-            "pass": sum(1 for verdict in sample_verdicts if verdict == "pass"),
-            "warn": sum(1 for verdict in sample_verdicts if verdict == "warn"),
-            "fail": sum(1 for verdict in sample_verdicts if verdict == "fail"),
-        }
+                    case_reports[str(case_index)] = {
+                        "case_index": case_index,
+                        "verdict": case_verdict,
+                        "scene_json": f"{name}/{scene_json_artifacts['cases'][str(case_index)]}",
+                        "render_median_ms": case_benchmark.render_summary.median_ms,
+                        "baseline_render_median_ms": baseline_render_summary.median_ms,
+                        "render_sample_total_ms": render_sample_total_ms,
+                        "baseline_render_sample_total_ms": baseline_render_sample_total_ms,
+                        "render_timing": _timing_dict(case_benchmark.render_summary),
+                        "baseline_render_timing": _timing_dict(baseline_render_summary),
+                        "wall_median_ms": case_benchmark.wall_summary.median_ms,
+                        "baseline_wall_median_ms": baseline_wall_summary.median_ms,
+                        "wall_sample_total_ms": wall_sample_total_ms,
+                        "baseline_wall_sample_total_ms": baseline_wall_sample_total_ms,
+                        "wall_timing": _timing_dict(case_benchmark.wall_summary),
+                        "baseline_wall_timing": _timing_dict(baseline_wall_summary),
+                        "render_ratio": render_ratio,
+                        "render_speedup": render_speedup.speedup,
+                        "render_comparison": _speedup_dict(render_speedup),
+                        "wall_ratio": wall_ratio,
+                        "wall_speedup": wall_speedup.speedup,
+                        "wall_comparison": _speedup_dict(wall_speedup),
+                        "samples": case_samples[case_index],
+                    }
+                    all_cases_report.append(
+                        {
+                            "scene": name,
+                            "case_index": case_index,
+                            "verdict": case_verdict,
+                            "render_median_ms": case_benchmark.render_summary.median_ms,
+                            "baseline_render_median_ms": baseline_render_summary.median_ms,
+                            "render_sample_total_ms": render_sample_total_ms,
+                            "baseline_render_sample_total_ms": baseline_render_sample_total_ms,
+                            "render_ratio": render_ratio,
+                            "render_speedup": render_speedup.speedup,
+                            "wall_median_ms": case_benchmark.wall_summary.median_ms,
+                            "baseline_wall_median_ms": baseline_wall_summary.median_ms,
+                            "wall_sample_total_ms": wall_sample_total_ms,
+                            "baseline_wall_sample_total_ms": baseline_wall_sample_total_ms,
+                            "wall_ratio": wall_ratio,
+                            "wall_speedup": wall_speedup.speedup,
+                        }
+                    )
 
-        scene_render_ratio_summary = None
-        if scene_score_available and len(scene_render_case_ratios) == frames:
-            scene_render_ratio_summary = summarize_ratios(scene_render_case_ratios)
-            score_cases += len(scene_render_case_ratios)
-        scene_wall_ratio_summary = None
-        if scene_wall_score_available and len(scene_wall_case_ratios) == frames:
-            scene_wall_ratio_summary = summarize_ratios(scene_wall_case_ratios)
+                comparison_counts = {
+                    "pass": sum(1 for verdict in sample_verdicts if verdict == "pass"),
+                    "warn": sum(1 for verdict in sample_verdicts if verdict == "warn"),
+                    "fail": sum(1 for verdict in sample_verdicts if verdict == "fail"),
+                }
+                scene_render_ratio_summary = summarize_ratios(scene_render_case_ratios)
+                scene_wall_ratio_summary = summarize_ratios(scene_wall_case_ratios)
 
-        if scene_render_ratio_summary is not None:
-            print(
-                f"    score:      ratio_gmean={scene_render_ratio_summary.geometric_mean:.4f}"
-                f" speedup_gmean={scene_render_ratio_summary.speedup_gmean:.4f}x"
-            )
-        else:
-            print("    score:      skipped (baseline lacks per-case timing metadata)")
-        if scene_wall_ratio_summary is not None:
-            print(
-                f"    wall score: ratio_gmean={scene_wall_ratio_summary.geometric_mean:.4f}"
-                f" speedup_gmean={scene_wall_ratio_summary.speedup_gmean:.4f}x"
-            )
-        print(
-            f"    verdict:    {scene_verdict.upper()}"
-            f" across {measurement.sample_count} sample(s)"
-        )
-        for entry in sample_non_pass[:8]:
-            print(f"    sample:     {entry}")
+                print(
+                    f"    score:      ratio_gmean={scene_render_ratio_summary.geometric_mean:.4f}"
+                    f" speedup_gmean={scene_render_ratio_summary.speedup_gmean:.4f}x"
+                )
+                print(
+                    f"    wall score: ratio_gmean={scene_wall_ratio_summary.geometric_mean:.4f}"
+                    f" speedup_gmean={scene_wall_ratio_summary.speedup_gmean:.4f}x"
+                )
+                print(
+                    f"    totals:     render={scene_render_sample_total_ms:.1f}ms"
+                    f" baseline_render={scene_baseline_render_sample_total_ms:.1f}ms"
+                    f" wall={scene_wall_sample_total_ms:.1f}ms"
+                    f" baseline_wall={scene_baseline_wall_sample_total_ms:.1f}ms"
+                )
+                print(
+                    f"    verdict:    {scene_verdict.upper()}"
+                    f" across {measurement.sample_count} sample(s)"
+                )
+                for entry in sample_non_pass[:8]:
+                    print(f"    sample:     {entry}")
 
-        scene_report: dict = {
-            "verdict": scene_verdict,
-            "samples": measurement.sample_count,
-            "cases": measurement.case_count,
-            "frames_per_launch": frames,
-            "launches": launches,
-            "warmup": warmup,
-            "render_settings": settings,
-            "comparison_counts": comparison_counts,
-            "render_case_timing": _timing_dict(measurement.case_render_summary),
-            "wall_case_timing": _timing_dict(measurement.case_wall_summary),
-            "pooled_render_timing": _timing_dict(measurement.pooled_render_summary),
-            "pooled_wall_timing": _timing_dict(measurement.pooled_wall_summary),
-            "benchmark_score_available": scene_render_ratio_summary is not None,
-            "frames": frame_reports,
-        }
-        if scene_render_ratio_summary is not None:
-            scene_report["render_ratio"] = _ratio_dict(scene_render_ratio_summary)
-        if scene_wall_ratio_summary is not None:
-            scene_report["wall_ratio"] = _ratio_dict(scene_wall_ratio_summary)
-        if scene_score_note is not None:
-            scene_report["benchmark_note"] = scene_score_note
-        report_scenes[name] = scene_report
+                report_scenes[name] = {
+                    "verdict": scene_verdict,
+                    "case_count": measurement.case_count,
+                    "sample_count": measurement.sample_count,
+                    "frames_per_scene": frames,
+                    "launches": launches,
+                    "warmup": warmup,
+                    "warmup_mode": WARMUP_MODE,
+                    "render_settings": settings,
+                    "warmup_scene_json": f"{name}/{scene_json_artifacts['warmup']}",
+                    "comparison_counts": comparison_counts,
+                    "pooled_render_timing": _timing_dict(measurement.pooled_render_summary),
+                    "pooled_wall_timing": _timing_dict(measurement.pooled_wall_summary),
+                    "totals": {
+                        "render_sample_total_ms": scene_render_sample_total_ms,
+                        "baseline_render_sample_total_ms": scene_baseline_render_sample_total_ms,
+                        "wall_sample_total_ms": scene_wall_sample_total_ms,
+                        "baseline_wall_sample_total_ms": scene_baseline_wall_sample_total_ms,
+                    },
+                    "render_ratio": _ratio_dict(scene_render_ratio_summary),
+                    "wall_ratio": _ratio_dict(scene_wall_ratio_summary),
+                    "cases": case_reports,
+                }
 
-    overall_verdict = _combine_verdicts(scene_verdicts) if scene_verdicts else "fail"
-    overall_render_case_summary = (
-        summarize_times(all_render_case_medians) if all_render_case_medians else None
-    )
-    overall_wall_case_summary = summarize_times(all_wall_case_medians) if all_wall_case_medians else None
-    overall_pooled_render_summary = (
-        summarize_times(all_pooled_render_times) if all_pooled_render_times else None
-    )
-    overall_pooled_wall_summary = summarize_times(all_pooled_wall_times) if all_pooled_wall_times else None
-    overall_render_ratio_summary = (
-        summarize_ratios(all_render_case_ratios) if all_render_case_ratios else None
-    )
-    overall_wall_ratio_summary = (
-        summarize_ratios(all_wall_case_ratios)
-        if all_wall_case_ratios and len(all_wall_case_ratios) == len(all_render_case_ratios)
-        else None
-    )
-    corpus_complete = len(report_scenes) == len(scenes)
-    benchmark_score_available = corpus_complete and overall_render_ratio_summary is not None
+            overall_verdict = _combine_verdicts(scene_verdicts) if scene_verdicts else "fail"
+            overall_pooled_render_summary = summarize_times(all_pooled_render_times)
+            overall_pooled_wall_summary = summarize_times(all_pooled_wall_times)
+            overall_render_ratio_summary = summarize_ratios(all_render_case_ratios)
+            overall_wall_ratio_summary = summarize_ratios(all_wall_case_ratios)
+            overall_render_sample_total_ms = _timing_total_ms(overall_pooled_render_summary)
+            overall_wall_sample_total_ms = _timing_total_ms(overall_pooled_wall_summary)
 
-    report = {
-        "timestamp": timestamp,
-        "commit": commit,
-        "branch": git.get("branch"),
-        "dirty": git.get("dirty"),
-        "verdict": overall_verdict,
-        "corpus_complete": corpus_complete,
-        "benchmark_score_available": benchmark_score_available,
-        "scenes_evaluated": len(report_scenes),
-        "scene_manifest": str(SCENE_MANIFEST),
-        "scene_names": [scene_path.stem for scene_path in scenes],
-        "frames_per_launch": frames,
-        "launches": launches,
-        "warmup": warmup,
-        "render_settings": settings,
-        "cases": len(all_render_case_medians),
-        "score_cases": score_cases,
-        "samples": len(all_pooled_render_times),
-        "render_case_median_ms": round(overall_render_case_summary.median_ms, 1)
-        if overall_render_case_summary
-        else None,
-        "wall_case_median_ms": round(overall_wall_case_summary.median_ms, 1)
-        if overall_wall_case_summary
-        else None,
-        "render_ratio_gmean": overall_render_ratio_summary.geometric_mean
-        if overall_render_ratio_summary
-        else None,
-        "render_speedup_gmean": overall_render_ratio_summary.speedup_gmean
-        if overall_render_ratio_summary
-        else None,
-        "wall_ratio_gmean": overall_wall_ratio_summary.geometric_mean
-        if overall_wall_ratio_summary
-        else None,
-        "wall_speedup_gmean": overall_wall_ratio_summary.speedup_gmean
-        if overall_wall_ratio_summary
-        else None,
-        "errors": errors,
-        "notes": notes,
-        "overall": {
-            "render_case_timing": _timing_dict(overall_render_case_summary)
-            if overall_render_case_summary
-            else None,
-            "wall_case_timing": _timing_dict(overall_wall_case_summary)
-            if overall_wall_case_summary
-            else None,
-            "pooled_render_timing": _timing_dict(overall_pooled_render_summary)
-            if overall_pooled_render_summary
-            else None,
-            "pooled_wall_timing": _timing_dict(overall_pooled_wall_summary)
-            if overall_pooled_wall_summary
-            else None,
-            "render_ratio": _ratio_dict(overall_render_ratio_summary)
-            if overall_render_ratio_summary
-            else None,
-            "wall_ratio": _ratio_dict(overall_wall_ratio_summary)
-            if overall_wall_ratio_summary
-            else None,
-        },
-        "build": {
-            "requested_configuration": build_contract["requested_configuration"],
-            "configure_command": build_contract["configure_command"],
-            "build_command": build_contract["build_command"],
-        },
-        "scenes": report_scenes,
-    }
+            report = {
+                "schema_version": 1,
+                "timestamp": timestamp,
+                "commit": commit,
+                "branch": git.get("branch"),
+                "dirty": git.get("dirty"),
+                "verdict": overall_verdict,
+                "scene_manifest": str(SCENE_MANIFEST),
+                "scene_names": [scene_path.stem for scene_path in scenes],
+                "scene_count": len(report_scenes),
+                "frames_per_scene": frames,
+                "launches": launches,
+                "warmup": warmup,
+                "warmup_mode": WARMUP_MODE,
+                "render_settings": settings,
+                "case_count": len(all_render_case_ratios),
+                "sample_count": len(all_pooled_render_times),
+                "totals": {
+                    "render_sample_total_ms": overall_render_sample_total_ms,
+                    "baseline_render_sample_total_ms": all_baseline_render_sample_total_ms,
+                    "wall_sample_total_ms": overall_wall_sample_total_ms,
+                    "baseline_wall_sample_total_ms": all_baseline_wall_sample_total_ms,
+                },
+                "render_ratio_gmean": overall_render_ratio_summary.geometric_mean,
+                "render_speedup_gmean": overall_render_ratio_summary.speedup_gmean,
+                "wall_ratio_gmean": overall_wall_ratio_summary.geometric_mean,
+                "wall_speedup_gmean": overall_wall_ratio_summary.speedup_gmean,
+                "overall": {
+                    "pooled_render_timing": _timing_dict(overall_pooled_render_summary),
+                    "pooled_wall_timing": _timing_dict(overall_pooled_wall_summary),
+                    "render_ratio": _ratio_dict(overall_render_ratio_summary),
+                    "wall_ratio": _ratio_dict(overall_wall_ratio_summary),
+                },
+                "build": {
+                    "requested_configuration": build_contract["requested_configuration"],
+                    "configure_command": build_contract["configure_command"],
+                    "build_command": build_contract["build_command"],
+                },
+                "all_cases": all_cases_report,
+                "scenes": report_scenes,
+            }
 
-    report_path = run_dir / "report.json"
-    report_path.write_text(json.dumps(report, indent=2, default=str) + "\n")
+            report_path = staging_run_dir / "report.json"
+            report_path.write_text(json.dumps(report, indent=2, default=str) + "\n")
+
+            RUNS_DIR.mkdir(parents=True, exist_ok=True)
+            _replace_directory(staging_run_dir, final_run_dir)
+    except EvaluationSetupError as exc:
+        print(f"Evaluation failed: {exc}", file=sys.stderr)
+        sys.exit(2)
+
+    final_report_path = final_run_dir / "report.json"
 
     print(f"\n{'=' * 60}")
     print("  SUMMARY")
     print(f"{'=' * 60}")
-
-    if errors:
-        print(f"\n  Errors ({len(errors)}):")
-        for error in errors:
-            print(f"    - {error}")
-    if notes:
-        print(f"\n  Notes ({len(notes)}):")
-        for note in notes:
-            print(f"    - {note}")
-
-    if corpus_complete and overall_render_case_summary:
-        print()
-        if overall_render_ratio_summary is not None:
-            print(
-                f"overall:    {overall_verdict.upper()}"
-                f" ratio={overall_render_ratio_summary.geometric_mean:.4f}"
-                f" speedup={overall_render_ratio_summary.speedup_gmean:.4f}x"
-                f" render_case={overall_render_case_summary.median_ms:.1f}ms"
-                f" scenes={len(report_scenes)}"
-                f" cases={len(all_render_case_medians)}"
-                f" samples={len(all_pooled_render_times)}"
-            )
-        else:
-            print(
-                f"overall:    {overall_verdict.upper()}"
-                f" ratio=n/a"
-                f" speedup=n/a"
-                f" render_case={overall_render_case_summary.median_ms:.1f}ms"
-                f" scenes={len(report_scenes)}"
-                f" cases={len(all_render_case_medians)}"
-                f" samples={len(all_pooled_render_times)}"
-            )
-        print(f"verdict:    {overall_verdict}")
-        print(f"fidelity_verdict: {overall_verdict}")
-        print(f"benchmark_score_available: {'yes' if benchmark_score_available else 'no'}")
-        print(f"scenes:     {len(report_scenes)}")
-        print(f"cases:      {len(all_render_case_medians)}")
-        print(f"frames:     {frames}")
-        print(f"launches:   {launches}")
-        print(f"resolution: {settings['resolution']}")
-        print(f"rays:       {settings['rays']}")
-        print(f"samples:    {len(all_pooled_render_times)}")
-        print(f"render_case_median_ms: {overall_render_case_summary.median_ms:.1f}")
-        if overall_wall_case_summary:
-            print(f"wall_case_median_ms: {overall_wall_case_summary.median_ms:.1f}")
-        if overall_render_ratio_summary is not None:
-            print(f"render_ratio_gmean: {overall_render_ratio_summary.geometric_mean:.6f}")
-            print(f"render_speedup_gmean: {overall_render_ratio_summary.speedup_gmean:.6f}")
-        else:
-            print("render_ratio_gmean: unavailable")
-            print("render_speedup_gmean: unavailable")
-        if overall_wall_ratio_summary is not None:
-            print(f"wall_ratio_gmean: {overall_wall_ratio_summary.geometric_mean:.6f}")
-            print(f"wall_speedup_gmean: {overall_wall_ratio_summary.speedup_gmean:.6f}")
-        else:
-            print("wall_ratio_gmean: unavailable")
-            print("wall_speedup_gmean: unavailable")
-        print(f"run_dir:    {run_dir}/")
-        print(f"report:     {report_path}")
-    else:
-        print()
-        print(f"verdict:    {overall_verdict} (corpus incomplete or no scenes evaluated)")
-        overall_verdict = "fail"
-
+    print()
+    print(
+        f"overall:    {overall_verdict.upper()}"
+        f" ratio={overall_render_ratio_summary.geometric_mean:.4f}"
+        f" speedup={overall_render_ratio_summary.speedup_gmean:.4f}x"
+        f" scenes={len(report_scenes)}"
+        f" cases={len(all_render_case_ratios)}"
+        f" samples={len(all_pooled_render_times)}"
+    )
+    print(f"verdict:    {overall_verdict}")
+    print(f"scenes:     {len(report_scenes)}")
+    print(f"cases:      {len(all_render_case_ratios)}")
+    print(f"frames:     {frames}")
+    print(f"launches:   {launches}")
+    print(f"warmup:     {warmup} base-scene render(s) per launch")
+    print(f"resolution: {settings['resolution']}")
+    print(f"rays:       {settings['rays']}")
+    print(f"samples:    {len(all_pooled_render_times)}")
+    print(f"render_sample_total_ms: {overall_render_sample_total_ms:.1f}")
+    print(f"baseline_render_sample_total_ms: {all_baseline_render_sample_total_ms:.1f}")
+    print(f"wall_sample_total_ms: {overall_wall_sample_total_ms:.1f}")
+    print(f"baseline_wall_sample_total_ms: {all_baseline_wall_sample_total_ms:.1f}")
+    print(f"render_ratio_gmean: {overall_render_ratio_summary.geometric_mean:.6f}")
+    print(f"render_speedup_gmean: {overall_render_ratio_summary.speedup_gmean:.6f}")
+    print(f"wall_ratio_gmean: {overall_wall_ratio_summary.geometric_mean:.6f}")
+    print(f"wall_speedup_gmean: {overall_wall_ratio_summary.speedup_gmean:.6f}")
+    print(f"run_dir:    {final_run_dir}/")
+    print(f"report:     {final_report_path}")
     print(f"\n{'=' * 60}")
     sys.exit(0 if overall_verdict == "pass" else 1)
 
@@ -909,19 +940,12 @@ def main() -> None:
         elif args[i] == "--frames" and i + 1 < len(args):
             i += 1
             frames = int(args[i])
-        elif args[i] == "--repeats" and i + 1 < len(args):
-            i += 1
-            frames = int(args[i])
-            print("Warning: `--repeats` is deprecated; use `--frames`.", file=sys.stderr)
         elif args[i] == "--launches" and i + 1 < len(args):
             i += 1
             launches = int(args[i])
         elif args[i] == "--warmup" and i + 1 < len(args):
             i += 1
             warmup = int(args[i])
-        elif args[i] == "--animate":
-            print("`--animate` was removed; use `--frames N` instead.", file=sys.stderr)
-            sys.exit(2)
         elif args[i] in ("capture", "evaluate"):
             command = args[i]
         elif args[i] in ("-h", "--help"):

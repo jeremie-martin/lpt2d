@@ -92,6 +92,8 @@ class SceneBenchmark:
 
     samples: list[TimedFrame]
     cases: dict[int, CaseBenchmark]
+    case_scene_jsons: dict[int, str]
+    warmup_scene_json: str
     pooled_render_summary: TimingSummary
     pooled_wall_summary: TimingSummary
     case_render_summary: TimingSummary
@@ -191,7 +193,11 @@ def _apply_render_settings(shot, *, width: int | None, height: int | None, rays:
     return shot
 
 
-def _build_frame_shots(
+def _scene_json_text(scene_dict: dict) -> str:
+    return json.dumps(scene_dict, indent=2) + "\n"
+
+
+def _build_benchmark_inputs(
     scene_path: str,
     frames: int,
     *,
@@ -199,7 +205,7 @@ def _build_frame_shots(
     height: int | None,
     rays: int | None,
 ):
-    """Prepare deterministic frame shots once and reuse them across launches."""
+    """Prepare a warm-up shot plus deterministic benchmark cases."""
     import _lpt2d
 
     from .animate import animate_scene
@@ -207,26 +213,40 @@ def _build_frame_shots(
     if frames < 1:
         raise ValueError("frames must be >= 1")
 
-    if frames == 1:
-        return [_apply_render_settings(_lpt2d.load_shot(scene_path), width=width, height=height, rays=rays)]
-
     scene_dict = json.loads(Path(scene_path).read_text())
-    shots = []
+    warmup_scene_json = _scene_json_text(scene_dict)
+    case_scene_jsons: dict[int, str] = {}
+    case_shots = []
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_root = Path(tmpdir)
-        for frame_index in range(frames):
-            modified = animate_scene(scene_dict, frame_index, frames)
-            tmp_path = tmp_root / f"frame_{frame_index:04d}.json"
-            tmp_path.write_text(json.dumps(modified))
-            shots.append(
+        warmup_path = tmp_root / "warmup.json"
+        warmup_path.write_text(warmup_scene_json)
+        warmup_shot = _apply_render_settings(
+            _lpt2d.load_shot(str(warmup_path)),
+            width=width,
+            height=height,
+            rays=rays,
+        )
+
+        for case_index in range(frames):
+            if frames == 1:
+                case_scene_json = warmup_scene_json
+            else:
+                case_scene_json = _scene_json_text(animate_scene(scene_dict, case_index, frames))
+
+            case_path = tmp_root / f"case_{case_index:04d}.json"
+            case_path.write_text(case_scene_json)
+            case_shots.append(
                 _apply_render_settings(
-                    _lpt2d.load_shot(str(tmp_path)),
+                    _lpt2d.load_shot(str(case_path)),
                     width=width,
                     height=height,
                     rays=rays,
                 )
             )
-    return shots
+            case_scene_jsons[case_index] = case_scene_json
+
+    return warmup_shot, warmup_scene_json, case_shots, case_scene_jsons
 
 
 def _close_session(session: Any) -> None:
@@ -260,32 +280,26 @@ def benchmark_scene(
     if warmup < 0:
         raise ValueError("warmup must be >= 0")
 
-    base_shot = _apply_render_settings(
-        _lpt2d.load_shot(scene_path),
+    warmup_shot, warmup_scene_json, case_shots, case_scene_jsons = _build_benchmark_inputs(
+        scene_path,
+        frames,
         width=width,
         height=height,
         rays=rays,
     )
-    frame_shots = _build_frame_shots(
-        scene_path,
-        frames,
-        width=base_shot.canvas.width,
-        height=base_shot.canvas.height,
-        rays=base_shot.trace.rays,
-    )
 
     samples: list[TimedFrame] = []
-    width = base_shot.canvas.width
-    height = base_shot.canvas.height
+    width = warmup_shot.canvas.width
+    height = warmup_shot.canvas.height
 
     for launch_index in range(launches):
         session = _lpt2d.RenderSession(width, height)
         try:
-            for warmup_index in range(warmup):
-                frame_index = warmup_index % frames
-                session.render_shot(frame_shots[frame_index], frame_index)
+            # Warm up the session on the base scene before the timed case sweep.
+            for _ in range(warmup):
+                session.render_shot(warmup_shot, 0)
 
-            for frame_index, frame_shot in enumerate(frame_shots):
+            for frame_index, frame_shot in enumerate(case_shots):
                 wall_t0 = time.perf_counter()
                 result = session.render_shot(frame_shot, frame_index)
                 wall_ms = (time.perf_counter() - wall_t0) * 1000.0
@@ -320,6 +334,8 @@ def benchmark_scene(
     return SceneBenchmark(
         samples=samples,
         cases=cases,
+        case_scene_jsons=case_scene_jsons,
+        warmup_scene_json=warmup_scene_json,
         pooled_render_summary=summarize_times([sample.render_time_ms for sample in samples]),
         pooled_wall_summary=summarize_times([sample.wall_time_ms for sample in samples]),
         case_render_summary=summarize_times(
