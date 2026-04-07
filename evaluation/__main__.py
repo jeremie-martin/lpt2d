@@ -7,6 +7,7 @@ Usage:
     python -m evaluation --frames 5       Timed deterministic frames per launch
     python -m evaluation --launches 3     Fresh render sessions per scene
     python -m evaluation --warmup 1       Warm-up frames discarded per launch
+    python -m evaluation --resolution 1280x720 --rays 2000000
 
 Artifacts are saved to runs/<timestamp>/ with rendered images, a JSON report,
 and a human-readable summary. The path is printed at the end.
@@ -27,12 +28,16 @@ from PIL import Image
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 BUILD_DIR = PROJECT_DIR / "build"
 SCENES_DIR = Path(__file__).resolve().parent / "scenes"
+SCENE_MANIFEST = SCENES_DIR / "manifest.json"
 BASELINES_DIR = PROJECT_DIR / "baselines"
 RUNS_DIR = PROJECT_DIR / "runs"
 
 DEFAULT_FRAMES = 5
 DEFAULT_LAUNCHES = 3
 DEFAULT_WARMUP = 1
+DEFAULT_WIDTH = 1280
+DEFAULT_HEIGHT = 720
+DEFAULT_RAYS = 2_000_000
 
 
 # ── Build ────────────────────────────────────────────────────────────────
@@ -47,15 +52,24 @@ def _nproc() -> int:
 def _build() -> bool:
     """Build C++ and reinstall Python package. Returns True on success."""
     t0 = time.monotonic()
+    build_contract = _build_contract()
 
     print("=" * 60)
     print("  BUILD")
     print("=" * 60)
 
+    # Configure explicitly so this command remains the authoritative path and
+    # enforces a Release-grade build on single-config generators.
+    print("\n[cmake] Configuring C++ build...\n", flush=True)
+    r = subprocess.run(build_contract["configure_command"], cwd=str(PROJECT_DIR))
+    if r.returncode != 0:
+        print(f"\n[cmake] CONFIGURE FAILED (exit {r.returncode})", file=sys.stderr)
+        return False
+
     # cmake build — stream output so compiler errors are visible
     print("\n[cmake] Building C++...\n", flush=True)
     r = subprocess.run(
-        ["cmake", "--build", str(BUILD_DIR), f"-j{_nproc()}"],
+        build_contract["build_command"],
         cwd=str(PROJECT_DIR),
     )
     if r.returncode != 0:
@@ -81,13 +95,26 @@ def _build() -> bool:
 
 
 def _discover_scenes() -> list[Path]:
-    if not SCENES_DIR.is_dir():
-        print(f"Error: no scenes directory at {SCENES_DIR}", file=sys.stderr)
+    if not SCENE_MANIFEST.is_file():
+        print(f"Error: no scene manifest at {SCENE_MANIFEST}", file=sys.stderr)
         sys.exit(2)
-    scenes = sorted(SCENES_DIR.glob("*.json"))
-    if not scenes:
-        print(f"Error: no .json files in {SCENES_DIR}", file=sys.stderr)
+    manifest = json.loads(SCENE_MANIFEST.read_text())
+    entries = manifest.get("scenes", [])
+    if not entries:
+        print(f"Error: no scenes listed in {SCENE_MANIFEST}", file=sys.stderr)
         sys.exit(2)
+
+    scenes: list[Path] = []
+    for entry in entries:
+        rel_path = entry.get("file")
+        if not rel_path:
+            print(f"Error: scene manifest entry missing `file`: {entry}", file=sys.stderr)
+            sys.exit(2)
+        scene_path = SCENES_DIR / rel_path
+        if not scene_path.is_file():
+            print(f"Error: scene manifest references missing file {scene_path}", file=sys.stderr)
+            sys.exit(2)
+        scenes.append(scene_path)
     return scenes
 
 
@@ -116,9 +143,60 @@ def _git_info() -> dict:
         )
         if r.returncode == 0:
             info["branch"] = r.stdout.strip()
+        r = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=str(PROJECT_DIR),
+        )
+        if r.returncode == 0:
+            info["dirty"] = bool(r.stdout.strip())
     except FileNotFoundError:
         pass
     return info
+
+
+def _build_contract() -> dict:
+    """Return the build contract this command requests from CMake."""
+    return {
+        "requested_configuration": "Release",
+        "configure_command": [
+            "cmake",
+            "-S",
+            str(PROJECT_DIR),
+            "-B",
+            str(BUILD_DIR),
+            "-DCMAKE_BUILD_TYPE=Release",
+        ],
+        "build_command": [
+            "cmake",
+            "--build",
+            str(BUILD_DIR),
+            "--config",
+            "Release",
+            f"-j{_nproc()}",
+        ],
+    }
+
+
+def _render_settings(width: int, height: int, rays: int) -> dict:
+    return {
+        "width": width,
+        "height": height,
+        "resolution": f"{width}x{height}",
+        "rays": rays,
+    }
+
+
+def _parse_resolution(value: str) -> tuple[int, int]:
+    parts = value.lower().split("x", 1)
+    if len(parts) != 2:
+        raise ValueError(f"invalid resolution `{value}`; expected WIDTHxHEIGHT")
+    width = int(parts[0])
+    height = int(parts[1])
+    if width < 1 or height < 1:
+        raise ValueError(f"invalid resolution `{value}`; width and height must be > 0")
+    return width, height
 
 
 # ── Timing/report helpers ────────────────────────────────────────────────
@@ -175,7 +253,7 @@ def _speedup_dict(result) -> dict:
 # ── Capture ──────────────────────────────────────────────────────────────
 
 
-def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int) -> None:
+def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, width: int, height: int, rays: int) -> None:
     if not skip_build:
         if not _build():
             sys.exit(2)
@@ -187,13 +265,18 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int) -> N
 
     scenes = _discover_scenes()
     BASELINES_DIR.mkdir(parents=True, exist_ok=True)
+    build_contract = _build_contract()
+    settings = _render_settings(width, height, rays)
 
     print("=" * 60)
     print("  CAPTURE BASELINE")
     print(f"  scenes:    {len(scenes)}")
+    print(f"  manifest:  {SCENE_MANIFEST}")
     print(f"  frames:    {frames}")
     print(f"  launches:  {launches}")
     print(f"  warmup:    {warmup} per launch")
+    print(f"  render:    {settings['resolution']} @ {settings['rays']} rays")
+    print(f"  build:     {build_contract['requested_configuration']} requested")
     print("=" * 60)
 
     for scene_path in scenes:
@@ -202,16 +285,24 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int) -> N
 
         try:
             shot = _lpt2d.load_shot(str(scene_path))
-            res = f"{shot.canvas.width}x{shot.canvas.height}"
         except Exception as e:
             print(f"    LOAD ERROR: {e}", file=sys.stderr)
             continue
 
-        print(f"    resolution: {res}", flush=True)
+        print(f"    resolution: {settings['resolution']}", flush=True)
+        print(f"    rays:       {settings['rays']}", flush=True)
         print(f"    measuring:  {launches} launch(es) x {frames} frame(s)...", flush=True)
 
         try:
-            measurement = benchmark_scene(str(scene_path), frames=frames, launches=launches, warmup=warmup)
+            measurement = benchmark_scene(
+                str(scene_path),
+                frames=frames,
+                launches=launches,
+                warmup=warmup,
+                width=width,
+                height=height,
+                rays=rays,
+            )
         except Exception as e:
             print(f"    RENDER ERROR: {e}", file=sys.stderr)
             continue
@@ -241,6 +332,7 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int) -> N
                 "frames": frames,
                 "launches": launches,
                 "warmup": warmup,
+                "render_settings": settings,
                 "render_timing": _timing_dict(measurement.render_summary),
                 "wall_timing": _timing_dict(measurement.wall_summary),
             },
@@ -255,7 +347,15 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int) -> N
 # ── Evaluate ─────────────────────────────────────────────────────────────
 
 
-def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> None:
+def _run_evaluate(
+    skip_build: bool,
+    frames: int,
+    launches: int,
+    warmup: int,
+    width: int,
+    height: int,
+    rays: int,
+) -> None:
     if not skip_build:
         if not _build():
             sys.exit(2)
@@ -280,15 +380,21 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
     commit = git.get("commit", "unknown")
     run_dir = RUNS_DIR / f"{timestamp}_{commit}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    build_contract = _build_contract()
+    settings = _render_settings(width, height, rays)
 
     print("=" * 60)
     print("  EVALUATE")
     print(f"  commit:   {commit}")
     print(f"  branch:   {git.get('branch', 'unknown')}")
+    print(f"  dirty:    {'yes' if git.get('dirty') else 'no'}")
     print(f"  scenes:   {len(scenes)}")
+    print(f"  manifest: {SCENE_MANIFEST}")
     print(f"  frames:   {frames}")
     print(f"  launches: {launches}")
     print(f"  warmup:   {warmup} per launch")
+    print(f"  render:   {settings['resolution']} @ {settings['rays']} rays")
+    print(f"  build:    {build_contract['requested_configuration']} requested")
     print(f"  run_dir:  {run_dir}/")
     print("=" * 60)
 
@@ -317,8 +423,8 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
 
         try:
             shot = _lpt2d.load_shot(str(scene_path))
-            res = f"{shot.canvas.width}x{shot.canvas.height}"
-            print(f"    resolution: {res}", flush=True)
+            print(f"    resolution: {settings['resolution']}", flush=True)
+            print(f"    rays:       {settings['rays']}", flush=True)
         except Exception as e:
             msg = f"{name}: failed to load scene: {e}"
             print(f"    LOAD ERROR: {e}", file=sys.stderr)
@@ -344,6 +450,13 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
             if actual is not None and actual != expected:
                 baseline_timing_compatible = False
                 config_mismatches.append(f"{key}={actual} (expected {expected})")
+        baseline_render_settings = baseline_meta.get("render_settings")
+        if baseline_render_settings is not None and baseline_render_settings != settings:
+            baseline_timing_compatible = False
+            config_mismatches.append(
+                "render_settings="
+                f"{baseline_render_settings.get('resolution', 'unknown')} / {baseline_render_settings.get('rays', 'unknown')} rays"
+            )
 
         missing_frames = [frame_index for frame_index in range(frames) if frame_index not in baseline_frames]
         if missing_frames:
@@ -352,9 +465,30 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
             errors.append(msg)
             scene_verdicts.append("fail")
             continue
+        baseline_frame_zero = baseline_frames[min(baseline_frames)]
+        if (
+            baseline_frame_zero["width"] != width
+            or baseline_frame_zero["height"] != height
+        ):
+            msg = (
+                f"{name}: baseline resolution {baseline_frame_zero['width']}x{baseline_frame_zero['height']}"
+                f" does not match requested {width}x{height}"
+            )
+            print(f"    BASELINE ERROR: {msg}", file=sys.stderr)
+            errors.append(msg)
+            scene_verdicts.append("fail")
+            continue
 
         try:
-            measurement = benchmark_scene(str(scene_path), frames=frames, launches=launches, warmup=warmup)
+            measurement = benchmark_scene(
+                str(scene_path),
+                frames=frames,
+                launches=launches,
+                warmup=warmup,
+                width=width,
+                height=height,
+                rays=rays,
+            )
         except Exception as e:
             msg = f"{name}: render failed: {e}"
             print(f"    RENDER ERROR: {e}", file=sys.stderr)
@@ -485,6 +619,7 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
             "frames_per_launch": frames,
             "launches": launches,
             "warmup": warmup,
+            "render_settings": settings,
             "comparison_counts": comparison_counts,
             "render_timing": _timing_dict(measurement.render_summary),
             "wall_timing": _timing_dict(measurement.wall_summary),
@@ -516,11 +651,15 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
         "timestamp": timestamp,
         "commit": commit,
         "branch": git.get("branch"),
+        "dirty": git.get("dirty"),
         "verdict": overall_verdict,
         "scenes_evaluated": len(report_scenes),
+        "scene_manifest": str(SCENE_MANIFEST),
+        "scene_names": [scene_path.stem for scene_path in scenes],
         "frames_per_launch": frames,
         "launches": launches,
         "warmup": warmup,
+        "render_settings": settings,
         "samples": len(all_render_times),
         "median_ms": round(overall_render_summary.median_ms, 1) if overall_render_summary else None,
         "wall_median_ms": round(overall_wall_summary.median_ms, 1) if overall_wall_summary else None,
@@ -534,6 +673,11 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
             "wall_timing": _timing_dict(overall_wall_summary) if overall_wall_summary else None,
             "speedup": _speedup_dict(overall_render_speedup) if overall_render_speedup else None,
             "wall_speedup": _speedup_dict(overall_wall_speedup) if overall_wall_speedup else None,
+        },
+        "build": {
+            "requested_configuration": build_contract["requested_configuration"],
+            "configure_command": build_contract["configure_command"],
+            "build_command": build_contract["build_command"],
         },
         "scenes": report_scenes,
     }
@@ -560,12 +704,17 @@ def _run_evaluate(skip_build: bool, frames: int, launches: int, warmup: int) -> 
             f" samples={len(all_render_times)}"
         )
         print(f"verdict:    {overall_verdict}")
+        print(f"fidelity_verdict: {overall_verdict}")
         print(f"scenes:     {len(report_scenes)}")
         print(f"frames:     {frames}")
         print(f"launches:   {launches}")
+        print(f"resolution: {settings['resolution']}")
+        print(f"rays:       {settings['rays']}")
         print(f"samples:    {len(all_render_times)}")
         print(f"median_ms:  {overall_render_summary.median_ms:.1f}")
+        print(f"render_median_ms: {overall_render_summary.median_ms:.1f}")
         print(f"wall_ms:    {overall_wall_summary.median_ms:.1f}")
+        print(f"wall_median_ms: {overall_wall_summary.median_ms:.1f}")
         if overall_render_speedup:
             print(
                 f"speedup:    {overall_render_speedup.speedup:.3f}x"
@@ -592,12 +741,27 @@ def main() -> None:
     frames = DEFAULT_FRAMES
     launches = DEFAULT_LAUNCHES
     warmup = DEFAULT_WARMUP
+    width = DEFAULT_WIDTH
+    height = DEFAULT_HEIGHT
+    rays = DEFAULT_RAYS
     command = None
 
     i = 0
     while i < len(args):
         if args[i] == "--skip-build":
             skip_build = True
+        elif args[i] == "--resolution" and i + 1 < len(args):
+            i += 1
+            width, height = _parse_resolution(args[i])
+        elif args[i] == "--width" and i + 1 < len(args):
+            i += 1
+            width = int(args[i])
+        elif args[i] == "--height" and i + 1 < len(args):
+            i += 1
+            height = int(args[i])
+        elif args[i] == "--rays" and i + 1 < len(args):
+            i += 1
+            rays = int(args[i])
         elif args[i] == "--frames" and i + 1 < len(args):
             i += 1
             frames = int(args[i])
@@ -625,10 +789,20 @@ def main() -> None:
             sys.exit(2)
         i += 1
 
+    if width < 1 or height < 1:
+        print("Resolution width and height must be > 0.", file=sys.stderr)
+        sys.exit(2)
+    if rays < 1:
+        print("Rays must be > 0.", file=sys.stderr)
+        sys.exit(2)
+    if frames < 1 or launches < 1 or warmup < 0:
+        print("Frames and launches must be > 0, and warmup must be >= 0.", file=sys.stderr)
+        sys.exit(2)
+
     if command == "capture":
-        _run_capture(skip_build, frames, launches, warmup)
+        _run_capture(skip_build, frames, launches, warmup, width, height, rays)
     else:
-        _run_evaluate(skip_build, frames, launches, warmup)
+        _run_evaluate(skip_build, frames, launches, warmup, width, height, rays)
 
 
 if __name__ == "__main__":

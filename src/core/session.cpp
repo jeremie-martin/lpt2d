@@ -30,15 +30,15 @@ RenderSession::RenderSession(int width, int height, bool half_float) : impl_(std
         throw std::runtime_error("RenderSession: failed to initialize renderer");
 }
 
-RenderSession::~RenderSession() {
-    if (impl_)
-        impl_->renderer.shutdown();
-}
+RenderSession::~RenderSession() { close(); }
 
 RenderSession::RenderSession(RenderSession&&) noexcept = default;
 RenderSession& RenderSession::operator=(RenderSession&&) noexcept = default;
 
 RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+
     // Resize if canvas dimensions changed
     if (shot.canvas.width != impl_->width || shot.canvas.height != impl_->height)
         resize(shot.canvas.width, shot.canvas.height);
@@ -99,11 +99,31 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
     return result;
 }
 
+void RenderSession::close() {
+    if (!impl_)
+        return;
+
+    impl_->renderer.shutdown();
+    impl_.reset();
+}
+
 void RenderSession::resize(int width, int height) {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+
     impl_->renderer.resize(width, height);
     impl_->width = width;
     impl_->height = height;
 }
 
-int RenderSession::width() const { return impl_->width; }
-int RenderSession::height() const { return impl_->height; }
+int RenderSession::width() const {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+    return impl_->width;
+}
+
+int RenderSession::height() const {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+    return impl_->height;
+}

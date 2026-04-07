@@ -121,7 +121,25 @@ def benchmark(
     return summarize_times(times), last_result
 
 
-def _build_frame_shots(scene_path: str, frames: int):
+def _apply_render_settings(shot, *, width: int | None, height: int | None, rays: int | None):
+    """Apply evaluation render settings to a loaded shot in place."""
+    if width is not None:
+        shot.canvas.width = width
+    if height is not None:
+        shot.canvas.height = height
+    if rays is not None:
+        shot.trace.rays = rays
+    return shot
+
+
+def _build_frame_shots(
+    scene_path: str,
+    frames: int,
+    *,
+    width: int | None,
+    height: int | None,
+    rays: int | None,
+):
     """Prepare deterministic frame shots once and reuse them across launches."""
     import _lpt2d
 
@@ -131,7 +149,7 @@ def _build_frame_shots(scene_path: str, frames: int):
         raise ValueError("frames must be >= 1")
 
     if frames == 1:
-        return [_lpt2d.load_shot(scene_path)]
+        return [_apply_render_settings(_lpt2d.load_shot(scene_path), width=width, height=height, rays=rays)]
 
     scene_dict = json.loads(Path(scene_path).read_text())
     shots = []
@@ -141,8 +159,22 @@ def _build_frame_shots(scene_path: str, frames: int):
             modified = animate_scene(scene_dict, frame_index, frames)
             tmp_path = tmp_root / f"frame_{frame_index:04d}.json"
             tmp_path.write_text(json.dumps(modified))
-            shots.append(_lpt2d.load_shot(str(tmp_path)))
+            shots.append(
+                _apply_render_settings(
+                    _lpt2d.load_shot(str(tmp_path)),
+                    width=width,
+                    height=height,
+                    rays=rays,
+                )
+            )
     return shots
+
+
+def _close_session(session: Any) -> None:
+    """Release a RenderSession deterministically between launches."""
+    close = getattr(session, "close", None)
+    if callable(close):
+        close()
 
 
 def benchmark_scene(
@@ -151,6 +183,9 @@ def benchmark_scene(
     frames: int = 1,
     launches: int = 1,
     warmup: int = 1,
+    width: int | None = None,
+    height: int | None = None,
+    rays: int | None = None,
 ) -> SceneBenchmark:
     """Measure one scene across multiple fresh sessions and deterministic frames.
 
@@ -166,8 +201,19 @@ def benchmark_scene(
     if warmup < 0:
         raise ValueError("warmup must be >= 0")
 
-    base_shot = _lpt2d.load_shot(scene_path)
-    frame_shots = _build_frame_shots(scene_path, frames)
+    base_shot = _apply_render_settings(
+        _lpt2d.load_shot(scene_path),
+        width=width,
+        height=height,
+        rays=rays,
+    )
+    frame_shots = _build_frame_shots(
+        scene_path,
+        frames,
+        width=base_shot.canvas.width,
+        height=base_shot.canvas.height,
+        rays=base_shot.trace.rays,
+    )
 
     samples: list[TimedFrame] = []
     width = base_shot.canvas.width
@@ -175,25 +221,28 @@ def benchmark_scene(
 
     for launch_index in range(launches):
         session = _lpt2d.RenderSession(width, height)
+        try:
+            for warmup_index in range(warmup):
+                frame_index = warmup_index % frames
+                session.render_shot(frame_shots[frame_index], frame_index)
 
-        for warmup_index in range(warmup):
-            frame_index = warmup_index % frames
-            session.render_shot(frame_shots[frame_index], frame_index)
-
-        for frame_index, frame_shot in enumerate(frame_shots):
-            wall_t0 = time.perf_counter()
-            result = session.render_shot(frame_shot, frame_index)
-            wall_ms = (time.perf_counter() - wall_t0) * 1000.0
-            render_ms = result.time_ms if result.time_ms > 0 else wall_ms
-            samples.append(
-                TimedFrame(
-                    launch_index=launch_index,
-                    frame_index=frame_index,
-                    render_time_ms=render_ms,
-                    wall_time_ms=wall_ms,
-                    result=result,
+            for frame_index, frame_shot in enumerate(frame_shots):
+                wall_t0 = time.perf_counter()
+                result = session.render_shot(frame_shot, frame_index)
+                wall_ms = (time.perf_counter() - wall_t0) * 1000.0
+                render_ms = result.time_ms if result.time_ms > 0 else wall_ms
+                samples.append(
+                    TimedFrame(
+                        launch_index=launch_index,
+                        frame_index=frame_index,
+                        render_time_ms=render_ms,
+                        wall_time_ms=wall_ms,
+                        result=result,
+                    )
                 )
-            )
+        finally:
+            _close_session(session)
+            del session
 
     return SceneBenchmark(
         samples=samples,

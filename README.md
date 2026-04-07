@@ -45,7 +45,14 @@ This builds:
 
 # Canonical Python example
 python examples/python/beam_chamber_starter.py --frame 0
+
+# Authoritative renderer evaluation
+python -m evaluation
 ```
+
+`python -m evaluation` is the central render-speed and render-fidelity
+validation command. It builds the project, runs the explicit evaluation scene
+corpus, reports grep-friendly summary keys, and writes a detailed JSON report.
 
 ## Test
 

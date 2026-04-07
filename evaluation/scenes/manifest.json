@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "purpose": "Authoritative evaluation corpus for renderer speed and fidelity.",
+  "scenes": [
+    {
+      "name": "solid_surface_gallery",
+      "file": "solid_surface_gallery.json",
+      "summary": "Mixed geometry, grouped transforms, point lights, and projectors."
+    },
+    {
+      "name": "three_spheres",
+      "file": "three_spheres.json",
+      "summary": "Small reflective room with refractive spheres and point emitters."
+    },
+    {
+      "name": "crystal_field",
+      "file": "crystal_field.json",
+      "summary": "Dense refractive circle field in a mirrored enclosure."
+    }
+  ]
+}

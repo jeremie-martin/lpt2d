@@ -41,6 +41,7 @@ public:
                               const TraceConfig& trace_cfg, const PostProcess& pp,
                               int64_t total_rays);
 
+    void close();
     void resize(int width, int height);
     int width() const;
     int height() const;

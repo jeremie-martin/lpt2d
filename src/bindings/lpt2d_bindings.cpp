@@ -630,6 +630,7 @@ NB_MODULE(_lpt2d, m) {
     // ── RenderSession ────────────────────────────────────────────
     nb::class_<RenderSession>(m, "RenderSession")
         .def(nb::init<int, int, bool>(), "width"_a, "height"_a, "half_float"_a = false)
+        .def("close", &RenderSession::close)
         .def("render_shot", &RenderSession::render_shot, "shot"_a, "frame_index"_a = 0)
         .def("render_frame", &RenderSession::render_frame,
              "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a)

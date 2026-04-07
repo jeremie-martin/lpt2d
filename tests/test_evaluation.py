@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -20,8 +25,9 @@ from evaluation import (
     save_baseline_set,
 )
 from evaluation.animate import animate_scene
+from evaluation.__main__ import _parse_resolution
 from evaluation.compare import compare_metrics
-from evaluation.timing import TimingSummary, classify_speedup
+from evaluation.timing import TimingSummary, benchmark_scene, classify_speedup
 
 # ── Image metrics ────────────────────────────────────────────────────────
 
@@ -334,6 +340,59 @@ class TestTimingSummary:
         )
         assert s.cv_pct == pytest.approx(10.0)
 
+    def test_benchmark_scene_closes_between_launches(self, monkeypatch):
+        class _FakeCanvas:
+            def __init__(self):
+                self.width = 320
+                self.height = 180
+
+        class _FakeTrace:
+            def __init__(self):
+                self.rays = 1000
+
+        class _FakeShot:
+            def __init__(self):
+                self.canvas = _FakeCanvas()
+                self.trace = _FakeTrace()
+
+        class _FakeSession:
+            active_sessions = 0
+            close_calls = 0
+
+            def __init__(self, width: int, height: int):
+                assert width == 320
+                assert height == 180
+                if _FakeSession.active_sessions != 0:
+                    raise AssertionError("RenderSession overlap detected")
+                _FakeSession.active_sessions += 1
+                self._closed = False
+
+            def render_shot(self, shot, frame_index=0):
+                return _FakeResult(time_ms=10.0 + frame_index)
+
+            def close(self):
+                if self._closed:
+                    return
+                self._closed = True
+                _FakeSession.active_sessions -= 1
+                _FakeSession.close_calls += 1
+
+        fake_module = SimpleNamespace(
+            load_shot=lambda path: _FakeShot(),
+            RenderSession=_FakeSession,
+        )
+        monkeypatch.setitem(sys.modules, "_lpt2d", fake_module)
+        monkeypatch.setattr(
+            "evaluation.timing._build_frame_shots",
+            lambda *args, **kwargs: [_FakeShot(), _FakeShot()],
+        )
+
+        bench = benchmark_scene("fake.json", frames=2, launches=3, warmup=1)
+
+        assert bench.sample_count == 6
+        assert _FakeSession.close_calls == 3
+        assert _FakeSession.active_sessions == 0
+
 
 class TestClassifySpeedup:
     def _summary(self, times: list[float]) -> TimingSummary:
@@ -397,3 +456,27 @@ class TestAnimateScene:
         assert animated["shapes"][1]["a"] != [0.0, 0.0]
         assert animated["lights"][0]["pos"] != [0.0, 0.0]
         assert animated["lights"][1]["direction"] != [0.0, -1.0]
+
+
+class TestEvaluationCorpus:
+    def test_scene_manifest_matches_scene_files(self):
+        repo_root = Path(__file__).resolve().parent.parent
+        scenes_dir = repo_root / "evaluation" / "scenes"
+        manifest = json.loads((scenes_dir / "manifest.json").read_text())
+
+        listed = [entry["file"] for entry in manifest["scenes"]]
+        assert listed == [
+            "solid_surface_gallery.json",
+            "three_spheres.json",
+            "crystal_field.json",
+        ]
+        assert all((scenes_dir / rel).is_file() for rel in listed)
+
+
+class TestEvaluationCliHelpers:
+    def test_parse_resolution(self):
+        assert _parse_resolution("1280x720") == (1280, 720)
+
+    def test_parse_resolution_rejects_invalid_input(self):
+        with pytest.raises(ValueError):
+            _parse_resolution("720p")
