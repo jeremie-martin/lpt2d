@@ -1,10 +1,10 @@
 # Authored Format
 
-This repo treats authored shot JSON as a strict `version: 9` format.
+This repo treats authored shot JSON as a strict `version: 10` format.
 
 ## Policy
 
-- Python and C++ loaders reject authored JSON whose `version` is not `9`.
+- Python and C++ loaders reject authored JSON whose `version` is not `10`.
 - The repo does not keep fallback readers or compatibility branches for older
   authored shot versions.
 - Format changes should land as explicit repo-wide migrations across scenes,
@@ -33,16 +33,16 @@ the committed repo baseline uses named materials and explicit bindings.
 `Polygon` supports three authored corner/shading controls:
 
 - `corner_radius`
-  Uniform convex corner bevel radius.
+  Uniform convex corner bevel-fillet radius.
 - `corner_radii`
-  Optional per-vertex bevel override. When non-empty, it must match
+  Optional per-vertex bevel-fillet override. When non-empty, it must match
   `vertices.size()` and overrides `corner_radius`.
 - `smooth_angle`
   Optional shading-normal threshold in radians. It only affects polygon edge
   shading; intersection geometry, fill, perimeter, and emission remain
   geometric.
 
-Concave polygon vertices stay sharp for both smoothing and beveling.
+Concave polygon vertices stay sharp for both smoothing and bevel-filleting.
 
 ## Surface Alignment
 
@@ -55,5 +55,5 @@ The same authored concepts should mean the same thing in:
 - built-in JSON scenes
 - benchmark scenes
 
-Frame-specific render choices such as the runtime `frame_index` stay outside
+Frame-specific render choices such as the runtime `frame` stay outside
 the authored document. They are render context, not saved shot state.

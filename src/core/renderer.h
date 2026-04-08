@@ -127,7 +127,7 @@ private:
     GLint trace_loc_num_beziers_ = -1;
     GLint trace_loc_num_ellipses_ = -1;
     GLint trace_loc_num_lights_ = -1;
-    GLint trace_loc_max_depth_ = -1;
+    GLint trace_loc_depth_ = -1;
     GLint trace_loc_seed_ = -1;
     GLint trace_loc_intensity_ = -1;
     GLint trace_loc_batch_rays_ = -1;
@@ -183,7 +183,7 @@ private:
     GLint loc_exposure_ = -1;
     GLint loc_contrast_ = -1;
     GLint loc_inv_gamma_ = -1;
-    GLint loc_tone_map_ = -1;
+    GLint loc_tonemap_ = -1;
     GLint loc_white_point_ = -1;
     GLint loc_float_tex_ = -1;
     GLint loc_fill_tex_ = -1;

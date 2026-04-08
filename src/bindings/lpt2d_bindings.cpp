@@ -366,13 +366,13 @@ NB_MODULE(_lpt2d, m) {
 
     // ── Light types ──────────────────────────────────────────────
     nb::class_<PointLight>(m, "PointLight")
-        .def("__init__", [](PointLight* l, std::string id, Vec2 pos, float intensity,
+        .def("__init__", [](PointLight* l, std::string id, Vec2 position, float intensity,
                             float wl_min, float wl_max) {
-            new (l) PointLight{std::move(id), pos, intensity, wl_min, wl_max};
-        }, "id"_a = "", "pos"_a = Vec2{}, "intensity"_a = 1.0f,
+            new (l) PointLight{std::move(id), position, intensity, wl_min, wl_max};
+        }, "id"_a = "", "position"_a = Vec2{}, "intensity"_a = 1.0f,
            "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
         .def_rw("id", &PointLight::id)
-        .def_rw("pos", &PointLight::pos)
+        .def_rw("position", &PointLight::position)
         .def_rw("intensity", &PointLight::intensity)
         .def_rw("wavelength_min", &PointLight::wavelength_min)
         .def_rw("wavelength_max", &PointLight::wavelength_max);
@@ -524,8 +524,8 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("contrast", &Look::contrast)
         .def_rw("gamma", &Look::gamma)
         .def_prop_rw("tonemap",
-            [](const Look& l) { return tonemap_to_string(l.tone_map); },
-            [](Look& l, nb::object obj) { l.tone_map = parse_tonemap_arg(obj); })
+            [](const Look& l) { return tonemap_to_string(l.tonemap); },
+            [](Look& l, nb::object obj) { l.tonemap = parse_tonemap_arg(obj); })
         .def_rw("white_point", &Look::white_point)
         .def_prop_rw("normalize",
             [](const Look& l) { return normalize_mode_to_string(l.normalize); },
@@ -563,18 +563,18 @@ NB_MODULE(_lpt2d, m) {
         .def_prop_rw("seed_mode",
             [](const TraceDefaults& t) { return seed_mode_to_string(t.seed_mode); },
             [](TraceDefaults& t, nb::object obj) { t.seed_mode = parse_seed_mode_arg(obj); })
-        .def("to_trace_config", &TraceDefaults::to_trace_config, "frame_index"_a = 0);
+        .def("to_trace_config", &TraceDefaults::to_trace_config, "frame"_a = 0);
 
     // ── TraceConfig (runtime) ────────────────────────────────────
     nb::class_<TraceConfig>(m, "TraceConfig")
         .def(nb::init<>())
         .def_rw("batch_size", &TraceConfig::batch_size)
-        .def_rw("max_depth", &TraceConfig::max_depth)
+        .def_rw("depth", &TraceConfig::depth)
         .def_rw("intensity", &TraceConfig::intensity)
         .def_prop_rw("seed_mode",
             [](const TraceConfig& cfg) { return seed_mode_to_string(cfg.seed_mode); },
             [](TraceConfig& cfg, nb::object obj) { cfg.seed_mode = parse_seed_mode_arg(obj); })
-        .def_rw("frame_index", &TraceConfig::frame_index);
+        .def_rw("frame", &TraceConfig::frame);
 
     // ── PostProcess (runtime) ────────────────────────────────────
     nb::class_<PostProcess>(m, "PostProcess")
@@ -597,9 +597,9 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("grain", &PostProcess::grain)
         .def_rw("grain_seed", &PostProcess::grain_seed)
         .def_rw("chromatic_aberration", &PostProcess::chromatic_aberration)
-        .def_prop_rw("tone_map",
-            [](const PostProcess& pp) { return tonemap_to_string(pp.tone_map); },
-            [](PostProcess& pp, nb::object obj) { pp.tone_map = parse_tonemap_arg(obj); })
+        .def_prop_rw("tonemap",
+            [](const PostProcess& pp) { return tonemap_to_string(pp.tonemap); },
+            [](PostProcess& pp, nb::object obj) { pp.tonemap = parse_tonemap_arg(obj); })
         .def_prop_rw("normalize",
             [](const PostProcess& pp) { return normalize_mode_to_string(pp.normalize); },
             [](PostProcess& pp, nb::object obj) { pp.normalize = parse_normalize_arg(obj); })
@@ -691,7 +691,7 @@ NB_MODULE(_lpt2d, m) {
     nb::class_<RenderSession>(m, "RenderSession")
         .def(nb::init<int, int, bool>(), "width"_a, "height"_a, "half_float"_a = false)
         .def("close", &RenderSession::close)
-        .def("render_shot", &RenderSession::render_shot, "shot"_a, "frame_index"_a = 0)
+        .def("render_shot", &RenderSession::render_shot, "shot"_a, "frame"_a = 0)
         .def("render_frame", &RenderSession::render_frame,
              "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a)
         .def("resize", &RenderSession::resize, "width"_a, "height"_a)

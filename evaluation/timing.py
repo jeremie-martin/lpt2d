@@ -66,7 +66,7 @@ class TimedFrame:
     """One timed case measurement from a specific launch."""
 
     launch_index: int
-    frame_index: int
+    frame: int
     render_time_ms: float
     wall_time_ms: float
     result: Any
@@ -79,7 +79,7 @@ class CaseBenchmark:
     A case is one deterministic scene variant identified by a frame index.
     """
 
-    frame_index: int
+    frame: int
     samples: list[TimedFrame]
     render_summary: TimingSummary
     wall_summary: TimingSummary
@@ -159,7 +159,7 @@ def benchmark(
     *,
     repeats: int = 5,
     warmup: int = 1,
-    frame_index: int = 0,
+    frame: int = 0,
 ):
     """Render a shot repeatedly inside one existing session.
 
@@ -168,7 +168,7 @@ def benchmark(
         shot: ``_lpt2d.Shot`` to render.
         repeats: Number of timed renders of the same shot (default 5).
         warmup: Number of untimed renders of the same shot to discard (default 1).
-        frame_index: Frame index passed to ``render_shot``.
+        frame: Frame index passed to ``render_shot``.
 
     Returns:
         ``(TimingSummary, RenderResult)`` — the summary covers timing only;
@@ -179,13 +179,13 @@ def benchmark(
     """
     # Warm-up renders (discard results, prime GPU pipeline)
     for _ in range(warmup):
-        session.render_shot(shot, frame_index)
+        session.render_shot(shot, frame)
 
     # Timed renders
     times: list[float] = []
     last_result = None
     for _ in range(repeats):
-        result = session.render_shot(shot, frame_index)
+        result = session.render_shot(shot, frame)
         times.append(result.time_ms)
         last_result = result
 
@@ -312,15 +312,15 @@ def benchmark_scene(
             for _ in range(warmup):
                 session.render_shot(warmup_shot, 0)
 
-            for frame_index, frame_shot in enumerate(case_shots):
+            for frame, frame_shot in enumerate(case_shots):
                 wall_t0 = time.perf_counter()
-                result = session.render_shot(frame_shot, frame_index)
+                result = session.render_shot(frame_shot, frame)
                 wall_ms = (time.perf_counter() - wall_t0) * 1000.0
                 render_ms = result.time_ms if result.time_ms > 0 else wall_ms
                 samples.append(
                     TimedFrame(
                         launch_index=launch_index,
-                        frame_index=frame_index,
+                        frame=frame,
                         render_time_ms=render_ms,
                         wall_time_ms=wall_ms,
                         result=result,
@@ -330,15 +330,15 @@ def benchmark_scene(
             _close_session(session)
             del session
 
-    case_samples: dict[int, list[TimedFrame]] = {frame_index: [] for frame_index in range(frames)}
+    case_samples: dict[int, list[TimedFrame]] = {frame: [] for frame in range(frames)}
     for sample in samples:
-        case_samples[sample.frame_index].append(sample)
+        case_samples[sample.frame].append(sample)
 
     cases: dict[int, CaseBenchmark] = {}
-    for frame_index in range(frames):
-        frame_samples = case_samples[frame_index]
-        cases[frame_index] = CaseBenchmark(
-            frame_index=frame_index,
+    for frame in range(frames):
+        frame_samples = case_samples[frame]
+        cases[frame] = CaseBenchmark(
+            frame=frame,
             samples=frame_samples,
             render_summary=summarize_times([sample.render_time_ms for sample in frame_samples]),
             wall_summary=summarize_times([sample.wall_time_ms for sample in frame_samples]),

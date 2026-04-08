@@ -65,7 +65,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid authored shot JSON dict."""
     base = {
-        "version": 9,
+        "version": 10,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -137,9 +137,9 @@ def _make_seed_behavior_shot(seed_mode: str) -> Shot:
     )
 
 
-def _render_pixels(shot: Shot, frame_index: int) -> bytes:
+def _render_pixels(shot: Shot, frame: int) -> bytes:
     session = RenderSession(shot.canvas.width, shot.canvas.height, False)
-    return session.render_shot(shot.to_cpp(), frame_index).pixels
+    return session.render_shot(shot.to_cpp(), frame).pixels
 
 
 # ─── Round-trip serialization via C++ ──────────────────────────────────
@@ -259,7 +259,7 @@ def test_authored_rejects_older_shot_version(tmp_path):
 def test_authored_rejects_sparse_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 9,
+        "version": 10,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -322,7 +322,7 @@ def test_authored_round_trip_preserves_seed_mode(tmp_path):
     assert loaded.trace.seed_mode == "decorrelated"
 
 
-def test_render_session_seed_mode_uses_repeatable_frame_index():
+def test_render_session_seed_mode_uses_repeatable_frame():
     deterministic = _make_seed_behavior_shot("deterministic")
     decorrelated = _make_seed_behavior_shot("decorrelated")
 
@@ -354,14 +354,14 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 9)" in result.stderr
+    assert "Unsupported shot version (expected 10)" in result.stderr
     assert not output.exists()
 
 
 def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
     bad_path = tmp_path / "trailing_garbage.json"
     output = tmp_path / "trailing_garbage.png"
-    bad_path.write_text('{"version":9,"shapes":[],"lights":[],"groups":[]} trailing')
+    bad_path.write_text('{"version":10,"shapes":[],"lights":[],"groups":[]} trailing')
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],

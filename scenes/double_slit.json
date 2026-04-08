@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "double_slit",
   "camera": {
     "bounds": [
@@ -174,7 +174,7 @@
     {
       "id": "source_main",
       "type": "point",
-      "pos": [
+      "position": [
         -1.0,
         0.0
       ],

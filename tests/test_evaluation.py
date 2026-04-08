@@ -392,9 +392,9 @@ class TestTimingSummary:
                 _FakeSession.active_sessions += 1
                 self._closed = False
 
-            def render_shot(self, shot, frame_index=0):
+            def render_shot(self, shot, frame=0):
                 _FakeSession.render_kinds.append(shot.kind)
-                return _FakeResult(time_ms=10.0 + frame_index)
+                return _FakeResult(time_ms=10.0 + frame)
 
             def close(self):
                 if self._closed:
@@ -505,7 +505,7 @@ class TestAnimateScene:
                 {"id": "interior_segment", "type": "segment", "a": [0.0, 0.0], "b": [0.5, 0.0]},
             ],
             "lights": [
-                {"type": "point", "pos": [0.0, 0.0]},
+                {"type": "point", "position": [0.0, 0.0]},
                 {"type": "projector", "position": [1.0, 0.0], "direction": [0.0, -1.0]},
             ],
         }
@@ -516,7 +516,7 @@ class TestAnimateScene:
         assert animated["shapes"][1]["a"] == [-1.0, 0.5]
         assert animated["shapes"][1]["b"] == [-1.0, -0.5]
         assert animated["shapes"][2]["a"] != [0.0, 0.0]
-        assert animated["lights"][0]["pos"] == [0.0, 0.0]
+        assert animated["lights"][0]["position"] == [0.0, 0.0]
         assert animated["lights"][1]["direction"] == [0.0, -1.0]
 
 
@@ -558,7 +558,7 @@ class TestEvaluationStrictness:
             samples=[
                 TimedFrame(
                     launch_index=0,
-                    frame_index=0,
+                    frame=0,
                     render_time_ms=42.0,
                     wall_time_ms=43.0,
                     result=_FakeResult(fill=100, time_ms=42.0),
@@ -566,7 +566,7 @@ class TestEvaluationStrictness:
             ],
             cases={
                 0: CaseBenchmark(
-                    frame_index=0,
+                    frame=0,
                     samples=[],
                     render_summary=summarize_times([42.0]),
                     wall_summary=summarize_times([43.0]),
@@ -624,7 +624,7 @@ class TestEvaluationStrictness:
             ],
             cases={
                 0: CaseBenchmark(
-                    frame_index=0,
+                    frame=0,
                     samples=[
                         TimedFrame(0, 0, 42.0, 43.0, _FakeResult(fill=100, time_ms=42.0)),
                         TimedFrame(1, 0, 44.0, 45.0, _FakeResult(fill=100, time_ms=44.0)),
@@ -633,7 +633,7 @@ class TestEvaluationStrictness:
                     wall_summary=summarize_times([43.0, 45.0]),
                 ),
                 1: CaseBenchmark(
-                    frame_index=1,
+                    frame=1,
                     samples=[
                         TimedFrame(0, 1, 52.0, 53.0, _FakeResult(fill=100, time_ms=52.0)),
                         TimedFrame(1, 1, 54.0, 55.0, _FakeResult(fill=100, time_ms=54.0)),
@@ -712,7 +712,7 @@ class TestEvaluationStrictness:
             samples=[
                 TimedFrame(
                     launch_index=0,
-                    frame_index=0,
+                    frame=0,
                     render_time_ms=42.0,
                     wall_time_ms=43.0,
                     result=_FakeResult(fill=100, time_ms=42.0),
@@ -720,7 +720,7 @@ class TestEvaluationStrictness:
             ],
             cases={
                 0: CaseBenchmark(
-                    frame_index=0,
+                    frame=0,
                     samples=[],
                     render_summary=summarize_times([42.0]),
                     wall_summary=summarize_times([43.0]),
@@ -826,13 +826,13 @@ class TestEvaluationStrictness:
             ],
             cases={
                 0: CaseBenchmark(
-                    frame_index=0,
+                    frame=0,
                     samples=[],
                     render_summary=summarize_times([44.0, 46.0]),
                     wall_summary=summarize_times([45.0, 47.0]),
                 ),
                 1: CaseBenchmark(
-                    frame_index=1,
+                    frame=1,
                     samples=[],
                     render_summary=summarize_times([54.0, 56.0]),
                     wall_summary=summarize_times([55.0, 57.0]),

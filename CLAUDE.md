@@ -68,13 +68,13 @@ baseline = load_baseline("baselines/scene_name")
 
 ## Current Repo Truth
 
-- Authored shot JSON is strict `version: 9`.
+- Authored shot JSON is strict `version: 10`.
 - Committed scene and benchmark JSON use named materials plus `material_id`
   bindings.
 - The C++ authored model uses `MaterialBinding` (`Material` or material-id
   reference).
 - Python and CLI rendering both use the in-process C++ `RenderSession`.
-- `seed_mode` lives in `Shot.trace`; `frame_index` is runtime-only render
+- `seed_mode` lives in `Shot.trace`; `frame` is runtime-only render
   context.
 - The GUI, CLI, Python API, and JSON format are all expected to preserve the
   same authored shot meaning.

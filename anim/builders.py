@@ -26,7 +26,7 @@ def polygon(
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices.
 
-    ``corner_radius`` applies one uniform convex bevel radius. ``corner_radii``
+    ``corner_radius`` applies one uniform convex bevel-fillet radius. ``corner_radii``
     overrides that per vertex when provided. ``smooth_angle`` is a radians
     threshold for smooth-shaded polygon edge normals on convex zero-radius
     corners.
@@ -56,7 +56,7 @@ def regular_polygon(
     """Regular *n*-sided polygon inscribed in a circle.
 
     *rotation* offsets the first vertex (radians, 0 = right). Polygon corner
-    bevel and smooth-shading options forward to :func:`polygon`.
+    Bevel-fillet and smooth-shading options forward to :func:`polygon`.
     """
     cx, cy = center
     verts = [
@@ -89,7 +89,7 @@ def rectangle(
 ) -> Polygon:
     """Axis-aligned rectangle centered at *center*.
 
-    Polygon corner bevel and smooth-shading options forward to
+    Polygon corner bevel-fillet and smooth-shading options forward to
     :func:`polygon`.
     """
     cx, cy = center

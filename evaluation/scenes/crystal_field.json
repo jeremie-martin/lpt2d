@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "crystal_field",
   "camera": {
     "bounds": [
@@ -533,7 +533,7 @@
     {
       "id": "source_left",
       "type": "point",
-      "pos": [
+      "position": [
         -1.0,
         0.6000000238418579
       ],
@@ -544,7 +544,7 @@
     {
       "id": "source_right",
       "type": "point",
-      "pos": [
+      "position": [
         0.800000011920929,
         -0.6000000238418579
       ],

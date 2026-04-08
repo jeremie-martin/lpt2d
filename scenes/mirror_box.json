@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "mirror_box",
   "camera": {
     "bounds": [
@@ -193,7 +193,7 @@
     {
       "id": "source_lower_left",
       "type": "point",
-      "pos": [
+      "position": [
         -0.6000000238418579,
         -0.3499999940395355
       ],
@@ -204,7 +204,7 @@
     {
       "id": "source_upper_right",
       "type": "point",
-      "pos": [
+      "position": [
         0.6000000238418579,
         0.3499999940395355
       ],

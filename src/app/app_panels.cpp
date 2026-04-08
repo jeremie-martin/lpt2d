@@ -189,8 +189,8 @@ const Shot& current_authored_shot(const EditorState& ed, const CompareSnapshot& 
     return (compare_ab.active && compare_ab.showing_a) ? compare_ab.shot : ed.shot;
 }
 
-int current_runtime_frame_index(const EditorState& ed, const CompareSnapshot& compare_ab) {
-    return (compare_ab.active && compare_ab.showing_a) ? compare_ab.frame_index : ed.session.frame_index;
+int current_runtime_frame(const EditorState& ed, const CompareSnapshot& compare_ab) {
+    return (compare_ab.active && compare_ab.showing_a) ? compare_ab.frame : ed.session.frame;
 }
 
 void rename_selection_ref(EditorState& ed, const SelectionRef& from, std::string_view new_id) {
@@ -372,7 +372,7 @@ void draw_controls_panel(
             add_box_walls(ed.shot.scene, kDefaultRoomHalfWidth, kDefaultRoomHalfHeight,
                           gui_wall_material());
             PointLight light;
-            light.pos = {0.0f, 0.0f};
+            light.position = {0.0f, 0.0f};
             light.intensity = 1.0f;
             ed.shot.scene.lights.push_back(light);
             ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
@@ -749,9 +749,9 @@ void draw_controls_panel(
                     Bounds view = diagnostic_copy.camera.resolve(
                         diagnostic_copy.canvas.aspect(), scene_bounds);
                     TraceConfig tcfg =
-                        diagnostic_copy.trace.to_trace_config(current_runtime_frame_index(ed, compare_ab));
+                        diagnostic_copy.trace.to_trace_config(current_runtime_frame(ed, compare_ab));
                     tcfg.batch_size = std::min(tcfg.batch_size, 100000);
-                    tcfg.max_depth = std::min(tcfg.max_depth, 12);
+                    tcfg.depth = std::min(tcfg.depth, 12);
                     int analysis_dispatches =
                         std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
 
@@ -766,7 +766,7 @@ void draw_controls_panel(
                     contribution_look.exposure = 0.0f;
                     contribution_look.contrast = 1.0f;
                     contribution_look.gamma = 1.0f;
-                    contribution_look.tone_map = ToneMap::None;
+                    contribution_look.tonemap = ToneMap::None;
                     contribution_look.normalize = NormalizeMode::Fixed;
                     contribution_look.normalize_ref = normalize_ref;
                     contribution_look.ambient = 0.0f;
@@ -977,7 +977,7 @@ void draw_controls_panel(
                         p.smooth_angle = smooth_angle_degrees * PI / 180.0f;
                         changed = true;
                     }
-                    ImGui::TextDisabled("Shading only. Concave or beveled corners stay sharp.");
+                    ImGui::TextDisabled("Shading only. Concave or bevel-filleted corners stay sharp.");
 
                     int mode = static_cast<int>(polygon_corner_mode_ui_value);
                     if (ImGui::Combo("Corner mode", &mode, "Sharp\0Uniform\0Per-vertex\0")) {
@@ -1008,7 +1008,7 @@ void draw_controls_panel(
                             changed = true;
                         }
 
-                        ImGui::TextDisabled("Only convex vertices can bevel. Concave entries stay sharp.");
+                        ImGui::TextDisabled("Only convex vertices can bevel-fillet. Concave entries stay sharp.");
                         ImGui::BeginChild("PolygonCornerRadii", ImVec2(0.0f, 180.0f), true);
                         if (ImGui::BeginTable("PolygonCornerTable", 4,
                                               ImGuiTableFlags_BordersInnerH |
@@ -1042,7 +1042,7 @@ void draw_controls_panel(
 
                                 ImGui::TableSetColumnIndex(3);
                                 if (convex)
-                                    ImGui::TextUnformatted(p.corner_radii[(size_t)vi] > 0.0f ? "Beveled" : "Convex");
+                                    ImGui::TextUnformatted(p.corner_radii[(size_t)vi] > 0.0f ? "Filleted" : "Convex");
                                 else
                                     ImGui::TextDisabled("Concave");
 
@@ -1100,7 +1100,7 @@ void draw_controls_panel(
             };
             std::visit(overloaded{
                 [&](PointLight& l) {
-                    changed |= ImGui::DragFloat2("Position", &l.pos.x, 0.01f);
+                    changed |= ImGui::DragFloat2("Position", &l.position.x, 0.01f);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
                     edit_wavelength(l.wavelength_min, l.wavelength_max);
                 },
@@ -1327,7 +1327,7 @@ void draw_controls_panel(
         ImGui::PushID("Tracer");
         ImGui::SliderInt("Batch", &ed.shot.trace.batch, 1000, 1000000, "%d",
                          ImGuiSliderFlags_Logarithmic);
-        ImGui::SliderInt("Max depth", &ed.shot.trace.depth, 1, 30);
+        ImGui::SliderInt("Depth", &ed.shot.trace.depth, 1, 30);
         ImGui::SliderFloat("Intensity", &ed.shot.trace.intensity, 0.001f, 10.0f, "%.3f",
                            ImGuiSliderFlags_Logarithmic);
         int seed_mode = (int)ed.shot.trace.seed_mode;
@@ -1337,9 +1337,9 @@ void draw_controls_panel(
             panel.light_analysis_valid = false;
             force_live_metrics_refresh = true;
         }
-        int frame_index = ed.session.frame_index;
-        if (ImGui::InputInt("Frame index", &frame_index)) {
-            ed.session.frame_index = std::max(frame_index, 0);
+        int frame = ed.session.frame;
+        if (ImGui::InputInt("Frame", &frame)) {
+            ed.session.frame = std::max(frame, 0);
             renderer.clear();
             panel.light_analysis_valid = false;
             force_live_metrics_refresh = true;
@@ -1367,7 +1367,7 @@ void draw_controls_panel(
                     ed.shot.look.exposure = p.exp;
                     ed.shot.look.contrast = p.contrast;
                     ed.shot.look.gamma = p.gamma;
-                    ed.shot.look.tone_map = p.tm;
+                    ed.shot.look.tonemap = p.tm;
                     ed.shot.look.white_point = p.wp;
                     ed.shot.look.normalize = p.norm;
                     ed.shot.look.ambient = p.ambient;
@@ -1386,7 +1386,7 @@ void draw_controls_panel(
             std::vector<uint8_t> snapshot_rgba;
             renderer.read_display_rgba(snapshot_rgba);
             compare_ab.shot = ed.shot;
-            compare_ab.frame_index = ed.session.frame_index;
+            compare_ab.frame = ed.session.frame;
             ensure_scene_entity_ids(compare_ab.shot.scene);
             compare_ab.view_bounds = current_display_view(ed, compare_ab, win_w, win_h);
             compare_ab.metrics = renderer.compute_frame_metrics();
@@ -1413,7 +1413,7 @@ void draw_controls_panel(
                 compare_ab.active = false;
                 compare_ab.showing_a = false;
                 compare_ab.metrics_valid = false;
-                compare_ab.frame_index = 0;
+                compare_ab.frame = 0;
                 if (was_showing_a)
                     reload(false);
                 force_live_metrics_refresh = true;
@@ -1432,9 +1432,9 @@ void draw_controls_panel(
         ImGui::SliderFloat("Gamma", &ed.shot.look.gamma, 0.5f, 4.0f);
         ImGui::SliderFloat("White point", &ed.shot.look.white_point, 0.1f, 10.0f);
         const char* tone_names[] = {"None", "Reinhard", "Reinhard Ext", "ACES", "Logarithmic"};
-        int tm = (int)ed.shot.look.tone_map;
+        int tm = (int)ed.shot.look.tonemap;
         if (ImGui::Combo("Tone map", &tm, tone_names, 5))
-            ed.shot.look.tone_map = (ToneMap)tm;
+            ed.shot.look.tonemap = (ToneMap)tm;
         const char* norm_names[] = {"Auto (Max)", "Ray Count", "Fixed Ref", "Off"};
         int nm = (int)ed.shot.look.normalize;
         if (ImGui::Combo("Normalize", &nm, norm_names, 4))
@@ -1475,7 +1475,7 @@ void draw_controls_panel(
         char ray_str[32];
         int64_t tr = renderer.total_rays();
         const Shot& output_shot = current_authored_shot(ed, compare_ab);
-        int output_frame_index = current_runtime_frame_index(ed, compare_ab);
+        int output_frame = current_runtime_frame(ed, compare_ab);
         const Look& output_look = output_shot.look;
         if (tr >= 1'000'000)
             std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
@@ -1497,7 +1497,7 @@ void draw_controls_panel(
         ImGui::SameLine();
         if (ImGui::Button("Export PNG")) {
             std::string filename = output_shot.name + ".png";
-            if (export_authored_png(output_shot, output_frame_index))
+            if (export_authored_png(output_shot, output_frame))
                 std::cerr << "Exported: " << filename << "\n";
         }
         ImGui::PopID();

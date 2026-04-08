@@ -64,7 +64,7 @@ def point_light(x: float, y: float, intensity: float = 1.0) -> dict:
     return {
         "id": f"point_light_{next(_LIGHT_IDS)}",
         "type": "point",
-        "pos": [x, y],
+        "position": [x, y],
         "intensity": intensity,
         "wavelength_min": 380.0,
         "wavelength_max": 780.0,

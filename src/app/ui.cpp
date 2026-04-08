@@ -254,7 +254,7 @@ static void draw_projector_aperture(ImDrawList* dl, const CameraView& cv, const 
 void draw_light_overlay(ImDrawList* dl, const CameraView& cv, const Light& light, ImU32 col, float th, float dpi) {
     std::visit(overloaded{
         [&](const PointLight& l) {
-            dl->AddCircleFilled(cv.to_screen(l.pos), 4.0f * dpi, col);
+            dl->AddCircleFilled(cv.to_screen(l.position), 4.0f * dpi, col);
         },
         [&](const SegmentLight& l) {
             ImVec2 a = cv.to_screen(l.a), b = cv.to_screen(l.b);

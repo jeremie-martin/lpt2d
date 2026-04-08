@@ -585,12 +585,12 @@ Bounds Camera2D::resolve(float aspect, const Bounds& fallback) const {
     return fallback;
 }
 
-TraceConfig TraceDefaults::to_trace_config(int frame_index) const {
+TraceConfig TraceDefaults::to_trace_config(int frame) const {
     return {
         .batch_size = batch,
-        .max_depth = depth,
+        .depth = depth,
         .intensity = intensity,
         .seed_mode = seed_mode,
-        .frame_index = frame_index,
+        .frame = frame,
     };
 }

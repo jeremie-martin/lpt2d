@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "ring",
   "camera": {
     "bounds": [
@@ -215,7 +215,7 @@
     {
       "id": "source_center",
       "type": "point",
-      "pos": [
+      "position": [
         0.0,
         0.0
       ],

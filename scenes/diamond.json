@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "diamond",
   "camera": {
     "bounds": [
@@ -145,7 +145,7 @@
     {
       "id": "source_left",
       "type": "point",
-      "pos": [
+      "position": [
         -0.699999988079071,
         0.4000000059604645
       ],
@@ -156,7 +156,7 @@
     {
       "id": "source_right",
       "type": "point",
-      "pos": [
+      "position": [
         0.699999988079071,
         0.4000000059604645
       ],
@@ -167,7 +167,7 @@
     {
       "id": "source_bottom",
       "type": "point",
-      "pos": [
+      "position": [
         0.0,
         -0.5
       ],

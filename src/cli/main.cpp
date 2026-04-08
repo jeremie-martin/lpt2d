@@ -49,7 +49,7 @@ struct CliOverrides {
         if (contrast) shot.look.contrast = *contrast;
         if (gamma) shot.look.gamma = *gamma;
         if (white_point) shot.look.white_point = *white_point;
-        if (tonemap) shot.look.tone_map = *tonemap;
+        if (tonemap) shot.look.tonemap = *tonemap;
         if (normalize) shot.look.normalize = *normalize;
         if (normalize_ref) shot.look.normalize_ref = *normalize_ref;
         if (normalize_pct) shot.look.normalize_pct = *normalize_pct;
@@ -86,7 +86,7 @@ static void print_usage() {
               << "  --batch <int>            Rays per batch (overrides shot trace)\n"
               << "  --depth <int>            Max ray depth (overrides shot trace)\n"
               << "  --seed-mode <mode>       deterministic|decorrelated (overrides shot trace)\n"
-              << "  --frame-index <int>      Runtime frame index for decorrelated seed mode (default: 0)\n"
+              << "  --frame <int>      Runtime frame index for decorrelated seed mode (default: 0)\n"
               << "  --exposure <float>       Exposure in stops (overrides shot look)\n"
               << "  --contrast <float>       Contrast (overrides shot look)\n"
               << "  --gamma <float>          Gamma (overrides shot look)\n"
@@ -142,7 +142,7 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
-static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool include_histogram, int frame_index) {
+static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool include_histogram, int frame) {
     std::string input((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
     if (input.empty()) {
         std::cerr << "No JSON received on stdin\n";
@@ -160,7 +160,7 @@ static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool i
     try {
         RenderSession session(shot->canvas.width, shot->canvas.height, fast_mode);
         auto t0 = std::chrono::steady_clock::now();
-        auto result = session.render_shot(*shot, frame_index);
+        auto result = session.render_shot(*shot, frame);
         auto t1 = std::chrono::steady_clock::now();
         const double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
@@ -169,7 +169,7 @@ static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool i
         std::cout.flush();
 
         Json report = {
-            {"frame", frame_index},
+            {"frame", frame},
             {"rays", result.total_rays},
             {"time_ms", static_cast<int>(elapsed_ms + 0.5)},
             {"time_ms_exact", elapsed_ms},
@@ -184,7 +184,7 @@ static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool i
         if (include_histogram)
             report["histogram"] = result.metrics.histogram;
 
-        std::cerr << "frame " << frame_index << ": " << report.dump() << "\n";
+        std::cerr << "frame " << frame << ": " << report.dump() << "\n";
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << ex.what() << "\n";
@@ -199,7 +199,7 @@ int main(int argc, char** argv) {
     bool fast_mode = false;
     bool stream_mode = false;
     bool include_histogram = false;
-    int frame_index = 0;
+    int frame = 0;
 
     CliOverrides overrides;
 
@@ -231,9 +231,9 @@ int main(int argc, char** argv) {
                 std::cerr << "Invalid seed mode: " << value << "\n";
                 return 1;
             }
-        } else if (std::strcmp(argv[i], "--frame-index") == 0 && i + 1 < argc) {
-            frame_index = std::atoi(argv[++i]);
-            if (frame_index < 0) {
+        } else if (std::strcmp(argv[i], "--frame") == 0 && i + 1 < argc) {
+            frame = std::atoi(argv[++i]);
+            if (frame < 0) {
                 std::cerr << "Frame index must be >= 0\n";
                 return 1;
             }
@@ -314,7 +314,7 @@ int main(int argc, char** argv) {
             std::cerr << "--save-shot cannot be combined with --stream\n";
             return 1;
         }
-        return run_stream_mode(overrides, fast_mode, include_histogram, frame_index);
+        return run_stream_mode(overrides, fast_mode, include_histogram, frame);
     }
 
     // Load shot and apply CLI overrides
@@ -333,7 +333,7 @@ int main(int argc, char** argv) {
 
     // Render using RenderSession
     RenderSession session(shot.canvas.width, shot.canvas.height, fast_mode);
-    auto result = session.render_shot(shot, frame_index);
+    auto result = session.render_shot(shot, frame);
 
     std::cerr << shot.trace.rays << "/" << shot.trace.rays << " rays\n";
 

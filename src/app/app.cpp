@@ -52,7 +52,7 @@ VignetteFrame make_camera_vignette_frame(const Bounds& display_bounds,
     if (tex_w <= 0 || tex_h <= 0)
         return frame;
 
-    Camera display_camera;
+    EditorCamera display_camera;
     display_camera.fit(display_bounds, (float)tex_w, (float)tex_h);
     CameraView display_view{display_camera, (float)tex_w, (float)tex_h};
     ImVec2 top_left = display_view.to_screen({camera_bounds.min.x, camera_bounds.max.y});
@@ -268,14 +268,14 @@ int App::run(const AppConfig& config) {
         ed.validate_selection();
 
         // Camera view for this frame
-        Camera active_camera = current_display_camera(ed, compare_ab, win_w, win_h);
+        EditorCamera active_camera = current_display_camera(ed, compare_ab, win_w, win_h);
         CameraView cv{active_camera, (float)win_w, (float)win_h};
         bool showing_snapshot_a = compare_ab.active && compare_ab.showing_a;
 
         // Trace
         auto t0 = std::chrono::steady_clock::now();
         if (!showing_snapshot_a && !panel.paused && renderer.num_lights() > 0) {
-            TraceConfig trace_cfg = ed.shot.trace.to_trace_config(ed.session.frame_index);
+            TraceConfig trace_cfg = ed.shot.trace.to_trace_config(ed.session.frame);
             renderer.trace_and_draw(trace_cfg);
             glFinish();
         }
@@ -884,7 +884,7 @@ int App::run(const AppConfig& config) {
                                         }, *shape);
                                     } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
                                         std::visit(overloaded{
-                                            [&](const PointLight& l) { ed.interaction.drag_offsets.push_back({l.pos - mw_raw, {}}); },
+                                            [&](const PointLight& l) { ed.interaction.drag_offsets.push_back({l.position - mw_raw, {}}); },
                                             [&](const SegmentLight& l) { ed.interaction.drag_offsets.push_back({l.a - mw_raw, l.b - mw_raw}); },
                                             [&](const ProjectorLight& l) { ed.interaction.drag_offsets.push_back({l.position - mw_raw, {}}); },
                                         }, *light);
@@ -913,7 +913,7 @@ int App::run(const AppConfig& config) {
                     ed.session.undo.push(ed.shot.scene);
                     PointLight light;
                     light.id = next_scene_entity_id(ed.shot.scene, "point_light");
-                    light.pos = mw;
+                    light.position = mw;
                     light.intensity = 1.0f;
                     ed.shot.scene.lights.push_back(light);
                     ed.select_only({SelectionRef::Light, light.id, ""});
@@ -986,7 +986,7 @@ int App::run(const AppConfig& config) {
                     }, *shape);
                 } else if (Light* light = resolve_light(ed.shot.scene, sid)) {
                     std::visit(overloaded{
-                        [&](PointLight& l) { l.pos = mw + off.a; },
+                        [&](PointLight& l) { l.position = mw + off.a; },
                         [&](SegmentLight& l) { l.a = mw + off.a; l.b = mw + off.b; },
                         [&](ProjectorLight& l) { l.position = mw + off.a; },
                     }, *light);

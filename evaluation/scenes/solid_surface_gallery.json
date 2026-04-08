@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "solid_surface_gallery",
   "camera": {
     "bounds": [
@@ -435,7 +435,7 @@
     {
       "id": "point_light_0",
       "type": "point",
-      "pos": [
+      "position": [
         -0.6245858073234558,
         -0.4020330309867859
       ],
@@ -465,7 +465,7 @@
     {
       "id": "point_light_1",
       "type": "point",
-      "pos": [
+      "position": [
         0.6787967681884766,
         -0.5282532572746277
       ],
