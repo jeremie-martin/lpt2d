@@ -43,14 +43,14 @@ normalized authored model:
 
 For shading:
 
-- `auto` keeps the conservative angle-based heuristic
+- `auto` smooths polygon joins whose adjacent edge normals meet within
+  `smooth_angle`
 - `sharp` forces a flat shading join
 - `smooth` forces shading continuity even on concave joins when the normal
   build remains well-defined
 
-Concave polygon joins stay sharp in `auto`, and concave polygon vertices remain
-ineligible for bevel fillets. Explicit `join_modes: smooth` can still request
-shading continuity at a concave join. Fillets remain convex-only geometry.
+Polygon bevel fillets remain convex-only geometry. `auto` and explicit
+`smooth` both affect shading only; they do not change the polygon boundary.
 
 ## Polygon Examples
 

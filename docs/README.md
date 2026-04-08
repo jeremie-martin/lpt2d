@@ -24,21 +24,20 @@ useful over time.
 
 - [examples/README.md](/home/holo/prog/lpt2d/examples/README.md)
   Canonical example pack.
-- [RENDER_SPEED_AUTORESEARCH_20260407.md](/home/holo/prog/lpt2d/docs/RENDER_SPEED_AUTORESEARCH_20260407.md)
-  Focused render-speed research log and accepted benchmark framing.
 - [evaluation/](/home/holo/prog/lpt2d/evaluation/)
   Fidelity comparison and timing measurement.
 - [CLAUDE.md](/home/holo/prog/lpt2d/CLAUDE.md)
   In-tree contributor and agent guide.
 - [OPTIMIZATION_LOG.md](/home/holo/prog/lpt2d/OPTIMIZATION_LOG.md)
-  Performance history.
-- [OUTLINE_JOIN_DISCUSSION_20260408.md](/home/holo/prog/lpt2d/docs/OUTLINE_JOIN_DISCUSSION_20260408.md)
-  Historical discussion log behind the join-semantics model.
+  Canonical performance history and retained optimization lessons.
 
 ## Documentation Rules
 
 - Keep it current.
 - Prefer durable facts over planning prose.
 - Delete superseded docs instead of letting them rot.
+- Do not keep standalone resolved-bug notes, dated discussion transcripts, or
+  one-off research dumps once their durable conclusions have been folded into
+  the canonical docs, examples, tests, or optimization log.
 - Put unscheduled future work in one place instead of spreading it across
   multiple roadmaps, prompts, or review checklists.

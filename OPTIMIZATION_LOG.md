@@ -1,5 +1,21 @@
 # lpt2d Optimization Log
 
+This is the canonical retained optimization history for the repo.
+
+Keep durable wins, durable failures, and still-relevant profiling lessons here.
+Do not spin up separate dated markdown reports once the important conclusions
+can be summarized in this file.
+
+## Current Guidance
+
+- Use `python -m evaluation` as the canonical performance and fidelity gate.
+- Treat fidelity-preserving behavior as non-negotiable; speedups that rely on
+  reduced precision or altered light transport are not acceptable defaults.
+- Historically, the productive wins have come from reducing real pipeline cost
+  rather than from shader micro-tweaks the GPU compiler already handles well.
+- Keep experiment-by-experiment detail only when it remains useful for future
+  optimization work.
+
 ## Reference Baseline
 - Date: 2026-04-03 00:06
 - Commit: e8da824

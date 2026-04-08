@@ -289,7 +289,7 @@ class TestRayIntersect:
         assert result is not None
         assert result[2] == pytest.approx((0.0, 1.0))
 
-    def test_polygon_concave_vertex_stays_flat_even_with_large_threshold(self):
+    def test_polygon_concave_vertex_auto_smooths_with_large_threshold(self):
         from anim.analysis import ray_intersect
         from anim.types import Material, Polygon, Scene
 
@@ -298,6 +298,25 @@ class TestRayIntersect:
             vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
             material_id="mat",
             smooth_angle=3.0,
+        )
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
+
+        result = ray_intersect(scene, (0.0, 1.001), (1.0, 0.0))
+        assert result is not None
+        assert result[2][0] < 1.0
+        assert result[2][0] > 0.6
+        assert result[2][1] > 0.2
+        assert math.hypot(*result[2]) == pytest.approx(1.0)
+
+    def test_polygon_concave_vertex_auto_stays_flat_with_zero_threshold(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, Scene
+
+        poly = Polygon(
+            id="concave_flat",
+            vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
+            material_id="mat",
+            smooth_angle=0.0,
         )
         scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
