@@ -121,7 +121,7 @@ containing 10 collapsible sections, all open by default:
 | J                   | Join mode cycle (polygon)     | works      |
 | Shift+1-6           | Look presets                  | works      |
 | Ctrl+Shift+S        | Save As                       | works      |
-| Shift+A             | Add menu at cursor            | works      |
+| A                   | Add menu at cursor            | works      |
 | ?                   | Shortcut reference overlay    | works      |
 
 ---
