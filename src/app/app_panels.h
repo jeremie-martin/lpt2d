@@ -46,9 +46,11 @@ struct PanelState {
     int current_scene = 0;
     bool open_load_popup = false;
     bool open_save_as_popup = false;
+    bool open_add_popup = false;
     bool show_wireframe = true;
     bool paused = false;
     bool show_controls_panel = true;
+    bool show_shortcuts_help = false;
 };
 
 // ─── Controls panel ─────────────────────────────────────────────────
