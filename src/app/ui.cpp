@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <variant>
 
 namespace {
@@ -290,13 +291,40 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
         float r = (i == hovered_handle) ? 5.0f : 4.0f;
         ImU32 col = (i == hovered_handle) ? COL_HANDLE_HOV : COL_HANDLE;
 
+        // Check if this is a polygon vertex handle (for join mode indicators)
+        const Polygon* poly = nullptr;
+        if (handles[i].kind == Handle::Position && handles[i].obj.type == SelectionRef::Shape) {
+            if (const Shape* shape = resolve_shape(scene, handles[i].obj))
+                poly = std::get_if<Polygon>(shape);
+        }
+
         if (handles[i].kind == Handle::Position && handles[i].param_index == 1 &&
-            handles[i].obj.type == SelectionRef::Shape) {
+            handles[i].obj.type == SelectionRef::Shape && !poly) {
             // Bezier control point: diamond shape
             dl->AddQuadFilled(ImVec2(sp.x, sp.y - r), ImVec2(sp.x + r, sp.y),
                               ImVec2(sp.x, sp.y + r), ImVec2(sp.x - r, sp.y), col);
+        } else if (poly && handles[i].kind == Handle::Position) {
+            // Polygon vertex: shape varies by join mode
+            int vi = handles[i].param_index;
+            PolygonJoinMode jm = polygon_effective_join_mode(*poly, vi);
+            switch (jm) {
+                case PolygonJoinMode::Auto:
+                    dl->AddRectFilled(ImVec2(sp.x - r, sp.y - r), ImVec2(sp.x + r, sp.y + r), col);
+                    break;
+                case PolygonJoinMode::Sharp:
+                    dl->AddRect(ImVec2(sp.x - r, sp.y - r), ImVec2(sp.x + r, sp.y + r), col, 0.0f, 0, 1.5f);
+                    break;
+                case PolygonJoinMode::Smooth:
+                    dl->AddCircleFilled(sp, r, col);
+                    break;
+            }
+            // Vertex label
+            char label[8];
+            std::snprintf(label, sizeof(label), "V%d", vi);
+            ImVec2 text_pos(sp.x + r + 3.0f, sp.y - r - 2.0f);
+            dl->AddText(text_pos, IM_COL32(200, 200, 210, 140), label);
         } else if (handles[i].kind == Handle::Position) {
-            // Filled square
+            // Filled square (default for non-polygon Position handles)
             dl->AddRectFilled(ImVec2(sp.x - r, sp.y - r), ImVec2(sp.x + r, sp.y + r), col);
         } else {
             // Diamond for radius/angle/direction
