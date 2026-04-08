@@ -37,7 +37,8 @@ Shared example flags:
 - `--hq` - render the HQ preset instead of preview
 - `--frame N` - render a still instead of a movie
 - `--output PATH` - override the default output path
-- `--fast` - enable the renderer's half-float fast mode
+- `--fast` - enable the renderer's half-float fast mode for preview work; do
+  not use it for final fidelity or exposure tuning
 
 ## Polygon Join Notes
 
@@ -51,6 +52,15 @@ Shared example flags:
 - The conceptual distinction between `auto`, `sharp`, `smooth`, and geometric
   rounding is documented in
   [docs/OUTLINE_JOIN_SEMANTICS.md](/home/holo/prog/lpt2d/docs/OUTLINE_JOIN_SEMANTICS.md).
+
+## Practical Heuristics
+
+- Mirror-box plus projector setups are still the most reliable starting point
+  for optics-heavy examples and scene families.
+- Calibrate exposure from representative-frame stats rather than by eye alone,
+  and do not over-optimize for zero clipping.
+- Keep camera bounds, enclosure bounds, and canvas aspect ratio aligned to
+  avoid accidental letterboxing and misleading framing.
 
 ## Relationship To Other Surfaces
 

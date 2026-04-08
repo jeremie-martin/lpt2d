@@ -6,6 +6,10 @@ that are already shipped today and a design guide for how that model should
 extend further. Use it to evaluate whether renderer, GUI, Python, JSON, and
 authoring changes are moving the engine in the intended direction.
 
+This is the canonical join-semantics reference. Temporary bug notes or
+discussion transcripts should be folded back into this file once the durable
+model is clear.
+
 ## Why This Exists
 
 lpt2d needs to support authored 2D solid shapes that mix:
@@ -39,8 +43,8 @@ Today, polygon join semantics are partially shipped.
 The current polygon behavior is:
 
 - `auto` smoothing is enabled only when `smooth_angle > 0`
-- `auto` remains conservative: only convex zero-radius polygon joins are
-  eligible
+- `auto` is angle-based for zero-radius polygon joins, including concave joins
+  when the adjacent edge normals can be blended safely
 - `sharp` forces a flat shading join
 - `smooth` explicitly requests shading continuity, including on concave joins,
   subject to the existing normal-safety guards
@@ -48,8 +52,8 @@ The current polygon behavior is:
 
 This is a useful step forward because the engine now has first-class authored
 join semantics for polygons. It is still not the full long-term model, because
-`auto` remains convexity-gated and mixed line/arc/bezier closed outlines do not
-yet share the same authored join system.
+mixed line/arc/bezier closed outlines do not yet share the same authored join
+system.
 
 ## Problem Statement
 

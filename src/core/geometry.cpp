@@ -247,8 +247,6 @@ std::vector<PolygonVertexNormalBuild> compute_polygon_vertex_normals(
         if (join_mode == PolygonJoinMode::Auto) {
             if (poly.smooth_angle <= 0.0f)
                 continue;
-            if (!convex)
-                continue;
 
             float angle = std::acos(std::clamp(prev_normal.dot(next_normal), -1.0f, 1.0f));
             if (angle > poly.smooth_angle)
