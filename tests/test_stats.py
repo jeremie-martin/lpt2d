@@ -30,6 +30,7 @@ from anim.types import (
     Group,
     Look,
     Material,
+    Polygon,
     Scene,
     Transform2D,
 )
@@ -390,6 +391,22 @@ def test_internal_transform_shape_keeps_arc_bounds_tight():
     bounds = _shape_bounds(transformed)
 
     assert bounds == pytest.approx((-1.0, 0.0, 0.0, 1.0))
+
+
+def test_internal_transform_shape_scales_polygon_corner_radii_but_not_smooth_angle():
+    polygon = Polygon(
+        vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+        material=Material(),
+        corner_radius=0.2,
+        corner_radii=[0.0, 0.1, 0.2, 0.0],
+        smooth_angle=1.25,
+    )
+
+    transformed = _transform_shape(polygon, Transform2D(scale=[4.0, 1.0]))
+
+    assert transformed.corner_radius == pytest.approx(0.4)
+    assert transformed.corner_radii == pytest.approx([0.0, 0.2, 0.4, 0.0])
+    assert transformed.smooth_angle == pytest.approx(1.25)
 
 
 def test_internal_shape_bounds_keep_rotated_ellipse_tight():

@@ -120,13 +120,15 @@ static_assert(sizeof(GPUCircle) == 64);
 struct GPUSegment {
     float a[2];
     float b[2];
+    float normal_a[2];
+    float normal_b[2];
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
     float spectral_c0, spectral_c1, spectral_c2;
     float inv_len;
 };
-static_assert(sizeof(GPUSegment) == 64);
+static_assert(sizeof(GPUSegment) == 80);
 
 struct GPULight {
     uint32_t type;    // 0=point, 1=segment, 2=projector
@@ -566,6 +568,20 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
         gpu.spectral_c2 = mat.spectral_c2;
     };
 
+    auto set_segment_geometry = [](GPUSegment& gs, Vec2 a, Vec2 b, Vec2 normal_a, Vec2 normal_b) {
+        gs.a[0] = a.x;
+        gs.a[1] = a.y;
+        gs.b[0] = b.x;
+        gs.b[1] = b.y;
+        gs.normal_a[0] = normal_a.x;
+        gs.normal_a[1] = normal_a.y;
+        gs.normal_b[0] = normal_b.x;
+        gs.normal_b[1] = normal_b.y;
+        Vec2 d = b - a;
+        float len_sq = d.length_sq();
+        gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
+    };
+
     // Collect all world-space shapes (ungrouped + transformed group shapes)
     std::vector<Shape> all_shapes(scene.shapes.begin(), scene.shapes.end());
     for (const auto& group : scene.groups)
@@ -586,11 +602,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
             },
             [&](const Segment& s) {
                 GPUSegment gs{};
-                gs.a[0] = s.a.x; gs.a[1] = s.a.y;
-                gs.b[0] = s.b.x; gs.b[1] = s.b.y;
                 Vec2 d = s.b - s.a;
-                float len_sq = d.length_sq();
-                gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
+                Vec2 flat_normal = d.perp().normalized();
+                set_segment_geometry(gs, s.a, s.b, flat_normal, flat_normal);
                 fill_material(gs, resolve_binding(s.binding, scene.materials));
                 segs.push_back(gs);
             },
@@ -617,50 +631,23 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 int n = (int)p.vertices.size();
                 if (n < 2) return;
                 const Material& mat = resolve_binding(p.binding, scene.materials);
-
-                if (p.corner_radius > 0.0f && n >= 3) {
-                    auto parts = decompose_rounded_polygon(p);
-                    if (!parts.edges.empty() || !parts.corners.empty()) {
-                        for (auto& e : parts.edges) {
-                            GPUSegment gs{};
-                            gs.a[0] = e.a.x; gs.a[1] = e.a.y;
-                            gs.b[0] = e.b.x; gs.b[1] = e.b.y;
-                            Vec2 d = e.b - e.a;
-                            float len_sq = d.length_sq();
-                            gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
-                            fill_material(gs, mat);
-                            segs.push_back(gs);
-                        }
-                        for (auto& c : parts.corners) {
-                            GPUArc ga{};
-                            ga.center[0] = c.center.x; ga.center[1] = c.center.y;
-                            ga.radius = c.radius;
-                            ga.angle_start = c.angle_start;
-                            ga.sweep = c.sweep;
-                            ga.radius_sq = c.radius * c.radius;
-                            ga.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
-                            fill_material(ga, mat);
-                            gpu_arcs.push_back(ga);
-                        }
-                        return;
-                    }
-                }
-
-                // Sharp polygon fallback
-                bool clockwise = polygon_is_clockwise(p);
-                for (int i = 0; i < n; ++i) {
-                    Vec2 a = p.vertices[i];
-                    Vec2 b = p.vertices[(i + 1) % n];
+                auto parts = decompose_rounded_polygon(p);
+                for (auto& e : parts.edges) {
                     GPUSegment gs{};
-                    Vec2 edge_a = clockwise ? a : b;
-                    Vec2 edge_b = clockwise ? b : a;
-                    gs.a[0] = edge_a.x; gs.a[1] = edge_a.y;
-                    gs.b[0] = edge_b.x; gs.b[1] = edge_b.y;
-                    Vec2 d = edge_b - edge_a;
-                    float len_sq = d.length_sq();
-                    gs.inv_len = len_sq > 0.0f ? 1.0f / std::sqrt(len_sq) : 0.0f;
+                    set_segment_geometry(gs, e.a, e.b, e.normal_a, e.normal_b);
                     fill_material(gs, mat);
                     segs.push_back(gs);
+                }
+                for (auto& c : parts.corners) {
+                    GPUArc ga{};
+                    ga.center[0] = c.center.x; ga.center[1] = c.center.y;
+                    ga.radius = c.radius;
+                    ga.angle_start = c.angle_start;
+                    ga.sweep = c.sweep;
+                    ga.radius_sq = c.radius * c.radius;
+                    ga.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
+                    fill_material(ga, mat);
+                    gpu_arcs.push_back(ga);
                 }
             },
             [&](const Ellipse& e) {

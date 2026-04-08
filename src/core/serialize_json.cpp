@@ -118,6 +118,15 @@ float read_required_float(const Json& json, std::string_view key, std::string_vi
     return read_float(require_key(json, key, context), std::string(context) + "." + std::string(key));
 }
 
+std::vector<float> read_float_array(const Json& json, std::string_view context) {
+    expect_array(json, context);
+    std::vector<float> values;
+    values.reserve(json.size());
+    for (size_t i = 0; i < json.size(); ++i)
+        values.push_back(read_float(json[i], std::string(context) + "[" + std::to_string(i) + "]"));
+    return values;
+}
+
 Json vec2_json(Vec2 value) { return Json::array({value.x, value.y}); }
 Json rgb_json(const float value[3]) { return Json::array({value[0], value[1], value[2]}); }
 Json bounds_json(const Bounds& value) { return Json::array({value.min.x, value.min.y, value.max.x, value.max.y}); }
@@ -268,7 +277,8 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         return bezier;
     }
     if (type == "polygon") {
-        reject_unknown_keys(json, {"id", "type", "vertices", "corner_radius", "material", "material_id"}, context);
+        reject_unknown_keys(json, {"id", "type", "vertices", "corner_radius", "corner_radii",
+                                   "smooth_angle", "material", "material_id"}, context);
         Polygon polygon;
         polygon.id = id;
         if (schema == Schema::Authored || json.contains("vertices")) {
@@ -278,7 +288,14 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                                                      std::string(context) + ".vertices[" + std::to_string(i) + "]"));
         }
         if (json.contains("corner_radius"))
-            polygon.corner_radius = json["corner_radius"].get<float>();
+            polygon.corner_radius = read_float(json["corner_radius"], std::string(context) + ".corner_radius");
+        if (json.contains("corner_radii"))
+            polygon.corner_radii = read_float_array(json["corner_radii"], std::string(context) + ".corner_radii");
+        if (json.contains("smooth_angle"))
+            polygon.smooth_angle = read_float(json["smooth_angle"], std::string(context) + ".smooth_angle");
+        if (PolygonFieldValidationResult polygon_validation = validate_polygon_fields(polygon);
+            polygon_validation.error != PolygonFieldValidationError::None)
+            fail(format_polygon_field_validation_error(polygon_validation, context, true));
         polygon.binding = std::move(binding);
         return polygon;
     }
@@ -356,6 +373,14 @@ Json write_shape(const Shape& shape) {
             Json json = {{"id", value.id}, {"type", "polygon"}, {"vertices", std::move(vertices)}};
             if (value.corner_radius > 0.0f)
                 json["corner_radius"] = value.corner_radius;
+            if (!value.corner_radii.empty()) {
+                Json corner_radii = Json::array();
+                for (float radius : value.corner_radii)
+                    corner_radii.push_back(radius);
+                json["corner_radii"] = std::move(corner_radii);
+            }
+            if (value.smooth_angle > 0.0f)
+                json["smooth_angle"] = value.smooth_angle;
             write_binding(json, value.binding);
             return json;
         },

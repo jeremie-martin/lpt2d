@@ -23,7 +23,10 @@ float point_arc_distance(Vec2 p, const Arc& arc);
 // ─── Rounded-polygon decomposition ──────────────────────────────
 
 struct RoundedPolygonParts {
-    struct Edge { Vec2 a, b; };
+    struct Edge {
+        Vec2 a, b;
+        Vec2 normal_a, normal_b;
+    };
     struct Corner { Vec2 center; float radius; float angle_start; float sweep; };
     std::vector<Edge> edges;
     std::vector<Corner> corners;

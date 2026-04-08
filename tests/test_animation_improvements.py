@@ -252,6 +252,80 @@ class TestColorStats:
 
 
 class TestRayIntersect:
+    def test_polygon_smooth_normal_interpolates_on_edge(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, Scene
+
+        poly = Polygon(
+            id="smooth",
+            vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+            material=Material(),
+            smooth_angle=2.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
+        assert result is not None
+        _, point, normal, shape_id = result
+        assert shape_id == "smooth"
+        assert point == pytest.approx((0.8, 1.0))
+        assert normal[0] > 0.4
+        assert normal[1] < 0.95
+        assert math.hypot(*normal) == pytest.approx(1.0)
+
+    def test_polygon_large_corner_stays_flat_below_smooth_threshold(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, Scene
+
+        poly = Polygon(
+            id="sharp",
+            vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+            material=Material(),
+            smooth_angle=1.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
+        assert result is not None
+        assert result[2] == pytest.approx((0.0, 1.0))
+
+    def test_polygon_concave_vertex_stays_flat_even_with_large_threshold(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, Scene
+
+        poly = Polygon(
+            id="concave",
+            vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
+            material=Material(),
+            smooth_angle=3.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.0, 1.001), (1.0, 0.0))
+        assert result is not None
+        assert result[2][0] == pytest.approx(1.0, abs=1e-6)
+        assert abs(result[2][1]) < 1e-3
+
+    def test_polygon_edge_can_mix_smooth_and_beveled_endpoints(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, Scene
+
+        poly = Polygon(
+            id="mixed",
+            vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+            material=Material(),
+            corner_radii=[0.0, 0.0, 0.25, 0.0],
+            smooth_angle=2.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (-0.75, 2.0), (0.0, -1.0))
+        assert result is not None
+        _, point, normal, _ = result
+        assert point[1] == pytest.approx(1.0)
+        assert normal[0] < -0.1
+        assert normal[1] > 0.7
+
     def test_ray_hits_segment(self):
         from anim.analysis import ray_intersect
         from anim.types import Material, Scene, Segment

@@ -195,6 +195,8 @@ struct Polygon {
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
     MaterialBinding binding;
     float corner_radius = 0.0f; // fillet radius; 0 = sharp corners
+    std::vector<float> corner_radii; // optional per-vertex fillet override; empty = use corner_radius
+    float smooth_angle = 0.0f; // radians; 0 = flat-shaded polygon edges
 
     Vec2 centroid() const {
         if (vertices.empty()) return {0, 0};
@@ -217,6 +219,69 @@ inline float polygon_signed_area2(const Polygon& p) {
 
 inline bool polygon_is_clockwise(const Polygon& p) {
     return polygon_signed_area2(p) <= 0.0f;
+}
+
+inline bool polygon_uses_per_vertex_corner_radii(const Polygon& p) {
+    return !p.corner_radii.empty() && p.corner_radii.size() == p.vertices.size();
+}
+
+inline float polygon_effective_corner_radius(const Polygon& p, int index) {
+    if (polygon_uses_per_vertex_corner_radii(p) && index >= 0 && index < (int)p.corner_radii.size())
+        return p.corner_radii[(size_t)index];
+    return p.corner_radius;
+}
+
+enum class PolygonFieldValidationError {
+    None,
+    NegativeCornerRadius,
+    NegativeSmoothAngle,
+    CornerRadiiSizeMismatch,
+    NegativeCornerRadiiEntry,
+};
+
+struct PolygonFieldValidationResult {
+    PolygonFieldValidationError error = PolygonFieldValidationError::None;
+    size_t index = 0;
+};
+
+inline PolygonFieldValidationResult validate_polygon_fields(const Polygon& p) {
+    if (p.corner_radius < 0.0f)
+        return {PolygonFieldValidationError::NegativeCornerRadius, 0};
+    if (p.smooth_angle < 0.0f)
+        return {PolygonFieldValidationError::NegativeSmoothAngle, 0};
+    if (!p.corner_radii.empty() && p.corner_radii.size() != p.vertices.size())
+        return {PolygonFieldValidationError::CornerRadiiSizeMismatch, 0};
+    for (size_t i = 0; i < p.corner_radii.size(); ++i)
+        if (p.corner_radii[i] < 0.0f)
+            return {PolygonFieldValidationError::NegativeCornerRadiiEntry, i};
+    return {};
+}
+
+inline std::string format_polygon_field_validation_error(const PolygonFieldValidationResult& result,
+                                                         std::string_view context,
+                                                         bool member_path_context) {
+    auto field_context = [&](std::string_view field) {
+        if (context.empty()) return std::string(field);
+        return member_path_context ? std::string(context) + "." + std::string(field)
+                                   : std::string(context) + " " + std::string(field);
+    };
+
+    switch (result.error) {
+        case PolygonFieldValidationError::None:
+            return {};
+        case PolygonFieldValidationError::NegativeCornerRadius:
+            return field_context("corner_radius") + " must be >= 0";
+        case PolygonFieldValidationError::NegativeSmoothAngle:
+            return field_context("smooth_angle") + " must be >= 0";
+        case PolygonFieldValidationError::CornerRadiiSizeMismatch:
+            return field_context("corner_radii") + " must be empty or match vertices.size()";
+        case PolygonFieldValidationError::NegativeCornerRadiiEntry:
+            if (member_path_context)
+                return std::string(context) + ".corner_radii[" + std::to_string(result.index) +
+                       "] must be >= 0";
+            return field_context("corner_radii entries") + " must be >= 0";
+    }
+    return {};
 }
 
 struct Ellipse {

@@ -298,14 +298,23 @@ NB_MODULE(_lpt2d, m) {
 
     nb::class_<Polygon>(m, "Polygon")
         .def("__init__", [=](Polygon* p, std::string id, std::vector<Vec2> vertices,
-                             nb::object material, std::string material_id, float corner_radius) {
-            new (p) Polygon{std::move(id), std::move(vertices),
-                            make_binding(material, std::move(material_id)), corner_radius};
+                             nb::object material, std::string material_id, float corner_radius,
+                             std::vector<float> corner_radii, float smooth_angle) {
+            new (p) Polygon{};
+            p->id = std::move(id);
+            p->vertices = std::move(vertices);
+            p->binding = make_binding(material, std::move(material_id));
+            p->corner_radius = corner_radius;
+            p->corner_radii = std::move(corner_radii);
+            p->smooth_angle = smooth_angle;
         }, "id"_a = "", "vertices"_a = std::vector<Vec2>{},
-           "material"_a = nb::none(), "material_id"_a = "", "corner_radius"_a = 0.0f)
+           "material"_a = nb::none(), "material_id"_a = "", "corner_radius"_a = 0.0f,
+           "corner_radii"_a = std::vector<float>{}, "smooth_angle"_a = 0.0f)
         .def_rw("id", &Polygon::id)
         .def_rw("vertices", &Polygon::vertices)
         .def_rw("corner_radius", &Polygon::corner_radius)
+        .def_rw("corner_radii", &Polygon::corner_radii)
+        .def_rw("smooth_angle", &Polygon::smooth_angle)
         .def_prop_rw("material",
             [=](const Polygon& p) { return mat_getter(p); },
             [=](Polygon& p, const Material& m) { mat_setter(p, m); })

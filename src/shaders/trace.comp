@@ -15,6 +15,8 @@ struct GPUCircle {
 struct GPUSeg {
     vec2 a;
     vec2 b;
+    vec2 normal_a;
+    vec2 normal_b;
     float ior, roughness, metallic, transmission;
     float absorption, cauchy_b, albedo;
     float emission;
@@ -247,7 +249,15 @@ HitGeo hit_segment(vec2 ro, vec2 rd, GPUSeg s, float max_t) {
     if (t < INTERSECT_EPS || t >= max_t || u < 0.0 || u > 1.0) return NO_HIT;
 
     vec2 p = ro + rd * t;
-    vec2 n = vec2(-d.y, d.x) * s.inv_len;
+    vec2 flat_n = vec2(-d.y, d.x) * s.inv_len;
+    vec2 mixed_n = mix(s.normal_a, s.normal_b, u);
+    float mixed_len_sq = dot(mixed_n, mixed_n);
+    vec2 n = flat_n;
+    if (mixed_len_sq > 1e-8) {
+        vec2 candidate = mixed_n * inversesqrt(mixed_len_sq);
+        if (dot(candidate, flat_n) > 0.0)
+            n = candidate;
+    }
     return HitGeo(t, p, n);
 }
 
