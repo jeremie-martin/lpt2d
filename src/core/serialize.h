@@ -15,11 +15,6 @@ std::optional<Shot> try_load_shot_json(const std::string& path, std::string* err
 // Try to parse a shot from a JSON string in the current authored format.
 std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std::string* error = nullptr);
 
-// Try to parse a shot from a JSON string for CLI/stdin stream rendering.
-// Accepts either a full authored shot document or a partial scene/wire document
-// with optional camera/canvas/look/trace blocks.
-std::optional<Shot> try_load_stream_shot_json_string(std::string_view json_content, std::string* error = nullptr);
-
 // Load shot from JSON file. Returns default shot on failure.
 Shot load_shot_json(const std::string& path);
 

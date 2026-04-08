@@ -4,22 +4,15 @@
 #include "serialize.h"
 #include "session.h"
 
-#include <nlohmann/json.hpp>
-
-#include <stdint.h>
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
-#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
-
-using Json = nlohmann::ordered_json;
 
 struct CliOverrides {
     std::optional<int> width, height;
@@ -77,9 +70,7 @@ static void print_usage() {
     std::cerr << "Usage: lpt2d-cli [options]\n"
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
-              << "  --stream                 Read one JSON shot/scene from stdin, write raw RGB24 to stdout\n"
-              << "  --histogram              Include the 256-bin luminance histogram in --stream metadata\n"
-              << "  --save-shot <path>       Save the resolved v7 shot JSON via the C++ serializer and exit\n"
+              << "  --save-shot <path>       Save the resolved shot JSON via the C++ serializer and exit\n"
               << "  --width <int>            Width (overrides shot canvas)\n"
               << "  --height <int>           Height (overrides shot canvas)\n"
               << "  --rays <int>             Total rays (overrides shot trace)\n"
@@ -142,63 +133,12 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
-static int run_stream_mode(const CliOverrides& overrides, bool fast_mode, bool include_histogram, int frame) {
-    std::string input((std::istreambuf_iterator<char>(std::cin)), std::istreambuf_iterator<char>());
-    if (input.empty()) {
-        std::cerr << "No JSON received on stdin\n";
-        return 1;
-    }
-
-    std::string error;
-    auto shot = try_load_stream_shot_json_string(input, &error);
-    if (!shot) {
-        std::cerr << error << "\n";
-        return 1;
-    }
-    overrides.apply_to(*shot);
-
-    try {
-        RenderSession session(shot->canvas.width, shot->canvas.height, fast_mode);
-        auto t0 = std::chrono::steady_clock::now();
-        auto result = session.render_shot(*shot, frame);
-        auto t1 = std::chrono::steady_clock::now();
-        const double elapsed_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-        std::cout.write(reinterpret_cast<const char*>(result.pixels.data()),
-                        static_cast<std::streamsize>(result.pixels.size()));
-        std::cout.flush();
-
-        Json report = {
-            {"frame", frame},
-            {"rays", result.total_rays},
-            {"time_ms", static_cast<int>(elapsed_ms + 0.5)},
-            {"time_ms_exact", elapsed_ms},
-            {"max_hdr", result.max_hdr},
-            {"total_rays", result.total_rays},
-            {"mean", result.metrics.mean_lum},
-            {"pct_black", result.metrics.pct_black},
-            {"pct_clipped", result.metrics.pct_clipped},
-            {"p50", result.metrics.p50},
-            {"p95", result.metrics.p95},
-        };
-        if (include_histogram)
-            report["histogram"] = result.metrics.histogram;
-
-        std::cerr << "frame " << frame << ": " << report.dump() << "\n";
-        return 0;
-    } catch (const std::exception& ex) {
-        std::cerr << ex.what() << "\n";
-        return 1;
-    }
-}
 
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     std::string save_shot_path;
     bool fast_mode = false;
-    bool stream_mode = false;
-    bool include_histogram = false;
     int frame = 0;
 
     CliOverrides overrides;
@@ -208,10 +148,6 @@ int main(int argc, char** argv) {
             scene_name = argv[++i];
         else if (std::strcmp(argv[i], "--output") == 0 && i + 1 < argc)
             output = argv[++i];
-        else if (std::strcmp(argv[i], "--stream") == 0)
-            stream_mode = true;
-        else if (std::strcmp(argv[i], "--histogram") == 0)
-            include_histogram = true;
         else if (std::strcmp(argv[i], "--save-shot") == 0 && i + 1 < argc)
             save_shot_path = argv[++i];
         else if (std::strcmp(argv[i], "--width") == 0 && i + 1 < argc)
@@ -307,14 +243,6 @@ int main(int argc, char** argv) {
             print_usage();
             return 1;
         }
-    }
-
-    if (stream_mode) {
-        if (!save_shot_path.empty()) {
-            std::cerr << "--save-shot cannot be combined with --stream\n";
-            return 1;
-        }
-        return run_stream_mode(overrides, fast_mode, include_histogram, frame);
     }
 
     // Load shot and apply CLI overrides
