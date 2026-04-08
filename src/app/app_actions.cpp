@@ -311,6 +311,40 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
     ed.session.dirty = false;
 }
 
+void duplicate_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
+                        bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                        int win_w, int win_h) {
+    if (ed.interaction.selection.empty()) return;
+    ed.session.undo.push(ed.shot.scene);
+    std::vector<SelectionRef> new_sel;
+    Vec2 offset{0.05f, 0.05f};
+    for (auto& sid : ed.interaction.selection) {
+        if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) {
+            Shape s = *shape;
+            shape_id(s) = next_scene_entity_id(ed.shot.scene, shape_type_name(s));
+            translate_shape(s, offset);
+            ed.shot.scene.shapes.push_back(s);
+            new_sel.push_back({SelectionRef::Shape, shape_id(s), ""});
+        } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
+            Light l = *light;
+            light_id(l) = next_scene_entity_id(ed.shot.scene, light_type_name(l));
+            translate_light(l, offset);
+            ed.shot.scene.lights.push_back(l);
+            new_sel.push_back({SelectionRef::Light, light_id(l), ""});
+        } else if (sid.type == SelectionRef::Group) {
+            if (const Group* gp = find_group(ed.shot.scene, sid.id)) {
+                Group g = *gp;
+                g.id = next_scene_entity_id(ed.shot.scene, "group");
+                translate_group(g, offset);
+                ed.shot.scene.groups.push_back(g);
+                new_sel.push_back({SelectionRef::Group, g.id, ""});
+            }
+        }
+    }
+    ed.replace_selection(std::move(new_sel));
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
+}
+
 bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
                     bool& light_analysis_valid, bool& force_live_metrics_refresh,
                     int win_w, int win_h) {
