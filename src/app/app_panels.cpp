@@ -57,6 +57,15 @@ bool material_id_available(const Scene& scene, std::string_view candidate, std::
     return !scene.materials.contains(std::string(candidate));
 }
 
+std::string generate_unique_material_name(const MaterialMap& materials, std::string_view base = "Material") {
+    std::string name(base);
+    if (!materials.contains(name)) return name;
+    for (int n = 2; ; ++n) {
+        name = std::string(base) + " " + std::to_string(n);
+        if (!materials.contains(name)) return name;
+    }
+}
+
 bool apply_material_to_selection(EditorState& ed, std::string_view material_id) {
     bool changed = false;
     for (const auto& id : ed.interaction.selection) {
@@ -813,13 +822,27 @@ void draw_controls_panel(
                         local_changed = true;
                     }
                 }
+                ImGui::Separator();
+                if (ImGui::Selectable("+ New Material")) {
+                    std::string new_name = generate_unique_material_name(ed.shot.scene.materials);
+                    ed.shot.scene.materials[new_name] = resolve_shape_material(shape, ed.shot.scene.materials);
+                    bind_material(shape, ed.shot.scene, new_name);
+                    mid = new_name;
+                    sync_library(new_name);
+                    local_changed = true;
+                }
                 ImGui::EndCombo();
             }
 
             if (!mid.empty()) {
-                ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
-                    "Editing shared material asset '%s'", mid.c_str());
-                if (ImGui::SmallButton("Make Inline")) {
+                int bound_count = material_usage_count(ed.shot.scene, mid);
+                if (bound_count > 1)
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
+                        "Shared material '%s' (%d shapes)", mid.c_str(), bound_count);
+                else
+                    ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
+                        "Material '%s'", mid.c_str());
+                if (ImGui::SmallButton("Make Unique")) {
                     detach_material(shape, ed.shot.scene.materials);
                     mid.clear();
                     sync_library(std::string_view{});
@@ -827,12 +850,11 @@ void draw_controls_panel(
                 }
                 if (auto it = ed.shot.scene.materials.find(mid); it != ed.shot.scene.materials.end()) {
                     local_changed |= edit_material(it->second);
-                } else {
+                } else if (!mid.empty()) {
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f),
                         "Missing shared material '%s'", mid.c_str());
                 }
             } else {
-                ImGui::TextDisabled("Editing inline custom material");
                 if (auto* mat = std::get_if<Material>(&shape_binding(shape)))
                     local_changed |= edit_material(*mat);
             }
@@ -999,14 +1021,13 @@ void draw_controls_panel(
     sync_material_panel_to_active_object(ed, panel);
 
     // -- Material Library --
-    if (ImGui::CollapsingHeader("Material Library (Advanced)")) {
+    if (ImGui::CollapsingHeader("Material Library")) {
         ImGui::PushID("Materials");
         auto& mats = ed.shot.scene.materials;
         if (!panel.material_panel.selected_name.empty() && !mats.contains(panel.material_panel.selected_name)) {
             panel.material_panel.selected_name.clear();
             panel.material_panel.rename_buffer.clear();
         }
-        ImGui::TextDisabled("Advanced: shared material assets and batch actions.");
         if (mats.empty()) {
             ImGui::TextDisabled("No materials defined");
         } else {
@@ -1065,7 +1086,6 @@ void draw_controls_panel(
                 Scene before = ed.shot.scene;
                 if (apply_material_to_selection(ed, panel.material_panel.selected_name)) {
                     ed.session.undo.push(ed.shot.scene);
-                    panel.material_panel.synced_target.reset();
                     reload();
                 } else {
                     ed.shot.scene = std::move(before);
@@ -1076,7 +1096,6 @@ void draw_controls_panel(
                 Scene before = ed.shot.scene;
                 if (detach_material_from_selection(ed, panel.material_panel.selected_name)) {
                     ed.session.undo.push(ed.shot.scene);
-                    panel.material_panel.synced_target.reset();
                     reload();
                 } else {
                     ed.shot.scene = std::move(before);
@@ -1098,13 +1117,20 @@ void draw_controls_panel(
 
         ImGui::Separator();
 
+        auto create_and_bind = [&](const std::string& name) {
+            if (!ed.interaction.selection.empty())
+                apply_material_to_selection(ed, name);
+        };
+
         ImGui::InputText("Name##newmat", panel.material_panel.new_name.data(), panel.material_panel.new_name.size());
         ImGui::SameLine();
         if (ImGui::Button("Add") && panel.material_panel.new_name[0] != '\0' && !mats.count(panel.material_panel.new_name.data())) {
             ed.session.undo.push(ed.shot.scene);
-            mats[panel.material_panel.new_name.data()] = Material{};
-            panel.material_panel.selected_name = panel.material_panel.new_name.data();
-            panel.material_panel.rename_buffer = panel.material_panel.new_name.data();
+            std::string name = panel.material_panel.new_name.data();
+            mats[name] = Material{};
+            create_and_bind(name);
+            panel.material_panel.selected_name = name;
+            panel.material_panel.rename_buffer = name;
             panel.material_panel.new_name[0] = '\0';
             reload();
         }
@@ -1115,6 +1141,7 @@ void draw_controls_panel(
                 if (mats.count(name)) { int n = 2; while (mats.count(name + " " + std::to_string(n))) ++n; name += " " + std::to_string(n); }
                 ed.session.undo.push(ed.shot.scene);
                 mats[name] = mat;
+                create_and_bind(name);
                 panel.material_panel.selected_name = name;
                 panel.material_panel.rename_buffer = name;
                 reload();
