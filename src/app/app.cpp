@@ -1204,26 +1204,26 @@ int App::run(const AppConfig& config) {
             panel.open_add_popup = false;
         }
         if (ImGui::BeginPopup("AddAtCursor##popup")) {
-            auto add_item = [&](const char* name, EditTool tool, const char* shortcut) {
-                if (ImGui::MenuItem(name, shortcut)) {
+            auto add_item = [&](const char* name, EditTool tool) {
+                if (ImGui::MenuItem(name)) {
                     ed.interaction.creating = false;
                     ed.interaction.path_create_points.clear();
                     ed.interaction.tool = tool;
                 }
             };
             ImGui::TextDisabled("Shapes");
-            add_item("Circle", EditTool::Circle, "C");
-            add_item("Segment", EditTool::Segment, "L");
-            add_item("Arc", EditTool::Arc, "A");
-            add_item("Bezier", EditTool::Bezier, "B");
-            add_item("Polygon", EditTool::Polygon, nullptr);
-            add_item("Ellipse", EditTool::Ellipse, "E");
-            add_item("Path", EditTool::Path, "D");
+            add_item("Circle", EditTool::Circle);
+            add_item("Segment", EditTool::Segment);
+            add_item("Arc", EditTool::Arc);
+            add_item("Bezier", EditTool::Bezier);
+            add_item("Polygon", EditTool::Polygon);
+            add_item("Ellipse", EditTool::Ellipse);
+            add_item("Path", EditTool::Path);
             ImGui::Separator();
             ImGui::TextDisabled("Lights");
-            add_item("Point Light", EditTool::PointLight, "P");
-            add_item("Segment Light", EditTool::SegmentLight, "T");
-            add_item("Projector", EditTool::ProjectorLight, "W");
+            add_item("Point Light", EditTool::PointLight);
+            add_item("Segment Light", EditTool::SegmentLight);
+            add_item("Projector", EditTool::ProjectorLight);
             ImGui::EndPopup();
         }
 
@@ -1263,10 +1263,8 @@ int App::run(const AppConfig& config) {
                 section("Tools");
                 row("Q", "Select tool");
                 row("Shift+A", "Add menu at cursor");
-                row("C / L / A / B", "Circle / Segment / Arc / Bezier");
-                row("E / D", "Ellipse / Path");
-                row("P / T / W", "Point / Segment / Projector light");
-                row("M / X", "Measure / Erase");
+                row("X", "Erase tool");
+                row("M", "Measure tool");
 
                 section("Materials & Look");
                 row("N / Shift+N", "Cycle material fwd / back");
@@ -1523,16 +1521,7 @@ int App::run(const AppConfig& config) {
                         ed.interaction.tool = t;
                     };
                     if (ImGui::IsKeyPressed(ImGuiKey_Q)) switch_tool(EditTool::Select);
-                    if (ImGui::IsKeyPressed(ImGuiKey_C)) switch_tool(EditTool::Circle);
-                    if (ImGui::IsKeyPressed(ImGuiKey_L)) switch_tool(EditTool::Segment);
-                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl && !io.KeyShift) switch_tool(EditTool::Arc);
-                    if (ImGui::IsKeyPressed(ImGuiKey_B)) switch_tool(EditTool::Bezier);
-                    if (ImGui::IsKeyPressed(ImGuiKey_E)) switch_tool(EditTool::Ellipse);
-                    if (ImGui::IsKeyPressed(ImGuiKey_D)) switch_tool(EditTool::Path);
                     if (ImGui::IsKeyPressed(ImGuiKey_X) && !ed.interaction.transform.active()) switch_tool(EditTool::Erase);
-                    if (ImGui::IsKeyPressed(ImGuiKey_P)) switch_tool(EditTool::PointLight);
-                    if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);
-                    if (ImGui::IsKeyPressed(ImGuiKey_W)) switch_tool(EditTool::ProjectorLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_M)) switch_tool(EditTool::Measure);
 
                     // Wireframe toggle: V
