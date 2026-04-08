@@ -87,7 +87,7 @@ def test_quality_gate_too_black():
 
 
 def test_quality_gate_no_metrics():
-    """When live metrics are None (old binary), check_quality returns empty."""
+    """When live metrics are absent, check_quality returns empty."""
     gate = QualityGate()
     report = FrameReport(frame=0, rays=1000, time_ms=10, max_hdr=1.0, total_rays=1000)
     warnings = check_quality(report, gate)

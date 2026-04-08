@@ -32,11 +32,6 @@ def parse_example_args(
     parser.add_argument("--output", type=Path, help="explicit output path")
     parser.add_argument("--save-json", type=Path, help="optional authored shot export path")
     parser.add_argument("--fast", action="store_true", help="pass --fast to the renderer")
-    parser.add_argument(
-        "--binary",
-        type=Path,
-        help="accepted for compatibility with legacy example harnesses; ignored by in-process rendering",
-    )
     return parser.parse_args(argv)
 
 

@@ -163,19 +163,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="native Polygon.corner_radius bevel-fillet radius in scene units",
     )
     parser.add_argument(
-        "--bevel-quality",
-        type=int,
-        help="deprecated compatibility flag; ignored because native bevel fillets are analytic",
-    )
-    parser.add_argument(
         "--save-json",
         type=Path,
         help="optional authored shot export path; defaults to a sibling .json next to the render output",
-    )
-    parser.add_argument(
-        "--binary",
-        type=Path,
-        help="accepted for compatibility with the shared example harness; ignored here",
     )
     return parser.parse_args(argv)
 

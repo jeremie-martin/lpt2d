@@ -77,7 +77,7 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 
 ### Material Constructors
 
-`glass()`, `mirror()`, `opaque_mirror()`, `diffuse()`, `absorber()`, `emissive()`, `beam_splitter()`
+`glass()`, `mirror()`, `opaque_mirror()`, `diffuse()`, `absorber()`, `emissive()`
 
 Python wrappers in `anim/types.py` add a `color: ColorSpec` keyword for spectral color.
 
