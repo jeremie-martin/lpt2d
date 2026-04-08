@@ -75,13 +75,6 @@ EXPOSURE = Track(
     ],
     wrap=Wrap.PINGPONG,
 )
-
-
-def _bind_material_id(shape, material_id: str):
-    shape.material_id = material_id
-    return shape
-
-
 def _unit(angle: float) -> list[float]:
     return [math.cos(angle), math.sin(angle)]
 
@@ -112,10 +105,7 @@ def frame(ctx: FrameContext) -> Frame:
         "secondary_glass": SECONDARY_GLASS,
         "splitter_panel": SPLITTER,
     }
-    chamber = [
-        _bind_material_id(shape, "wall_mirror")
-        for shape in mirror_box(1.2, 0.7, materials["wall_mirror"], id_prefix="wall")
-    ]
+    chamber = mirror_box(1.2, 0.7, "wall_mirror", id_prefix="wall")
     scene = Scene(
         materials=materials,
         shapes=[
@@ -124,21 +114,19 @@ def frame(ctx: FrameContext) -> Frame:
                 id="glass_left",
                 center=[-0.38, 0.18 + 0.05 * phase],
                 radius=0.22,
-                material=materials["primary_glass"],
                 material_id="primary_glass",
             ),
             Circle(
                 id="glass_right",
                 center=[0.36, -0.14 - 0.04 * phase],
                 radius=0.17,
-                material=materials["secondary_glass"],
                 material_id="secondary_glass",
             ),
             thick_segment(
                 (-0.18, -0.42 + panel_sway),
                 (0.24, 0.30 + panel_sway),
                 0.05,
-                materials["splitter_panel"],
+                "splitter_panel",
                 id_prefix="splitter_panel",
             ),
         ],
@@ -153,7 +141,6 @@ def frame(ctx: FrameContext) -> Frame:
             )
         ],
     )
-    scene.shapes[-1].material_id = "splitter_panel"
     return Frame(scene=scene, look=Look(exposure=EXPOSURE(ctx.time)))
 
 

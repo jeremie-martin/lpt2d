@@ -43,6 +43,9 @@ ORBIT_RADIUS = 1.0
 
 WALL = mirror(0.95)
 SPHERE_GLASS = glass(1.5, cauchy_b=20000, absorption=0.5)
+WALL_ID = "wall"
+SPHERE_GLASS_ID = "sphere_glass"
+MATERIALS = {WALL_ID: WALL, SPHERE_GLASS_ID: SPHERE_GLASS}
 
 CAMERA = Camera2D(bounds=[-BOX_HALF - 0.1, -BOX_HALF - 0.1, BOX_HALF + 0.1, BOX_HALF + 0.1])
 
@@ -84,10 +87,10 @@ def make_box() -> Group:
     return Group(
         id="mirror_box",
         shapes=[
-            Segment(a=[-h, -h], b=[h, -h], material=WALL),
-            Segment(a=[h, h], b=[-h, h], material=WALL),
-            Segment(a=[-h, h], b=[-h, -h], material=WALL),
-            Segment(a=[h, -h], b=[h, h], material=WALL),
+            Segment(a=[-h, -h], b=[h, -h], material_id=WALL_ID),
+            Segment(a=[h, h], b=[-h, h], material_id=WALL_ID),
+            Segment(a=[-h, h], b=[-h, -h], material_id=WALL_ID),
+            Segment(a=[h, -h], b=[h, h], material_id=WALL_ID),
         ],
     )
 
@@ -95,7 +98,7 @@ def make_box() -> Group:
 def make_spheres() -> Group:
     return Group(
         id="glass_spheres",
-        shapes=[Circle(center=[x, 0], radius=0.2, material=SPHERE_GLASS) for x in (-0.5, 0.0, 0.5)],
+        shapes=[Circle(center=[x, 0], radius=0.2, material_id=SPHERE_GLASS_ID) for x in (-0.5, 0.0, 0.5)],
     )
 
 
@@ -134,6 +137,7 @@ def make_beam(t: float) -> Group:
 def animate(ctx: FrameContext) -> Frame:
     return Frame(
         scene=Scene(
+            materials=MATERIALS,
             groups=[make_box(), make_spheres(), make_fill_light(), make_beam(ctx.time)],
         ),
         look=Look(

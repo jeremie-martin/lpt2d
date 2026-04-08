@@ -7,7 +7,7 @@ import pytest
 
 from anim import mirror_block
 from anim.builders import biconvex_lens, double_slit, mirror_box, rectangle, regular_polygon, thick_arc, waveguide
-from anim.types import Material, Polygon, PolygonJoinMode, Segment
+from anim.types import Polygon, PolygonJoinMode, Segment
 
 
 def _polygon_area2(vertices: list[tuple[float, float]]) -> float:
@@ -25,7 +25,7 @@ def test_thick_arc_returns_clockwise_annular_sector_polygon():
         thickness=0.4,
         angle_start=0.25,
         sweep=1.5,
-        material=Material(transmission=1.0, ior=1.5),
+        material_id="glass",
     )
 
     assert len(shapes) == 1
@@ -46,7 +46,7 @@ def test_thick_arc_supports_smooth_angle_and_end_cap_radii():
         thickness=0.2,
         angle_start=0.25,
         sweep=1.75,
-        material=Material(transmission=1.0, ior=1.5),
+        material_id="glass",
         smooth_angle=1.0,
         end_cap_radii=(0.05, 0.08),
     )
@@ -92,7 +92,7 @@ def test_polygon_wrappers_forward_corner_radii_join_modes_and_smooth_angle(
     if expected_vertex_count > 0:
         join_modes[-1] = PolygonJoinMode.smooth
     shape = builder(
-        material=Material(transmission=1.0, ior=1.5),
+        material_id="glass",
         corner_radius=0.25,
         corner_radii=[0.0] * expected_vertex_count,
         join_modes=join_modes,
@@ -108,25 +108,23 @@ def test_polygon_wrappers_forward_corner_radii_join_modes_and_smooth_angle(
     assert shape.smooth_angle == pytest.approx(1.0)
 
 
-def test_polygon_positional_constructor_keeps_smooth_angle_slot():
+def test_polygon_positional_constructor_requires_material_id_first():
     shape = Polygon(
+        "glass",
         "poly",
         [(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-        Material(),
-        "",
         0.0,
         [],
         1.25,
     )
 
+    assert shape.material_id == "glass"
     assert shape.smooth_angle == pytest.approx(1.25)
     assert list(shape.join_modes) == []
 
 
 def test_mirror_block_returns_clockwise_per_face_segments():
-    default = Material(metallic=1.0, transmission=0.0, albedo=0.95)
-
-    shapes = mirror_block(center=(1.0, -2.0), width=4.0, height=2.0, material=default)
+    shapes = mirror_block(center=(1.0, -2.0), width=4.0, height=2.0, material_id="mirror")
 
     assert [type(shape) for shape in shapes] == [Segment, Segment, Segment, Segment]
     assert [(shape.a, shape.b) for shape in shapes] == [
@@ -135,34 +133,26 @@ def test_mirror_block_returns_clockwise_per_face_segments():
         ((3.0, -1.0), (3.0, -3.0)),
         ((3.0, -3.0), (-1.0, -3.0)),
     ]
-    assert all(shape.material == default for shape in shapes)
+    assert all(shape.material_id == "mirror" for shape in shapes)
 
 
 def test_mirror_block_applies_per_face_material_overrides():
-    default = Material(albedo=0.2)
-    top = Material(metallic=1.0, albedo=0.95)
-    right = Material(transmission=1.0, ior=1.5)
-    bottom = Material(albedo=0.0)
-    left = Material(albedo=0.8)
-
     shapes = mirror_block(
         center=(0.0, 0.0),
         width=2.0,
         height=1.0,
-        material=default,
-        top=top,
-        right=right,
-        bottom=bottom,
-        left=left,
+        material_id="default",
+        top="top",
+        right="right",
+        bottom="bottom",
+        left="left",
     )
 
-    assert [shape.material for shape in shapes] == [left, top, right, bottom]
+    assert [shape.material_id for shape in shapes] == ["left", "top", "right", "bottom"]
 
 
 def test_multi_shape_builders_accept_id_prefix():
-    material = Material(transmission=1.0, ior=1.5)
-
-    box = mirror_box(half_w=1.0, half_h=0.5, material=material, id_prefix="room")
+    box = mirror_box(half_w=1.0, half_h=0.5, material_id="glass", id_prefix="room")
     assert [shape.id for shape in box] == [
         "room_bottom",
         "room_top",
@@ -176,7 +166,7 @@ def test_multi_shape_builders_accept_id_prefix():
         center_thickness=0.1,
         left_radius=0.8,
         right_radius=0.8,
-        material=material,
+        material_id="glass",
         id_prefix="lens",
     )
     assert [shape.id for shape in lens] == [
@@ -191,7 +181,7 @@ def test_multi_shape_builders_accept_id_prefix():
         width=4.0,
         gap=0.3,
         separation=1.0,
-        material=Material(albedo=0.0),
+        material_id="absorber",
         id_prefix="barrier",
     )
     assert [shape.id for shape in slits] == [
@@ -203,7 +193,7 @@ def test_multi_shape_builders_accept_id_prefix():
     guide = waveguide(
         points=[(-1.0, 0.0), (0.0, 0.5), (1.0, 0.0)],
         width=0.2,
-        material=material,
+        material_id="glass",
         id_prefix="guide",
     )
     assert [shape.id for shape in guide] == [
@@ -223,4 +213,4 @@ def test_multi_shape_builders_accept_id_prefix():
 )
 def test_mirror_block_rejects_non_positive_dimensions(width: float, height: float):
     with pytest.raises(ValueError):
-        mirror_block(center=(0.0, 0.0), width=width, height=height, material=Material())
+        mirror_block(center=(0.0, 0.0), width=width, height=height, material_id="mirror")

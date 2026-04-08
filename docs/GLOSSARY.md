@@ -72,8 +72,7 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 | **albedo** | Metallic: reflectance F0. Dielectric: diffuse scatter probability. |
 | **spectral_c0/c1/c2** | Sigmoid spectral color coefficients (Jakob & Hanika model). |
 | **fill** | Interior fill intensity. 0 = no fill, >0 = rasterized solid interior. |
-| **MaterialBinding** | C++ variant: inline `Material` or string reference to named material. |
-| **material_id** | JSON/Python: string reference to a named entry in `Scene.materials`. |
+| **material_id** | String reference to a named entry in `Scene.materials`. |
 
 ### Material Constructors
 
@@ -153,7 +152,7 @@ Python wrappers in `anim/types.py` add a `color: ColorSpec` keyword for spectral
 
 | Term | Definition |
 |------|-----------|
-| **version** | Integer. Current: **10**. Loaders reject any other value. |
+| **version** | Integer. Current: **11**. Loaders reject any other value. |
 | **Authored format** | Full explicit field sets for all blocks. No sparse keys in committed scenes. |
 | **Named materials** | Top-level `materials` map. Shapes reference via `material_id`. |
 

@@ -99,33 +99,14 @@ inline Material mat_emissive(float emission, Material base = {}) {
     return base;
 }
 
-// --- Material binding ---
-//
-// A shape's material is either an inline Material value or a string reference
-// to a named entry in Scene::materials.  One field, one source of truth.
-
 using MaterialMap = std::map<std::string, Material>;
-using MaterialBinding = std::variant<Material, std::string>;
 
-// Resolve a binding to its Material value.
-// Inline: returns the Material directly.  Reference: looks up in the map.
-inline const Material& resolve_binding(const MaterialBinding& binding,
-                                        const MaterialMap& materials) {
-    if (auto* mat = std::get_if<Material>(&binding)) return *mat;
-    const auto& ref = std::get<std::string>(binding);
-    auto it = materials.find(ref);
+inline const Material& resolve_material_id(std::string_view material_id,
+                                           const MaterialMap& materials) {
+    auto it = materials.find(std::string(material_id));
     if (it != materials.end()) return it->second;
     static const Material default_material;
     return default_material;
-}
-
-inline bool is_material_ref(const MaterialBinding& b) {
-    return std::holds_alternative<std::string>(b);
-}
-
-inline std::string_view material_ref_id(const MaterialBinding& b) {
-    if (auto* s = std::get_if<std::string>(&b)) return *s;
-    return {};
 }
 
 // --- Transform ---
@@ -161,13 +142,13 @@ struct Circle {
     std::string id;
     Vec2 center;
     float radius;
-    MaterialBinding binding;
+    std::string material_id;
 };
 
 struct Segment {
     std::string id;
     Vec2 a, b;
-    MaterialBinding binding;
+    std::string material_id;
 };
 
 struct Arc {
@@ -176,13 +157,13 @@ struct Arc {
     float radius;
     float angle_start = 0.0f; // radians [0, 2π)
     float sweep = TWO_PI;     // radians [0, 2π], CCW from angle_start
-    MaterialBinding binding;
+    std::string material_id;
 };
 
 struct Bezier {
     std::string id;
     Vec2 p0, p1, p2; // p1 is control point
-    MaterialBinding binding;
+    std::string material_id;
 };
 
 inline Vec2 bezier_eval(const Bezier& b, float t) {
@@ -225,7 +206,7 @@ inline bool polygon_join_mode_is_valid(PolygonJoinMode mode) {
 struct Polygon {
     std::string id;
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
-    MaterialBinding binding;
+    std::string material_id;
     float corner_radius = 0.0f; // bevel-fillet radius; 0 = sharp corners
     std::vector<float> corner_radii; // optional per-vertex bevel-fillet override; empty = use corner_radius
     std::vector<PolygonJoinMode> join_modes; // optional per-vertex shading join override; empty = auto
@@ -375,14 +356,14 @@ struct Ellipse {
     float semi_a;          // semi-axis length along rotated X
     float semi_b;          // semi-axis length along rotated Y
     float rotation = 0.0f; // radians, angle of semi_a axis from +X
-    MaterialBinding binding;
+    std::string material_id;
 };
 
 struct Path {
     std::string id;
     std::vector<Vec2> points; // 2N+1 points for N quadratic Bezier segments;
                               // even-indexed are on-curve, odd-indexed are control points
-    MaterialBinding binding;
+    std::string material_id;
     bool closed = false;      // if true, auto-close with extra Bezier back to start
 };
 
@@ -522,10 +503,11 @@ const Light* find_light_in(const std::vector<Light>& lights, std::string_view id
 Material* find_material(Scene& scene, std::string_view id);
 const Material* find_material(const Scene& scene, std::string_view id);
 bool bind_material(Shape& shape, const Scene& scene, std::string_view material_id, std::string* error = nullptr);
-void detach_material(Shape& shape, const MaterialMap& materials);
 int material_usage_count(const Scene& scene, std::string_view material_id);
 bool rename_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error = nullptr);
+bool rebind_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error = nullptr);
 bool delete_material(Scene& scene, std::string_view material_id, std::string* error = nullptr);
+std::string next_scene_material_id(const Scene& scene, std::string_view base = "Material");
 
 // Prepare a scene for serialization: assign IDs, validate.
 // Returns false and sets *error if validation fails.
@@ -536,8 +518,8 @@ const std::string& shape_id(const Shape& s);
 std::string& shape_id(Shape& s);
 const std::string& light_id(const Light& l);
 std::string& light_id(Light& l);
-const MaterialBinding& shape_binding(const Shape& s);
-MaterialBinding& shape_binding(Shape& s);
+const std::string& shape_material_id(const Shape& s);
+std::string& shape_material_id(Shape& s);
 const Material& resolve_shape_material(const Shape& s, const MaterialMap& materials);
 std::string shape_display_name(const Shape& s, int fallback_index);
 std::string light_display_name(const Light& l, int fallback_index);
@@ -750,4 +732,4 @@ struct overloaded : Ts... {
 void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int width, int height);
 
 // Add four axis-aligned walls forming a box
-void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat);
+void add_box_walls(Scene& scene, float half_w, float half_h, std::string_view material_id);

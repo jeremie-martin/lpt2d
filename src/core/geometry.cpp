@@ -611,7 +611,7 @@ std::optional<Hit> intersect(const Ray& ray, const Circle& circle, const Materia
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = (point - circle.center).normalized();
 
-    return Hit{t, point, normal, &resolve_binding(circle.binding, materials), {}};
+    return Hit{t, point, normal, &resolve_material_id(circle.material_id, materials), {}};
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialMap& materials) {
@@ -632,7 +632,7 @@ std::optional<Hit> intersect(const Ray& ray, const Segment& seg, const MaterialM
     Vec2 point = ray.origin + ray.dir * t;
     Vec2 normal = d.perp().normalized();
 
-    return Hit{t, point, normal, &resolve_binding(seg.binding, materials), {}}; // shape_id set by intersect_scene
+    return Hit{t, point, normal, &resolve_material_id(seg.material_id, materials), {}}; // shape_id set by intersect_scene
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& materials) {
@@ -656,7 +656,7 @@ std::optional<Hit> intersect(const Ray& ray, const Arc& arc, const MaterialMap& 
         float angle = std::atan2(point.y - arc.center.y, point.x - arc.center.x);
         if (angle_in_arc(angle, arc)) {
             Vec2 normal = (point - arc.center).normalized();
-            return Hit{t, point, normal, &resolve_binding(arc.binding, materials), {}};
+            return Hit{t, point, normal, &resolve_material_id(arc.material_id, materials), {}};
         }
     }
     return std::nullopt;
@@ -704,7 +704,7 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMa
         Vec2 normal = tangent.perp().normalized();
         if (normal.dot(rd) > 0.0f) normal = -normal;
 
-        best = Hit{s, point, normal, &resolve_binding(bez.binding, materials), {}};
+        best = Hit{s, point, normal, &resolve_material_id(bez.material_id, materials), {}};
     }
     return best;
 }
@@ -901,7 +901,7 @@ PathParts decompose_path(const Path& path) {
         b.p0 = path.points[2 * i];
         b.p1 = path.points[2 * i + 1];
         b.p2 = path.points[2 * i + 2];
-        b.binding = path.binding;
+        b.material_id = path.material_id;
         parts.curves.push_back(b);
     }
 
@@ -912,16 +912,16 @@ PathParts decompose_path(const Path& path) {
         closing.p0 = last;
         closing.p1 = (last + first) * 0.5f; // midpoint = straight line
         closing.p2 = first;
-        closing.binding = path.binding;
+        closing.material_id = path.material_id;
         parts.curves.push_back(closing);
     }
 
     return parts;
 }
 
-Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBinding& binding, bool closed) {
+Path fit_path_from_samples(const std::vector<Vec2>& samples, std::string material_id, bool closed) {
     Path path;
-    path.binding = binding;
+    path.material_id = std::move(material_id);
     path.closed = closed;
     int n = (int)samples.size();
 
@@ -953,7 +953,7 @@ Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBindi
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials) {
     auto parts = decompose_rounded_polygon(poly);
     std::optional<Hit> best;
-    const Material* mat = &resolve_binding(poly.binding, materials);
+    const Material* mat = &resolve_material_id(poly.material_id, materials);
     for (auto& e : parts.edges) {
         auto hit = intersect_polygon_edge(ray, e, mat);
         if (hit && (!best || hit->t < best->t)) {
@@ -966,7 +966,7 @@ std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const Material
         arc.radius = c.radius;
         arc.angle_start = c.angle_start;
         arc.sweep = c.sweep;
-        arc.binding = poly.binding;
+        arc.material_id = poly.material_id;
         auto hit = intersect(ray, arc, materials);
         if (hit && (!best || hit->t < best->t)) {
             best = hit;
@@ -1009,13 +1009,13 @@ std::optional<Hit> intersect(const Ray& ray, const Ellipse& ellipse, const Mater
     Vec2 normal{ln.x * cr - ln.y * sr, ln.x * sr + ln.y * cr};
 
     Vec2 point = ray.origin + ray.dir * t;
-    return Hit{t, point, normal, &resolve_binding(ellipse.binding, materials), {}};
+    return Hit{t, point, normal, &resolve_material_id(ellipse.material_id, materials), {}};
 }
 
 std::optional<Hit> intersect(const Ray& ray, const Path& path, const MaterialMap& materials) {
     auto parts = decompose_path(path);
     std::optional<Hit> best;
-    const Material* mat = &resolve_binding(path.binding, materials);
+    const Material* mat = &resolve_material_id(path.material_id, materials);
     for (auto& curve : parts.curves) {
         auto hit = intersect(ray, curve, materials);
         if (hit && (!best || hit->t < best->t)) {

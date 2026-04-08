@@ -40,6 +40,16 @@ GLASS_MATERIALS = (
     glass(1.58, cauchy_b=24_000, absorption=0.22),
     glass(1.7, cauchy_b=32_000, absorption=0.28),
 )
+BOX_MATERIAL_ID = "box_material"
+ACCENT_MIRROR_ID = "accent_mirror"
+GLASS_MATERIAL_IDS = ("glass_0", "glass_1", "glass_2")
+MATERIALS = {
+    BOX_MATERIAL_ID: BOX_MATERIAL,
+    ACCENT_MIRROR_ID: ACCENT_MIRROR,
+    GLASS_MATERIAL_IDS[0]: GLASS_MATERIALS[0],
+    GLASS_MATERIAL_IDS[1]: GLASS_MATERIALS[1],
+    GLASS_MATERIAL_IDS[2]: GLASS_MATERIALS[2],
+}
 
 PRIMARY_ORBIT = Track(
     [
@@ -167,14 +177,14 @@ def make_box_group() -> Group:
     return Group(
         id="mirror_box",
         shapes=[
-            Segment(a=[-h, -h], b=[h, -h], material=BOX_MATERIAL),
-            Segment(a=[h, h], b=[-h, h], material=BOX_MATERIAL),
-            Segment(a=[-h, h], b=[-h, -h], material=BOX_MATERIAL),
-            Segment(a=[h, -h], b=[h, h], material=BOX_MATERIAL),
-            Segment(a=[-h, 0.52], b=[-0.78, h], material=ACCENT_MIRROR),
-            Segment(a=[0.78, h], b=[h, 0.52], material=ACCENT_MIRROR),
-            Segment(a=[-0.78, -h], b=[-h, -0.52], material=ACCENT_MIRROR),
-            Segment(a=[h, -0.52], b=[0.78, -h], material=ACCENT_MIRROR),
+            Segment(a=[-h, -h], b=[h, -h], material_id=BOX_MATERIAL_ID),
+            Segment(a=[h, h], b=[-h, h], material_id=BOX_MATERIAL_ID),
+            Segment(a=[-h, h], b=[-h, -h], material_id=BOX_MATERIAL_ID),
+            Segment(a=[h, -h], b=[h, h], material_id=BOX_MATERIAL_ID),
+            Segment(a=[-h, 0.52], b=[-0.78, h], material_id=ACCENT_MIRROR_ID),
+            Segment(a=[0.78, h], b=[h, 0.52], material_id=ACCENT_MIRROR_ID),
+            Segment(a=[-0.78, -h], b=[-h, -0.52], material_id=ACCENT_MIRROR_ID),
+            Segment(a=[h, -0.52], b=[0.78, -h], material_id=ACCENT_MIRROR_ID),
         ],
     )
 
@@ -185,9 +195,9 @@ def make_cluster_group(t: float) -> Group:
         id="glass_triplet",
         transform=Transform2D.uniform(rotate=sample_scalar(CLUSTER_ROTATION, t), scale=scale),
         shapes=[
-            Circle(center=[-0.46, 0.08], radius=0.18, material=GLASS_MATERIALS[0]),
-            Circle(center=[0.0, -0.02], radius=0.2, material=GLASS_MATERIALS[1]),
-            Circle(center=[0.46, 0.08], radius=0.18, material=GLASS_MATERIALS[2]),
+            Circle(center=[-0.46, 0.08], radius=0.18, material_id=GLASS_MATERIAL_IDS[0]),
+            Circle(center=[0.0, -0.02], radius=0.2, material_id=GLASS_MATERIAL_IDS[1]),
+            Circle(center=[0.46, 0.08], radius=0.18, material_id=GLASS_MATERIAL_IDS[2]),
         ],
     )
 
@@ -202,14 +212,14 @@ def make_shutter_group(t: float) -> Group:
                 radius=0.62,
                 angle_start=0.16 * math.pi,
                 sweep=0.68 * math.pi,
-                material=ACCENT_MIRROR,
+                material_id=ACCENT_MIRROR_ID,
             ),
             Arc(
                 center=[0.0, 0.0],
                 radius=0.62,
                 angle_start=1.16 * math.pi,
                 sweep=0.68 * math.pi,
-                material=ACCENT_MIRROR,
+                material_id=ACCENT_MIRROR_ID,
             ),
         ],
     )
@@ -308,7 +318,7 @@ def animate(ctx: FrameContext) -> Frame:
     camera = Camera2D(center=[center_x, center_y], width=sample_scalar(CAMERA_WIDTH, ctx.time))
 
     return Frame(
-        scene=Scene(groups=groups),
+        scene=Scene(materials=MATERIALS, groups=groups),
         camera=camera,
         look=Look(
             exposure=exposure,

@@ -35,6 +35,11 @@ from anim.types import (
     Transform2D,
 )
 
+MAT_ID = "mat"
+GLASS_ID = "glass"
+EMISSIVE_ID = "emissive"
+
+
 # --- QualityGate / check_quality ---
 
 
@@ -290,32 +295,32 @@ def test_diagnose_scene_empty():
 
 
 def test_diagnose_scene_high_surface_count():
-    shapes = [Circle(center=[float(i), 0], radius=0.1, material=Material()) for i in range(25)]
-    scene = Scene(shapes=shapes)
+    shapes = [Circle(center=[float(i), 0], radius=0.1, material_id=MAT_ID) for i in range(25)]
+    scene = Scene(materials={MAT_ID: Material()}, shapes=shapes)
     warnings = diagnose_scene(scene)
     assert any("surface count" in w.lower() for w in warnings)
 
 
 def test_diagnose_scene_transparent_no_absorption():
     glass_mat = Material(transmission=1.0, absorption=0.0)
-    shapes = [Circle(center=[float(i) * 0.1, 0], radius=0.1, material=glass_mat) for i in range(8)]
-    scene = Scene(shapes=shapes)
+    shapes = [Circle(center=[float(i) * 0.1, 0], radius=0.1, material_id=GLASS_ID) for i in range(8)]
+    scene = Scene(materials={GLASS_ID: glass_mat}, shapes=shapes)
     warnings = diagnose_scene(scene)
     assert any("absorption" in w.lower() for w in warnings)
 
 
 def test_diagnose_scene_counts_emissive_shapes_as_sources():
     emissive = Material(emission=1.0)
-    shapes = [Circle(center=[float(i), 0], radius=0.1, material=emissive) for i in range(11)]
-    scene = Scene(shapes=shapes)
+    shapes = [Circle(center=[float(i), 0], radius=0.1, material_id=EMISSIVE_ID) for i in range(11)]
+    scene = Scene(materials={EMISSIVE_ID: emissive}, shapes=shapes)
     warnings = diagnose_scene(scene)
     assert any("light/source count" in w.lower() for w in warnings)
 
 
 def test_diagnose_scene_overlapping_shapes():
     """Many shapes at the same position trigger the overlap warning."""
-    shapes = [Circle(center=[0.0, 0.0], radius=0.5, material=Material()) for _ in range(6)]
-    scene = Scene(shapes=shapes)
+    shapes = [Circle(center=[0.0, 0.0], radius=0.5, material_id=MAT_ID) for _ in range(6)]
+    scene = Scene(materials={MAT_ID: Material()}, shapes=shapes)
     warnings = diagnose_scene(scene)
     assert any("overlapping" in w.lower() for w in warnings)
 
@@ -326,7 +331,7 @@ def test_diagnose_scene_grouped_rotated_arc_uses_precise_bounds():
             Circle(
                 center=[-0.45, -0.45 + 0.09 * i],
                 radius=0.02,
-                material=Material(),
+                material_id=MAT_ID,
             )
             for i in range(11)
         ],
@@ -340,11 +345,12 @@ def test_diagnose_scene_grouped_rotated_arc_uses_precise_bounds():
                         radius=0.5,
                         angle_start=0.0,
                         sweep=0.2,
-                        material=Material(),
+                        material_id=MAT_ID,
                     )
                 ],
             )
         ],
+        materials={MAT_ID: Material()},
     )
 
     warnings = diagnose_scene(scene)
@@ -360,17 +366,18 @@ def test_diagnose_scene_rotated_ellipse_uses_precise_bounds():
                 semi_a=1.0,
                 semi_b=0.2,
                 rotation=math.pi / 4,
-                material=Material(),
+                material_id=MAT_ID,
             )
         ]
         + [
             Circle(
                 center=[0.76, -0.45 + 0.09 * i],
                 radius=0.02,
-                material=Material(),
+                material_id=MAT_ID,
             )
             for i in range(11)
         ],
+        materials={MAT_ID: Material()},
     )
 
     warnings = diagnose_scene(scene)
@@ -384,7 +391,7 @@ def test_internal_transform_shape_keeps_arc_bounds_tight():
         radius=1.0,
         angle_start=0.0,
         sweep=math.pi / 2,
-        material=Material(),
+        material_id=MAT_ID,
     )
 
     transformed = _transform_shape(arc, Transform2D(rotate=math.pi / 2))
@@ -396,7 +403,7 @@ def test_internal_transform_shape_keeps_arc_bounds_tight():
 def test_internal_transform_shape_scales_polygon_corner_radii_but_not_smooth_angle():
     polygon = Polygon(
         vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
-        material=Material(),
+        material_id=MAT_ID,
         corner_radius=0.2,
         corner_radii=[0.0, 0.1, 0.2, 0.0],
         join_modes=["auto", "sharp", "smooth", "auto"],
@@ -418,7 +425,7 @@ def test_internal_shape_bounds_keep_rotated_ellipse_tight():
             semi_a=1.0,
             semi_b=0.2,
             rotation=math.pi / 4,
-            material=Material(),
+            material_id=MAT_ID,
         )
     )
 

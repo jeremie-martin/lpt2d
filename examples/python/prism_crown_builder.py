@@ -90,11 +90,6 @@ EXPOSURE = Track(
 )
 
 
-def _bind_material_id(shape, material_id: str):
-    shape.material_id = material_id
-    return shape
-
-
 def _normalize(x: float, y: float) -> list[float]:
     length = math.hypot(x, y)
     if length <= 1e-9:
@@ -114,15 +109,12 @@ def _make_prism_group(index: int, radius: float, spin: float) -> Group:
             scale=scale,
         ),
         shapes=[
-            _bind_material_id(
-                prism(
-                    center=(0.0, 0.0),
-                    size=0.18,
-                    material=PRISM_MATERIALS[index % len(PRISM_MATERIALS)],
-                    rotation=math.pi / 2,
-                    id_prefix=f"body_{index}",
-                ),
-                material_id,
+            prism(
+                center=(0.0, 0.0),
+                size=0.18,
+                material_id=material_id,
+                rotation=math.pi / 2,
+                id_prefix=f"body_{index}",
             )
         ],
     )
@@ -134,24 +126,21 @@ def _make_core_group(scale: float) -> Group:
         transform=Transform2D.uniform(scale=scale),
         shapes=[
             *[
-                _bind_material_id(shape, "core_glass")
+                shape
                 for shape in elliptical_lens(
                     center=(0.0, 0.0),
                     semi_a=0.22,
                     semi_b=0.4,
-                    material=CORE_GLASS,
+                    material_id="core_glass",
                     id_prefix="lens",
                 )
             ],
-            _bind_material_id(
-                thick_segment(
-                    (-0.34, 0.0),
-                    (0.34, 0.0),
-                    0.04,
-                    GUIDE,
-                    id_prefix="guide",
-                ),
+            thick_segment(
+                (-0.34, 0.0),
+                (0.34, 0.0),
+                0.04,
                 "guide_splitter",
+                id_prefix="guide",
             ),
         ],
     )
@@ -188,10 +177,7 @@ def frame(ctx: FrameContext) -> Frame:
     scene = Scene(
         materials=materials,
         shapes=[
-            *[
-                _bind_material_id(shape, "wall_mirror")
-                for shape in mirror_box(1.35, 0.82, materials["wall_mirror"], id_prefix="wall")
-            ]
+            *mirror_box(1.35, 0.82, "wall_mirror", id_prefix="wall")
         ],
         lights=[
             ProjectorLight(

@@ -50,6 +50,9 @@ DURATION = 8.0
 
 # Stained glass: moderate dispersion, gentle fill for visibility
 HEX_GLASS = glass(1.50, cauchy_b=25_000, color=(0.96, 0.96, 0.96), fill=0.12)
+WALL_ID = "wall"
+HEX_GLASS_ID = "hex_glass"
+MATERIALS = {WALL_ID: WALL, HEX_GLASS_ID: HEX_GLASS}
 
 # ---------------------------------------------------------------------------
 # Honeycomb builder
@@ -60,7 +63,7 @@ def build_honeycomb(
     hex_radius: float,
     rows: int,
     cols: int,
-    material: Material,
+    material_id: str,
     *,
     rotation_offset: float = 0.0,
     corner_radius: float = 0.0,
@@ -95,7 +98,7 @@ def build_honeycomb(
                     center=(cx, cy),
                     radius=hex_radius,
                     n=6,
-                    material=material,
+                    material_id=material_id,
                     rotation=rotation_offset,
                     corner_radius=corner_radius,
                     id_prefix=f"hex_{idx}",
@@ -170,18 +173,19 @@ def build_animate(p: AnimParams):
         hex_radius=p.hex_radius,
         rows=p.rows,
         cols=p.cols,
-        material=HEX_GLASS,
+        material_id=HEX_GLASS_ID,
         rotation_offset=p.hex_rotation,
         corner_radius=0.005,
     )
 
-    wall_shapes = mirror_box(1.6, 0.9, WALL, id_prefix="wall")
+    wall_shapes = mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall")
 
     def animate(ctx: FrameContext) -> Frame:
         bx = float(x_trk(ctx.time))
         beam_angle = float(angle_trk(ctx.time))
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
                 *wall_shapes,
                 *hex_shapes,

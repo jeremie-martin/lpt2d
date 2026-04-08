@@ -58,15 +58,6 @@ bool material_id_available(const Scene& scene, std::string_view candidate, std::
     return !scene.materials.contains(std::string(candidate));
 }
 
-std::string generate_unique_material_name(const MaterialMap& materials, std::string_view base = "Material") {
-    std::string name(base);
-    if (!materials.contains(name)) return name;
-    for (int n = 2; ; ++n) {
-        name = std::string(base) + " " + std::to_string(n);
-        if (!materials.contains(name)) return name;
-    }
-}
-
 bool apply_material_to_selection(EditorState& ed, std::string_view material_id) {
     bool changed = false;
     for (const auto& id : ed.interaction.selection) {
@@ -81,29 +72,6 @@ bool apply_material_to_selection(EditorState& ed, std::string_view material_id) 
                     bind_material(shape, ed.shot.scene, material_id);
                     changed = true;
                 }
-            }
-        }
-    }
-    return changed;
-}
-
-bool detach_material_from_selection(EditorState& ed, std::string_view material_id) {
-    bool changed = false;
-    auto maybe_detach = [&](Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == material_id) {
-            detach_material(shape, ed.shot.scene.materials);
-            changed = true;
-        }
-    };
-    for (const auto& id : ed.interaction.selection) {
-        if (Shape* shape = resolve_shape(ed.shot.scene, id)) {
-            maybe_detach(*shape);
-            continue;
-        }
-        if (id.type == SelectionRef::Group) {
-            if (Group* g = find_group(ed.shot.scene, id.id)) {
-                for (auto& shape : g->shapes)
-                    maybe_detach(shape);
             }
         }
     }
@@ -152,32 +120,9 @@ void apply_projector_preset(ProjectorLight& light, int preset) {
     }
 }
 
-void for_each_clipboard_shape(EditorState& ed, auto&& fn) {
-    for (auto& shape : ed.session.clipboard.shapes)
-        fn(shape);
-    for (auto& group : ed.session.clipboard.groups)
-        for (auto& shape : group.shapes)
-            fn(shape);
-}
-
-void rewrite_clipboard_material_binding(EditorState& ed, std::string_view old_id, std::string_view new_id) {
-    for_each_clipboard_shape(ed, [&](Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == old_id)
-            shape_binding(shape) = std::string(new_id);
-    });
-}
-
-void detach_clipboard_material_binding(EditorState& ed, std::string_view material_id) {
-    for_each_clipboard_shape(ed, [&](Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == material_id)
-            detach_material(shape, ed.shot.scene.materials);
-    });
-}
-
 void rename_material_binding(EditorState& ed, std::string_view old_id, std::string_view new_id) {
     if (old_id == new_id) return;
-    if (!rename_material(ed.shot.scene, old_id, new_id)) return;
-    rewrite_clipboard_material_binding(ed, old_id, new_id);
+    rename_material(ed.shot.scene, old_id, new_id);
 }
 
 std::string group_display_name(const Group& group, int index) {
@@ -243,7 +188,7 @@ void sync_material_panel_to_active_object(EditorState& ed, PanelState& panel) {
     const Shape* shape = resolve_shape(ed.shot.scene, *active);
     if (!shape)
         return;
-    std::string_view ref = material_ref_id(shape_binding(*shape));
+    std::string_view ref = shape_material_id(*shape);
     if (ref.empty())
         return;
     panel.material_panel.selected_name = std::string(ref);
@@ -386,8 +331,10 @@ void draw_controls_panel(
             panel.current_scene = -1;
             ed.shot = Shot{};
             ed.shot.name = "custom";
+            std::string wall_material_id = next_scene_material_id(ed.shot.scene);
+            ed.shot.scene.materials[wall_material_id] = gui_wall_material();
             add_box_walls(ed.shot.scene, kDefaultRoomHalfWidth, kDefaultRoomHalfHeight,
-                          gui_wall_material());
+                          wall_material_id);
             PointLight light;
             light.position = {0.0f, 0.0f};
             light.intensity = 1.0f;
@@ -883,21 +830,13 @@ void draw_controls_panel(
         };
         auto edit_shape_material_binding = [&](Shape& shape) {
             bool local_changed = false;
-            auto ref = material_ref_id(shape_binding(shape));
-            std::string mid(ref);
+            std::string mid = shape_material_id(shape);
             auto sync_library = [&](std::string_view material_id) {
                 panel.material_panel.synced_target = sid;
                 panel.material_panel.selected_name = std::string(material_id);
                 panel.material_panel.rename_buffer = panel.material_panel.selected_name;
             };
-            const char* preview = mid.empty() ? "(inline custom)" : mid.c_str();
-            if (ImGui::BeginCombo("Material", preview)) {
-                if (ImGui::Selectable("(inline custom)", mid.empty()) && !mid.empty()) {
-                    detach_material(shape, ed.shot.scene.materials);
-                    mid.clear();
-                    sync_library(std::string_view{});
-                    local_changed = true;
-                }
+            if (ImGui::BeginCombo("Material", mid.c_str())) {
                 for (const auto& [name, _] : ed.shot.scene.materials) {
                     bool selected = mid == name;
                     if (ImGui::Selectable(name.c_str(), selected) && mid != name) {
@@ -909,7 +848,7 @@ void draw_controls_panel(
                 }
                 ImGui::Separator();
                 if (ImGui::Selectable("+ New Material")) {
-                    std::string new_name = generate_unique_material_name(ed.shot.scene.materials);
+                    std::string new_name = next_scene_material_id(ed.shot.scene);
                     ed.shot.scene.materials[new_name] = resolve_shape_material(shape, ed.shot.scene.materials);
                     bind_material(shape, ed.shot.scene, new_name);
                     mid = new_name;
@@ -928,9 +867,11 @@ void draw_controls_panel(
                     ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
                         "Material '%s'", mid.c_str());
                 if (ImGui::SmallButton("Make Unique")) {
-                    detach_material(shape, ed.shot.scene.materials);
-                    mid.clear();
-                    sync_library(std::string_view{});
+                    std::string new_name = next_scene_material_id(ed.shot.scene);
+                    ed.shot.scene.materials[new_name] = resolve_shape_material(shape, ed.shot.scene.materials);
+                    bind_material(shape, ed.shot.scene, new_name);
+                    mid = new_name;
+                    sync_library(new_name);
                     local_changed = true;
                 }
                 if (auto it = ed.shot.scene.materials.find(mid); it != ed.shot.scene.materials.end()) {
@@ -939,9 +880,6 @@ void draw_controls_panel(
                     ImGui::TextColored(ImVec4(0.95f, 0.5f, 0.5f, 1.0f),
                         "Missing shared material '%s'", mid.c_str());
                 }
-            } else {
-                if (auto* mat = std::get_if<Material>(&shape_binding(shape)))
-                    local_changed |= edit_material(*mat);
             }
             return local_changed;
         };
@@ -1336,26 +1274,110 @@ void draw_controls_panel(
                 }
             }
             ImGui::SameLine();
-            if (ImGui::Button("Detach Selection")) {
-                Scene before = ed.shot.scene;
-                if (detach_material_from_selection(ed, panel.material_panel.selected_name)) {
-                    ed.session.undo.push(ed.shot.scene);
-                    reload();
+            if (ImGui::Button("Delete##mat")) {
+                panel.material_panel.delete_error.clear();
+                panel.material_panel.delete_replacement_name.clear();
+                panel.material_panel.delete_replacement_pending_new = false;
+                if (bound_count > 0) {
+                    for (const auto& [name, _] : mats) {
+                        if (name != panel.material_panel.selected_name) {
+                            panel.material_panel.delete_replacement_name = name;
+                            break;
+                        }
+                    }
+                    ImGui::OpenPopup("Delete Material##dialog");
                 } else {
-                    ed.shot.scene = std::move(before);
+                    ed.session.undo.push(ed.shot.scene);
+                    delete_material(ed.shot.scene, panel.material_panel.selected_name);
+                    panel.material_panel.selected_name.clear();
+                    panel.material_panel.rename_buffer.clear();
+                    reload();
                 }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Delete##mat")) {
-                ed.session.undo.push(ed.shot.scene);
-                delete_material(ed.shot.scene, panel.material_panel.selected_name);
-                detach_clipboard_material_binding(ed, panel.material_panel.selected_name);
-                panel.material_panel.selected_name.clear();
-                panel.material_panel.rename_buffer.clear();
-                reload();
-            }
-            if (bound_count > 0) {
-                ImGui::TextDisabled("Delete detaches bound shapes to inline materials");
+
+            if (ImGui::BeginPopupModal("Delete Material##dialog", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                ImGui::TextWrapped(
+                    "Material '%s' is still bound to %d shape(s). Choose a replacement before deleting it.",
+                    panel.material_panel.selected_name.c_str(),
+                    bound_count);
+
+                if (mats.size() <= 1) {
+                    ImGui::TextDisabled("No replacement material exists yet.");
+                } else if (ImGui::BeginCombo(
+                               "Replacement",
+                               panel.material_panel.delete_replacement_name.empty()
+                                   ? "(select)"
+                                   : panel.material_panel.delete_replacement_name.c_str())) {
+                    for (const auto& [name, _] : mats) {
+                        if (name == panel.material_panel.selected_name)
+                            continue;
+                        bool selected = name == panel.material_panel.delete_replacement_name;
+                        if (ImGui::Selectable(name.c_str(), selected)) {
+                            panel.material_panel.delete_replacement_name = name;
+                            panel.material_panel.delete_replacement_pending_new = false;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                if (ImGui::Button("Create Replacement")) {
+                    panel.material_panel.delete_replacement_name = next_scene_material_id(ed.shot.scene);
+                    panel.material_panel.delete_replacement_pending_new = true;
+                }
+                if (panel.material_panel.delete_replacement_pending_new
+                    && !panel.material_panel.delete_replacement_name.empty()) {
+                    ImGui::TextDisabled(
+                        "Will create '%s' on confirm",
+                        panel.material_panel.delete_replacement_name.c_str());
+                }
+                if (!panel.material_panel.delete_error.empty()) {
+                    ImGui::TextColored(
+                        ImVec4(0.95f, 0.5f, 0.5f, 1.0f),
+                        "%s",
+                        panel.material_panel.delete_error.c_str());
+                }
+
+                if (ImGui::Button("Reassign And Delete")) {
+                    if (panel.material_panel.delete_replacement_name.empty()) {
+                        panel.material_panel.delete_error = "Choose or create a replacement material";
+                    } else {
+                        Scene updated = ed.shot.scene;
+                        std::string replacement_name = panel.material_panel.delete_replacement_name;
+                        if (panel.material_panel.delete_replacement_pending_new) {
+                            if (updated.materials.contains(replacement_name))
+                                replacement_name = next_scene_material_id(updated);
+                            updated.materials[replacement_name]
+                                = updated.materials[panel.material_panel.selected_name];
+                        }
+                        std::string error;
+                        if (rebind_material(
+                                updated,
+                                panel.material_panel.selected_name,
+                                replacement_name,
+                                &error)
+                            && delete_material(updated, panel.material_panel.selected_name, &error)) {
+                            ed.session.undo.push(ed.shot.scene);
+                            ed.shot.scene = std::move(updated);
+                            panel.material_panel.selected_name = replacement_name;
+                            panel.material_panel.rename_buffer = panel.material_panel.selected_name;
+                            panel.material_panel.delete_replacement_name.clear();
+                            panel.material_panel.delete_replacement_pending_new = false;
+                            panel.material_panel.delete_error.clear();
+                            ImGui::CloseCurrentPopup();
+                            reload();
+                        } else {
+                            panel.material_panel.delete_error = std::move(error);
+                        }
+                    }
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) {
+                    panel.material_panel.delete_replacement_name.clear();
+                    panel.material_panel.delete_replacement_pending_new = false;
+                    panel.material_panel.delete_error.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
             }
         }
 
@@ -1382,7 +1404,11 @@ void draw_controls_panel(
         auto preset_btn = [&](const char* label, Material mat) {
             if (ImGui::SmallButton(label)) {
                 std::string name = label;
-                if (mats.count(name)) { int n = 2; while (mats.count(name + " " + std::to_string(n))) ++n; name += " " + std::to_string(n); }
+                if (mats.count(name)) {
+                    int n = 2;
+                    while (mats.count(name + " " + std::to_string(n))) ++n;
+                    name += " " + std::to_string(n);
+                }
                 ed.session.undo.push(ed.shot.scene);
                 mats[name] = mat;
                 create_and_bind(name);

@@ -53,6 +53,8 @@ SURFACE = Material(
     absorption=0.0,
     albedo=1.0,
 )
+SURFACE_ID = "surface"
+MATERIALS = {SURFACE_ID: SURFACE}
 
 ShapeBuilder = Callable[[str], list]
 
@@ -113,7 +115,7 @@ def _polygon_body(
         Polygon(
             id=_shape_id(id_prefix, "body"),
             vertices=_ensure_clockwise(points),
-            material=SURFACE,
+            material_id=SURFACE_ID,
             corner_radius=corner_radius,
         )
     ]
@@ -209,7 +211,7 @@ def _build_pentagon(id_prefix: str) -> list:
             (0.0, 0.0),
             0.25,
             5,
-            SURFACE,
+            SURFACE_ID,
             rotation=0.5 * math.pi,
             corner_radius=BEVEL_RADIUS,
             id_prefix=id_prefix,
@@ -222,7 +224,7 @@ def _build_prism(id_prefix: str) -> list:
         prism(
             (0.0, 0.0),
             0.29,
-            SURFACE,
+            SURFACE_ID,
             rotation=0.5 * math.pi,
             corner_radius=BEVEL_RADIUS,
             id_prefix=id_prefix,
@@ -232,7 +234,7 @@ def _build_prism(id_prefix: str) -> list:
 
 def _build_wheel(id_prefix: str) -> list:
     shapes: list = [
-        Circle(id=_shape_id(id_prefix, "hub"), center=[0.0, 0.0], radius=0.10, material=SURFACE)
+        Circle(id=_shape_id(id_prefix, "hub"), center=[0.0, 0.0], radius=0.10, material_id=SURFACE_ID)
     ]
     start_radius = 0.16
     end_radius = 0.36
@@ -245,7 +247,7 @@ def _build_wheel(id_prefix: str) -> list:
                 start,
                 end,
                 0.07,
-                SURFACE,
+                SURFACE_ID,
                 corner_radius=BEVEL_RADIUS,
                 id_prefix=_shape_id(id_prefix, f"spoke_{i}"),
             )
@@ -265,7 +267,7 @@ def _build_ellipse(id_prefix: str) -> list:
             semi_a=0.28,
             semi_b=0.15,
             rotation=0.18,
-            material=SURFACE,
+            material_id=SURFACE_ID,
         )
     ]
 
@@ -351,7 +353,8 @@ def make_settings(mode: str = "preview") -> Shot:
 
 def frame(ctx: FrameContext) -> Frame:
     scene = Scene(
-        shapes=mirror_box(ROOM_HALF_W, ROOM_HALF_H, SURFACE, id_prefix="room"),
+        materials=MATERIALS,
+        shapes=mirror_box(ROOM_HALF_W, ROOM_HALF_H, SURFACE_ID, id_prefix="room"),
         lights=[
             ProjectorLight(
                 id="beam_main",

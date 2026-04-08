@@ -13,13 +13,14 @@ from anim.builders import function_curve, path, path_from_samples
 from anim.types import Material, Path
 
 MAT = Material(transmission=1.0, ior=1.5)
+MAT_ID = "glass"
 
 
 # ─── Construction ────────────────────────────────────────────────
 
 
 def test_path_explicit_3_points():
-    p = path([[0, 0], [0.5, 1], [1, 0]], MAT)
+    p = path([[0, 0], [0.5, 1], [1, 0]], MAT_ID)
     assert isinstance(p, Path)
     assert len(p.points) == 3
     assert p.closed is False
@@ -27,27 +28,27 @@ def test_path_explicit_3_points():
 
 def test_path_explicit_5_points():
     pts = [[0, 0], [0.25, 0.5], [0.5, 0], [0.75, -0.5], [1, 0]]
-    p = path(pts, MAT)
+    p = path(pts, MAT_ID)
     assert len(p.points) == 5  # 2 Bezier segments
 
 
 def test_path_explicit_closed():
-    p = path([[0, 0], [0.5, 1], [1, 0]], MAT, closed=True)
+    p = path([[0, 0], [0.5, 1], [1, 0]], MAT_ID, closed=True)
     assert p.closed is True
 
 
 def test_path_rejects_even_length():
     with pytest.raises(ValueError):
-        path([[0, 0], [1, 1]], MAT)
+        path([[0, 0], [1, 1]], MAT_ID)
 
 
 def test_path_rejects_too_short():
     with pytest.raises(ValueError):
-        path([[0, 0]], MAT)
+        path([[0, 0]], MAT_ID)
 
 
 def test_path_id_prefix():
-    p = path([[0, 0], [0.5, 1], [1, 0]], MAT, id_prefix="wave")
+    p = path([[0, 0], [0.5, 1], [1, 0]], MAT_ID, id_prefix="wave")
     assert p.id == "wave_body"
 
 
@@ -55,14 +56,14 @@ def test_path_id_prefix():
 
 
 def test_path_from_samples_2_points():
-    p = path_from_samples([[0.0, 0.0], [1.0, 0.0]], MAT)
+    p = path_from_samples([[0.0, 0.0], [1.0, 0.0]], MAT_ID)
     assert isinstance(p, Path)
     assert len(p.points) == 3  # 1 segment
 
 
 def test_path_from_samples_4_points():
     pts = [[0.0, 0.0], [1.0, 1.0], [2.0, 0.0], [3.0, 1.0]]
-    p = path_from_samples(pts, MAT)
+    p = path_from_samples(pts, MAT_ID)
     # N=4 samples → N-2=2 Bezier segments → 2*2+1=5 points
     assert len(p.points) == 5
     assert len(p.points) % 2 == 1  # always odd
@@ -71,13 +72,13 @@ def test_path_from_samples_4_points():
 def test_path_from_samples_chain_is_odd():
     for n in range(3, 10):
         pts = [[float(i), 0.0] for i in range(n)]
-        p = path_from_samples(pts, MAT)
+        p = path_from_samples(pts, MAT_ID)
         assert len(p.points) % 2 == 1, f"n={n}: points={len(p.points)}"
 
 
 def test_path_from_samples_endpoints_match():
     pts = [[0.0, 0.0], [1.0, 2.0], [3.0, 1.0], [4.0, 0.0]]
-    p = path_from_samples(pts, MAT)
+    p = path_from_samples(pts, MAT_ID)
     assert p.points[0] == pytest.approx([0, 0], abs=1e-6)
     assert p.points[-1] == pytest.approx([4, 0], abs=1e-6)
 
@@ -86,7 +87,7 @@ def test_path_from_samples_endpoints_match():
 
 
 def test_function_curve_sine():
-    p = function_curve(math.sin, (0, math.pi), MAT, samples=16)
+    p = function_curve(math.sin, (0, math.pi), MAT_ID, samples=16)
     assert isinstance(p, Path)
     assert len(p.points) >= 3
     assert len(p.points) % 2 == 1
@@ -98,11 +99,11 @@ def test_function_curve_sine():
 def test_path_json_round_trip():
     """Create a Shot with a Path, save to JSON, reload, verify."""
     pts = [[0, 0], [0.5, 1], [1, 0], [1.5, -1], [2, 0]]
-    p = path(pts, MAT, closed=True, id_prefix="test")
+    p = path(pts, MAT_ID, closed=True, id_prefix="test")
 
     scene = _lpt2d.Scene()
     scene.shapes = [p]
-    scene.materials = {}
+    scene.materials = {MAT_ID: MAT}
 
     shot = _lpt2d.Shot()
     shot.name = "path_test"
@@ -128,11 +129,11 @@ def test_path_json_round_trip():
 
 def test_path_json_format():
     """Verify the JSON structure of a saved Path."""
-    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material=MAT, closed=True)
+    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material_id=MAT_ID, closed=True)
 
     scene = _lpt2d.Scene()
     scene.shapes = [p]
-    scene.materials = {}
+    scene.materials = {MAT_ID: MAT}
 
     shot = _lpt2d.Shot()
     shot.name = "json_test"
@@ -155,17 +156,17 @@ def test_path_json_format():
     assert shapes[0]["type"] == "path"
     assert shapes[0]["closed"] is True
     assert len(shapes[0]["points"]) == 3
+    assert shapes[0]["material_id"] == MAT_ID
 
 
 # ─── Material binding ────────────────────────────────────────────
 
 
-def test_path_inline_material():
-    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material=MAT)
-    assert p.material is not None
-    assert p.material.ior == pytest.approx(1.5)
+def test_path_material_id_round_trip_property():
+    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material_id=MAT_ID)
+    assert p.material_id == MAT_ID
 
 
 def test_path_material_id():
-    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material_id="glass")
-    assert p.material_id == "glass"
+    p = Path(id="p1", points=[[0, 0], [1, 1], [2, 0]], material_id=MAT_ID)
+    assert p.material_id == MAT_ID

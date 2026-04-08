@@ -19,6 +19,7 @@ import _lpt2d
 
 _SHAPE_IDS = count()
 _LIGHT_IDS = count()
+_INLINE_MATERIAL_IDS = count()
 
 # ---------------------------------------------------------------------------
 # Rendering helpers
@@ -39,8 +40,9 @@ def render_pixels(
     gamma: float = 1.0,
 ) -> tuple[np.ndarray, dict]:
     """Render and return (H, W, 3) uint8 array + metadata dict."""
+    materials = {k: _complete_material(v) for k, v in scene_dict.get("materials", {}).items()}
     shot_dict = {
-        "version": 10,
+        "version": 11,
         "name": "test",
         "camera": {},
         "canvas": {"width": width, "height": height},
@@ -74,10 +76,10 @@ def render_pixels(
             "intensity": intensity,
             "seed_mode": "deterministic",
         },
-        "materials": {k: _complete_material(v) for k, v in scene_dict.get("materials", {}).items()},
-        "shapes": _complete_materials_in_shapes(scene_dict.get("shapes", [])),
+        "materials": materials,
+        "shapes": _normalize_shape_materials(scene_dict.get("shapes", []), materials),
         "lights": scene_dict.get("lights", []),
-        "groups": _complete_materials_in_groups(scene_dict.get("groups", [])),
+        "groups": _normalize_group_materials(scene_dict.get("groups", []), materials),
     }
     shot = _lpt2d.load_shot_json_string(json.dumps(shot_dict))
     session = _lpt2d.RenderSession(width, height)
@@ -120,24 +122,26 @@ def _complete_material(mat: dict) -> dict:
     return {**_MATERIAL_DEFAULTS, **mat}
 
 
-def _complete_materials_in_shapes(shapes: list[dict]) -> list[dict]:
-    """Deep-copy shapes, completing inline material dicts."""
+def _normalize_shape_materials(shapes: list[dict], materials: dict[str, dict]) -> list[dict]:
+    """Deep-copy shapes, normalizing any helper-local materials into the library."""
     out = []
     for s in shapes:
         s = dict(s)
-        if "material" in s and isinstance(s["material"], dict):
-            s["material"] = _complete_material(s["material"])
+        if "_material" in s and isinstance(s["_material"], dict):
+            mat_id = f"material_{next(_INLINE_MATERIAL_IDS)}"
+            materials[mat_id] = _complete_material(s.pop("_material"))
+            s["material_id"] = mat_id
         out.append(s)
     return out
 
 
-def _complete_materials_in_groups(groups: list[dict]) -> list[dict]:
-    """Deep-copy groups, completing inline material dicts on nested shapes."""
+def _normalize_group_materials(groups: list[dict], materials: dict[str, dict]) -> list[dict]:
+    """Deep-copy groups, normalizing any nested shape-local materials into the library."""
     out = []
     for g in groups:
         g = dict(g)
         if "shapes" in g:
-            g["shapes"] = _complete_materials_in_shapes(g["shapes"])
+            g["shapes"] = _normalize_shape_materials(g["shapes"], materials)
         out.append(g)
     return out
 
@@ -229,7 +233,7 @@ def polygon_shape(vertices, material):
         "id": f"polygon_{next(_SHAPE_IDS)}",
         "type": "polygon",
         "vertices": vertices,
-        "material": material,
+        "_material": material,
     }
 
 
@@ -239,7 +243,7 @@ def segment_shape(a, b, material):
         "type": "segment",
         "a": a,
         "b": b,
-        "material": material,
+        "_material": material,
     }
 
 
@@ -249,7 +253,7 @@ def circle_shape(center, radius, material):
         "type": "circle",
         "center": center,
         "radius": radius,
-        "material": material,
+        "_material": material,
     }
 
 
@@ -261,7 +265,7 @@ def ellipse_shape(center, semi_a, semi_b, rotation, material):
         "semi_a": semi_a,
         "semi_b": semi_b,
         "rotation": rotation,
-        "material": material,
+        "_material": material,
     }
 
 
@@ -273,7 +277,7 @@ def arc_shape(center, radius, angle_start, sweep, material):
         "radius": radius,
         "angle_start": angle_start,
         "sweep": sweep,
-        "material": material,
+        "_material": material,
     }
 
 

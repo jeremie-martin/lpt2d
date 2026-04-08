@@ -52,6 +52,9 @@ DURATION = 8.0
 
 # Turbine glass: high Cauchy for strong dispersion, slight fill for visibility
 TURBINE_GLASS = glass(1.65, cauchy_b=35_000, color=(0.92, 0.95, 1.0), fill=0.12)
+WALL_ID = "wall"
+TURBINE_GLASS_ID = "turbine_glass"
+MATERIALS = {WALL_ID: WALL, TURBINE_GLASS_ID: TURBINE_GLASS}
 
 # ---------------------------------------------------------------------------
 # Turbine builder
@@ -65,14 +68,14 @@ def build_turbine(
     spoke_width: float,
     n_spokes: int,
     rotation: float,
-    material: Material,
+    material_id: str,
     *,
     corner_radius: float = 0.01,
 ) -> list[Circle | Polygon]:
     """Build a turbine: central hub + radial rectangular spokes."""
     cx, cy = center
     shapes: list[Circle | Polygon] = [
-        Circle(id="turbine_hub", center=[cx, cy], radius=hub_radius, material=material),
+        Circle(id="turbine_hub", center=[cx, cy], radius=hub_radius, material_id=material_id),
     ]
 
     for i in range(n_spokes):
@@ -95,7 +98,7 @@ def build_turbine(
             Polygon(
                 id=f"turbine_spoke_{i}",
                 vertices=[p1, p2, p3, p4],
-                material=material,
+                material_id=material_id,
                 corner_radius=corner_radius,
             )
         )
@@ -172,12 +175,13 @@ def build_animate(p: AnimParams):
             spoke_width=p.spoke_width,
             n_spokes=p.n_spokes,
             rotation=rot,
-            material=TURBINE_GLASS,
+            material_id=TURBINE_GLASS_ID,
         )
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *turbine_shapes,
             ],
             lights=[

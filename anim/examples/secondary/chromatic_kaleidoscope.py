@@ -38,6 +38,16 @@ PRISM_MATERIALS = (
 )
 CORE_MATERIAL = glass(1.72, cauchy_b=28_000, absorption=0.18)
 SATELLITE_MATERIAL = glass(1.38, cauchy_b=9_000, absorption=0.06)
+PRISM_MATERIAL_IDS = ("prism_0", "prism_1", "prism_2")
+CORE_MATERIAL_ID = "core"
+SATELLITE_MATERIAL_ID = "satellite"
+MATERIALS = {
+    PRISM_MATERIAL_IDS[0]: PRISM_MATERIALS[0],
+    PRISM_MATERIAL_IDS[1]: PRISM_MATERIALS[1],
+    PRISM_MATERIAL_IDS[2]: PRISM_MATERIALS[2],
+    CORE_MATERIAL_ID: CORE_MATERIAL,
+    SATELLITE_MATERIAL_ID: SATELLITE_MATERIAL,
+}
 
 CROWN_RADIUS = Track(
     [
@@ -118,10 +128,10 @@ def make_core_group(t: float) -> Group:
         id="core",
         transform=Transform2D.uniform(rotate=rotation, scale=scale),
         shapes=[
-            Circle(center=[0.0, 0.0], radius=0.13, material=CORE_MATERIAL),
-            Circle(center=[0.18, 0.0], radius=0.06, material=SATELLITE_MATERIAL),
-            Circle(center=[-0.09, 0.155], radius=0.06, material=SATELLITE_MATERIAL),
-            Circle(center=[-0.09, -0.155], radius=0.06, material=SATELLITE_MATERIAL),
+            Circle(center=[0.0, 0.0], radius=0.13, material_id=CORE_MATERIAL_ID),
+            Circle(center=[0.18, 0.0], radius=0.06, material_id=SATELLITE_MATERIAL_ID),
+            Circle(center=[-0.09, 0.155], radius=0.06, material_id=SATELLITE_MATERIAL_ID),
+            Circle(center=[-0.09, -0.155], radius=0.06, material_id=SATELLITE_MATERIAL_ID),
         ],
     )
 
@@ -132,7 +142,7 @@ def make_prism_group(index: int, t: float, crown_spin: float) -> Group:
     radius = sample_scalar(CROWN_RADIUS, t)
     twist = orbit_angle + math.pi + 0.2 * math.sin(1.45 * t + phase * math.tau)
     scale = 0.96 + 0.08 * math.sin(1.3 * t + phase * math.tau)
-    material = PRISM_MATERIALS[index % len(PRISM_MATERIALS)]
+    material_id = PRISM_MATERIAL_IDS[index % len(PRISM_MATERIAL_IDS)]
 
     return Group(
         id=f"prism_{index}",
@@ -142,9 +152,9 @@ def make_prism_group(index: int, t: float, crown_spin: float) -> Group:
             scale=scale,
         ),
         shapes=[
-            Segment(a=[-0.22, -0.12], b=[0.22, -0.12], material=material),
-            Segment(a=[0.22, -0.12], b=[0.0, 0.22], material=material),
-            Segment(a=[0.0, 0.22], b=[-0.22, -0.12], material=material),
+            Segment(a=[-0.22, -0.12], b=[0.22, -0.12], material_id=material_id),
+            Segment(a=[0.22, -0.12], b=[0.0, 0.22], material_id=material_id),
+            Segment(a=[0.0, 0.22], b=[-0.22, -0.12], material_id=material_id),
         ],
     )
 
@@ -216,7 +226,7 @@ def animate(ctx: FrameContext) -> Frame:
     camera = Camera2D(center=[center_x, center_y], width=sample_scalar(CAMERA_WIDTH, ctx.time))
 
     return Frame(
-        scene=Scene(groups=groups),
+        scene=Scene(materials=MATERIALS, groups=groups),
         camera=camera,
         look=Look(
             exposure=sample_scalar(EXPOSURE, ctx.time),

@@ -53,6 +53,12 @@ FIELD_MATERIAL = Material(
     absorption=0.2,
     albedo=0.4,
 )
+FRAME_MATERIAL_ID = "frame_material"
+FIELD_MATERIAL_ID = "field_material"
+MATERIALS = {
+    FRAME_MATERIAL_ID: FRAME_MATERIAL,
+    FIELD_MATERIAL_ID: FIELD_MATERIAL,
+}
 
 # Beam path: left -> right near the top, gently descending.
 BEAM_X = Track(
@@ -96,8 +102,8 @@ EXPOSURE = Track(
 )
 
 
-def seg(a, b, material=FIELD_MATERIAL):
-    return Segment(a=list(a), b=list(b), material=material)
+def seg(a, b, material_id: str = FIELD_MATERIAL_ID):
+    return Segment(a=list(a), b=list(b), material_id=material_id)
 
 
 def make_frame_group() -> Group:
@@ -108,10 +114,10 @@ def make_frame_group() -> Group:
     bottom = -0.88
 
     shapes: list[Shape] = [
-        seg((left, top), (right, top), FRAME_MATERIAL),
-        seg((left, top), (left, bottom), FRAME_MATERIAL),
-        seg((left, bottom), (right, bottom), FRAME_MATERIAL),
-        seg((right, bottom), (right, top), FRAME_MATERIAL),
+        seg((left, top), (right, top), FRAME_MATERIAL_ID),
+        seg((left, top), (left, bottom), FRAME_MATERIAL_ID),
+        seg((left, bottom), (right, bottom), FRAME_MATERIAL_ID),
+        seg((right, bottom), (right, top), FRAME_MATERIAL_ID),
     ]
     return Group(id="frame", shapes=shapes)
 
@@ -220,6 +226,7 @@ def animate(ctx: FrameContext) -> Frame:
 
     return Frame(
         scene=Scene(
+            materials=MATERIALS,
             groups=[
                 FRAME_GROUP,
                 FIELD_GROUP,

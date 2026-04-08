@@ -72,16 +72,21 @@ bool group_visible(const RenderFilterState& filters, const std::string& id) {
 } // namespace
 
 Scene build_render_scene_for(const Shot& shot, const RenderFilterState& filters) {
-    auto strip_shape_emission = [&](Shape shape) -> Shape {
-        Material mat = resolve_shape_material(shape, shot.scene.materials);
-        if (mat.emission > 0.0f) {
-            mat.emission = 0.0f;
-            shape_binding(shape) = mat;
-        }
-        return shape;
-    };
     Scene filtered;
     filtered.materials = shot.scene.materials;
+    auto assign_emissionless_material = [&](Shape& shape) {
+        Material mat = resolve_shape_material(shape, shot.scene.materials);
+        if (mat.emission <= 0.0f)
+            return;
+        mat.emission = 0.0f;
+        std::string material_id = next_scene_material_id(filtered, "Material");
+        filtered.materials[material_id] = mat;
+        shape_material_id(shape) = std::move(material_id);
+    };
+    auto strip_shape_emission = [&](Shape shape) -> Shape {
+        assign_emissionless_material(shape);
+        return shape;
+    };
     bool any_solo = !filters.solo_light_id.empty();
     for (const auto& s : shot.scene.shapes)
         if (shape_visible(filters, shape_id(s)))
@@ -206,12 +211,24 @@ void copy_to_clipboard(EditorState& ed) {
     ed.session.clipboard.shapes.clear();
     ed.session.clipboard.lights.clear();
     ed.session.clipboard.groups.clear();
+    ed.session.clipboard.materials.clear();
+    auto capture_shape_material = [&](const Shape& shape) {
+        const std::string& material_id = shape_material_id(shape);
+        if (auto it = ed.shot.scene.materials.find(material_id); it != ed.shot.scene.materials.end())
+            ed.session.clipboard.materials[material_id] = it->second;
+    };
     for (auto& sid : ed.interaction.selection) {
-        if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) ed.session.clipboard.shapes.push_back(*shape);
+        if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) {
+            ed.session.clipboard.shapes.push_back(*shape);
+            capture_shape_material(*shape);
+        }
         else if (const Light* light = resolve_light(ed.shot.scene, sid)) ed.session.clipboard.lights.push_back(*light);
         else if (sid.type == SelectionRef::Group) {
-            if (const Group* g = find_group(ed.shot.scene, sid.id))
+            if (const Group* g = find_group(ed.shot.scene, sid.id)) {
                 ed.session.clipboard.groups.push_back(*g);
+                for (const auto& shape : g->shapes)
+                    capture_shape_material(shape);
+            }
         }
     }
     ed.session.clipboard.centroid = ed.selection_centroid();

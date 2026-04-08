@@ -51,6 +51,14 @@ GLASSES = [
     glass(1.62, cauchy_b=35_000, color=(0.93, 0.95, 1.0), fill=0.12),
     glass(1.45, cauchy_b=22_000, color=(1.0, 0.95, 0.92), fill=0.10),
 ]
+WALL_ID = "wall"
+GLASS_IDS = ["glass_0", "glass_1", "glass_2"]
+MATERIALS = {
+    WALL_ID: WALL,
+    GLASS_IDS[0]: GLASSES[0],
+    GLASS_IDS[1]: GLASSES[1],
+    GLASS_IDS[2]: GLASSES[2],
+}
 
 # ---------------------------------------------------------------------------
 # Parameter space
@@ -103,12 +111,12 @@ def build_animate(p: AnimParams):
             y = pend.rest_y
             rot = pend.rotation_speed * t / DURATION
 
-            mat = GLASSES[pend.glass_idx % len(GLASSES)]
+            material_id = GLASS_IDS[pend.glass_idx % len(GLASS_IDS)]
             if pend.n_sides == 3:
                 shape = prism(
                     center=(x, y),
                     size=pend.size,
-                    material=mat,
+                    material_id=material_id,
                     rotation=rot,
                     id_prefix=f"crystal_{i}",
                 )
@@ -117,15 +125,16 @@ def build_animate(p: AnimParams):
                     center=(x, y),
                     radius=pend.size,
                     n=pend.n_sides,
-                    material=mat,
+                    material_id=material_id,
                     rotation=rot,
                     id_prefix=f"crystal_{i}",
                 )
             crystal_shapes.append(shape)
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *crystal_shapes,
             ],
             lights=[

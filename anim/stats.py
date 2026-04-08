@@ -532,20 +532,11 @@ def _transform_ellipse_affine(ellipse: Ellipse, t: Transform2D) -> Ellipse:
 
 
 def _shape_binding_kwargs(shape: Shape) -> dict[str, Any]:
-    material_id = getattr(shape, "material_id", "")
-    if material_id:
-        return {"material_id": material_id}
-    return {"material": shape.material}
+    return {"material_id": getattr(shape, "material_id", "")}
 
 
 def _copy_shape(shape: Shape, **overrides) -> Shape:
-    # Material binding: explicit override takes priority over original
-    if "material" in overrides:
-        binding: dict[str, Any] = {"material": overrides.pop("material")}
-    elif "material_id" in overrides:
-        binding = {"material_id": overrides.pop("material_id")}
-    else:
-        binding = _shape_binding_kwargs(shape)
+    binding = {"material_id": overrides.pop("material_id")} if "material_id" in overrides else _shape_binding_kwargs(shape)
 
     if isinstance(shape, Circle):
         return Circle(
