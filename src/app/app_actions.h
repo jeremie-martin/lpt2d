@@ -94,6 +94,12 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
                   bool& light_analysis_valid, bool& force_live_metrics_refresh,
                   int win_w, int win_h);
 
+// Duplicate all selected objects with a small offset, replacing the selection
+// with the new copies. Does NOT enter grab mode — caller may do that.
+void duplicate_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
+                        bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                        int win_w, int win_h);
+
 // Group selected ungrouped shapes/lights into a new group.
 // Returns true if a group was created.
 bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,

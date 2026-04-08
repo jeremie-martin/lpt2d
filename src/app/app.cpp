@@ -266,6 +266,29 @@ int App::run(const AppConfig& config) {
         return pasted;
     };
 
+    auto paste_clipboard_at = [&](Vec2 world_pos) {
+        ed.session.undo.push(ed.shot.scene);
+        Clipboard pasted = materialize_clipboard_for_paste();
+        Vec2 offset = world_pos - pasted.centroid;
+        ed.clear_selection();
+        for (auto s : pasted.shapes) {
+            translate_shape(s, offset);
+            ed.shot.scene.shapes.push_back(s);
+            ed.select({SelectionRef::Shape, shape_id(s), ""}, true);
+        }
+        for (auto l : pasted.lights) {
+            translate_light(l, offset);
+            ed.shot.scene.lights.push_back(l);
+            ed.select({SelectionRef::Light, light_id(l), ""}, true);
+        }
+        for (auto g : pasted.groups) {
+            translate_group(g, offset);
+            ed.shot.scene.groups.push_back(g);
+            ed.select({SelectionRef::Group, g.id, ""}, true);
+        }
+        reload();
+    };
+
     auto fit_bounds_rect = [](const Bounds& bounds, float width, float height) -> std::array<float, 4> {
         Vec2 size = bounds.max - bounds.min;
         size.x = std::max(size.x, 0.01f);
@@ -1006,6 +1029,49 @@ int App::run(const AppConfig& config) {
                 }
             }
 
+            // ── Right-click: context menu ─────────────────────────────────
+            if (ImGui::IsMouseClicked(1)
+                && !ed.interaction.dragging && !ed.interaction.handle_dragging
+                && !ed.interaction.box_selecting && !ed.interaction.creating) {
+                // Check for polygon vertex handle first
+                bool vertex_hit = false;
+                {
+                    auto handles = get_handles(ed.shot.scene, ed.interaction.selection);
+                    int h_idx = handle_hit_test(handles, mw_raw, hit_thresh);
+                    if (h_idx >= 0 && handles[h_idx].kind == Handle::Position) {
+                        const Handle& h = handles[h_idx];
+                        if (const Shape* shape = resolve_shape(ed.shot.scene, h.obj)) {
+                            if (std::get_if<Polygon>(shape)) {
+                                panel.context_menu = {ContextMenuTarget::PolygonVertex, h.obj, h.param_index, mw_raw, false};
+                                vertex_hit = true;
+                            }
+                        }
+                    }
+                }
+                if (!vertex_hit) {
+                    SelectionRef hit = hit_test(mw_raw, ed.shot.scene, hit_thresh, ed.interaction.editing_group_id);
+                    if (!hit.id.empty()) {
+                        if (!ed.is_selected(hit)) ed.select_only(hit);
+                        else ed.set_active(hit);
+
+                        ContextMenuTarget::Kind kind = ContextMenuTarget::Shape;
+                        if (hit.type == SelectionRef::Light)
+                            kind = ContextMenuTarget::Light;
+                        else if (hit.type == SelectionRef::Group)
+                            kind = ContextMenuTarget::Group;
+                        else if (const Shape* s = resolve_shape(ed.shot.scene, hit)) {
+                            if (std::get_if<Polygon>(s))
+                                kind = ContextMenuTarget::Polygon;
+                        }
+                        panel.context_menu = {kind, hit, -1, mw_raw};
+                    } else {
+                        ed.clear_selection();
+                        panel.context_menu = {ContextMenuTarget::EmptySpace, {}, -1, mw_raw};
+                    }
+                }
+                ImGui::OpenPopup("ContextMenu##popup");
+            }
+
         }
 
         // Handle drag (specific parameter modification)
@@ -1198,13 +1264,8 @@ int App::run(const AppConfig& config) {
                                 force_live_metrics_refresh, io, dpi_scale,
                                 frame_ms, win_w, win_h, fb_w, fb_h);
 
-        // ── Add popup at cursor (Shift+A) ─────────────────────────────
-
-        if (panel.open_add_popup) {
-            ImGui::OpenPopup("AddAtCursor##popup");
-            panel.open_add_popup = false;
-        }
-        if (ImGui::BeginPopup("AddAtCursor##popup")) {
+        // Shared add-menu items (used by A-key popup and right-click context menu)
+        auto draw_add_menu_items = [&]() {
             auto add_item = [&](const char* name, EditTool tool) {
                 if (ImGui::MenuItem(name)) {
                     ed.interaction.creating = false;
@@ -1225,7 +1286,219 @@ int App::run(const AppConfig& config) {
             add_item("Point Light", EditTool::PointLight);
             add_item("Segment Light", EditTool::SegmentLight);
             add_item("Projector", EditTool::ProjectorLight);
+        };
+
+        // ── Add popup at cursor (A) ──────────────────────────────────
+
+        if (panel.open_add_popup) {
+            ImGui::OpenPopup("AddAtCursor##popup");
+            panel.open_add_popup = false;
+        }
+        if (ImGui::BeginPopup("AddAtCursor##popup")) {
+            draw_add_menu_items();
             ImGui::EndPopup();
+        }
+
+        // ── Right-click context menu ────────────────────────────────────
+
+        if (ImGui::BeginPopup("ContextMenu##popup")) {
+            auto& ctx = panel.context_menu;
+
+            switch (ctx.kind) {
+            case ContextMenuTarget::EmptySpace: {
+                if (ImGui::BeginMenu("Add")) {
+                    draw_add_menu_items();
+                    ImGui::EndMenu();
+                }
+                if (ImGui::MenuItem("Paste", "Ctrl+V", false, !ed.session.clipboard.empty())) {
+                    paste_clipboard_at(ctx.world_pos);
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Fit to Scene", "Home")) {
+                    ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
+                    auto bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                    renderer.update_viewport(bounds);
+                    renderer.redraw_fills(bounds);
+                    renderer.clear();
+                }
+                if (ImGui::MenuItem("Select All", "Ctrl+A")) {
+                    ed.select_all();
+                }
+                break;
+            }
+
+            case ContextMenuTarget::Shape:
+            case ContextMenuTarget::Polygon: {
+                // Material submenu
+                if (ImGui::BeginMenu("Material")) {
+                    const Shape* ctx_shape = resolve_shape(ed.shot.scene, ctx.ref);
+                    const std::string current = ctx_shape ? shape_material_id(*ctx_shape) : "";
+                    for (auto& [name, mat] : ed.shot.scene.materials) {
+                        bool is_current = (name == current);
+                        if (ImGui::MenuItem(name.c_str(), nullptr, is_current)) {
+                            if (!is_current) {
+                                ed.session.undo.push(ed.shot.scene);
+                                for (auto& sid : ed.interaction.selection) {
+                                    if (Shape* s = resolve_shape(ed.shot.scene, sid))
+                                        bind_material(*s, ed.shot.scene, name);
+                                }
+                                reload();
+                            }
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
+                    duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                       force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Delete", "Del")) {
+                    delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                    force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Group", "Ctrl+G")) {
+                    group_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                   force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Hide", "H")) {
+                    for (auto& sid : ed.interaction.selection) {
+                        if (sid.type == SelectionRef::Shape)
+                            ed.visibility.toggle_shape(sid.id);
+                    }
+                    reload();
+                }
+                // Polygon-specific items
+                if (ctx.kind == ContextMenuTarget::Polygon) {
+                    ImGui::Separator();
+                    if (Shape* shape = resolve_shape(ed.shot.scene, ctx.ref)) {
+                        if (auto* poly = std::get_if<Polygon>(shape)) {
+                            if (ImGui::MenuItem("All Smooth")) {
+                                ed.session.undo.push(ed.shot.scene);
+                                poly->join_modes.assign(poly->vertices.size(), PolygonJoinMode::Smooth);
+                                reload();
+                            }
+                            if (ImGui::MenuItem("All Sharp")) {
+                                ed.session.undo.push(ed.shot.scene);
+                                poly->join_modes.assign(poly->vertices.size(), PolygonJoinMode::Sharp);
+                                reload();
+                            }
+                            if (ImGui::MenuItem("All Auto")) {
+                                ed.session.undo.push(ed.shot.scene);
+                                poly->join_modes.clear();
+                                reload();
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
+            case ContextMenuTarget::PolygonVertex: {
+                if (Shape* shape = resolve_shape(ed.shot.scene, ctx.ref)) {
+                    if (auto* poly = std::get_if<Polygon>(shape)) {
+                        int vi = ctx.vertex_index;
+                        if (vi >= 0 && vi < (int)poly->vertices.size()) {
+                            auto push_undo_once = [&]() {
+                                if (!ctx.undo_pushed) { ed.session.undo.push(ed.shot.scene); ctx.undo_pushed = true; }
+                            };
+                            // Join Mode submenu
+                            PolygonJoinMode current_mode = polygon_effective_join_mode(*poly, vi);
+                            if (ImGui::BeginMenu("Join Mode")) {
+                                auto set_join = [&](PolygonJoinMode mode) {
+                                    push_undo_once();
+                                    if (!polygon_uses_per_vertex_join_modes(*poly)) {
+                                        poly->join_modes.resize(poly->vertices.size(), PolygonJoinMode::Auto);
+                                        for (int i = 0; i < (int)poly->vertices.size(); ++i)
+                                            poly->join_modes[i] = polygon_effective_join_mode(*poly, i);
+                                    }
+                                    poly->join_modes[vi] = mode;
+                                    reload();
+                                };
+                                if (ImGui::MenuItem("Auto", nullptr, current_mode == PolygonJoinMode::Auto))
+                                    set_join(PolygonJoinMode::Auto);
+                                if (ImGui::MenuItem("Sharp", nullptr, current_mode == PolygonJoinMode::Sharp))
+                                    set_join(PolygonJoinMode::Sharp);
+                                if (ImGui::MenuItem("Smooth", nullptr, current_mode == PolygonJoinMode::Smooth))
+                                    set_join(PolygonJoinMode::Smooth);
+                                ImGui::EndMenu();
+                            }
+                            // Corner Radius inline editor
+                            float radius = polygon_effective_corner_radius(*poly, vi);
+                            ImGui::SetNextItemWidth(120);
+                            if (ImGui::DragFloat("Corner Radius", &radius, 0.001f, 0.0f, 10.0f, "%.3f")) {
+                                push_undo_once();
+                                if (!polygon_uses_per_vertex_corner_radii(*poly)) {
+                                    poly->corner_radii.resize(poly->vertices.size());
+                                    for (int i = 0; i < (int)poly->vertices.size(); ++i)
+                                        poly->corner_radii[i] = polygon_effective_corner_radius(*poly, i);
+                                    poly->corner_radius = 0.0f;
+                                }
+                                poly->corner_radii[vi] = radius;
+                                reload();
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
+            case ContextMenuTarget::Light: {
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
+                    duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                       force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Delete", "Del")) {
+                    delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                    force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Solo")) {
+                    if (ed.visibility.solo_light_id == ctx.ref.id
+                        && ed.visibility.solo_light_group_id == ctx.ref.group_id) {
+                        ed.visibility.clear_solo();
+                    } else {
+                        ed.visibility.solo_light_id = ctx.ref.id;
+                        ed.visibility.solo_light_group_id = ctx.ref.group_id;
+                    }
+                    reload();
+                }
+                if (ImGui::MenuItem("Hide", "H")) {
+                    ed.visibility.toggle_light(ctx.ref.id);
+                    reload();
+                }
+                break;
+            }
+
+            case ContextMenuTarget::Group: {
+                if (ImGui::MenuItem("Enter Group")) {
+                    ed.interaction.editing_group_id = ctx.ref.id;
+                    ed.clear_selection();
+                    reload();
+                }
+                if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G")) {
+                    ungroup_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                     force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
+                    duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                       force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Delete", "Del")) {
+                    delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                    force_live_metrics_refresh, win_w, win_h);
+                }
+                if (ImGui::MenuItem("Hide", "H")) {
+                    ed.visibility.toggle_group(ctx.ref.id);
+                    reload();
+                }
+                break;
+            }
+
+            default: break;
+            }
+
+            ImGui::EndPopup();
+        } else {
+            panel.context_menu.kind = ContextMenuTarget::None;
         }
 
         // ── Shortcut reference overlay (?) ──────────────────────────────
@@ -1264,6 +1537,7 @@ int App::run(const AppConfig& config) {
                 section("Tools");
                 row("Q", "Select tool");
                 row("A", "Add menu at cursor");
+                row("Right-click", "Context menu");
                 row("X", "Erase tool");
                 row("M", "Measure tool");
 
@@ -1428,26 +1702,7 @@ int App::run(const AppConfig& config) {
                 }
 
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !ed.session.clipboard.empty()) {
-                    ed.session.undo.push(ed.shot.scene);
-                    Clipboard pasted = materialize_clipboard_for_paste();
-                    Vec2 offset = mw - pasted.centroid;
-                    ed.clear_selection();
-                    for (auto s : pasted.shapes) {
-                        translate_shape(s, offset);
-                        ed.shot.scene.shapes.push_back(s);
-                        ed.select({SelectionRef::Shape, shape_id(s), ""}, true);
-                    }
-                    for (auto l : pasted.lights) {
-                        translate_light(l, offset);
-                        ed.shot.scene.lights.push_back(l);
-                        ed.select({SelectionRef::Light, light_id(l), ""}, true);
-                    }
-                    for (auto g : pasted.groups) {
-                        translate_group(g, offset);
-                        ed.shot.scene.groups.push_back(g);
-                        ed.select({SelectionRef::Group, g.id, ""}, true);
-                    }
-                    reload();
+                    paste_clipboard_at(mw);
                 }
 
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X)) {
@@ -1457,41 +1712,14 @@ int App::run(const AppConfig& config) {
                 }
 
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !ed.interaction.selection.empty()) {
-                    ed.session.undo.push(ed.shot.scene);
-                    std::vector<SelectionRef> new_sel;
-                    Vec2 offset{0.05f, 0.05f};
-                    for (auto& sid : ed.interaction.selection) {
-                        if (const Shape* shape = resolve_shape(ed.shot.scene, sid)) {
-                            Shape s = *shape;
-                            shape_id(s) = next_scene_entity_id(ed.shot.scene, shape_type_name(s));
-                            translate_shape(s, offset);
-                            ed.shot.scene.shapes.push_back(s);
-                            new_sel.push_back({SelectionRef::Shape, shape_id(s), ""});
-                        } else if (const Light* light = resolve_light(ed.shot.scene, sid)) {
-                            Light l = *light;
-                            light_id(l) = next_scene_entity_id(ed.shot.scene, light_type_name(l));
-                            translate_light(l, offset);
-                            ed.shot.scene.lights.push_back(l);
-                            new_sel.push_back({SelectionRef::Light, light_id(l), ""});
-                        } else if (sid.type == SelectionRef::Group) {
-                            if (const Group* gp = find_group(ed.shot.scene, sid.id)) {
-                                Group g = *gp;
-                                g.id = next_scene_entity_id(ed.shot.scene, "group");
-                                translate_group(g, offset);
-                                ed.shot.scene.groups.push_back(g);
-                                new_sel.push_back({SelectionRef::Group, g.id, ""});
-                            }
-                        }
-                    }
-                    ed.replace_selection(std::move(new_sel));
-
+                    duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
+                                       force_live_metrics_refresh, win_w, win_h);
                     ed.interaction.transform.type = TransformMode::Grab;
                     ed.interaction.transform.pivot = ed.selection_centroid();
                     ed.interaction.transform.mouse_start = mw;
                     ed.interaction.transform.lock_x = ed.interaction.transform.lock_y = false;
                     ed.interaction.transform.numeric_buf.clear();
                     ed.interaction.transform.snapshot = ed.shot.scene;
-                    reload();
                 }
 
                 // Transform shortcuts (G/R/S)

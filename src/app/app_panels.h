@@ -35,6 +35,16 @@ struct MaterialLibraryPanelState {
     std::string delete_error;
 };
 
+// What was right-clicked in the viewport (drives context menu content).
+struct ContextMenuTarget {
+    enum Kind { None, EmptySpace, Shape, Polygon, PolygonVertex, Light, Group };
+    Kind kind = None;
+    SelectionRef ref{};       // the clicked object (empty for EmptySpace)
+    int vertex_index = -1;    // for PolygonVertex: which vertex
+    Vec2 world_pos{};         // cursor world position (for paste placement)
+    bool undo_pushed = false; // for PolygonVertex: lazy undo on first edit
+};
+
 // Aggregate of all panel-local state (lives in App::run, passed to draw_controls_panel).
 struct PanelState {
     PathDialogState load_dialog;
@@ -51,6 +61,7 @@ struct PanelState {
     bool paused = false;
     bool show_controls_panel = true;
     bool show_shortcuts_help = false;
+    ContextMenuTarget context_menu;
 };
 
 // ─── Controls panel ─────────────────────────────────────────────────

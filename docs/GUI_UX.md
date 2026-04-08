@@ -122,6 +122,7 @@ containing 10 collapsible sections, all open by default:
 | Shift+1-6           | Look presets                  | works      |
 | Ctrl+Shift+S        | Save As                       | works      |
 | A                   | Add menu at cursor            | works      |
+| Right-click         | Context menu                  | works      |
 | ?                   | Shortcut reference overlay    | works      |
 
 ---
@@ -217,7 +218,7 @@ every parameter as an independent panel entry.
 
 ## 5. Directions for Improvement
 
-### 5.1 Right-click context menu — (open)
+### 5.1 Right-click context menu — (done)
 
 **Core interaction pattern.** Right-click anything in the viewport to see
 everything you can do to it, right there. The menu content depends on what was
@@ -231,12 +232,11 @@ then empty space.
 | **Empty space**           | Add (submenu), Paste, Fit to Scene, Select All   |
 | **Shape** (non-polygon)   | Material (submenu), Duplicate, Delete, Group, Hide |
 | **Polygon** (the shape)   | Same as Shape + All Smooth / All Sharp / All Auto |
-| **Polygon vertex handle** | Join Mode (Auto / Sharp / Smooth), Corner Radius... |
+| **Polygon vertex handle** | Join Mode (Auto / Sharp / Smooth), Corner Radius  |
 | **Light**                 | Duplicate, Delete, Solo, Hide                    |
 | **Group**                 | Enter Group, Ungroup, Duplicate, Delete, Hide    |
 
-For "Corner Radius..." on a polygon vertex, the menu could include an inline
-DragFloat, or could enter a drag mode where mouse movement sets the radius.
+Corner Radius on a polygon vertex uses an inline DragFloat in the popup menu.
 
 This pattern is intentional — defining the menu for every element forces us to
 think about what actions are meaningful at each point, rather than accumulating
