@@ -128,17 +128,13 @@ containing 10 collapsible sections, all open by default:
 
 ## 3. Friction Points
 
-### 3.1 The panel hierarchy problem — (open)
+### 3.1 The panel hierarchy problem — (partial)
 
-All 10 sections are presented with equal visual weight. When tuning a material,
-the Scene, Camera, and Tracer panels are still open and consuming screen space.
-When placing lights, the Display panel's 15 sliders are still visible. There is
-no notion of "what am I doing right now" and the UI does not adapt.
+Camera and Tracer panels now start collapsed by default (set-once panels).
+Properties auto-expands when an object is selected. This reduces the default
+scroll depth significantly.
 
-The consequence is constant scrolling. To go from adjusting a material property
-to tweaking exposure, you scroll past Objects, Properties, and Material Library.
-In a fast iteration session where you alternate between these constantly, the
-scrolling becomes the dominant interaction.
+Remaining: context-sensitive collapse of other panels, tabs or pinning.
 
 ### 3.2 No fullscreen viewport — (done)
 
@@ -153,12 +149,13 @@ no way to click a corner in the viewport and adjust it directly.
 
 Planned: viewport-based vertex editing (Phase 3 in the implementation plan).
 
-### 3.4 Join mode editing is indirect — (partial)
+### 3.4 Join mode editing is indirect — (done)
 
-J cycles all vertices through Auto/Sharp/Smooth. `648a1f5`
-
-Per-vertex viewport editing (right-click to cycle individual vertices) is
-planned for Phase 3.
+J cycles all vertices through Auto/Sharp/Smooth. Right-click a polygon vertex
+handle to cycle its individual join mode (Auto→Sharp→Smooth→Auto). Vertex
+handles show the join mode visually: filled square = Auto, outlined square =
+Sharp, filled circle = Smooth. Vertex labels (V0, V1, ...) are drawn next to
+each handle.
 
 ### 3.5 Too many clicks, not enough keystrokes — (partial)
 
@@ -239,16 +236,12 @@ Remaining candidates:
   selected or hovered
 - **Post-processing slider shortcuts** for common adjustments beyond exposure
 
-### 5.3 Viewport-based polygon editing — (open)
+### 5.3 Viewport-based polygon editing — (partial)
 
-**Click-to-select vertex.** When a polygon is selected, clicking near a vertex
-in the viewport highlights it and shows a small floating widget (or activates
-scroll-to-adjust) for its corner radius and join mode. This eliminates the
-index-matching problem entirely.
+Done: vertex labels (V0, V1, ...), join-mode-dependent handle shapes, and
+right-click to cycle per-vertex join mode.
 
-**Edge-click for join mode.** Clicking on a polygon edge (between two vertices)
-could toggle or cycle the join mode for that edge's vertices. One click instead
-of six.
+Remaining:
 
 **Drag handle for corner radius.** When hovering near a convex vertex, show a
 radius handle that can be dragged to visually set the fillet size. This would

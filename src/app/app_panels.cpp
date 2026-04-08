@@ -555,7 +555,7 @@ void draw_controls_panel(
     }
 
     // -- Camera --
-    if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Camera")) {
         ImGui::PushID("Camera");
 
         if (ImGui::Button("Set from View")) {
@@ -866,6 +866,14 @@ void draw_controls_panel(
     }
 
     // -- Properties --
+    // Auto-expand when selection appears (but let user collapse manually after).
+    {
+        static bool had_selection = false;
+        bool has_selection = ed.active_selection() != nullptr;
+        if (has_selection && !had_selection)
+            ImGui::SetNextItemOpen(true);
+        had_selection = has_selection;
+    }
     if (ed.active_selection() &&
         ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Properties");
@@ -1512,7 +1520,7 @@ void draw_controls_panel(
     }
 
     // -- Tracer --
-    if (ImGui::CollapsingHeader("Tracer", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Tracer")) {
         ImGui::PushID("Tracer");
         ImGui::SliderInt("Batch", &ed.shot.trace.batch, 1000, 1000000, "%d",
                          ImGuiSliderFlags_Logarithmic);

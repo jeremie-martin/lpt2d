@@ -1005,6 +1005,32 @@ int App::run(const AppConfig& config) {
                     ed.interaction.create_start = mw;
                 }
             }
+
+            // Right-click on polygon vertex: cycle join mode
+            if (ImGui::IsMouseClicked(1) && ed.interaction.tool == EditTool::Select) {
+                auto handles = get_handles(ed.shot.scene, ed.interaction.selection);
+                int h_idx = handle_hit_test(handles, mw_raw, hit_thresh);
+                if (h_idx >= 0 && handles[h_idx].kind == Handle::Position) {
+                    if (Shape* shape = resolve_shape(ed.shot.scene, handles[h_idx].obj)) {
+                        if (auto* poly = std::get_if<Polygon>(shape)) {
+                            int vi = handles[h_idx].param_index;
+                            if (vi >= 0 && vi < (int)poly->vertices.size()) {
+                                ed.session.undo.push(ed.shot.scene);
+                                if (!polygon_uses_per_vertex_join_modes(*poly))
+                                    poly->join_modes.assign(poly->vertices.size(), PolygonJoinMode::Auto);
+                                PolygonJoinMode cur = poly->join_modes[(size_t)vi];
+                                if (cur == PolygonJoinMode::Auto)
+                                    poly->join_modes[(size_t)vi] = PolygonJoinMode::Sharp;
+                                else if (cur == PolygonJoinMode::Sharp)
+                                    poly->join_modes[(size_t)vi] = PolygonJoinMode::Smooth;
+                                else
+                                    poly->join_modes[(size_t)vi] = PolygonJoinMode::Auto;
+                                reload();
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Handle drag (specific parameter modification)
