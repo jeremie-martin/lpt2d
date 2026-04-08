@@ -22,7 +22,6 @@ from anim import (
     Shot,
     Track,
     Wrap,
-    beam_splitter,
     glass,
     mirror,
     mirror_box,
@@ -40,7 +39,7 @@ CAMERA = Camera2D(bounds=[-1.35, -0.82, 1.35, 0.82])
 WALL = mirror(0.95, roughness=0.02)
 PRIMARY_GLASS = glass(1.48, cauchy_b=16_000, absorption=0.08)
 SECONDARY_GLASS = glass(1.6, cauchy_b=28_000, absorption=0.15)
-SPLITTER = beam_splitter(0.42, roughness=0.01)
+SPLITTER = mirror(0.42, roughness=0.01)
 
 BEAM_ANGLE = Track(
     [

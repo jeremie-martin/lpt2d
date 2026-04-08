@@ -199,8 +199,6 @@ NB_MODULE(_lpt2d, m) {
     m.def("diffuse", &mat_diffuse, "reflectance"_a);
     m.def("absorber", &mat_absorber);
     m.def("emissive", &mat_emissive, "emission"_a, "base"_a = Material{});
-    // beam_splitter is an alias for mirror
-    m.def("beam_splitter", &mat_mirror, "reflectance"_a, "roughness"_a = 0.0f);
 
     // ── Color convenience ───────────────────────────────────────
     m.def("named_color", [](const std::string& name) -> nb::tuple {

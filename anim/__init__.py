@@ -89,7 +89,6 @@ from .types import Timeline as Timeline
 from .types import TraceDefaults as TraceDefaults
 from .types import Transform2D as Transform2D
 from .types import absorber as absorber
-from .types import beam_splitter as beam_splitter
 from .types import diffuse as diffuse
 from .types import emissive as emissive
 from .types import glass as glass
@@ -145,7 +144,6 @@ __all__ = [
     "LookReport",
     "absorber",
     "ball_lens",
-    "beam_splitter",
     "biconvex_lens",
     "calibrate_normalize_ref",
     "color_stats",

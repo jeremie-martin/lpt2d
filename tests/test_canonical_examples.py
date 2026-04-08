@@ -14,11 +14,11 @@ from anim import Frame, FrameContext, Scene, Shot, Timeline
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_DIR = REPO_ROOT / "examples" / "python"
 SECONDARY_DIR = REPO_ROOT / "anim" / "examples" / "secondary"
-BINARY = REPO_ROOT / "build" / "lpt2d-cli"
 EXPECTED_CANONICAL = {
     "beam_chamber_starter.py",
     "prism_crown_builder.py",
     "solid_surface_gallery.py",
+    "thick_arc_demo.py",
     "three_spheres_center_zoom.py",
     "twin_prisms_scene_patch.py",
 }
@@ -27,6 +27,8 @@ EXPECTED_SECONDARY = {
     "clean_scanning_reflective_field.py",
     "layered_orbiting_beam.py",
     "orbiting_beam.py",
+    "prism_sweep.py",
+    "prism_sweep_generator.py",
     "twin_prisms_vertical_swap.py",
 }
 EXPECTED_BENCHMARK_SCENES = [
@@ -124,8 +126,6 @@ def test_canonical_examples_render_frame_zero(tmp_path: Path, filename: str):
             "0",
             "--output",
             str(output),
-            "--binary",
-            str(BINARY),
         ],
         cwd=REPO_ROOT,
         capture_output=True,

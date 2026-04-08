@@ -23,7 +23,6 @@ from anim import (
     Track,
     Transform2D,
     Wrap,
-    beam_splitter,
     elliptical_lens,
     glass,
     mirror,
@@ -42,7 +41,7 @@ PRISM_COUNT = 5
 CAMERA = Camera2D(bounds=[-1.5, -0.95, 1.5, 0.95])
 
 WALL = mirror(0.94, roughness=0.02)
-GUIDE = beam_splitter(0.36, roughness=0.01)
+GUIDE = mirror(0.36, roughness=0.01)
 CORE_GLASS = glass(1.52, cauchy_b=18_000, absorption=0.1)
 PRISM_MATERIALS = (
     glass(1.46, cauchy_b=14_000, absorption=0.08),

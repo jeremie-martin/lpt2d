@@ -26,6 +26,8 @@ from anim import (
 from anim.examples_support import run_example
 
 NAME = "thick_arc_demo"
+SUMMARY = "Thick-arc polygon shading with sharp cap joins and selective end-cap fillets."
+WORKFLOW = "polygon-join-semantics"
 DURATION = 1.0
 CAMERA = Camera2D(bounds=[-1.2, -0.675, 1.2, 0.675])
 

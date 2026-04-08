@@ -137,17 +137,6 @@ def emissive(emission: float, base: Material | None = None, *, color: ColorSpec 
         m.spectral_c2 = c2
     return m
 
-
-def beam_splitter(
-    reflectance: float,
-    roughness: float = 0.0,
-    *,
-    color: ColorSpec = None,
-    fill: float = 0.0,
-) -> Material:
-    return mirror(reflectance, roughness, color=color, fill=fill)
-
-
 # ─── Geometry helpers ────────────────────────────────────────────
 
 TAU = 2.0 * math.pi
