@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <set>
+#include <type_traits>
 #include <utility>
 
 namespace {
@@ -129,6 +130,7 @@ bool validate_scene(const Scene& scene, std::string* error) {
     for_each_shape(scene, [&](const Shape& shape) {
         std::visit([&](const auto& value) {
             if (error && !error->empty()) return;
+            using ShapeT = std::decay_t<decltype(value)>;
             if (value.id.empty()) {
                 if (error) *error = "shape ids must be non-empty";
                 return;
@@ -140,6 +142,14 @@ bool validate_scene(const Scene& scene, std::string* error) {
             auto ref = material_ref_id(value.binding);
             if (!ref.empty() && !scene.materials.contains(std::string(ref)))
                 if (error) *error = "unknown material_id: " + std::string(ref);
+            if constexpr (std::is_same_v<ShapeT, Polygon>) {
+                PolygonFieldValidationResult polygon_validation = validate_polygon_fields(value);
+                if (polygon_validation.error != PolygonFieldValidationError::None) {
+                    if (error)
+                        *error = format_polygon_field_validation_error(polygon_validation, "polygon", false);
+                    return;
+                }
+            }
         }, shape);
     });
     if (error && !error->empty()) return false;

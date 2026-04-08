@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
 from anim import mirror_block
-from anim.builders import biconvex_lens, double_slit, mirror_box, thick_arc, waveguide
+from anim.builders import biconvex_lens, double_slit, mirror_box, rectangle, regular_polygon, thick_arc, waveguide
 from anim.types import Material, Polygon, Segment
 
 
@@ -36,6 +37,60 @@ def test_thick_arc_returns_clockwise_annular_sector_polygon():
     assert math.isclose(min(radii), 1.8, rel_tol=1e-6, abs_tol=1e-6)
     assert math.isclose(max(radii), 2.2, rel_tol=1e-6, abs_tol=1e-6)
     assert _polygon_area2(shape.vertices) < 0.0
+
+
+def test_thick_arc_supports_smooth_angle_and_end_cap_radii():
+    shapes = thick_arc(
+        center=(0.0, 0.0),
+        radius=1.0,
+        thickness=0.2,
+        angle_start=0.25,
+        sweep=1.75,
+        material=Material(transmission=1.0, ior=1.5),
+        smooth_angle=1.0,
+        end_cap_radii=(0.05, 0.08),
+    )
+
+    assert len(shapes) == 1
+    shape = shapes[0]
+    assert isinstance(shape, Polygon)
+    assert shape.smooth_angle == pytest.approx(1.0)
+    assert shape.corner_radius == pytest.approx(0.0)
+
+    steps = (len(shape.vertices) - 2) // 2
+    expected = [0.0] * len(shape.vertices)
+    expected[steps] = 0.05
+    expected[steps + 1] = 0.05
+    expected[0] = 0.08
+    expected[-1] = 0.08
+    assert shape.corner_radii == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("builder", "kwargs", "expected_vertex_count"),
+    [
+        (rectangle, {"center": (0.0, 0.0), "width": 2.0, "height": 1.0}, 4),
+        (regular_polygon, {"center": (0.0, 0.0), "radius": 1.0, "n": 5}, 5),
+    ],
+)
+def test_polygon_wrappers_forward_corner_radii_and_smooth_angle(
+    builder: Any,
+    kwargs: dict[str, Any],
+    expected_vertex_count: int,
+):
+    shape = builder(
+        material=Material(transmission=1.0, ior=1.5),
+        corner_radius=0.25,
+        corner_radii=[0.0] * expected_vertex_count,
+        smooth_angle=1.0,
+        **kwargs,
+    )
+
+    assert isinstance(shape, Polygon)
+    assert len(shape.vertices) == expected_vertex_count
+    assert shape.corner_radius == pytest.approx(0.25)
+    assert shape.corner_radii == pytest.approx([0.0] * expected_vertex_count)
+    assert shape.smooth_angle == pytest.approx(1.0)
 
 
 def test_mirror_block_returns_clockwise_per_face_segments():

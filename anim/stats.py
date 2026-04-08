@@ -583,6 +583,8 @@ def _copy_shape(shape: Shape, **overrides) -> Shape:
             id=overrides.get("id", shape.id),
             vertices=overrides.get("vertices", shape.vertices),
             corner_radius=overrides.get("corner_radius", shape.corner_radius),
+            corner_radii=overrides.get("corner_radii", shape.corner_radii),
+            smooth_angle=overrides.get("smooth_angle", shape.smooth_angle),
             **binding,
         )
     if isinstance(shape, Ellipse):
@@ -628,10 +630,12 @@ def _transform_shape(shape: Shape, t: Transform2D) -> Shape:
     if isinstance(shape, Polygon):
         cr = shape.corner_radius
         scaled_cr = max(cr * uniform_scale, 0.0) if cr > 0.0 else 0.0
+        scaled_corner_radii = [max(radius * uniform_scale, 0.0) for radius in shape.corner_radii]
         return _copy_shape(
             shape,
             vertices=[_transform_point(v, t) for v in shape.vertices],
             corner_radius=scaled_cr,
+            corner_radii=scaled_corner_radii,
         )
     if isinstance(shape, Ellipse):
         return _transform_ellipse_affine(shape, t)

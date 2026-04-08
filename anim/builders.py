@@ -20,6 +20,8 @@ def polygon(
     material: Material,
     *,
     corner_radius: float = 0.0,
+    corner_radii: Sequence[float] | None = None,
+    smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
@@ -28,6 +30,8 @@ def polygon(
         vertices=[list(v) for v in vertices],
         material=material,
         corner_radius=corner_radius,
+        corner_radii=[] if corner_radii is None else list(corner_radii),
+        smooth_angle=smooth_angle,
     )
 
 
@@ -39,6 +43,8 @@ def regular_polygon(
     rotation: float = 0.0,
     *,
     corner_radius: float = 0.0,
+    corner_radii: Sequence[float] | None = None,
+    smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Regular *n*-sided polygon inscribed in a circle.
@@ -53,7 +59,14 @@ def regular_polygon(
         ]
         for i in range(n)
     ]
-    return polygon(verts, material, corner_radius=corner_radius, id_prefix=id_prefix)
+    return polygon(
+        verts,
+        material,
+        corner_radius=corner_radius,
+        corner_radii=corner_radii,
+        smooth_angle=smooth_angle,
+        id_prefix=id_prefix,
+    )
 
 
 def rectangle(
@@ -63,6 +76,8 @@ def rectangle(
     material: Material,
     *,
     corner_radius: float = 0.0,
+    corner_radii: Sequence[float] | None = None,
+    smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Axis-aligned rectangle centered at *center*."""
@@ -72,6 +87,8 @@ def rectangle(
         [[cx - hw, cy - hh], [cx - hw, cy + hh], [cx + hw, cy + hh], [cx + hw, cy - hh]],
         material,
         corner_radius=corner_radius,
+        corner_radii=corner_radii,
+        smooth_angle=smooth_angle,
         id_prefix=id_prefix,
     )
 
@@ -120,6 +137,8 @@ def thick_arc(
     sweep: float,
     material: Material,
     *,
+    smooth_angle: float = 0.0,
+    end_cap_radii: float | tuple[float, float] = 0.0,
     id_prefix: str | None = None,
 ) -> list[Shape]:
     """Arc with physical thickness, approximated as a polygonal annular sector.
@@ -132,6 +151,8 @@ def thick_arc(
     sweep = max(0.0, min(sweep, math.tau))
     if sweep <= 0:
         raise ValueError("sweep must be positive")
+    if smooth_angle < 0:
+        raise ValueError("smooth_angle must be non-negative")
 
     cx, cy = center
     r_inner = radius - thickness / 2
@@ -144,10 +165,36 @@ def thick_arc(
     def ring_point(r: float, angle: float) -> list[float]:
         return [cx + r * math.cos(angle), cy + r * math.sin(angle)]
 
+    if isinstance(end_cap_radii, Sequence) and not isinstance(end_cap_radii, (str, bytes)):
+        if len(end_cap_radii) != 2:
+            raise ValueError("end_cap_radii must be a float or a 2-tuple")
+        start_cap_radius = float(end_cap_radii[0])
+        end_cap_radius = float(end_cap_radii[1])
+    else:
+        start_cap_radius = float(end_cap_radii)
+        end_cap_radius = float(end_cap_radii)
+    if start_cap_radius < 0.0 or end_cap_radius < 0.0:
+        raise ValueError("end_cap_radii must be non-negative")
+
     end_angle = angle_start + sweep
     outer = [ring_point(r_outer, end_angle - sweep * (i / steps)) for i in range(steps + 1)]
     inner = [ring_point(r_inner, angle_start + sweep * (i / steps)) for i in range(steps + 1)]
-    return [Polygon(id=_shape_id(id_prefix, "sector"), vertices=outer + inner, material=material)]
+    corner_radii: list[float] = []
+    if start_cap_radius > 0.0 or end_cap_radius > 0.0:
+        corner_radii = [0.0] * (2 * steps + 2)
+        corner_radii[steps] = start_cap_radius
+        corner_radii[steps + 1] = start_cap_radius
+        corner_radii[0] = end_cap_radius
+        corner_radii[-1] = end_cap_radius
+    return [
+        Polygon(
+            id=_shape_id(id_prefix, "sector"),
+            vertices=outer + inner,
+            material=material,
+            corner_radii=corner_radii,
+            smooth_angle=smooth_angle,
+        )
+    ]
 
 
 def _convex_face(

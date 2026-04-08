@@ -104,31 +104,68 @@ struct RoundedCornerBuild {
     RoundedPolygonParts::Corner corner{};
 };
 
+struct PolygonVertexNormalBuild {
+    bool has_smooth_normal = false;
+    Vec2 normal{};
+};
+
+bool compute_polygon_vertex_frame(const Polygon& poly, int vertex_index, bool cw,
+                                  Vec2& dp, Vec2& dn, float& len_prev,
+                                  float& len_next, float& cos_a, bool& convex) {
+    int n = (int)poly.vertices.size();
+    if (n < 3) return false;
+
+    Vec2 prev = poly.vertices[(vertex_index - 1 + n) % n];
+    Vec2 curr = poly.vertices[vertex_index];
+    Vec2 next = poly.vertices[(vertex_index + 1) % n];
+
+    Vec2 to_prev = prev - curr;
+    Vec2 to_next = next - curr;
+    len_prev = to_prev.length();
+    len_next = to_next.length();
+    if (len_prev < 1e-6f || len_next < 1e-6f)
+        return false;
+
+    dp = to_prev * (1.0f / len_prev);
+    dn = to_next * (1.0f / len_next);
+    cos_a = std::clamp(dp.dot(dn), -1.0f, 1.0f);
+
+    float turn = cross(dp, dn);
+    convex = cw ? (turn > 0.0f) : (turn < 0.0f);
+    return true;
+}
+
+std::vector<Vec2> compute_polygon_edge_flat_normals(const Polygon& poly, bool cw) {
+    int n = (int)poly.vertices.size();
+    std::vector<Vec2> normals(n);
+    for (int i = 0; i < n; ++i) {
+        Vec2 edge = poly.vertices[(i + 1) % n] - poly.vertices[i];
+        float len = edge.length();
+        if (len < 1e-6f) continue;
+        Vec2 normal = edge.perp() * (1.0f / len);
+        normals[i] = cw ? normal : -normal;
+    }
+    return normals;
+}
+
 std::vector<RoundedCornerBuild> compute_rounded_polygon_vertices(const Polygon& poly) {
     int n = (int)poly.vertices.size();
     std::vector<RoundedCornerBuild> corners(n);
-    if (n < 3 || poly.corner_radius <= 0.0f) return corners;
+    if (n < 3) return corners;
 
     bool cw = polygon_is_clockwise(poly);
     for (int i = 0; i < n; ++i) {
-        Vec2 prev = poly.vertices[(i - 1 + n) % n];
-        Vec2 curr = poly.vertices[i];
-        Vec2 next = poly.vertices[(i + 1) % n];
+        float radius = polygon_effective_corner_radius(poly, i);
+        if (radius <= 0.0f) continue;
 
-        Vec2 to_prev = prev - curr;
-        Vec2 to_next = next - curr;
-        float len_prev = to_prev.length();
-        float len_next = to_next.length();
-        if (len_prev < 1e-6f || len_next < 1e-6f) continue;
-
-        Vec2 dp = to_prev * (1.0f / len_prev);
-        Vec2 dn = to_next * (1.0f / len_next);
-
-        float cos_a = std::clamp(dp.dot(dn), -1.0f, 1.0f);
+        Vec2 dp, dn;
+        float len_prev = 0.0f;
+        float len_next = 0.0f;
+        float cos_a = 0.0f;
+        bool convex = false;
+        if (!compute_polygon_vertex_frame(poly, i, cw, dp, dn, len_prev, len_next, cos_a, convex))
+            continue;
         if (cos_a > 0.999f || cos_a < -0.999f) continue;
-
-        float turn = cross(dp, dn);
-        bool convex = cw ? (turn > 0.0f) : (turn < 0.0f);
         if (!convex) continue;
 
         float half_a = std::acos(cos_a) * 0.5f;
@@ -137,10 +174,11 @@ std::vector<RoundedCornerBuild> compute_rounded_polygon_vertices(const Polygon& 
         if (tan_ha < 1e-6f || sin_ha < 1e-6f) continue;
 
         float max_cut = std::min(len_prev * 0.5f, len_next * 0.5f);
-        float cut = std::min(poly.corner_radius / tan_ha, max_cut);
+        float cut = std::min(radius / tan_ha, max_cut);
         float eff_r = cut * tan_ha;
         if (eff_r < 1e-6f) continue;
 
+        Vec2 curr = poly.vertices[i];
         Vec2 bisect = dp + dn;
         float bl = bisect.length();
         if (bl < 1e-6f) continue;
@@ -173,6 +211,100 @@ std::vector<RoundedCornerBuild> compute_rounded_polygon_vertices(const Polygon& 
     }
 
     return corners;
+}
+
+std::vector<PolygonVertexNormalBuild> compute_polygon_vertex_normals(
+        const Polygon& poly,
+        const std::vector<RoundedCornerBuild>& rounded,
+        const std::vector<Vec2>& edge_flat_normals) {
+    int n = (int)poly.vertices.size();
+    std::vector<PolygonVertexNormalBuild> normals(n);
+    if (n < 3 || poly.smooth_angle <= 0.0f)
+        return normals;
+
+    bool cw = polygon_is_clockwise(poly);
+    for (int i = 0; i < n; ++i) {
+        if (rounded[i].has_fillet) continue;
+
+        int prev_edge = (i - 1 + n) % n;
+        int next_edge = i;
+        Vec2 prev_normal = edge_flat_normals[prev_edge];
+        Vec2 next_normal = edge_flat_normals[next_edge];
+        if (prev_normal.length_sq() < 1e-10f || next_normal.length_sq() < 1e-10f)
+            continue;
+
+        Vec2 dp, dn;
+        float len_prev = 0.0f;
+        float len_next = 0.0f;
+        float cos_a = 0.0f;
+        bool convex = false;
+        if (!compute_polygon_vertex_frame(poly, i, cw, dp, dn, len_prev, len_next, cos_a, convex))
+            continue;
+        if (!convex) continue;
+
+        float angle = std::acos(std::clamp(prev_normal.dot(next_normal), -1.0f, 1.0f));
+        if (angle > poly.smooth_angle)
+            continue;
+
+        Vec2 smooth = prev_normal + next_normal;
+        if (smooth.length_sq() < 1e-10f)
+            continue;
+        smooth = smooth.normalized();
+        if (smooth.dot(prev_normal) <= 0.0f || smooth.dot(next_normal) <= 0.0f)
+            continue;
+
+        normals[i] = {true, smooth};
+    }
+    return normals;
+}
+
+Vec2 polygon_edge_endpoint_normal(const std::vector<RoundedCornerBuild>& rounded,
+                                  const std::vector<PolygonVertexNormalBuild>& vertex_normals,
+                                  const std::vector<Vec2>& edge_flat_normals,
+                                  int edge_index, int vertex_index) {
+    Vec2 flat_normal = edge_flat_normals[edge_index];
+    if (flat_normal.length_sq() < 1e-10f)
+        return flat_normal;
+    if (vertex_index < 0 || vertex_index >= (int)vertex_normals.size())
+        return flat_normal;
+    if (vertex_index < (int)rounded.size() && rounded[vertex_index].has_fillet)
+        return flat_normal;
+    if (!vertex_normals[vertex_index].has_smooth_normal)
+        return flat_normal;
+    Vec2 smooth_normal = vertex_normals[vertex_index].normal;
+    return smooth_normal.dot(flat_normal) > 0.0f ? smooth_normal : flat_normal;
+}
+
+Vec2 interpolate_polygon_edge_normal(const RoundedPolygonParts::Edge& edge, float u) {
+    Vec2 flat_normal = (edge.b - edge.a).perp().normalized();
+    Vec2 blended = edge.normal_a * (1.0f - u) + edge.normal_b * u;
+    if (blended.length_sq() < 1e-10f)
+        return flat_normal;
+
+    Vec2 normal = blended.normalized();
+    if (normal.dot(flat_normal) <= 0.0f)
+        return flat_normal;
+    return normal;
+}
+
+std::optional<Hit> intersect_polygon_edge(const Ray& ray, const RoundedPolygonParts::Edge& edge,
+                                          const Material* material) {
+    Vec2 d = edge.b - edge.a;
+    Vec2 e = ray.dir;
+    Vec2 f = ray.origin - edge.a;
+
+    float denom = e.x * d.y - e.y * d.x;
+    if (std::abs(denom) < INTERSECT_EPS)
+        return std::nullopt;
+
+    float t = (d.x * f.y - d.y * f.x) / denom;
+    float u = (e.x * f.y - e.y * f.x) / denom;
+    if (t < INTERSECT_EPS || u < 0.0f || u > 1.0f)
+        return std::nullopt;
+
+    Vec2 point = ray.origin + ray.dir * t;
+    Vec2 normal = interpolate_polygon_edge_normal(edge, u);
+    return Hit{t, point, normal, material, {}};
 }
 
 void append_polygon_point(std::vector<Vec2>& points, Vec2 point) {
@@ -573,12 +705,14 @@ std::optional<Hit> intersect(const Ray& ray, const Bezier& bez, const MaterialMa
 RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
     RoundedPolygonParts parts;
     int n = (int)poly.vertices.size();
-    if (n < 3 || poly.corner_radius <= 0.0f) return parts;
+    if (n < 2) return parts;
 
     bool cw = polygon_is_clockwise(poly);
     auto rounded = compute_rounded_polygon_vertices(poly);
+    auto edge_flat_normals = compute_polygon_edge_flat_normals(poly, cw);
+    auto vertex_normals = compute_polygon_vertex_normals(poly, rounded, edge_flat_normals);
 
-    // Emit shortened edges
+    // Emit boundary edges, trimmed where fillets consume the endpoints.
     for (int i = 0; i < n; ++i) {
         int j = (i + 1) % n;
         Vec2 a = poly.vertices[i];
@@ -594,8 +728,14 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
 
         Vec2 ea = a + dir * trim_a;
         Vec2 eb = b - dir * trim_b;
-        parts.edges.push_back(cw ? RoundedPolygonParts::Edge{ea, eb}
-                                 : RoundedPolygonParts::Edge{eb, ea});
+        Vec2 normal_i = polygon_edge_endpoint_normal(rounded, vertex_normals, edge_flat_normals, i, i);
+        Vec2 normal_j = polygon_edge_endpoint_normal(rounded, vertex_normals, edge_flat_normals, i, j);
+
+        if (cw) {
+            parts.edges.push_back({ea, eb, normal_i, normal_j});
+        } else {
+            parts.edges.push_back({eb, ea, normal_j, normal_i});
+        }
     }
 
     // Emit corner arcs
@@ -802,54 +942,26 @@ Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBindi
 // ─── Polygon intersection ───────────────────────────────────────
 
 std::optional<Hit> intersect(const Ray& ray, const Polygon& poly, const MaterialMap& materials) {
-    // Rounded polygon: decompose into edges + arcs
-    if (poly.corner_radius > 0.0f && (int)poly.vertices.size() >= 3) {
-        auto parts = decompose_rounded_polygon(poly);
-        if (!parts.edges.empty() || !parts.corners.empty()) {
-            std::optional<Hit> best;
-            const Material* mat = &resolve_binding(poly.binding, materials);
-            for (auto& e : parts.edges) {
-                Segment seg;
-                seg.a = e.a;
-                seg.b = e.b;
-                seg.binding = poly.binding;
-                auto hit = intersect(ray, seg, materials);
-                if (hit && (!best || hit->t < best->t)) {
-                    best = hit;
-                    best->material = mat;
-                }
-            }
-            for (auto& c : parts.corners) {
-                Arc arc;
-                arc.center = c.center;
-                arc.radius = c.radius;
-                arc.angle_start = c.angle_start;
-                arc.sweep = c.sweep;
-                arc.binding = poly.binding;
-                auto hit = intersect(ray, arc, materials);
-                if (hit && (!best || hit->t < best->t)) {
-                    best = hit;
-                    best->material = mat;
-                }
-            }
-            return best;
-        }
-    }
-
-    // Sharp polygon: existing path
+    auto parts = decompose_rounded_polygon(poly);
     std::optional<Hit> best;
-    int n = (int)poly.vertices.size();
-    bool clockwise = polygon_is_clockwise(poly);
-    for (int i = 0; i < n; ++i) {
-        Vec2 a = poly.vertices[i];
-        Vec2 b = poly.vertices[(i + 1) % n];
-        Segment edge;
-        edge.a = clockwise ? a : b;
-        edge.b = clockwise ? b : a;
-        auto hit = intersect(ray, edge, materials);
+    const Material* mat = &resolve_binding(poly.binding, materials);
+    for (auto& e : parts.edges) {
+        auto hit = intersect_polygon_edge(ray, e, mat);
         if (hit && (!best || hit->t < best->t)) {
             best = hit;
-            best->material = &resolve_binding(poly.binding, materials);
+        }
+    }
+    for (auto& c : parts.corners) {
+        Arc arc;
+        arc.center = c.center;
+        arc.radius = c.radius;
+        arc.angle_start = c.angle_start;
+        arc.sweep = c.sweep;
+        arc.binding = poly.binding;
+        auto hit = intersect(ray, arc, materials);
+        if (hit && (!best || hit->t < best->t)) {
+            best = hit;
+            best->material = mat;
         }
     }
     return best;
@@ -978,6 +1090,8 @@ Shape transform_shape(const Shape& s, const Transform2D& t) {
             for (auto& v : r.vertices) v = t.apply(v);
             if (r.corner_radius > 0.0f)
                 r.corner_radius = std::max(r.corner_radius * uniform_scale, 0.0f);
+            for (auto& radius : r.corner_radii)
+                radius = std::max(radius * uniform_scale, 0.0f);
             return r;
         },
         [&](const Ellipse& e) -> Shape {
@@ -1063,19 +1177,10 @@ float shape_perimeter(const Shape& s) {
             return len;
         },
         [](const Polygon& p) {
-            if (p.corner_radius > 0.0f && (int)p.vertices.size() >= 3) {
-                auto parts = decompose_rounded_polygon(p);
-                if (!parts.edges.empty() || !parts.corners.empty()) {
-                    float sum = 0;
-                    for (auto& e : parts.edges) sum += (e.b - e.a).length();
-                    for (auto& c : parts.corners) sum += c.radius * c.sweep;
-                    return sum;
-                }
-            }
+            auto parts = decompose_rounded_polygon(p);
             float sum = 0;
-            int n = (int)p.vertices.size();
-            for (int i = 0; i < n; ++i)
-                sum += (p.vertices[(i + 1) % n] - p.vertices[i]).length();
+            for (auto& e : parts.edges) sum += (e.b - e.a).length();
+            for (auto& c : parts.corners) sum += c.radius * c.sweep;
             return sum;
         },
         [](const Ellipse& e) {
@@ -1178,48 +1283,33 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
             int n = (int)p.vertices.size();
             if (n < 2) return;
 
-            if (p.corner_radius > 0.0f && n >= 3) {
-                auto parts = decompose_rounded_polygon(p);
-                if (!parts.edges.empty() || !parts.corners.empty()) {
-                    for (auto& e : parts.edges) {
-                        SegmentLight sl;
-                        sl.a = e.a;
-                        sl.b = e.b;
-                        sl.intensity = mat.emission * (e.b - e.a).length();
-
-                        lights.push_back(sl);
-                    }
-                    for (auto& c : parts.corners) {
-                        float arc_len = c.radius * c.sweep;
-                        int arc_n = std::clamp((int)std::round(arc_len / EMISSION_SAMPLE_SPACING),
-                                               2, EMISSION_MAX_POINTS);
-                        float seg_i = mat.emission * arc_len / std::max(1, arc_n - 1);
-                        Vec2 prev{c.center.x + c.radius * std::cos(c.angle_start),
-                                  c.center.y + c.radius * std::sin(c.angle_start)};
-                        for (int i = 1; i < arc_n; ++i) {
-                            float angle = c.angle_start + c.sweep * (float)i / (arc_n - 1);
-                            Vec2 cur{c.center.x + c.radius * std::cos(angle),
-                                     c.center.y + c.radius * std::sin(angle)};
-                            SegmentLight sl;
-                            sl.a = prev;
-                            sl.b = cur;
-                            sl.intensity = seg_i;
-    
-                            lights.push_back(sl);
-                            prev = cur;
-                        }
-                    }
-                    return;
-                }
-            }
-
-            for (int i = 0; i < n; ++i) {
-                Vec2 a = p.vertices[i], b = p.vertices[(i + 1) % n];
+            auto parts = decompose_rounded_polygon(p);
+            for (auto& e : parts.edges) {
                 SegmentLight sl;
-                sl.a = a;
-                sl.b = b;
-                sl.intensity = mat.emission * (b - a).length();
+                sl.a = e.a;
+                sl.b = e.b;
+                sl.intensity = mat.emission * (e.b - e.a).length();
                 lights.push_back(sl);
+            }
+            for (auto& c : parts.corners) {
+                float arc_len = c.radius * c.sweep;
+                int arc_n = std::clamp((int)std::round(arc_len / EMISSION_SAMPLE_SPACING),
+                                       2, EMISSION_MAX_POINTS);
+                float seg_i = mat.emission * arc_len / std::max(1, arc_n - 1);
+                Vec2 prev{c.center.x + c.radius * std::cos(c.angle_start),
+                          c.center.y + c.radius * std::sin(c.angle_start)};
+                for (int i = 1; i < arc_n; ++i) {
+                    float angle = c.angle_start + c.sweep * (float)i / (arc_n - 1);
+                    Vec2 cur{c.center.x + c.radius * std::cos(angle),
+                             c.center.y + c.radius * std::sin(angle)};
+                    SegmentLight sl;
+                    sl.a = prev;
+                    sl.b = cur;
+                    sl.intensity = seg_i;
+
+                    lights.push_back(sl);
+                    prev = cur;
+                }
             }
         },
         [&](const Ellipse& e) {

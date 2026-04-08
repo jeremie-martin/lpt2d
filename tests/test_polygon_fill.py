@@ -57,3 +57,22 @@ def test_polygon_fill_handles_concave_polygon_with_partial_rounding() -> None:
     assert _triangles_area(boundary, indices) == pytest.approx(
         _polygon_area(boundary), rel=1e-4, abs=1e-4
     )
+
+
+def test_polygon_fill_handles_per_vertex_corner_radii_override() -> None:
+    polygon = _lpt2d.Polygon(
+        vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
+        material=_lpt2d.Material(fill=1.0),
+        corner_radius=0.4,
+        corner_radii=[0.3, 0.0, 0.2, 0.3, 0.0, 0.1],
+    )
+
+    boundary = _lpt2d._polygon_fill_boundary(polygon, arc_segments=24)
+    indices = _lpt2d._triangulate_simple_polygon(boundary)
+
+    assert (1.0, 1.0) in boundary
+    assert len(boundary) > len(polygon.vertices)
+    assert len(indices) % 3 == 0
+    assert _triangles_area(boundary, indices) == pytest.approx(
+        _polygon_area(boundary), rel=1e-4, abs=1e-4
+    )

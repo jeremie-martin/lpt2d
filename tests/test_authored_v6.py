@@ -13,6 +13,7 @@ from anim.types import (
     Group,
     Look,
     Material,
+    Polygon,
     ProjectorLight,
     RenderSession,
     Scene,
@@ -64,7 +65,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid v6 shot JSON dict."""
     base = {
-        "version": 8,
+        "version": 9,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -258,7 +259,7 @@ def test_v6_rejects_older_shot_version(tmp_path):
 def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 8,
+        "version": 9,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -353,7 +354,7 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 8)" in result.stderr
+    assert "Unsupported shot version (expected 9)" in result.stderr
     assert not output.exists()
 
 
@@ -559,6 +560,86 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
 def test_validate_scene_accepts_valid_scene():
     scene = _make_bound_scene()
     _lpt2d.validate_scene(scene)
+
+
+def test_validate_scene_rejects_invalid_polygon_fields():
+    scene = Scene(
+        shapes=[
+            Polygon(
+                id="poly",
+                vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                material=Material(),
+                corner_radii=[0.1, 0.2],
+                smooth_angle=-0.5,
+            )
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="corner_radii|smooth_angle"):
+        _lpt2d.validate_scene(scene)
+
+
+def test_polygon_round_trip_preserves_corner_radii_and_smooth_angle(tmp_path):
+    path = tmp_path / "polygon_round_trip.json"
+    shot = Shot(
+        name="poly_round_trip",
+        scene=Scene(
+            shapes=[
+                Polygon(
+                    id="poly",
+                    vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                    material=Material(fill=1.0),
+                    corner_radius=0.25,
+                    corner_radii=[0.0, 0.1, 0.2, 0.0],
+                    smooth_angle=1.25,
+                )
+            ],
+        ),
+    )
+
+    shot.save(path)
+    loaded = Shot.load(path)
+    polygon = loaded.scene.require_shape("poly")
+    assert isinstance(polygon, Polygon)
+    assert polygon.corner_radius == pytest.approx(0.25)
+    assert polygon.corner_radii == pytest.approx([0.0, 0.1, 0.2, 0.0])
+    assert polygon.smooth_angle == pytest.approx(1.25)
+
+
+def test_authored_polygon_rejects_bad_corner_radii_length(tmp_path):
+    path = tmp_path / "bad_polygon.json"
+    data = _make_valid_shot_json(
+        materials={
+            "mat": {
+                "ior": 1.0,
+                "roughness": 0.0,
+                "metallic": 0.0,
+                "transmission": 0.0,
+                "absorption": 0.0,
+                "cauchy_b": 0.0,
+                "albedo": 1.0,
+                "emission": 0.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 1.0,
+            }
+        },
+        shapes=[
+            {
+                "id": "poly",
+                "type": "polygon",
+                "vertices": [[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                "corner_radii": [0.1, 0.2],
+                "smooth_angle": 1.0,
+                "material_id": "mat",
+            }
+        ]
+    )
+    _write_json(path, data)
+
+    with pytest.raises(RuntimeError, match="corner_radii"):
+        Shot.load(path)
 
 
 def test_normalize_scene_assigns_ids_and_syncs_materials():
