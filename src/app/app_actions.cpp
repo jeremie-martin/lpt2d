@@ -244,6 +244,12 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
     ed.interaction.creating = false;
     ed.interaction.dragging = false;
     ed.interaction.handle_dragging = false;
+    ed.interaction.box_selecting = false;
+    ed.interaction.box_active_before.reset();
+    ed.interaction.path_create_points.clear();
+    ed.interaction.measure_active = false;
+    ed.interaction.editing_group_id.clear();
+    ed.interaction.tool = EditTool::Select;
     ed.interaction.cam_handle_dragging = CameraHandle::None;
     ed.interaction.cam_handle_hovered = CameraHandle::None;
     destroy_compare_snapshot(compare_ab);
@@ -303,8 +309,7 @@ bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& 
 
     std::string new_group_id = group.id;
     ed.shot.scene.groups.push_back(std::move(group));
-    ed.clear_selection();
-    ed.select({SelectionRef::Group, new_group_id, ""});
+    ed.select_only({SelectionRef::Group, new_group_id, ""});
     reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
     return true;
 }
@@ -341,7 +346,7 @@ bool ungroup_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot
         groups_to_remove.insert(sid.id);
     }
     std::erase_if(ed.shot.scene.groups, [&](const Group& g) { return groups_to_remove.contains(g.id); });
-    ed.interaction.selection = new_sel;
+    ed.replace_selection(std::move(new_sel));
     ed.validate_selection();
     reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
     return true;

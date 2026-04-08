@@ -35,6 +35,14 @@ std::string selection_label(const std::string& visible, const std::string& key) 
     return visible + "##" + key;
 }
 
+std::string selection_display_name(std::string_view label, bool is_active, bool is_editing = false) {
+    std::string out;
+    if (is_editing) out += "> ";
+    if (is_active) out += "[A] ";
+    out += label;
+    return out;
+}
+
 bool entity_id_available(const Scene& scene, std::string_view candidate, std::string_view current) {
     if (candidate.empty()) return false;
     if (candidate == current) return true;
@@ -175,6 +183,63 @@ int current_runtime_frame_index(const EditorState& ed, const CompareSnapshot& co
     return (compare_ab.active && compare_ab.showing_a) ? compare_ab.frame_index : ed.session.frame_index;
 }
 
+void rename_selection_ref(EditorState& ed, const SelectionRef& from, std::string_view new_id) {
+    SelectionRef updated = from;
+    updated.id = std::string(new_id);
+    for (auto& ref : ed.interaction.selection) {
+        if (ref == from)
+            ref.id = std::string(new_id);
+    }
+    if (ed.interaction.active_selection && *ed.interaction.active_selection == from)
+        ed.interaction.active_selection = updated;
+}
+
+void rename_group_refs(EditorState& ed, std::string_view old_id, std::string_view new_id) {
+    auto rewrite_ref = [&](SelectionRef& ref) {
+        if (ref.type == SelectionRef::Group && ref.id == old_id)
+            ref.id = std::string(new_id);
+        if (ref.group_id == old_id)
+            ref.group_id = std::string(new_id);
+    };
+    for (auto& ref : ed.interaction.selection)
+        rewrite_ref(ref);
+    if (ed.interaction.active_selection)
+        rewrite_ref(*ed.interaction.active_selection);
+    if (!ed.interaction.hovered.id.empty())
+        rewrite_ref(ed.interaction.hovered);
+    if (ed.interaction.box_active_before)
+        rewrite_ref(*ed.interaction.box_active_before);
+    if (!ed.interaction.active_handle.obj.id.empty())
+        rewrite_ref(ed.interaction.active_handle.obj);
+    if (ed.interaction.editing_group_id == old_id)
+        ed.interaction.editing_group_id = std::string(new_id);
+    if (ed.visibility.solo_light_group_id == old_id)
+        ed.visibility.solo_light_group_id = std::string(new_id);
+}
+
+void sync_material_panel_to_active_object(EditorState& ed, PanelState& panel) {
+    std::optional<SelectionRef> active;
+    if (const SelectionRef* current = ed.active_selection())
+        active = *current;
+    if (panel.material_panel.synced_target == active)
+        return;
+
+    panel.material_panel.synced_target = active;
+    panel.material_panel.selected_name.clear();
+    panel.material_panel.rename_buffer.clear();
+
+    if (!active)
+        return;
+    const Shape* shape = resolve_shape(ed.shot.scene, *active);
+    if (!shape)
+        return;
+    std::string_view ref = material_ref_id(shape_binding(*shape));
+    if (ref.empty())
+        return;
+    panel.material_panel.selected_name = std::string(ref);
+    panel.material_panel.rename_buffer = panel.material_panel.selected_name;
+}
+
 } // namespace
 
 // ─── Controls panel ──────────────────────────────────────────────────
@@ -199,6 +264,7 @@ void draw_controls_panel(
 
     const auto& builtins = get_builtin_scenes();
     bool showing_snapshot_a = compare_ab.active && compare_ab.showing_a;
+    sync_material_panel_to_active_object(ed, panel);
 
     float panel_w = 280 * dpi_scale;
     ImGui::SetNextWindowPos(ImVec2((float)win_w - panel_w - 8, 8), ImGuiCond_FirstUseEver);
@@ -280,33 +346,83 @@ void draw_controls_panel(
         ImGui::PopID();
     }
 
-    // -- Tools --
-    if (ImGui::CollapsingHeader("Tools", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::PushID("Tools");
+    // -- Edit --
+    if (ImGui::CollapsingHeader("Edit", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::PushID("Edit");
         ImVec4 accent(0.31f, 0.53f, 0.86f, 1.0f);
         ImVec4 accent_h(0.38f, 0.60f, 0.92f, 1.0f);
-        auto tbtn = [&](const char* lbl, EditTool t) {
-            bool active = (ed.interaction.tool == t);
+        auto select_tool = [&](EditTool t) {
+            if (ed.interaction.tool == EditTool::Measure && t != EditTool::Measure)
+                ed.interaction.measure_active = false;
+            if (t != EditTool::Path)
+                ed.interaction.path_create_points.clear();
+            ed.interaction.creating = false;
+            ed.interaction.tool = t;
+        };
+        auto tbtn = [&](const char* lbl, bool active, auto&& on_click, const char* tooltip) {
             if (active) {
                 ImGui::PushStyleColor(ImGuiCol_Button, accent);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent_h);
             }
-            if (ImGui::Button(lbl)) { ed.interaction.tool = t; ed.interaction.creating = false; ed.interaction.path_create_points.clear(); }
+            if (ImGui::Button(lbl))
+                on_click();
             if (active) ImGui::PopStyleColor(2);
+            if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+                ImGui::SetTooltip("%s", tooltip);
         };
-        tbtn("Select", EditTool::Select); ImGui::SameLine();
-        tbtn("Circle", EditTool::Circle); ImGui::SameLine();
-        tbtn("Segment", EditTool::Segment);
-        tbtn("Arc", EditTool::Arc); ImGui::SameLine();
-        tbtn("Bezier", EditTool::Bezier); ImGui::SameLine();
-        tbtn("Polygon", EditTool::Polygon);
-        tbtn("Ellipse", EditTool::Ellipse); ImGui::SameLine();
-        tbtn("Path", EditTool::Path);
-        tbtn("Erase", EditTool::Erase);
-        tbtn("Pt Light", EditTool::PointLight); ImGui::SameLine();
-        tbtn("Seg Light", EditTool::SegmentLight); ImGui::SameLine();
-        tbtn("Projector", EditTool::ProjectorLight); ImGui::SameLine();
-        tbtn("Measure", EditTool::Measure);
+        tbtn("Select", ed.interaction.tool == EditTool::Select,
+             [&] { select_tool(EditTool::Select); },
+             "Default mode. Click to select, Shift-click to add/remove, drag selected objects to move.");
+        ImGui::SameLine();
+        tbtn("Add", is_add_tool(ed.interaction.tool),
+             [&] { ImGui::OpenPopup("Add##popup"); },
+             "Create one object, select it, then return to Select mode.");
+        ImGui::SameLine();
+        tbtn("Measure", ed.interaction.tool == EditTool::Measure,
+             [&] { select_tool(EditTool::Measure); },
+             "Measure distance and angle between two points.");
+        ImGui::SameLine();
+        tbtn("Erase", ed.interaction.tool == EditTool::Erase,
+             [&] { select_tool(EditTool::Erase); },
+             "Click an object to delete it.");
+
+        if (ImGui::BeginPopup("Add##popup")) {
+            ImGui::TextDisabled("Shapes");
+            auto add_item = [&](const char* name, EditTool tool, const char* shortcut) {
+                std::string label = std::string(name) + "##" + name;
+                if (ImGui::MenuItem(label.c_str(), shortcut))
+                    select_tool(tool);
+            };
+            add_item("Circle", EditTool::Circle, "C");
+            add_item("Segment", EditTool::Segment, "L");
+            add_item("Arc", EditTool::Arc, "A");
+            add_item("Bezier", EditTool::Bezier, "B");
+            add_item("Polygon", EditTool::Polygon, nullptr);
+            add_item("Ellipse", EditTool::Ellipse, "E");
+            add_item("Path", EditTool::Path, "D");
+            ImGui::Separator();
+            ImGui::TextDisabled("Lights");
+            add_item("Point Light", EditTool::PointLight, "P");
+            add_item("Segment Light", EditTool::SegmentLight, "T");
+            add_item("Projector", EditTool::ProjectorLight, "W");
+            ImGui::EndPopup();
+        }
+
+        if (is_add_tool(ed.interaction.tool)) {
+            if (ed.interaction.tool == EditTool::Path) {
+                if (ed.interaction.path_create_points.empty()) {
+                    ImGui::TextDisabled("Add Path: click points, then Enter or double-click to finish.");
+                } else {
+                    ImGui::TextDisabled("Adding Path: %d point(s). Enter/double-click to finish, Escape to cancel.",
+                                        (int)ed.interaction.path_create_points.size());
+                }
+            } else {
+                ImGui::TextDisabled("Add %s: create one object, then return to Select.",
+                                    edit_tool_name(ed.interaction.tool));
+            }
+        } else {
+            ImGui::TextDisabled("Shift-click adds/removes from selection. Drag selected objects to move.");
+        }
 
         ImGui::Checkbox("Wireframe overlay", &panel.show_wireframe);
         ImGui::Checkbox("Grid", &ed.view.show_grid);
@@ -402,7 +518,10 @@ void draw_controls_panel(
             const auto& sid = shape_id(shape);
             SelectionRef ref{SelectionRef::Shape, sid, ""};
             bool is_sel = ed.is_selected(ref);
-            std::string lbl = selection_label(shape_display_name(shape, i), "shape_" + sid);
+            bool is_active = ed.is_active(ref);
+            std::string lbl = selection_label(
+                selection_display_name(shape_display_name(shape, i), is_active),
+                "shape_" + sid);
             ImGui::PushID(i + 10000);
             bool svis = ed.visibility.is_shape_visible(sid);
             if (ImGui::SmallButton(svis ? "o" : "-")) {
@@ -416,8 +535,7 @@ void draw_controls_panel(
             ImGui::PopID();
             ImGui::SameLine();
             if (ImGui::Selectable(lbl.c_str(), is_sel)) {
-                if (io.KeyShift) ed.toggle_select(ref);
-                else { ed.clear_selection(); ed.select(ref); }
+                ed.click_select(ref, io.KeyShift);
             }
         }
 
@@ -426,7 +544,10 @@ void draw_controls_panel(
             const auto& lid = light_id(light);
             SelectionRef ref{SelectionRef::Light, lid, ""};
             bool is_sel = ed.is_selected(ref);
-            std::string lbl = selection_label(light_display_name(light, i), "light_" + lid);
+            bool is_active = ed.is_active(ref);
+            std::string lbl = selection_label(
+                selection_display_name(light_display_name(light, i), is_active),
+                "light_" + lid);
             ImGui::PushID(i + 20000);
             bool lvis = ed.visibility.is_light_visible(lid);
             if (ImGui::SmallButton(lvis ? "o" : "-")) {
@@ -448,8 +569,7 @@ void draw_controls_panel(
             ImGui::PopID();
             ImGui::SameLine();
             if (ImGui::Selectable(lbl.c_str(), is_sel)) {
-                if (io.KeyShift) ed.toggle_select(ref);
-                else { ed.clear_selection(); ed.select(ref); }
+                ed.click_select(ref, io.KeyShift);
             }
         }
 
@@ -457,13 +577,12 @@ void draw_controls_panel(
             const auto& group = ed.shot.scene.groups[i];
             SelectionRef gref{SelectionRef::Group, group.id, ""};
             bool is_sel = ed.is_selected(gref);
+            bool is_active = ed.is_active(gref);
             bool is_editing = (ed.interaction.editing_group_id == group.id);
             int n_members = (int)(group.shapes.size() + group.lights.size());
-            std::string grp_name = group_display_name(group, i);
-            std::string lbl = grp_name;
-            if (is_editing) lbl = "> " + lbl;
-            lbl += " (" + std::to_string(n_members) + " items)";
-            lbl = selection_label(lbl, "group_" + group.id);
+            std::string grp_name = group_display_name(group, i) + " (" + std::to_string(n_members) + " items)";
+            std::string lbl = selection_label(selection_display_name(grp_name, is_active, is_editing),
+                                              "group_" + group.id);
             ImGui::PushID(i + 40000);
             bool gvis = ed.visibility.is_group_visible(group.id);
             if (ImGui::SmallButton(gvis ? "o" : "-")) {
@@ -472,20 +591,19 @@ void draw_controls_panel(
             ImGui::PopID();
             ImGui::SameLine();
             if (ImGui::Selectable(lbl.c_str(), is_sel || is_editing)) {
-                if (io.KeyShift) ed.toggle_select(gref);
-                else { ed.clear_selection(); ed.select(gref); }
+                ed.click_select(gref, io.KeyShift);
             }
             if (is_editing) {
                 ImGui::Indent(12.0f);
                 for (int j = 0; j < (int)group.shapes.size(); ++j) {
                     SelectionRef mref{SelectionRef::Shape, shape_id(group.shapes[j]), group.id};
                     bool mid_sel = ed.is_selected(mref);
+                    bool mid_active = ed.is_active(mref);
                     std::string mlbl = selection_label(
-                        "  " + shape_display_name(group.shapes[j], j),
+                        selection_display_name("  " + shape_display_name(group.shapes[j], j), mid_active),
                         "group_shape_" + group.id + "_" + shape_id(group.shapes[j]));
                     if (ImGui::Selectable(mlbl.c_str(), mid_sel)) {
-                        ed.clear_selection();
-                        ed.select(mref);
+                        ed.click_select(mref, io.KeyShift);
                     }
                 }
                 for (int j = 0; j < (int)group.lights.size(); ++j) {
@@ -493,6 +611,7 @@ void draw_controls_panel(
                     const auto& glid = light_id(gl);
                     SelectionRef mref{SelectionRef::Light, glid, group.id};
                     bool mid_sel = ed.is_selected(mref);
+                    bool mid_active = ed.is_active(mref);
                     ImGui::PushID(i * 1000 + j + 50000);
                     bool is_gsolo = (ed.visibility.solo_light_group_id == group.id && ed.visibility.solo_light_id == glid);
                     if (ImGui::SmallButton(is_gsolo ? "S" : "s")) {
@@ -507,11 +626,10 @@ void draw_controls_panel(
                     ImGui::PopID();
                     ImGui::SameLine();
                     std::string mlbl = selection_label(
-                        "  " + light_display_name(gl, j),
+                        selection_display_name("  " + light_display_name(gl, j), mid_active),
                         "group_light_" + group.id + "_" + glid);
                     if (ImGui::Selectable(mlbl.c_str(), mid_sel)) {
-                        ed.clear_selection();
-                        ed.select(mref);
+                        ed.click_select(mref, io.KeyShift);
                     }
                 }
                 ImGui::Unindent(12.0f);
@@ -521,8 +639,12 @@ void draw_controls_panel(
         ImGui::EndChild();
 
         if (!ed.interaction.selection.empty()) {
-            if (ed.interaction.selection.size() > 1)
-                ImGui::Text("%d objects selected", (int)ed.interaction.selection.size());
+            if (ed.interaction.selection.size() > 1) {
+                const SelectionRef* active = ed.active_selection();
+                ImGui::Text("%d objects selected%s",
+                            (int)ed.interaction.selection.size(),
+                            active ? " (editing active object)" : "");
+            }
             if (ImGui::Button("Delete Selected")) {
                 delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
                                 force_live_metrics_refresh, win_w, win_h);
@@ -623,11 +745,16 @@ void draw_controls_panel(
     }
 
     // -- Properties --
-    if (ed.interaction.selection.size() == 1 &&
+    if (ed.active_selection() &&
         ImGui::CollapsingHeader("Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Properties");
         bool changed = false;
-        auto& sid = ed.interaction.selection[0];
+        SelectionRef& sid = *ed.active_selection();
+
+        if (ed.interaction.selection.size() > 1) {
+            ImGui::TextDisabled("Editing active object");
+            ImGui::Separator();
+        }
 
         if (!sid.group_id.empty()) {
             ImGui::TextDisabled("Editing group: %s", sid.group_id.c_str());
@@ -664,16 +791,25 @@ void draw_controls_panel(
             bool local_changed = false;
             auto ref = material_ref_id(shape_binding(shape));
             std::string mid(ref);
+            auto sync_library = [&](std::string_view material_id) {
+                panel.material_panel.synced_target = sid;
+                panel.material_panel.selected_name = std::string(material_id);
+                panel.material_panel.rename_buffer = panel.material_panel.selected_name;
+            };
             const char* preview = mid.empty() ? "(inline custom)" : mid.c_str();
             if (ImGui::BeginCombo("Material", preview)) {
                 if (ImGui::Selectable("(inline custom)", mid.empty()) && !mid.empty()) {
                     detach_material(shape, ed.shot.scene.materials);
+                    mid.clear();
+                    sync_library(std::string_view{});
                     local_changed = true;
                 }
                 for (const auto& [name, _] : ed.shot.scene.materials) {
                     bool selected = mid == name;
                     if (ImGui::Selectable(name.c_str(), selected) && mid != name) {
                         bind_material(shape, ed.shot.scene, name);
+                        mid = name;
+                        sync_library(name);
                         local_changed = true;
                     }
                 }
@@ -683,8 +819,10 @@ void draw_controls_panel(
             if (!mid.empty()) {
                 ImGui::TextColored(ImVec4(0.5f, 0.8f, 0.5f, 1.0f),
                     "Editing shared material asset '%s'", mid.c_str());
-                if (ImGui::SmallButton("Detach to Inline")) {
+                if (ImGui::SmallButton("Make Inline")) {
                     detach_material(shape, ed.shot.scene.materials);
+                    mid.clear();
+                    sync_library(std::string_view{});
                     local_changed = true;
                 }
                 if (auto it = ed.shot.scene.materials.find(mid); it != ed.shot.scene.materials.end()) {
@@ -705,6 +843,7 @@ void draw_controls_panel(
             auto& shape = *sp;
             show_id_editor(shape_id(shape), [&](const std::string& new_id) {
                 shape_id(shape) = new_id;
+                rename_selection_ref(ed, sid, new_id);
             });
             ImGui::Separator();
             std::visit(overloaded{
@@ -768,6 +907,7 @@ void draw_controls_panel(
             auto& light = *lp;
             show_id_editor(light_id(light), [&](const std::string& new_id) {
                 light_id(light) = new_id;
+                rename_selection_ref(ed, sid, new_id);
             });
             ImGui::Separator();
             auto edit_wavelength = [&](float& wl_min, float& wl_max) {
@@ -822,9 +962,10 @@ void draw_controls_panel(
 
         if (sid.type == SelectionRef::Group) {
             if (Group* group = find_group(ed.shot.scene, sid.id)) {
+                std::string old_group_id = group->id;
                 show_id_editor(group->id, [&](const std::string& new_id) {
                     group->id = new_id;
-                    sid.id = new_id;
+                    rename_group_refs(ed, old_group_id, new_id);
                 });
                 ImGui::Separator();
                 ImGui::Text("Transform");
@@ -855,14 +996,17 @@ void draw_controls_panel(
         ImGui::PopID();
     }
 
+    sync_material_panel_to_active_object(ed, panel);
+
     // -- Material Library --
-    if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Material Library (Advanced)")) {
         ImGui::PushID("Materials");
         auto& mats = ed.shot.scene.materials;
         if (!panel.material_panel.selected_name.empty() && !mats.contains(panel.material_panel.selected_name)) {
             panel.material_panel.selected_name.clear();
             panel.material_panel.rename_buffer.clear();
         }
+        ImGui::TextDisabled("Advanced: shared material assets and batch actions.");
         if (mats.empty()) {
             ImGui::TextDisabled("No materials defined");
         } else {
@@ -921,6 +1065,7 @@ void draw_controls_panel(
                 Scene before = ed.shot.scene;
                 if (apply_material_to_selection(ed, panel.material_panel.selected_name)) {
                     ed.session.undo.push(ed.shot.scene);
+                    panel.material_panel.synced_target.reset();
                     reload();
                 } else {
                     ed.shot.scene = std::move(before);
@@ -931,6 +1076,7 @@ void draw_controls_panel(
                 Scene before = ed.shot.scene;
                 if (detach_material_from_selection(ed, panel.material_panel.selected_name)) {
                     ed.session.undo.push(ed.shot.scene);
+                    panel.material_panel.synced_target.reset();
                     reload();
                 } else {
                     ed.shot.scene = std::move(before);
