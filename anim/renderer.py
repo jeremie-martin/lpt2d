@@ -136,6 +136,37 @@ def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
         Image.frombytes("RGB", (width, height), rgb).save(path)
 
 
+# ─── Formatting helpers ──────────────────────────────────────────
+
+
+def _fmt_time(seconds: float) -> str:
+    """Format a duration: ms when < 1s, otherwise seconds with 1 decimal."""
+    if seconds < 1.0:
+        return f"{seconds * 1000:.0f}ms"
+    return f"{seconds:.1f}s"
+
+
+def _fmt_rays(rays: int) -> str:
+    """Format ray count in human-readable form."""
+    if rays >= 1_000_000:
+        v = rays / 1_000_000
+        return f"{v:g}M rays" if v == int(v) else f"{v:.1f}M rays"
+    if rays >= 1_000:
+        v = rays / 1_000
+        return f"{v:g}K rays" if v == int(v) else f"{v:.1f}K rays"
+    return f"{rays} rays"
+
+
+def _header(shot: Shot, extra: str, output: str | None) -> str:
+    """Build header line: lpt2d: WxH, rays, <extra> -> filename."""
+    w, h = shot.canvas.width, shot.canvas.height
+    parts = [f"lpt2d: {w}x{h}", _fmt_rays(shot.trace.rays)]
+    parts.append(extra)
+    if output is not None:
+        parts.append(f"\u2192 {Path(output).name}")
+    return ", ".join(parts[:3]) + (" " + parts[3] if len(parts) > 3 else "")
+
+
 # ─── Core rendering ──────────────────────────────────────────────
 
 
@@ -256,10 +287,12 @@ def render(
 
     try:
         if frame is not None:
+            sys.stderr.write(_header(shot, f"frame {frame}", output) + "\n")
             out.write_frame(_render_frame(frame))
             _check_gate(frame)
-            ms = f", {last_report.time_ms}ms" if last_report else ""
-            sys.stderr.write(f"frame {frame} ({timeline.time_at(frame):.2f}s{ms})\n")
+            t_pos = timeline.time_at(frame)
+            frame_ms = last_report.time_ms if last_report else 0.0
+            sys.stderr.write(f"rendered: t={t_pos:.2f}s  {_fmt_time(frame_ms / 1000)}\n")
         else:
             start_frame = int(start * timeline.fps)
             end_frame = int(end * timeline.fps) if end is not None else timeline.total_frames
@@ -267,13 +300,33 @@ def render(
             frames = range(start_frame, end_frame, stride)
             total = len(frames)
 
+            sys.stderr.write(_header(shot, f"{total} frames @ {timeline.fps}fps", output) + "\n")
+            wall_start = time.monotonic()
             for idx, i in enumerate(frames):
                 out.write_frame(_render_frame(i))
                 _check_gate(i)
-                ms = f" {last_report.time_ms}ms" if last_report else ""
-                sys.stderr.write(f"\rframe {idx + 1}/{total} ({timeline.time_at(i):.2f}s{ms})")
+                done = idx + 1
+                elapsed = time.monotonic() - wall_start
+                avg_ms = elapsed / done
+                remaining = total - done
+                eta = avg_ms * remaining
+                frame_ms = last_report.time_ms if last_report else 0.0
+                sys.stderr.write(
+                    f"\rrendering: {done}/{total}"
+                    f"  t={timeline.time_at(i):.2f}s"
+                    f"  {_fmt_time(frame_ms / 1000)}/frame"
+                    f"  {_fmt_time(elapsed)} elapsed"
+                    f"  ETA {_fmt_time(eta)}"
+                )
                 sys.stderr.flush()
             sys.stderr.write("\n")
+            total_elapsed = time.monotonic() - wall_start
+            avg = total_elapsed / total if total else 0
+            sys.stderr.write(
+                f"done: {total} frames in {_fmt_time(total_elapsed)}"
+                f" (avg {_fmt_time(avg)}/frame),"
+                f" wrote {Path(output).name}\n"
+            )
 
         if gate_warnings:
             sys.stderr.write(f"Quality gate: {len(gate_warnings)} warning(s)\n")
@@ -298,9 +351,15 @@ def render_still(
     ctx = timeline.context_at(frame)
     result = animate(ctx)
     cpp_shot = _resolve_frame_shot(shot, result, camera)
+    t0 = time.monotonic()
     render_result = session.render_shot(cpp_shot, frame)
-    _save_image(output, render_result.pixels, shot.canvas.width, shot.canvas.height)
-    sys.stderr.write(f"wrote {output} ({shot.canvas.width}x{shot.canvas.height}, frame {frame})\n")
+    wall_ms = (time.monotonic() - t0) * 1000
+    frame_ms = render_result.time_ms if render_result.time_ms > 0 else wall_ms
+    w, h = shot.canvas.width, shot.canvas.height
+    _save_image(output, render_result.pixels, w, h)
+    sys.stderr.write(
+        f"wrote {Path(output).name} ({w}x{h}, frame {frame}, {_fmt_time(frame_ms / 1000)})\n"
+    )
 
 
 def render_contact_sheet(
@@ -325,13 +384,22 @@ def render_contact_sheet(
     session = RenderSession(w, h, fast)
     frames_rgb: list[bytes] = []
 
+    wall_start = time.monotonic()
     for idx, fi in enumerate(indices):
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, camera)
+        t0 = time.monotonic()
         render_result = session.render_shot(cpp_shot, fi)
+        frame_ms = (time.monotonic() - t0) * 1000
         frames_rgb.append(render_result.pixels)
-        sys.stderr.write(f"\rcontact sheet: {idx + 1}/{count}")
+        done = idx + 1
+        elapsed = time.monotonic() - wall_start
+        sys.stderr.write(
+            f"\rcontact sheet: {done}/{count}"
+            f"  {_fmt_time(frame_ms / 1000)}/frame"
+            f"  {_fmt_time(elapsed)} elapsed"
+        )
         sys.stderr.flush()
     sys.stderr.write("\n")
 
