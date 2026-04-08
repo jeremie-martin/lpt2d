@@ -115,6 +115,7 @@ containing 10 collapsible sections, all open by default:
 | Space               | Pause / unpause               | works      |
 | H / Alt+H           | Hide selected / Show all      | works      |
 | F / Home            | Fit selection / Fit scene     | works      |
+| 0                   | Toggle authored camera        | works      |
 | Tab                 | Toggle controls panel         | works      |
 | V                   | Wireframe toggle              | works      |
 | N / Shift+N         | Material cycle fwd/back       | works      |
@@ -158,16 +159,18 @@ Smooth. Per-vertex editing via right-click context menu on vertex handles.
 ### 3.5 Too many clicks, not enough keystrokes — (partial)
 
 Addressed: material cycling (N), wireframe toggle (V), look presets
-(Shift+1-6), join mode cycling (J), Add menu at cursor (Shift+A),
-shortcut reference overlay (?). `648a1f5`
+(Shift+1-6), join mode cycling (J), Add menu at cursor (A),
+shortcut reference overlay (?), light intensity (Shift+Scroll),
+authored camera toggle (0).
 
-Remaining gaps: light intensity adjustment, individual post-processing sliders.
+Remaining gaps: individual post-processing sliders.
 
-### 3.6 Viewport zoom and navigation friction — (open)
+### 3.6 Viewport zoom and navigation friction — (partial)
 
-The `F` (fit to selection) and `Home` (fit to scene) shortcuts exist but are
-not always discoverable. No way to toggle between a detail view and the full
-scene, or to match the authored camera exactly.
+F (fit to selection), Home (fit to scene), and 0 (toggle authored camera)
+provide the core navigation shortcuts. Pressing 0 snaps to the authored
+camera framing; pressing again restores the previous free camera. Any
+pan/zoom/fit automatically exits authored camera mode.
 
 ### 3.7 Scene evaluation has no dedicated workflow — (partial)
 
@@ -260,10 +263,12 @@ Join-mode-dependent handle shapes (square=Auto, outline=Sharp, circle=Smooth).
 Per-vertex join mode and corner radius editing via right-click context menu on
 vertex handles.
 
-### 5.5 Viewport navigation improvements — (open)
+### 5.5 Viewport navigation improvements — (partial)
 
-- **Toggle between authored camera and free view** with a single key, so you
-  can quickly check "how does this look at the final framing?"
+Done: `0` toggles between authored camera and free view.
+
+Remaining:
+
 - **Named view bookmarks** to save and recall viewport positions during
   exploration sessions.
 - **Smooth animated transitions** when using Fit (F) or Home, instead of

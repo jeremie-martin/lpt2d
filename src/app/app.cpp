@@ -863,6 +863,7 @@ int App::run(const AppConfig& config) {
             bool alt_drag = io.KeyAlt && ImGui::IsMouseDragging(0);
 
             if (!compare_view_locked && (middle_drag || alt_drag)) {
+                ed.view.showing_authored_camera = false;
                 ImVec2 delta = io.MouseDelta;
                 ed.view.camera.center.x -= delta.x / ed.view.camera.zoom;
                 ed.view.camera.center.y += delta.y / ed.view.camera.zoom;
@@ -897,6 +898,7 @@ int App::run(const AppConfig& config) {
                         }
                     }
                 } else if (!compare_view_locked) {
+                    ed.view.showing_authored_camera = false;
                     Vec2 world_before = cv.to_world(io.MousePos);
                     float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
                     ed.view.camera.zoom *= factor;
@@ -1543,6 +1545,7 @@ int App::run(const AppConfig& config) {
                 row("Scroll", "Zoom");
                 row("F", "Fit to selection");
                 row("Home", "Fit to scene");
+                row("0", "Toggle authored camera");
                 row("Tab", "Toggle panel");
 
                 section("Selection & Edit");
@@ -1849,8 +1852,30 @@ int App::run(const AppConfig& config) {
                     reload();
                 }
 
+                // Authored camera toggle: 0
+                if (!compare_ab.active && !io.KeyShift && !io.KeyCtrl && !io.KeyAlt
+                    && ImGui::IsKeyPressed(ImGuiKey_0) && !ed.shot.camera.empty()) {
+                    if (ed.view.showing_authored_camera) {
+                        // Restore free camera
+                        if (ed.view.saved_free_camera)
+                            ed.view.camera = *ed.view.saved_free_camera;
+                        ed.view.showing_authored_camera = false;
+                    } else {
+                        // Snap to authored camera
+                        ed.view.saved_free_camera = ed.view.camera;
+                        Bounds cam_bounds = ed.shot.camera.resolve(ed.shot.canvas.aspect(), ed.view.scene_bounds);
+                        ed.view.camera.fit(cam_bounds, (float)win_w, (float)win_h);
+                        ed.view.showing_authored_camera = true;
+                    }
+                    auto bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
+                    renderer.update_viewport(bounds);
+                    renderer.redraw_fills(bounds);
+                    renderer.clear();
+                }
+
                 // Fit to view
                 if (!compare_ab.active && ImGui::IsKeyPressed(ImGuiKey_F)) {
+                    ed.view.showing_authored_camera = false;
                     if (!ed.interaction.selection.empty()) {
                         Bounds sb = ed.selection_bounds();
                         Vec2 sz = sb.max - sb.min;
@@ -1871,6 +1896,7 @@ int App::run(const AppConfig& config) {
                     }
                 }
                 if (!compare_ab.active && ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                    ed.view.showing_authored_camera = false;
                     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
                     {
                         auto home_bounds = ed.view.camera.visible_bounds((float)win_w, (float)win_h);
