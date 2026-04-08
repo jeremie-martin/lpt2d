@@ -197,6 +197,9 @@ struct EditorState {
         bool snap_to_grid = false;
         bool show_camera_frame = true;
         bool dim_outside_camera = true;
+        // Saved free camera for authored-camera toggle (0 key)
+        std::optional<EditorCamera> saved_free_camera;
+        bool showing_authored_camera = false;
     } view;
 
     // Interaction state (ephemeral — active during input gestures)
