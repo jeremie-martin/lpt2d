@@ -7,10 +7,13 @@ image file I/O or visual inspection.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any, cast
+
+import numpy as np
 
 import _lpt2d
-import numpy as np
 
 from .types import (
     Arc,
@@ -133,7 +136,13 @@ def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05
     chromatic_frac = n_chromatic / n_pixels
 
     if n_chromatic == 0:
-        return ColorStats(mean_saturation=0.0, hue_entropy=0.0, chromatic_fraction=0.0, color_richness=0.0, n_chromatic=0)
+        return ColorStats(
+            mean_saturation=0.0,
+            hue_entropy=0.0,
+            chromatic_fraction=0.0,
+            color_richness=0.0,
+            n_chromatic=0,
+        )
 
     mean_sat = float(np.mean(sat[mask]))
 
@@ -435,7 +444,7 @@ def _shape_material(shape: Shape, scene: Scene) -> Material:
     return _lpt2d.resolve_material(shape, scene)  # type: ignore[arg-type]
 
 
-def _transform_point(p: list[float], t: Transform2D) -> list[float]:
+def _transform_point(p: Sequence[float], t: Transform2D) -> list[float]:
     sx, sy = t.scale
     rx, ry = p[0] * sx, p[1] * sy
     cos_r, sin_r = math.cos(t.rotate), math.sin(t.rotate)
@@ -476,11 +485,14 @@ def _arc_bounds(arc: Arc) -> tuple[float, float, float, float]:
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
     bounds = (min(xs), min(ys), max(xs), max(ys))
-    return tuple(0.0 if abs(value) < 1e-6 else value for value in bounds)
+    return cast(
+        tuple[float, float, float, float],
+        tuple(0.0 if abs(value) < 1e-6 else value for value in bounds),
+    )
 
 
 def _transform_ellipse_affine(ellipse: Ellipse, t: Transform2D) -> Ellipse:
-    out = _copy_shape(ellipse, center=_transform_point(ellipse.center, t))
+    out = cast(Ellipse, _copy_shape(ellipse, center=_transform_point(ellipse.center, t)))
 
     cr, sr = math.cos(ellipse.rotation), math.sin(ellipse.rotation)
     tc, ts = math.cos(t.rotate), math.sin(t.rotate)
@@ -519,7 +531,7 @@ def _transform_ellipse_affine(ellipse: Ellipse, t: Transform2D) -> Ellipse:
     return out
 
 
-def _shape_binding_kwargs(shape: Shape) -> dict[str, object]:
+def _shape_binding_kwargs(shape: Shape) -> dict[str, Any]:
     material_id = getattr(shape, "material_id", "")
     if material_id:
         return {"material_id": material_id}
@@ -529,7 +541,7 @@ def _shape_binding_kwargs(shape: Shape) -> dict[str, object]:
 def _copy_shape(shape: Shape, **overrides) -> Shape:
     # Material binding: explicit override takes priority over original
     if "material" in overrides:
-        binding: dict[str, object] = {"material": overrides.pop("material")}
+        binding: dict[str, Any] = {"material": overrides.pop("material")}
     elif "material_id" in overrides:
         binding = {"material_id": overrides.pop("material_id")}
     else:

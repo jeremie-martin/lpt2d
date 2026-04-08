@@ -9,7 +9,7 @@ from anim.builders import biconvex_lens, double_slit, mirror_box, thick_arc, wav
 from anim.types import Material, Polygon, Segment
 
 
-def _polygon_area2(vertices: list[list[float]]) -> float:
+def _polygon_area2(vertices: list[tuple[float, float]]) -> float:
     area2 = 0.0
     for i, a in enumerate(vertices):
         b = vertices[(i + 1) % len(vertices)]

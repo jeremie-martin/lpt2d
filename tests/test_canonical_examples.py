@@ -170,8 +170,6 @@ def test_canonical_examples_save_json_builds_authored_scene(tmp_path: Path, file
     assert output.exists(), f"{filename} did not produce {output.name}"
 
     shot = Shot.load(output)
-    assert (
-        len(shot.scene.shapes) > 0
-        or len(shot.scene.lights) > 0
-        or len(shot.scene.groups) > 0
-    ), f"{filename} saved an empty scene"
+    assert len(shot.scene.shapes) > 0 or len(shot.scene.lights) > 0 or len(shot.scene.groups) > 0, (
+        f"{filename} saved an empty scene"
+    )

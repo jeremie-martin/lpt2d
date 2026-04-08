@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -75,7 +76,7 @@ def save_baseline(
 
 def save_baseline_set(
     path: Path,
-    results_by_case: dict[int, object],
+    results_by_case: dict[int, Any],
     *,
     metadata: dict | None = None,
     timing_by_case: dict[int, dict] | None = None,
@@ -89,7 +90,9 @@ def save_baseline_set(
     cases_meta: dict[str, dict] = {}
     for case_index, result in sorted(results_by_case.items()):
         image_name = f"case_{case_index:04d}.png"
-        pixels = np.frombuffer(result.pixels, dtype=np.uint8).reshape(result.height, result.width, 3)
+        pixels = np.frombuffer(result.pixels, dtype=np.uint8).reshape(
+            result.height, result.width, 3
+        )
         Image.fromarray(pixels, "RGB").save(path / image_name)
 
         case_meta = _result_metadata(result)

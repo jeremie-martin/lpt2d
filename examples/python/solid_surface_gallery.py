@@ -129,8 +129,12 @@ def _sample_polar(
 ) -> list[list[float]]:
     points = [
         [
-            scale_x * radius_fn(rotation + math.tau * i / samples) * math.cos(rotation + math.tau * i / samples),
-            scale_y * radius_fn(rotation + math.tau * i / samples) * math.sin(rotation + math.tau * i / samples),
+            scale_x
+            * radius_fn(rotation + math.tau * i / samples)
+            * math.cos(rotation + math.tau * i / samples),
+            scale_y
+            * radius_fn(rotation + math.tau * i / samples)
+            * math.sin(rotation + math.tau * i / samples),
         ]
         for i in range(samples)
     ]

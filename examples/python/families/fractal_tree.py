@@ -33,7 +33,6 @@ from anim import (
     Timeline,
     Track,
     Wrap,
-    color_stats,
     glass,
     mirror_box,
     render,
@@ -91,7 +90,10 @@ def build_tree(
         ey = y + actual_length * math.sin(angle)
 
         seg = thick_segment(
-            (x, y), (ex, ey), thick, material,
+            (x, y),
+            (ex, ey),
+            thick,
+            material,
             corner_radius=thick * 0.3,
             id_prefix=f"branch_{idx[0]}",
         )
@@ -238,9 +240,7 @@ def random_params(rng: random.Random) -> AnimParams:
 
     # Compute angle range to sweep across the tree
     tree_top_y = tree_base_y + trunk_length * 2.0
-    tree_mid_y = (tree_base_y + tree_top_y) / 2
     angle_to_base = math.atan2(tree_base_y - beam_y, tree_base_x - beam_x)
-    angle_to_mid = math.atan2(tree_mid_y - beam_y, tree_base_x - beam_x)
     angle_to_top = math.atan2(tree_top_y - beam_y, tree_base_x - beam_x)
 
     # Tighter sweep centered on the tree canopy
@@ -276,8 +276,12 @@ def make_probe_shot() -> Shot:
     shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-4.8, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-4.8,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
@@ -319,13 +323,19 @@ def make_hq_shot(width: int = 1920, height: int = 1080, rays: int = 5_000_000) -
     shot = Shot.preset("production", width=width, height=height, rays=rays, depth=12)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-4.8, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-4.8,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
 
-def render_and_save(p: AnimParams, out_dir: Path, width: int = 1920, height: int = 1080, rays: int = 5_000_000) -> None:
+def render_and_save(
+    p: AnimParams, out_dir: Path, width: int = 1920, height: int = 1080, rays: int = 5_000_000
+) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     params_path = out_dir / "params.json"
@@ -346,7 +356,11 @@ def render_and_save(p: AnimParams, out_dir: Path, width: int = 1920, height: int
 
 
 def main() -> None:
-    seed = int(time.time()) if "--seed" not in sys.argv else int(sys.argv[sys.argv.index("--seed") + 1])
+    seed = (
+        int(time.time())
+        if "--seed" not in sys.argv
+        else int(sys.argv[sys.argv.index("--seed") + 1])
+    )
     target_count = int(sys.argv[sys.argv.index("-n") + 1]) if "-n" in sys.argv else 1
     hq = "--hq" in sys.argv
     width = 1920 if hq else 320
@@ -377,7 +391,7 @@ def main() -> None:
         out_dir = base_dir / f"{found:03d}"
         print(f"  FOUND #{found} — rendering...")
         render_and_save(p, out_dir, width, height, rays)
-        print(f"  done.\n")
+        print("  done.\n")
 
         if found >= target_count:
             break

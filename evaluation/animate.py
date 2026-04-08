@@ -9,7 +9,6 @@ from __future__ import annotations
 import copy
 import math
 
-
 _STATIC_BOUNDARY_ID_PREFIXES = ("wall_", "room_")
 
 
@@ -51,7 +50,9 @@ def _is_static_boundary_shape(shape: dict, camera_bounds: list[float] | None) ->
     x0, y0 = a[0], a[1]
     x1, y1 = b[0], b[1]
 
-    horizontal = _is_close(y0, y1) and _is_close(min(x0, x1), left) and _is_close(max(x0, x1), right)
+    horizontal = (
+        _is_close(y0, y1) and _is_close(min(x0, x1), left) and _is_close(max(x0, x1), right)
+    )
     vertical = _is_close(x0, x1) and _is_close(min(y0, y1), bottom) and _is_close(max(y0, y1), top)
     return horizontal or vertical
 

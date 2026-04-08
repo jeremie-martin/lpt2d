@@ -92,6 +92,7 @@ class TestTrackVelocity:
         assert track.velocity_at(0.999) == pytest.approx(0.0, abs=0.02)
         # Peak velocity at midpoint
         mid_vel = track.velocity_at(0.5)
+        assert isinstance(mid_vel, (int, float))
         assert mid_vel > 1.0  # should be 1.5
 
     def test_single_key_zero_velocity(self):
@@ -348,6 +349,7 @@ class TestCamera2DAspect:
         from anim.types import Camera2D
 
         cam = Camera2D(center=(0.5, 0.0), width=2.0)
+        assert cam.center is not None
         assert cam.center[0] == pytest.approx(0.5)
         assert cam.center[1] == pytest.approx(0.0)
         assert cam.width == pytest.approx(2.0)

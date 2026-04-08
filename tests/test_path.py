@@ -1,13 +1,14 @@
 """Tests for the Path shape type: construction, fitting, serialization, render."""
+
 from __future__ import annotations
 
 import json
 import math
 import tempfile
 
-import _lpt2d
 import pytest
 
+import _lpt2d
 from anim.builders import function_curve, path, path_from_samples
 from anim.types import Material, Path
 
@@ -54,13 +55,13 @@ def test_path_id_prefix():
 
 
 def test_path_from_samples_2_points():
-    p = path_from_samples([[0, 0], [1, 0]], MAT)
+    p = path_from_samples([[0.0, 0.0], [1.0, 0.0]], MAT)
     assert isinstance(p, Path)
     assert len(p.points) == 3  # 1 segment
 
 
 def test_path_from_samples_4_points():
-    pts = [[0, 0], [1, 1], [2, 0], [3, 1]]
+    pts = [[0.0, 0.0], [1.0, 1.0], [2.0, 0.0], [3.0, 1.0]]
     p = path_from_samples(pts, MAT)
     # N=4 samples → N-2=2 Bezier segments → 2*2+1=5 points
     assert len(p.points) == 5
@@ -69,13 +70,13 @@ def test_path_from_samples_4_points():
 
 def test_path_from_samples_chain_is_odd():
     for n in range(3, 10):
-        pts = [[i, 0] for i in range(n)]
+        pts = [[float(i), 0.0] for i in range(n)]
         p = path_from_samples(pts, MAT)
         assert len(p.points) % 2 == 1, f"n={n}: points={len(p.points)}"
 
 
 def test_path_from_samples_endpoints_match():
-    pts = [[0, 0], [1, 2], [3, 1], [4, 0]]
+    pts = [[0.0, 0.0], [1.0, 2.0], [3.0, 1.0], [4.0, 0.0]]
     p = path_from_samples(pts, MAT)
     assert p.points[0] == pytest.approx([0, 0], abs=1e-6)
     assert p.points[-1] == pytest.approx([4, 0], abs=1e-6)

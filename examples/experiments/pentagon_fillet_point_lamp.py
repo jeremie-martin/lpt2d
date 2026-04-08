@@ -27,8 +27,8 @@ from anim import (
     Segment,
     Shot,
     Timeline,
-    auto_look,
     absorber,
+    auto_look,
     opaque_mirror,
     render,
     render_still,
@@ -65,7 +65,9 @@ def _regular_polygon_vertices(
 
 
 def _pentagon_shape(corner_radius: float) -> Polygon:
-    base = _regular_polygon_vertices(center=(0.0, 0.0), radius=0.24, sides=5, rotation=0.5 * math.pi)
+    base = _regular_polygon_vertices(
+        center=(0.0, 0.0), radius=0.24, sides=5, rotation=0.5 * math.pi
+    )
     return Polygon(
         id="pentagon_body",
         vertices=base,

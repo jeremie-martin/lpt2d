@@ -11,41 +11,41 @@ import math
 import pathlib
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any, Callable, TypeAlias
 
 import _lpt2d
 
 # ─── Re-export C++ types ─────────────────────────────────────────
 
-Material = _lpt2d.Material
-Circle = _lpt2d.Circle
-Segment = _lpt2d.Segment
-Arc = _lpt2d.Arc
-Bezier = _lpt2d.Bezier
-Polygon = _lpt2d.Polygon
-Ellipse = _lpt2d.Ellipse
-Path = _lpt2d.Path
-PointLight = _lpt2d.PointLight
-SegmentLight = _lpt2d.SegmentLight
-ProjectorLight = _lpt2d.ProjectorLight
-ProjectorSource = _lpt2d.ProjectorSource
-Transform2D = _lpt2d.Transform2D
-Group = _lpt2d.Group
-Scene = _lpt2d.Scene
-Camera2D = _lpt2d.Camera2D
-Canvas = _lpt2d.Canvas
-Look = _lpt2d.Look
-TraceDefaults = _lpt2d.TraceDefaults
-Bounds = _lpt2d.Bounds
-ToneMap = _lpt2d.ToneMap
-NormalizeMode = _lpt2d.NormalizeMode
-SeedMode = _lpt2d.SeedMode
-ProjectorProfile = _lpt2d.ProjectorProfile
-RenderSession = _lpt2d.RenderSession
-RenderResult = _lpt2d.RenderResult
-FrameMetrics = _lpt2d.FrameMetrics
-TraceConfig = _lpt2d.TraceConfig
-PostProcess = _lpt2d.PostProcess
+Material: TypeAlias = _lpt2d.Material
+Circle: TypeAlias = _lpt2d.Circle
+Segment: TypeAlias = _lpt2d.Segment
+Arc: TypeAlias = _lpt2d.Arc
+Bezier: TypeAlias = _lpt2d.Bezier
+Polygon: TypeAlias = _lpt2d.Polygon
+Ellipse: TypeAlias = _lpt2d.Ellipse
+Path: TypeAlias = _lpt2d.Path
+PointLight: TypeAlias = _lpt2d.PointLight
+SegmentLight: TypeAlias = _lpt2d.SegmentLight
+ProjectorLight: TypeAlias = _lpt2d.ProjectorLight
+ProjectorSource: TypeAlias = _lpt2d.ProjectorSource
+Transform2D: TypeAlias = _lpt2d.Transform2D
+Group: TypeAlias = _lpt2d.Group
+Scene: TypeAlias = _lpt2d.Scene
+Camera2D: TypeAlias = _lpt2d.Camera2D
+Canvas: TypeAlias = _lpt2d.Canvas
+Look: TypeAlias = _lpt2d.Look
+TraceDefaults: TypeAlias = _lpt2d.TraceDefaults
+Bounds: TypeAlias = _lpt2d.Bounds
+ToneMap: TypeAlias = _lpt2d.ToneMap
+NormalizeMode: TypeAlias = _lpt2d.NormalizeMode
+SeedMode: TypeAlias = _lpt2d.SeedMode
+ProjectorProfile: TypeAlias = _lpt2d.ProjectorProfile
+RenderSession: TypeAlias = _lpt2d.RenderSession
+RenderResult: TypeAlias = _lpt2d.RenderResult
+FrameMetrics: TypeAlias = _lpt2d.FrameMetrics
+TraceConfig: TypeAlias = _lpt2d.TraceConfig
+PostProcess: TypeAlias = _lpt2d.PostProcess
 
 # ─── Color-aware material constructors ───────────────────────────
 
@@ -69,20 +69,39 @@ def glass(
     color: ColorSpec = None,
     fill: float = 0.0,
 ) -> Material:
-    return Material(ior=ior, transmission=1.0, absorption=absorption,
-                    cauchy_b=cauchy_b, fill=fill, **_sc(color))
+    return Material(
+        ior=ior, transmission=1.0, absorption=absorption, cauchy_b=cauchy_b, fill=fill, **_sc(color)
+    )
 
 
-def mirror(reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0) -> Material:
-    return Material(roughness=roughness, metallic=1.0, transmission=1.0,
-                    albedo=reflectance, fill=fill, **_sc(color))
+def mirror(
+    reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0
+) -> Material:
+    return Material(
+        roughness=roughness,
+        metallic=1.0,
+        transmission=1.0,
+        albedo=reflectance,
+        fill=fill,
+        **_sc(color),
+    )
 
 
 def opaque_mirror(
-    reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0,
+    reflectance: float,
+    roughness: float = 0.0,
+    *,
+    color: ColorSpec = None,
+    fill: float = 0.0,
 ) -> Material:
-    return Material(roughness=roughness, metallic=1.0, transmission=0.0,
-                    albedo=reflectance, fill=fill, **_sc(color))
+    return Material(
+        roughness=roughness,
+        metallic=1.0,
+        transmission=0.0,
+        albedo=reflectance,
+        fill=fill,
+        **_sc(color),
+    )
 
 
 def diffuse(reflectance: float, *, color: ColorSpec = None, fill: float = 0.0) -> Material:
@@ -97,10 +116,17 @@ def emissive(emission: float, base: Material | None = None, *, color: ColorSpec 
     if base is None:
         base = Material()
     m = Material(
-        ior=base.ior, roughness=base.roughness, metallic=base.metallic,
-        transmission=base.transmission, absorption=base.absorption, cauchy_b=base.cauchy_b,
-        albedo=base.albedo, emission=emission,
-        spectral_c0=base.spectral_c0, spectral_c1=base.spectral_c1, spectral_c2=base.spectral_c2,
+        ior=base.ior,
+        roughness=base.roughness,
+        metallic=base.metallic,
+        transmission=base.transmission,
+        absorption=base.absorption,
+        cauchy_b=base.cauchy_b,
+        albedo=base.albedo,
+        emission=emission,
+        spectral_c0=base.spectral_c0,
+        spectral_c1=base.spectral_c1,
+        spectral_c2=base.spectral_c2,
         fill=base.fill,
     )
     if color is not None:
@@ -112,9 +138,14 @@ def emissive(emission: float, base: Material | None = None, *, color: ColorSpec 
 
 
 def beam_splitter(
-    reflectance: float, roughness: float = 0.0, *, color: ColorSpec = None, fill: float = 0.0,
+    reflectance: float,
+    roughness: float = 0.0,
+    *,
+    color: ColorSpec = None,
+    fill: float = 0.0,
 ) -> Material:
     return mirror(reflectance, roughness, color=color, fill=fill)
+
 
 # ─── Geometry helpers ────────────────────────────────────────────
 
@@ -144,8 +175,8 @@ def light_type_name(light) -> str:
 
 # ─── Type aliases ────────────────────────────────────────────────
 
-Shape = Circle | Segment | Arc | Bezier | Polygon | Ellipse | Path
-Light = PointLight | SegmentLight | ProjectorLight
+Shape: TypeAlias = Circle | Segment | Arc | Bezier | Polygon | Ellipse | Path
+Light: TypeAlias = PointLight | SegmentLight | ProjectorLight
 
 
 # ─── Scene convenience methods (monkey-patched onto C++ Scene) ───
@@ -165,13 +196,13 @@ def scene_find_shape(scene: Scene, entity_id: str):
 
 def scene_find_light(scene: Scene, entity_id: str):
     """Find a light by ID, searching top-level and groups. Returns None if not found."""
-    for l in scene.lights:
-        if l.id == entity_id:
-            return l
+    for light in scene.lights:
+        if light.id == entity_id:
+            return light
     for g in scene.groups:
-        for l in g.lights:
-            if l.id == entity_id:
-                return l
+        for light in g.lights:
+            if light.id == entity_id:
+                return light
     return None
 
 
@@ -194,10 +225,10 @@ def scene_clone(scene: Scene) -> Scene:
 
 
 # Patch convenience methods onto the C++ Scene class
-Scene.find_shape = scene_find_shape
-Scene.find_light = scene_find_light
-Scene.find_group = scene_find_group
-Scene.clone = scene_clone
+Scene.find_shape = scene_find_shape  # type: ignore[attr-defined]
+Scene.find_light = scene_find_light  # type: ignore[attr-defined]
+Scene.find_group = scene_find_group  # type: ignore[attr-defined]
+Scene.clone = scene_clone  # type: ignore[attr-defined]
 
 
 def _require(result, kind: str, entity_id: str):
@@ -206,12 +237,10 @@ def _require(result, kind: str, entity_id: str):
     return result
 
 
-Scene.require_shape = lambda self, eid: _require(scene_find_shape(self, eid), "shape", eid)
-Scene.require_light = lambda self, eid: _require(scene_find_light(self, eid), "light", eid)
-Scene.require_group = lambda self, eid: _require(scene_find_group(self, eid), "group", eid)
-Scene.require_material = lambda self, mid: _require(
-    self.materials.get(mid), "material", mid
-)
+Scene.require_shape = lambda self, eid: _require(scene_find_shape(self, eid), "shape", eid)  # type: ignore[attr-defined]
+Scene.require_light = lambda self, eid: _require(scene_find_light(self, eid), "light", eid)  # type: ignore[attr-defined]
+Scene.require_group = lambda self, eid: _require(scene_find_group(self, eid), "group", eid)  # type: ignore[attr-defined]
+Scene.require_material = lambda self, mid: _require(self.materials.get(mid), "material", mid)  # type: ignore[attr-defined]
 
 
 # ─── Look.with_overrides / Transform2D.uniform ──────────────────
@@ -222,7 +251,7 @@ def _look_with_overrides(self, **overrides):
     return _apply_look_override(self, overrides)
 
 
-Look.with_overrides = _look_with_overrides
+Look.with_overrides = _look_with_overrides  # type: ignore[attr-defined]
 
 
 def _transform2d_uniform(translate=(0, 0), rotate=0.0, scale=1.0):
@@ -230,7 +259,7 @@ def _transform2d_uniform(translate=(0, 0), rotate=0.0, scale=1.0):
     return Transform2D(translate=list(translate), rotate=rotate, scale=[scale, scale])
 
 
-Transform2D.uniform = staticmethod(_transform2d_uniform)
+Transform2D.uniform = staticmethod(_transform2d_uniform)  # type: ignore[attr-defined]
 
 
 # ─── Quality presets ─────────────────────────────────────────────

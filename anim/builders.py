@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Literal
 
 from .types import Arc, Circle, Ellipse, Material, Path, Polygon, Segment, Shape
@@ -23,8 +24,10 @@ def polygon(
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices."""
     return Polygon(
-        id=_shape_id(id_prefix, "body"), vertices=[list(v) for v in vertices],
-        material=material, corner_radius=corner_radius,
+        id=_shape_id(id_prefix, "body"),
+        vertices=[list(v) for v in vertices],
+        material=material,
+        corner_radius=corner_radius,
     )
 
 
@@ -412,8 +415,15 @@ def prism(
 
     Convenience wrapper around :func:`regular_polygon` with *n=3*.
     """
-    return regular_polygon(center, size, 3, material, rotation=rotation,
-                           corner_radius=corner_radius, id_prefix=id_prefix)
+    return regular_polygon(
+        center,
+        size,
+        3,
+        material,
+        rotation=rotation,
+        corner_radius=corner_radius,
+        id_prefix=id_prefix,
+    )
 
 
 def mirror_block(
@@ -619,7 +629,7 @@ def path(
 
 
 def path_from_samples(
-    points: list[list[float]] | list[tuple[float, float]],
+    points: Sequence[Sequence[float]],
     material: Material,
     *,
     closed: bool = False,

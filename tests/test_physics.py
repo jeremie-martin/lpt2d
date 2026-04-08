@@ -99,10 +99,33 @@ def render_pixels(
 # Scene construction helpers
 # ---------------------------------------------------------------------------
 
-GLASS = {"ior": 1.5, "transmission": 1.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}
-GLASS_DISPERSIVE = {"ior": 1.5, "transmission": 1.0, "cauchy_b": 20000.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}
+GLASS = {
+    "ior": 1.5,
+    "transmission": 1.0,
+    "spectral_c0": 0.0,
+    "spectral_c1": 0.0,
+    "spectral_c2": 0.0,
+    "fill": 0.0,
+}
+GLASS_DISPERSIVE = {
+    "ior": 1.5,
+    "transmission": 1.0,
+    "cauchy_b": 20000.0,
+    "spectral_c0": 0.0,
+    "spectral_c1": 0.0,
+    "spectral_c2": 0.0,
+    "fill": 0.0,
+}
 ABSORBER = {"albedo": 0.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}
-MIRROR_98 = {"metallic": 1.0, "albedo": 0.98, "transmission": 0.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}
+MIRROR_98 = {
+    "metallic": 1.0,
+    "albedo": 0.98,
+    "transmission": 0.0,
+    "spectral_c0": 0.0,
+    "spectral_c1": 0.0,
+    "spectral_c2": 0.0,
+    "fill": 0.0,
+}
 
 
 def projector_light(
@@ -496,7 +519,21 @@ def test_emissive_segment_is_endpoint_order_invariant():
 
     def measure(a, b):
         scene = make_scene(
-            collectors + [segment_shape(a, b, {"albedo": 0.0, "emission": 2.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0})],
+            collectors
+            + [
+                segment_shape(
+                    a,
+                    b,
+                    {
+                        "albedo": 0.0,
+                        "emission": 2.0,
+                        "spectral_c0": 0.0,
+                        "spectral_c1": 0.0,
+                        "spectral_c2": 0.0,
+                        "fill": 0.0,
+                    },
+                )
+            ],
             [],
             bounds,
         )
@@ -521,7 +558,18 @@ def test_emissive_circle_lights_both_sides():
 
     assert_emissive_shape_lights_both_sides(
         "circle",
-        circle_shape([0.0, 0.0], 0.32, {"albedo": 0.0, "emission": 2.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}),
+        circle_shape(
+            [0.0, 0.0],
+            0.32,
+            {
+                "albedo": 0.0,
+                "emission": 2.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            },
+        ),
         max_imbalance=0.25,
     )
 
@@ -533,7 +581,14 @@ def test_emissive_polygon_lights_both_sides():
         "polygon",
         polygon_shape(
             [[-0.32, -0.32], [-0.32, 0.32], [0.32, 0.32], [0.32, -0.32]],
-            {"albedo": 0.0, "emission": 2.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0},
+            {
+                "albedo": 0.0,
+                "emission": 2.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            },
         ),
         max_imbalance=0.25,
     )
@@ -544,7 +599,20 @@ def test_emissive_arc_lights_both_sides():
 
     assert_emissive_shape_lights_both_sides(
         "arc",
-        arc_shape([0.0, 0.0], 0.42, -math.pi / 2, math.pi, {"albedo": 0.0, "emission": 2.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}),
+        arc_shape(
+            [0.0, 0.0],
+            0.42,
+            -math.pi / 2,
+            math.pi,
+            {
+                "albedo": 0.0,
+                "emission": 2.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            },
+        ),
         max_imbalance=0.35,
     )
 
@@ -554,7 +622,20 @@ def test_emissive_ellipse_lights_both_sides():
 
     assert_emissive_shape_lights_both_sides(
         "ellipse",
-        ellipse_shape([0.0, 0.0], 0.42, 0.24, 0.0, {"albedo": 0.0, "emission": 2.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}),
+        ellipse_shape(
+            [0.0, 0.0],
+            0.42,
+            0.24,
+            0.0,
+            {
+                "albedo": 0.0,
+                "emission": 2.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            },
+        ),
         max_imbalance=0.25,
     )
 
@@ -613,7 +694,16 @@ def test_dispersion():
     cauchy_b = 60_000.0
     prism = polygon_shape(
         [[-0.4, -0.25], [0.25, -0.1], [0.35, 0.1], [-0.4, 0.25]],
-        {"ior": 1.5, "transmission": 1.0, "cauchy_b": cauchy_b, "absorption": 0.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0},
+        {
+            "ior": 1.5,
+            "transmission": 1.0,
+            "cauchy_b": cauchy_b,
+            "absorption": 0.0,
+            "spectral_c0": 0.0,
+            "spectral_c1": 0.0,
+            "spectral_c2": 0.0,
+            "fill": 0.0,
+        },
     )
     screen = segment_shape([0.9, -0.35], [0.9, 0.75], ABSORBER)
     bounds = [-1.1, -0.6, 1.1, 0.9]
@@ -723,8 +813,28 @@ def test_tir():
     sz = 0.6
     # CW: bottom-left → top-left → bottom-right
     verts = [[-sz / 2, -sz / 2], [-sz / 2, sz / 2], [sz / 2, -sz / 2]]
-    prism_high = polygon_shape(verts, {"ior": 1.5, "transmission": 1.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0})
-    prism_low = polygon_shape(verts, {"ior": 1.2, "transmission": 1.0, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0})
+    prism_high = polygon_shape(
+        verts,
+        {
+            "ior": 1.5,
+            "transmission": 1.0,
+            "spectral_c0": 0.0,
+            "spectral_c1": 0.0,
+            "spectral_c2": 0.0,
+            "fill": 0.0,
+        },
+    )
+    prism_low = polygon_shape(
+        verts,
+        {
+            "ior": 1.2,
+            "transmission": 1.0,
+            "spectral_c0": 0.0,
+            "spectral_c1": 0.0,
+            "spectral_c2": 0.0,
+            "fill": 0.0,
+        },
+    )
 
     # Beam enters from below, going straight up into the bottom face
     light = projector_light([0.0, -0.7], [0.0, 1.0], spread=0.02)
@@ -868,20 +978,23 @@ def test_lens_focus():
 def test_grouped_ellipse_matches_direct_ellipse():
     print("\n=== Test 8: Grouped ellipse transform exactness ===\n")
 
-    local = dict(center=[0.06, -0.04], semi_a=0.18, semi_b=0.09, rotation=0.0)
-    group_transform = dict(translate=[0.08, -0.03], rotate=0.55, scale=[1.8, 0.65])
-    sx, sy = group_transform["scale"]
-    tc = math.cos(group_transform["rotate"])
-    ts = math.sin(group_transform["rotate"])
-    scaled_center = [local["center"][0] * sx, local["center"][1] * sy]
+    local_center = [0.06, -0.04]
+    local_semi_a, local_semi_b, local_rotation = 0.18, 0.09, 0.0
+    gt_translate = [0.08, -0.03]
+    gt_rotate = 0.55
+    gt_scale = [1.8, 0.65]
+    sx, sy = gt_scale
+    tc = math.cos(gt_rotate)
+    ts = math.sin(gt_rotate)
+    scaled_center = [local_center[0] * sx, local_center[1] * sy]
     direct = {
         "center": [
-            scaled_center[0] * tc - scaled_center[1] * ts + group_transform["translate"][0],
-            scaled_center[0] * ts + scaled_center[1] * tc + group_transform["translate"][1],
+            scaled_center[0] * tc - scaled_center[1] * ts + gt_translate[0],
+            scaled_center[0] * ts + scaled_center[1] * tc + gt_translate[1],
         ],
-        "semi_a": local["semi_a"] * sx,
-        "semi_b": local["semi_b"] * sy,
-        "rotation": group_transform["rotate"],
+        "semi_a": local_semi_a * sx,
+        "semi_b": local_semi_b * sy,
+        "rotation": gt_rotate,
     }
 
     collectors = [
@@ -890,7 +1003,15 @@ def test_grouped_ellipse_matches_direct_ellipse():
     ]
     light = parallel_projector_light([-0.55, 0.72], [0.55, 0.72], [0.0, -1.0], intensity=1.2)
     bounds = [-1.0, -1.0, 1.0, 1.0]
-    material = {"ior": 1.5, "transmission": 1.0, "absorption": 0.1, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0}
+    material = {
+        "ior": 1.5,
+        "transmission": 1.0,
+        "absorption": 0.1,
+        "spectral_c0": 0.0,
+        "spectral_c1": 0.0,
+        "spectral_c2": 0.0,
+        "fill": 0.0,
+    }
 
     grouped_scene = {
         "version": 8,
@@ -901,13 +1022,13 @@ def test_grouped_ellipse_matches_direct_ellipse():
         "groups": [
             {
                 "id": "ellipse",
-                "transform": group_transform,
+                "transform": {"translate": gt_translate, "rotate": gt_rotate, "scale": gt_scale},
                 "shapes": [
                     ellipse_shape(
-                        local["center"],
-                        local["semi_a"],
-                        local["semi_b"],
-                        local["rotation"],
+                        local_center,
+                        local_semi_a,
+                        local_semi_b,
+                        local_rotation,
                         material,
                     )
                 ],

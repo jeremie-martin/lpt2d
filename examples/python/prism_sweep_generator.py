@@ -49,7 +49,6 @@ from anim import (
     glass,
     mirror_box,
     prism,
-    projector_target,
     ray_intersect,
     render,
 )
@@ -234,11 +233,7 @@ def check_geometry(p: AnimParams) -> tuple[bool, float, float, float]:
     t_exit = hits[-1]
     on_fraction = len(hits) / (n_steps + 1)
 
-    ok = (
-        ENTER_MIN <= t_enter <= ENTER_MAX
-        and EXIT_MIN <= t_exit <= EXIT_MAX
-        and on_fraction >= 0.5
-    )
+    ok = ENTER_MIN <= t_enter <= ENTER_MAX and EXIT_MIN <= t_exit <= EXIT_MAX and on_fraction >= 0.5
     return ok, t_enter, t_exit, on_fraction
 
 
@@ -290,8 +285,12 @@ def make_probe_shot() -> Shot:
     shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-4.5, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-4.5,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
@@ -328,8 +327,12 @@ def make_hq_shot() -> Shot:
     shot = Shot.preset("preview", width=320, height=180, rays=2_000_000, depth=10)
     shot.camera = CAMERA
     shot.look = shot.look.with_overrides(
-        exposure=-4.5, gamma=2.0, tonemap="reinhardx",
-        white_point=0.5, normalize="rays", temperature=0.1,
+        exposure=-4.5,
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
     )
     return shot
 
@@ -355,7 +358,11 @@ def render_and_save(p: AnimParams, out_dir: Path) -> None:
 
 
 def main() -> None:
-    seed = int(time.time()) if "--seed" not in sys.argv else int(sys.argv[sys.argv.index("--seed") + 1])
+    seed = (
+        int(time.time())
+        if "--seed" not in sys.argv
+        else int(sys.argv[sys.argv.index("--seed") + 1])
+    )
     target_count = int(sys.argv[sys.argv.index("-n") + 1]) if "-n" in sys.argv else 1
     rng = random.Random(seed)
     print(f"seed={seed} target={target_count}")
@@ -389,7 +396,7 @@ def main() -> None:
         out_dir = base_dir / f"{found:03d}"
         print(f"  FOUND #{found} — rendering HQ...")
         render_and_save(p, out_dir)
-        print(f"  done.\n")
+        print("  done.\n")
 
         if found >= target_count:
             break

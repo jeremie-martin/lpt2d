@@ -5,7 +5,15 @@ from pathlib import Path
 from typing import Callable
 
 from .renderer import render, render_still
-from .types import Frame, FrameContext, Scene, Shot, Timeline, _apply_look_override, _apply_trace_override
+from .types import (
+    Frame,
+    FrameContext,
+    Scene,
+    Shot,
+    Timeline,
+    _apply_look_override,
+    _apply_trace_override,
+)
 
 AnimateFn = Callable[[FrameContext], Scene | Frame]
 SettingsFn = Callable[[str], Shot]

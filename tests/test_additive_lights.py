@@ -35,7 +35,15 @@ def make_scene(lights, name="test"):
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0},
+                "material": {
+                    "ior": 1.5,
+                    "transmission": 1.0,
+                    "cauchy_b": 0.004,
+                    "spectral_c0": 0.0,
+                    "spectral_c1": 0.0,
+                    "spectral_c2": 0.0,
+                    "fill": 0.0,
+                },
             }
         ],
         "lights": lights,
@@ -76,6 +84,7 @@ def render(scene_json, normalize="off", rays=RAYS):
     proc = subprocess.Popen(
         cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
+    assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
     proc.stdin.write((scene_json + "\n").encode())
     proc.stdin.close()
     px = proc.stdout.read(200 * 200 * 3)

@@ -66,7 +66,10 @@ def frame(ctx: FrameContext) -> Frame:
     right = scene.require_group("prism_right")
     prism_glass = scene.require_material("prism_glass")
 
-    left.transform.translate = [left.transform.translate[0], left.transform.translate[1] + 0.16 * swing]
+    left.transform.translate = [
+        left.transform.translate[0],
+        left.transform.translate[1] + 0.16 * swing,
+    ]
     right.transform.translate = [
         right.transform.translate[0],
         right.transform.translate[1] - 0.18 * swing,

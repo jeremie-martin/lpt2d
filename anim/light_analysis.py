@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import _lpt2d
+
 from . import analysis as analysis_mod
 from . import renderer as renderer_mod
 from .stats import (
@@ -23,14 +25,18 @@ from .types import (
     _apply_look_override,
 )
 
-import _lpt2d
-
 
 def _neutral_contribution_look(normalize_ref: float) -> Look:
-    return _apply_look_override(Look(), {
-        "exposure": 0.0, "gamma": 1.0, "tonemap": "none",
-        "normalize": "fixed", "normalize_ref": normalize_ref,
-    })
+    return _apply_look_override(
+        Look(),
+        {
+            "exposure": 0.0,
+            "gamma": 1.0,
+            "tonemap": "none",
+            "normalize": "fixed",
+            "normalize_ref": normalize_ref,
+        },
+    )
 
 
 def _collect_light_sources(scene: Scene) -> list[tuple[str, str]]:
@@ -56,9 +62,14 @@ def _zero_emission_material(mat: Material) -> Material:
     if mat.emission <= 0:
         return mat
     return Material(
-        ior=mat.ior, roughness=mat.roughness, metallic=mat.metallic,
-        transmission=mat.transmission, absorption=mat.absorption,
-        cauchy_b=mat.cauchy_b, albedo=mat.albedo, emission=0.0,
+        ior=mat.ior,
+        roughness=mat.roughness,
+        metallic=mat.metallic,
+        transmission=mat.transmission,
+        absorption=mat.absorption,
+        cauchy_b=mat.cauchy_b,
+        albedo=mat.albedo,
+        emission=0.0,
     )
 
 
@@ -79,15 +90,23 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
 
     ze_shapes = [_zero_emission(s, scene) for s in scene.shapes]
     ze_groups = [
-        _lpt2d.Group(id=g.id, transform=g.transform,
-                      shapes=[_zero_emission(s, scene) for s in g.shapes], lights=[])
+        _lpt2d.Group(
+            id=g.id,
+            transform=g.transform,
+            shapes=[_zero_emission(s, scene) for s in g.shapes],
+            lights=[],
+        )
         for g in scene.groups
     ]
 
     if kind == "light":
         idx = int(detail)
-        return Scene(lights=[scene.lights[idx]], shapes=ze_shapes, groups=ze_groups,
-                     materials=dict(scene.materials))
+        return Scene(
+            lights=[scene.lights[idx]],
+            shapes=ze_shapes,
+            groups=ze_groups,
+            materials=dict(scene.materials),
+        )
 
     if kind == "group":
         parts = detail.split(":")
@@ -96,11 +115,16 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
         for i, g in enumerate(scene.groups):
             kept_lights = [g.lights[li]] if i == gi else []
             new_groups.append(
-                _lpt2d.Group(id=g.id, transform=g.transform,
-                              shapes=[_zero_emission(s, scene) for s in g.shapes], lights=kept_lights)
+                _lpt2d.Group(
+                    id=g.id,
+                    transform=g.transform,
+                    shapes=[_zero_emission(s, scene) for s in g.shapes],
+                    lights=kept_lights,
+                )
             )
-        return Scene(lights=[], shapes=ze_shapes, groups=new_groups,
-                     materials=dict(scene.materials))
+        return Scene(
+            lights=[], shapes=ze_shapes, groups=new_groups, materials=dict(scene.materials)
+        )
 
     if kind in ("emissive", "emissive_group"):
         target_gi = -1
@@ -123,11 +147,10 @@ def _scene_with_solo_source(scene: Scene, key: str) -> Scene:
                     gs.append(s)
                 else:
                     gs.append(_zero_emission(s, scene))
-            new_groups.append(
-                _lpt2d.Group(id=g.id, transform=g.transform, shapes=gs, lights=[])
-            )
-        return Scene(lights=[], shapes=new_shapes, groups=new_groups,
-                     materials=dict(scene.materials))
+            new_groups.append(_lpt2d.Group(id=g.id, transform=g.transform, shapes=gs, lights=[]))
+        return Scene(
+            lights=[], shapes=new_shapes, groups=new_groups, materials=dict(scene.materials)
+        )
 
     return scene
 
@@ -174,7 +197,10 @@ def light_contributions(
 ) -> list[LightContribution]:
     """Render each source solo and measure its linear frame contribution."""
     scene, analysis_shot = _contribution_reference_shot(
-        subject, camera=camera, canvas=canvas, rays_per_light=rays_per_light,
+        subject,
+        camera=camera,
+        canvas=canvas,
+        rays_per_light=rays_per_light,
     )
     all_sources = _collect_light_sources(scene)
     if not all_sources:
@@ -237,34 +263,57 @@ def structure_contribution(
 ) -> StructureReport:
     """Measure one shape's effect on the rendered frame."""
     scene, analysis_shot = _contribution_reference_shot(
-        subject, camera=camera, canvas=canvas, rays_per_light=rays,
+        subject,
+        camera=camera,
+        canvas=canvas,
+        rays_per_light=rays,
     )
 
     scene_without = Scene(
         shapes=[s for s in scene.shapes if s.id != shape_id],
         lights=list(scene.lights),
         groups=[
-            _lpt2d.Group(id=g.id, transform=g.transform,
-                          shapes=[s for s in g.shapes if s.id != shape_id],
-                          lights=list(g.lights))
+            _lpt2d.Group(
+                id=g.id,
+                transform=g.transform,
+                shapes=[s for s in g.shapes if s.id != shape_id],
+                lights=list(g.lights),
+            )
             for g in scene.groups
         ],
         materials=dict(scene.materials),
     )
 
-    shot_with = Shot(scene=scene, camera=analysis_shot.camera, canvas=analysis_shot.canvas,
-                     look=analysis_shot.look, trace=analysis_shot.trace)
-    shot_without = Shot(scene=scene_without, camera=analysis_shot.camera,
-                        canvas=analysis_shot.canvas, look=analysis_shot.look,
-                        trace=analysis_shot.trace)
+    shot_with = Shot(
+        scene=scene,
+        camera=analysis_shot.camera,
+        canvas=analysis_shot.canvas,
+        look=analysis_shot.look,
+        trace=analysis_shot.trace,
+    )
+    shot_without = Shot(
+        scene=scene_without,
+        camera=analysis_shot.camera,
+        canvas=analysis_shot.canvas,
+        look=analysis_shot.look,
+        trace=analysis_shot.trace,
+    )
 
     stats_with = renderer_mod.render_stats(
-        lambda _ctx, _s=scene: Frame(scene=_s), 1.0, frames=[0],
-        settings=shot_with, camera=analysis_shot.camera, fast=True,
+        lambda _ctx, _s=scene: Frame(scene=_s),
+        1.0,
+        frames=[0],
+        settings=shot_with,
+        camera=analysis_shot.camera,
+        fast=True,
     )
     stats_without = renderer_mod.render_stats(
-        lambda _ctx, _s=scene_without: Frame(scene=_s), 1.0, frames=[0],
-        settings=shot_without, camera=analysis_shot.camera, fast=True,
+        lambda _ctx, _s=scene_without: Frame(scene=_s),
+        1.0,
+        frames=[0],
+        settings=shot_without,
+        camera=analysis_shot.camera,
+        fast=True,
     )
 
     s_with = stats_with[0][2] if stats_with else FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
@@ -288,7 +337,11 @@ def structure_contribution(
         role = "neutral"
 
     return StructureReport(
-        shape_id=shape_id, stats_with=s_with, stats_without=s_without, diff=diff, role=role,
+        shape_id=shape_id,
+        stats_with=s_with,
+        stats_without=s_without,
+        diff=diff,
+        role=role,
     )
 
 
