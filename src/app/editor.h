@@ -131,6 +131,43 @@ struct Clipboard {
 
 enum class EditTool { Select, Circle, Segment, Arc, Bezier, Polygon, Ellipse, Path, PointLight, SegmentLight, ProjectorLight, Erase, Measure };
 
+inline bool is_add_tool(EditTool tool) {
+    switch (tool) {
+        case EditTool::Circle:
+        case EditTool::Segment:
+        case EditTool::Arc:
+        case EditTool::Bezier:
+        case EditTool::Polygon:
+        case EditTool::Ellipse:
+        case EditTool::Path:
+        case EditTool::PointLight:
+        case EditTool::SegmentLight:
+        case EditTool::ProjectorLight:
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline const char* edit_tool_name(EditTool tool) {
+    switch (tool) {
+        case EditTool::Select: return "Select";
+        case EditTool::Circle: return "Circle";
+        case EditTool::Segment: return "Segment";
+        case EditTool::Arc: return "Arc";
+        case EditTool::Bezier: return "Bezier";
+        case EditTool::Polygon: return "Polygon";
+        case EditTool::Ellipse: return "Ellipse";
+        case EditTool::Path: return "Path";
+        case EditTool::PointLight: return "Point Light";
+        case EditTool::SegmentLight: return "Segment Light";
+        case EditTool::ProjectorLight: return "Projector";
+        case EditTool::Erase: return "Erase";
+        case EditTool::Measure: return "Measure";
+    }
+    return "Unknown";
+}
+
 // Camera handle identifiers for interactive frame editing
 enum class CameraHandle : int {
     None, TopLeft, Top, TopRight, Right, BottomRight, Bottom, BottomLeft, Left, Move
@@ -164,6 +201,7 @@ struct EditorState {
     // Interaction state (ephemeral — active during input gestures)
     struct Interaction {
         std::vector<SelectionRef> selection;
+        std::optional<SelectionRef> active_selection;
         SelectionRef hovered{};
         std::string editing_group_id;
         EditTool tool = EditTool::Select;
@@ -176,6 +214,7 @@ struct EditorState {
         Handle active_handle{{}, {}, -1, {}};
         bool box_selecting = false;
         ImVec2 box_start{};
+        std::optional<SelectionRef> box_active_before;
         TransformMode transform;
         bool prop_editing = false;
         CameraHandle cam_handle_hovered = CameraHandle::None;
@@ -223,20 +262,90 @@ struct EditorState {
         return std::find(interaction.selection.begin(), interaction.selection.end(), id) != interaction.selection.end();
     }
 
-    void select(const SelectionRef& id) {
-        if (!is_selected(id)) interaction.selection.push_back(id);
+    bool is_active(const SelectionRef& id) const {
+        if (const SelectionRef* active = active_selection())
+            return *active == id;
+        return false;
+    }
+
+    SelectionRef* active_selection() {
+        if (!interaction.active_selection)
+            return nullptr;
+        auto it = std::find(interaction.selection.begin(), interaction.selection.end(), *interaction.active_selection);
+        return (it != interaction.selection.end()) ? &*it : nullptr;
+    }
+
+    const SelectionRef* active_selection() const {
+        return const_cast<EditorState*>(this)->active_selection();
+    }
+
+    void set_active(const SelectionRef& id) {
+        if (is_selected(id))
+            interaction.active_selection = id;
+        else
+            interaction.active_selection.reset();
+    }
+
+    void select(const SelectionRef& id, bool make_active = false) {
+        if (!is_selected(id))
+            interaction.selection.push_back(id);
+        if (make_active)
+            interaction.active_selection = id;
     }
 
     void deselect(const SelectionRef& id) {
         interaction.selection.erase(std::remove(interaction.selection.begin(), interaction.selection.end(), id), interaction.selection.end());
+        if (interaction.active_selection && *interaction.active_selection == id) {
+            if (!interaction.selection.empty())
+                interaction.active_selection = interaction.selection.front();
+            else
+                interaction.active_selection.reset();
+        }
     }
 
     void toggle_select(const SelectionRef& id) {
         if (is_selected(id)) deselect(id);
-        else select(id);
+        else select(id, true);
     }
 
-    void clear_selection() { interaction.selection.clear(); }
+    void select_only(const SelectionRef& id) {
+        interaction.selection.clear();
+        interaction.selection.push_back(id);
+        interaction.active_selection = id;
+    }
+
+    void replace_selection(std::vector<SelectionRef> refs, std::optional<SelectionRef> active = std::nullopt) {
+        interaction.selection = std::move(refs);
+        if (active && std::find(interaction.selection.begin(), interaction.selection.end(), *active) != interaction.selection.end()) {
+            interaction.active_selection = *active;
+        } else if (!interaction.selection.empty()) {
+            interaction.active_selection = interaction.selection.front();
+        } else {
+            interaction.active_selection.reset();
+        }
+    }
+
+    void click_select(const SelectionRef& id, bool shift_held) {
+        if (id.id.empty()) {
+            if (!shift_held)
+                clear_selection();
+            return;
+        }
+        if (shift_held) {
+            toggle_select(id);
+            return;
+        }
+        if (is_selected(id)) {
+            set_active(id);
+            return;
+        }
+        select_only(id);
+    }
+
+    void clear_selection() {
+        interaction.selection.clear();
+        interaction.active_selection.reset();
+    }
 
     void select_all() {
         interaction.selection.clear();
@@ -246,6 +355,10 @@ struct EditorState {
             interaction.selection.push_back({SelectionRef::Light, light_id(l), ""});
         for (const auto& g : shot.scene.groups)
             interaction.selection.push_back({SelectionRef::Group, g.id, ""});
+        if (!interaction.selection.empty())
+            interaction.active_selection = interaction.selection.front();
+        else
+            interaction.active_selection.reset();
     }
 
     // Centroid of selected objects (for transform pivot)
@@ -284,6 +397,14 @@ struct EditorState {
                 return true;
             }),
             interaction.selection.end());
+        if (interaction.active_selection
+            && std::find(interaction.selection.begin(), interaction.selection.end(), *interaction.active_selection)
+                == interaction.selection.end()) {
+            if (!interaction.selection.empty())
+                interaction.active_selection = interaction.selection.front();
+            else
+                interaction.active_selection.reset();
+        }
         // Validate editing_group
         if (!interaction.editing_group_id.empty() && !find_group(sc, interaction.editing_group_id))
             interaction.editing_group_id.clear();

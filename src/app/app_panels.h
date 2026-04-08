@@ -4,6 +4,7 @@
 #include "editor.h"
 
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -28,6 +29,7 @@ struct MaterialLibraryPanelState {
     std::string rename_buffer;
     std::array<char, 64> new_name{};
     bool editing = false;
+    std::optional<SelectionRef> synced_target;
 };
 
 // Aggregate of all panel-local state (lives in App::run, passed to draw_controls_panel).
@@ -46,7 +48,7 @@ struct PanelState {
 // ─── Controls panel ─────────────────────────────────────────────────
 
 // Draws the full right-side controls panel including:
-//   Scene selector, Tools, Camera, Objects, Properties, Materials,
+//   Scene selector, Edit, Camera, Objects, Properties, Materials,
 //   Tracer, Display, Output, Stats.
 //
 // The function may call reload_scene / reset_editor / delete_selected etc. as needed.
