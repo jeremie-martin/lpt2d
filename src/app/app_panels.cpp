@@ -294,6 +294,23 @@ std::vector<float> polygon_seed_corner_radii(const Polygon& polygon) {
     return radii;
 }
 
+std::vector<PolygonJoinMode> polygon_seed_join_modes(const Polygon& polygon) {
+    std::vector<PolygonJoinMode> join_modes(polygon.vertices.size(), PolygonJoinMode::Auto);
+    for (int i = 0; i < (int)polygon.vertices.size(); ++i)
+        join_modes[(size_t)i] = polygon_effective_join_mode(polygon, i);
+    return join_modes;
+}
+
+void compact_polygon_join_modes(Polygon& polygon) {
+    if (!polygon_uses_per_vertex_join_modes(polygon))
+        return;
+    bool all_auto = true;
+    for (PolygonJoinMode mode : polygon.join_modes)
+        all_auto = all_auto && mode == PolygonJoinMode::Auto;
+    if (all_auto)
+        polygon.join_modes.clear();
+}
+
 void set_polygon_corner_mode(Polygon& polygon, PolygonCornerMode mode) {
     switch (mode) {
         case PolygonCornerMode::Sharp:
@@ -973,11 +990,77 @@ void draw_controls_panel(
                     ImGui::Text("Vertices: %d", (int)p.vertices.size());
 
                     float smooth_angle_degrees = p.smooth_angle * 180.0f / PI;
-                    if (ImGui::SliderFloat("Smooth angle", &smooth_angle_degrees, 0.0f, 180.0f, "%.1f deg")) {
+                    if (ImGui::SliderFloat("Auto smooth angle", &smooth_angle_degrees, 0.0f, 180.0f, "%.1f deg")) {
                         p.smooth_angle = smooth_angle_degrees * PI / 180.0f;
                         changed = true;
                     }
-                    ImGui::TextDisabled("Shading only. Concave or bevel-filleted corners stay sharp.");
+                    ImGui::TextDisabled("Applies to auto joins only. Explicit smooth/sharp overrides take precedence.");
+
+                    if (ImGui::Button("All Auto")) {
+                        p.join_modes.clear();
+                        changed = true;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("All Sharp")) {
+                        p.join_modes.assign(p.vertices.size(), PolygonJoinMode::Sharp);
+                        changed = true;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("All Smooth")) {
+                        p.join_modes.assign(p.vertices.size(), PolygonJoinMode::Smooth);
+                        changed = true;
+                    }
+
+                    ImGui::BeginChild("PolygonJoinModes", ImVec2(0.0f, 180.0f), true);
+                    if (ImGui::BeginTable("PolygonJoinTable", 4,
+                                          ImGuiTableFlags_BordersInnerH |
+                                          ImGuiTableFlags_RowBg |
+                                          ImGuiTableFlags_ScrollY |
+                                          ImGuiTableFlags_SizingStretchProp)) {
+                        ImGui::TableSetupColumn("Vertex", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+                        ImGui::TableSetupColumn("Position", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+                        ImGui::TableSetupColumn("Join", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                        ImGui::TableSetupColumn("Shape", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                        ImGui::TableHeadersRow();
+
+                        for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
+                            bool convex = polygon_vertex_is_convex(p, vi);
+                            bool rounded = polygon_effective_corner_radius(p, vi) > 0.0f;
+                            PolygonJoinMode mode = polygon_effective_join_mode(p, vi);
+                            int mode_ui = static_cast<int>(mode);
+
+                            ImGui::PushID(vi);
+                            ImGui::TableNextRow();
+
+                            ImGui::TableSetColumnIndex(0);
+                            ImGui::Text("V%d", vi);
+
+                            ImGui::TableSetColumnIndex(1);
+                            ImGui::Text("(%.3f, %.3f)", p.vertices[vi].x, p.vertices[vi].y);
+
+                            ImGui::TableSetColumnIndex(2);
+                            if (ImGui::Combo("##join_mode", &mode_ui, "Auto\0Sharp\0Smooth\0")) {
+                                if (!polygon_uses_per_vertex_join_modes(p))
+                                    p.join_modes = polygon_seed_join_modes(p);
+                                p.join_modes[(size_t)vi] = static_cast<PolygonJoinMode>(mode_ui);
+                                compact_polygon_join_modes(p);
+                                changed = true;
+                            }
+
+                            ImGui::TableSetColumnIndex(3);
+                            if (rounded)
+                                ImGui::TextUnformatted("Filleted");
+                            else if (convex)
+                                ImGui::TextUnformatted("Convex");
+                            else
+                                ImGui::TextDisabled("Concave");
+
+                            ImGui::PopID();
+                        }
+                        ImGui::EndTable();
+                    }
+                    ImGui::EndChild();
+                    ImGui::TextDisabled("Join mode affects shading normals only. Fillets remain geometric.");
 
                     int mode = static_cast<int>(polygon_corner_mode_ui_value);
                     if (ImGui::Combo("Corner mode", &mode, "Sharp\0Uniform\0Per-vertex\0")) {

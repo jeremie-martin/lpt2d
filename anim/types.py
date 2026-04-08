@@ -23,6 +23,7 @@ Segment: TypeAlias = _lpt2d.Segment
 Arc: TypeAlias = _lpt2d.Arc
 Bezier: TypeAlias = _lpt2d.Bezier
 Polygon: TypeAlias = _lpt2d.Polygon
+PolygonJoinMode: TypeAlias = _lpt2d.PolygonJoinMode
 Ellipse: TypeAlias = _lpt2d.Ellipse
 Path: TypeAlias = _lpt2d.Path
 PointLight: TypeAlias = _lpt2d.PointLight

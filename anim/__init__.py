@@ -75,6 +75,7 @@ from .types import Material as Material
 from .types import Path as Path
 from .types import PointLight as PointLight
 from .types import Polygon as Polygon
+from .types import PolygonJoinMode as PolygonJoinMode
 from .types import ProjectorLight as ProjectorLight
 from .types import ProjectorProfile as ProjectorProfile
 from .types import ProjectorSource as ProjectorSource
@@ -120,6 +121,7 @@ __all__ = [
     "ProjectorSource",
     "Path",
     "Polygon",
+    "PolygonJoinMode",
     "Quality",
     "Scene",
     "SeedMode",

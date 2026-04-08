@@ -190,13 +190,46 @@ inline Vec2 bezier_eval(const Bezier& b, float t) {
     return b.p0 * (u * u) + b.p1 * (2.0f * u * t) + b.p2 * (t * t);
 }
 
+enum class PolygonJoinMode : int {
+    Auto,
+    Sharp,
+    Smooth,
+};
+
+inline std::optional<PolygonJoinMode> parse_polygon_join_mode(const std::string& s) {
+    if (s == "auto") return PolygonJoinMode::Auto;
+    if (s == "sharp") return PolygonJoinMode::Sharp;
+    if (s == "smooth") return PolygonJoinMode::Smooth;
+    return std::nullopt;
+}
+
+inline const char* polygon_join_mode_to_string(PolygonJoinMode mode) {
+    switch (mode) {
+        case PolygonJoinMode::Auto: return "auto";
+        case PolygonJoinMode::Sharp: return "sharp";
+        case PolygonJoinMode::Smooth: return "smooth";
+    }
+    return "auto";
+}
+
+inline bool polygon_join_mode_is_valid(PolygonJoinMode mode) {
+    switch (mode) {
+        case PolygonJoinMode::Auto:
+        case PolygonJoinMode::Sharp:
+        case PolygonJoinMode::Smooth:
+            return true;
+    }
+    return false;
+}
+
 struct Polygon {
     std::string id;
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
     MaterialBinding binding;
     float corner_radius = 0.0f; // bevel-fillet radius; 0 = sharp corners
     std::vector<float> corner_radii; // optional per-vertex bevel-fillet override; empty = use corner_radius
-    float smooth_angle = 0.0f; // radians; 0 = flat-shaded polygon edges
+    std::vector<PolygonJoinMode> join_modes; // optional per-vertex shading join override; empty = auto
+    float smooth_angle = 0.0f; // radians; threshold for auto-smoothed polygon joins
 
     Vec2 centroid() const {
         if (vertices.empty()) return {0, 0};
@@ -225,10 +258,20 @@ inline bool polygon_uses_per_vertex_corner_radii(const Polygon& p) {
     return !p.corner_radii.empty() && p.corner_radii.size() == p.vertices.size();
 }
 
+inline bool polygon_uses_per_vertex_join_modes(const Polygon& p) {
+    return !p.join_modes.empty() && p.join_modes.size() == p.vertices.size();
+}
+
 inline float polygon_effective_corner_radius(const Polygon& p, int index) {
     if (polygon_uses_per_vertex_corner_radii(p) && index >= 0 && index < (int)p.corner_radii.size())
         return p.corner_radii[(size_t)index];
     return p.corner_radius;
+}
+
+inline PolygonJoinMode polygon_effective_join_mode(const Polygon& p, int index) {
+    if (polygon_uses_per_vertex_join_modes(p) && index >= 0 && index < (int)p.join_modes.size())
+        return p.join_modes[(size_t)index];
+    return PolygonJoinMode::Auto;
 }
 
 inline bool polygon_has_any_rounded_corner(const Polygon& p) {
@@ -265,6 +308,8 @@ enum class PolygonFieldValidationError {
     NegativeSmoothAngle,
     CornerRadiiSizeMismatch,
     NegativeCornerRadiiEntry,
+    JoinModesSizeMismatch,
+    InvalidJoinModeEntry,
 };
 
 struct PolygonFieldValidationResult {
@@ -282,6 +327,11 @@ inline PolygonFieldValidationResult validate_polygon_fields(const Polygon& p) {
     for (size_t i = 0; i < p.corner_radii.size(); ++i)
         if (p.corner_radii[i] < 0.0f)
             return {PolygonFieldValidationError::NegativeCornerRadiiEntry, i};
+    if (!p.join_modes.empty() && p.join_modes.size() != p.vertices.size())
+        return {PolygonFieldValidationError::JoinModesSizeMismatch, 0};
+    for (size_t i = 0; i < p.join_modes.size(); ++i)
+        if (!polygon_join_mode_is_valid(p.join_modes[i]))
+            return {PolygonFieldValidationError::InvalidJoinModeEntry, i};
     return {};
 }
 
@@ -308,6 +358,13 @@ inline std::string format_polygon_field_validation_error(const PolygonFieldValid
                 return std::string(context) + ".corner_radii[" + std::to_string(result.index) +
                        "] must be >= 0";
             return field_context("corner_radii entries") + " must be >= 0";
+        case PolygonFieldValidationError::JoinModesSizeMismatch:
+            return field_context("join_modes") + " must be empty or match vertices.size()";
+        case PolygonFieldValidationError::InvalidJoinModeEntry:
+            if (member_path_context)
+                return std::string(context) + ".join_modes[" + std::to_string(result.index) +
+                       "] must be one of auto, sharp, smooth";
+            return field_context("join_modes entries") + " must be one of auto, sharp, smooth";
     }
     return {};
 }

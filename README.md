@@ -86,6 +86,8 @@ cmake --build build --target static-analysis-iwyu
   Documentation index.
 - [docs/AUTHORED.md](/home/holo/prog/lpt2d/docs/AUTHORED.md)
   Authored JSON policy and committed scene conventions.
+- [docs/OUTLINE_JOIN_SEMANTICS.md](/home/holo/prog/lpt2d/docs/OUTLINE_JOIN_SEMANTICS.md)
+  Reference model for hard, smooth, and rounded boundary joins.
 - [docs/VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current look-development, comparison, and diagnostic workflow.
 - [docs/SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)

@@ -11,6 +11,8 @@ useful over time.
   Problem statement and scope for future autonomous optimization work.
 - [AUTHORED.md](/home/holo/prog/lpt2d/docs/AUTHORED.md)
   The authored JSON contract used by committed scenes and benchmark shots.
+- [OUTLINE_JOIN_SEMANTICS.md](/home/holo/prog/lpt2d/docs/OUTLINE_JOIN_SEMANTICS.md)
+  Conceptual model for hard, smooth, and rounded shape joins.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current Python and GUI workflow for look development and diagnostics.
 - [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)

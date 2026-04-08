@@ -37,10 +37,12 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 |------|-----------|
 | **vertex / vertices** | Polygon corner positions. Always `vertices`, never "points" or "corners". |
 | **edge** | Implicit segment connecting `vertices[i]` to `vertices[(i+1) % n]`. |
+| **join** | Authored connection at a polygon vertex between the incoming and outgoing edges. |
 | **corner_radius** | Uniform bevel-fillet radius applied to convex corners. 0 = sharp. |
 | **corner_radii** | Optional per-vertex bevel-fillet override. Must match `vertices.size()` if non-empty. |
+| **join_modes** | Optional per-vertex shading join override. Entries are `auto`, `sharp`, or `smooth`. |
 | **bevel fillet** | Arc-rounded corner operation (what `corner_radius` produces). Distinct from a future **bevel chamfer** (flat-cut). |
-| **smooth_angle** | Radians threshold for smooth-shading normals at convex zero-radius corners. Shading only; does not change geometry. |
+| **smooth_angle** | Radians threshold for `auto` polygon join smoothing. Shading only; does not change geometry. |
 | **winding** | Polygon orientation. `polygon_is_clockwise()` tests signed area. |
 | **convex** | A vertex where the interior angle < 180 deg. Only convex vertices receive bevel fillets. |
 
