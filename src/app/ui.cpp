@@ -318,11 +318,6 @@ void draw_handles(ImDrawList* dl, const CameraView& cv, const Scene& scene,
                     dl->AddCircleFilled(sp, r, col);
                     break;
             }
-            // Vertex label
-            char label[8];
-            std::snprintf(label, sizeof(label), "V%d", vi);
-            ImVec2 text_pos(sp.x + r + 3.0f, sp.y - r - 2.0f);
-            dl->AddText(text_pos, IM_COL32(200, 200, 210, 140), label);
         } else if (handles[i].kind == Handle::Position) {
             // Filled square (default for non-polygon Position handles)
             dl->AddRectFilled(ImVec2(sp.x - r, sp.y - r), ImVec2(sp.x + r, sp.y + r), col);
