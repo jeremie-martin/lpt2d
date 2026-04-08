@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "three_spheres",
   "camera": {
     "bounds": [
@@ -236,7 +236,7 @@
     {
       "id": "source_point",
       "type": "point",
-      "pos": [
+      "position": [
         -0.800000011920929,
         0.5
       ],

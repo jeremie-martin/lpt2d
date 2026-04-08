@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "name": "mirrors",
   "camera": {
     "bounds": [
@@ -445,7 +445,7 @@
     {
       "id": "source_left",
       "type": "point",
-      "pos": [
+      "position": [
         -0.699999988079071,
         0.0
       ],
@@ -456,7 +456,7 @@
     {
       "id": "source_right",
       "type": "point",
-      "pos": [
+      "position": [
         0.5,
         0.4000000059604645
       ],

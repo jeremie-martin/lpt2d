@@ -463,7 +463,7 @@ def _run_capture(
 
                 results_by_case: dict[int, object] = {}
                 for sample in measurement.samples:
-                    results_by_case.setdefault(sample.frame_index, sample.result)
+                    results_by_case.setdefault(sample.frame, sample.result)
 
                 timing_by_case = {
                     case_index: {
@@ -644,22 +644,22 @@ def _run_evaluate(
                 sample_non_pass: list[str] = []
 
                 for sample in measurement.samples:
-                    img_name = f"launch_{sample.launch_index:02d}_case_{sample.frame_index:04d}.png"
+                    img_name = f"launch_{sample.launch_index:02d}_case_{sample.frame:04d}.png"
                     img_path = scene_dir / img_name
                     _save_image(
                         sample.result.pixels, sample.result.width, sample.result.height, img_path
                     )
 
                     fidelity = compare_to_baseline(
-                        sample.result, baseline_cases[sample.frame_index]
+                        sample.result, baseline_cases[sample.frame]
                     )
                     verdict_value = fidelity.verdict.value
                     sample_verdicts.append(verdict_value)
-                    case_verdicts[sample.frame_index].append(verdict_value)
+                    case_verdicts[sample.frame].append(verdict_value)
 
                     sample_entry: dict = {
                         "launch_index": sample.launch_index,
-                        "case_index": sample.frame_index,
+                        "case_index": sample.frame,
                         "image": f"{name}/{img_name}",
                         "verdict": verdict_value,
                         "render_time_ms": sample.render_time_ms,
@@ -680,11 +680,11 @@ def _run_evaluate(
                             "pct_clipped_delta": fidelity.metrics.pct_clipped_delta,
                             "warnings": fidelity.metrics.warnings,
                         }
-                    case_samples[sample.frame_index].append(sample_entry)
+                    case_samples[sample.frame].append(sample_entry)
 
                     if verdict_value != "pass":
                         sample_non_pass.append(
-                            f"launch={sample.launch_index} case={sample.frame_index} verdict={verdict_value}"
+                            f"launch={sample.launch_index} case={sample.frame} verdict={verdict_value}"
                         )
 
                 scene_verdict = _combine_verdicts(sample_verdicts)

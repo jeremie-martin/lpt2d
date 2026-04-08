@@ -26,7 +26,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 9;
+constexpr int SHOT_JSON_VERSION = 10;
 enum class Schema { Authored, Stream };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
@@ -408,10 +408,10 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("light ids must be non-empty");
     if (type == "point") {
-        reject_unknown_keys(json, {"id", "type", "pos", "intensity", "wavelength_min", "wavelength_max"}, context);
+        reject_unknown_keys(json, {"id", "type", "position", "intensity", "wavelength_min", "wavelength_max"}, context);
         PointLight light{id, {}, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("pos"))
-            light.pos = read_vec2(require_key(json, "pos", context), std::string(context) + ".pos");
+        if (schema == Schema::Authored || json.contains("position"))
+            light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
         if (schema == Schema::Authored || json.contains("intensity"))
             light.intensity = read_required_float(json, "intensity", context);
         if (schema == Schema::Authored || json.contains("wavelength_min"))
@@ -470,7 +470,7 @@ Light read_light(const Json& json, Schema schema, std::string_view context) {
 
 Json write_light(const Light& light) {
     return std::visit(overloaded{
-        [](const PointLight& value) { return Json{{"id", value.id}, {"type", "point"}, {"pos", vec2_json(value.pos)},
+        [](const PointLight& value) { return Json{{"id", value.id}, {"type", "point"}, {"position", vec2_json(value.position)},
                                                   {"intensity", value.intensity},
                                                   {"wavelength_min", value.wavelength_min},
                                                   {"wavelength_max", value.wavelength_max}}; },
@@ -578,7 +578,7 @@ Look read_look(const Json& json, Schema schema, std::string_view context) {
     if (schema == Schema::Authored || json.contains("gamma"))
         look.gamma = read_required_float(json, "gamma", context);
     if (schema == Schema::Authored || json.contains("tonemap"))
-        look.tone_map = read_tonemap(require_key(json, "tonemap", context), std::string(context) + ".tonemap");
+        look.tonemap = read_tonemap(require_key(json, "tonemap", context), std::string(context) + ".tonemap");
     if (schema == Schema::Authored || json.contains("white_point"))
         look.white_point = read_required_float(json, "white_point", context);
     if (schema == Schema::Authored || json.contains("normalize"))
@@ -623,7 +623,7 @@ Look read_look(const Json& json, Schema schema, std::string_view context) {
 
 Json write_look(const Look& look) {
     return Json{{"exposure", look.exposure}, {"contrast", look.contrast}, {"gamma", look.gamma},
-                {"tonemap", tonemap_to_string(look.tone_map)}, {"white_point", look.white_point},
+                {"tonemap", tonemap_to_string(look.tonemap)}, {"white_point", look.white_point},
                 {"normalize", normalize_mode_to_string(look.normalize)}, {"normalize_ref", look.normalize_ref},
                 {"normalize_pct", look.normalize_pct}, {"ambient", look.ambient},
                 {"background", rgb_json(look.background)}, {"opacity", look.opacity},

@@ -158,7 +158,7 @@ def point_light(pos, intensity=1.0):
     return {
         "id": f"point_light_{next(_LIGHT_IDS)}",
         "type": "point",
-        "pos": pos,
+        "position": pos,
         "intensity": intensity,
     }
 

@@ -189,8 +189,8 @@ This matches the CLI contract:
 - `resolution`: evaluation render resolution, default `1280x720`
 - `rays`: evaluation ray count, default `2000000`
 
-The code still uses `frame_index` in several APIs because that integer is
-passed through to `render_shot()`. In scoring terms, each `frame_index`
+The code still uses `frame` in several APIs because that integer is
+passed through to `render_shot()`. In scoring terms, each `frame`
 identifies one benchmark case.
 
 The harness is strict by design:

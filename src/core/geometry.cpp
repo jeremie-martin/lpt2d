@@ -97,7 +97,7 @@ float cross(Vec2 a, Vec2 b) {
 }
 
 struct RoundedCornerBuild {
-    bool has_fillet = false;
+    bool has_bevel_fillet = false;
     float cut = 0.0f;
     Vec2 tangent_prev;
     Vec2 tangent_next;
@@ -224,7 +224,7 @@ std::vector<PolygonVertexNormalBuild> compute_polygon_vertex_normals(
 
     bool cw = polygon_is_clockwise(poly);
     for (int i = 0; i < n; ++i) {
-        if (rounded[i].has_fillet) continue;
+        if (rounded[i].has_bevel_fillet) continue;
 
         int prev_edge = (i - 1 + n) % n;
         int next_edge = i;
@@ -267,7 +267,7 @@ Vec2 polygon_edge_endpoint_normal(const std::vector<RoundedCornerBuild>& rounded
         return flat_normal;
     if (vertex_index < 0 || vertex_index >= (int)vertex_normals.size())
         return flat_normal;
-    if (vertex_index < (int)rounded.size() && rounded[vertex_index].has_fillet)
+    if (vertex_index < (int)rounded.size() && rounded[vertex_index].has_bevel_fillet)
         return flat_normal;
     if (!vertex_normals[vertex_index].has_smooth_normal)
         return flat_normal;
@@ -442,7 +442,7 @@ Bounds shape_bounds(const Shape& s) {
 Bounds light_bounds(const Light& l) {
     return std::visit(overloaded{
                           [](const PointLight& light) {
-                              return Bounds{light.pos, light.pos};
+                              return Bounds{light.position, light.position};
                           },
                           [](const SegmentLight& light) {
                               return Bounds{
@@ -712,7 +712,7 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
     auto edge_flat_normals = compute_polygon_edge_flat_normals(poly, cw);
     auto vertex_normals = compute_polygon_vertex_normals(poly, rounded, edge_flat_normals);
 
-    // Emit boundary edges, trimmed where fillets consume the endpoints.
+    // Emit boundary edges, trimmed where bevel fillets consume the endpoints.
     for (int i = 0; i < n; ++i) {
         int j = (i + 1) % n;
         Vec2 a = poly.vertices[i];
@@ -722,8 +722,8 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
         if (len < 1e-6f) continue;
         Vec2 dir = d * (1.0f / len);
 
-        float trim_a = rounded[i].has_fillet ? rounded[i].cut : 0.0f;
-        float trim_b = rounded[j].has_fillet ? rounded[j].cut : 0.0f;
+        float trim_a = rounded[i].has_bevel_fillet ? rounded[i].cut : 0.0f;
+        float trim_b = rounded[j].has_bevel_fillet ? rounded[j].cut : 0.0f;
         if (trim_a + trim_b >= len - 1e-6f) continue; // edge consumed
 
         Vec2 ea = a + dir * trim_a;
@@ -740,7 +740,7 @@ RoundedPolygonParts decompose_rounded_polygon(const Polygon& poly) {
 
     // Emit corner arcs
     for (int i = 0; i < n; ++i) {
-        if (!rounded[i].has_fillet) continue;
+        if (!rounded[i].has_bevel_fillet) continue;
         parts.corners.push_back(rounded[i].corner);
     }
 
@@ -757,7 +757,7 @@ std::vector<Vec2> polygon_fill_boundary(const Polygon& poly, int arc_segments) {
     auto rounded = compute_rounded_polygon_vertices(poly);
 
     for (int i = 0; i < n; ++i) {
-        if (!rounded[i].has_fillet) {
+        if (!rounded[i].has_bevel_fillet) {
             append_polygon_point(boundary, poly.vertices[i]);
             continue;
         }
@@ -1110,7 +1110,7 @@ Light transform_light(const Light& l, const Transform2D& t) {
     return std::visit(overloaded{
         [&](const PointLight& pl) -> Light {
             PointLight r = pl;
-            r.pos = t.apply(pl.pos);
+            r.position = t.apply(pl.position);
             return r;
         },
         [&](const SegmentLight& sl) -> Light {
@@ -1153,7 +1153,7 @@ Vec2 shape_centroid(const Shape& s) {
 
 Vec2 light_centroid(const Light& l) {
     return std::visit(overloaded{
-        [](const PointLight& pl) { return pl.pos; },
+        [](const PointLight& pl) { return pl.position; },
         [](const SegmentLight& sl) { return (sl.a + sl.b) * 0.5f; },
         [](const ProjectorLight& pl) { return pl.position; },
     }, l);
@@ -1230,7 +1230,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 float angle = TWO_PI * i / N;
                 Vec2 pos = c.center + Vec2{c.radius * std::cos(angle), c.radius * std::sin(angle)};
                 PointLight light;
-                light.pos = pos;
+                light.position = pos;
                 light.intensity = per_point;
 
                 lights.push_back(light);
@@ -1322,7 +1322,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 float ly = e.semi_b * std::sin(angle);
                 Vec2 pos = e.center + Vec2{lx * cr - ly * sr, lx * sr + ly * cr};
                 PointLight light;
-                light.pos = pos;
+                light.position = pos;
                 light.intensity = per_point;
 
                 lights.push_back(light);

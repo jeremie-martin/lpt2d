@@ -6,7 +6,7 @@ surface, strict JSON shot interchange, and a GUI for exploration.
 
 ## Current Baseline
 
-- authored shot JSON is strict `version: 9`
+- authored shot JSON is strict `version: 10`
 - Python and CLI rendering both go through the C++ `RenderSession`
 - committed scenes use named material libraries plus `material_id` bindings
 - the canonical example pack lives in [`examples/python/`](/home/holo/prog/lpt2d/examples/python)

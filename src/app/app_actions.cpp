@@ -28,7 +28,7 @@ void destroy_compare_snapshot(CompareSnapshot& snap) {
         glDeleteTextures(1, &snap.texture);
         snap.texture = 0;
     }
-    snap.frame_index = 0;
+    snap.frame = 0;
     snap.texture_width = 0;
     snap.texture_height = 0;
 }
@@ -120,10 +120,10 @@ Scene build_render_scene_for(const Shot& shot, const RenderFilterState& filters)
     return filtered;
 }
 
-Camera current_display_camera(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h) {
+EditorCamera current_display_camera(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h) {
     if (!compare_ab.active)
         return ed.view.camera;
-    Camera comparison_camera;
+    EditorCamera comparison_camera;
     comparison_camera.fit(compare_ab.view_bounds, (float)win_w, (float)win_h);
     return comparison_camera;
 }
@@ -131,7 +131,7 @@ Camera current_display_camera(const EditorState& ed, const CompareSnapshot& comp
 Bounds current_display_view(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h) {
     if (compare_ab.active)
         return compare_ab.view_bounds;
-    Camera display_camera = current_display_camera(ed, compare_ab, win_w, win_h);
+    EditorCamera display_camera = current_display_camera(ed, compare_ab, win_w, win_h);
     return display_camera.visible_bounds((float)win_w, (float)win_h);
 }
 
@@ -154,7 +154,7 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
     force_live_metrics_refresh = true;
 }
 
-bool export_authored_png(const Shot& source_shot, int frame_index) {
+bool export_authored_png(const Shot& source_shot, int frame) {
     Shot output_shot = source_shot;
     ensure_scene_entity_ids(output_shot.scene);
 
@@ -168,7 +168,7 @@ bool export_authored_png(const Shot& source_shot, int frame_index) {
     export_renderer.upload_fills(output_shot.scene, bounds);
     export_renderer.clear();
 
-    TraceConfig tcfg = output_shot.trace.to_trace_config(frame_index);
+    TraceConfig tcfg = output_shot.trace.to_trace_config(frame);
     int64_t total_rays = output_shot.trace.rays;
     int64_t num_batches = (total_rays + tcfg.batch_size - 1) / tcfg.batch_size;
     const int dispatches_per_draw = 4;
@@ -256,10 +256,10 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
     compare_ab.active = false;
     compare_ab.showing_a = false;
     compare_ab.metrics_valid = false;
-    compare_ab.frame_index = 0;
+    compare_ab.frame = 0;
     ed.session.undo.clear();
     ed.session.undo.push(ed.shot.scene);
-    ed.session.frame_index = 0;
+    ed.session.frame = 0;
     ensure_scene_entity_ids(ed.shot.scene);
 
     ed.view.scene_bounds = scene_default_bounds(ed.shot.scene);

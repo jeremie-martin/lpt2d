@@ -178,7 +178,7 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
 
 static float light_distance(Vec2 wp, const Light& light) {
     return std::visit(overloaded{
-        [&](const PointLight& l) -> float { return (wp - l.pos).length(); },
+        [&](const PointLight& l) -> float { return (wp - l.position).length(); },
         [&](const SegmentLight& l) -> float { return point_seg_dist(wp, l.a, l.b); },
         [&](const ProjectorLight& l) -> float {
             if (l.source == ProjectorSource::Ball && l.source_radius > 0.0f) {
@@ -333,7 +333,7 @@ void translate_shape(Shape& s, Vec2 delta) {
 
 void translate_light(Light& l, Vec2 delta) {
     std::visit(overloaded{
-        [&](PointLight& pl) { pl.pos = pl.pos + delta; },
+        [&](PointLight& pl) { pl.position = pl.position + delta; },
         [&](SegmentLight& sl) { sl.a = sl.a + delta; sl.b = sl.b + delta; },
         [&](ProjectorLight& pl) { pl.position = pl.position + delta; },
     }, l);
@@ -364,7 +364,7 @@ static void rotate_shape(Shape& s, Vec2 pivot, float angle) {
 
 static void rotate_light(Light& l, Vec2 pivot, float angle) {
     std::visit(overloaded{
-        [&](PointLight& pl) { pl.pos = rotate_around(pl.pos, pivot, angle); },
+        [&](PointLight& pl) { pl.position = rotate_around(pl.position, pivot, angle); },
         [&](SegmentLight& sl) { sl.a = rotate_around(sl.a, pivot, angle); sl.b = rotate_around(sl.b, pivot, angle); },
         [&](ProjectorLight& pl) {
             pl.position = rotate_around(pl.position, pivot, angle);
@@ -407,7 +407,7 @@ static void scale_shape(Shape& s, Vec2 pivot, float fx, float fy) {
 
 static void scale_light(Light& l, Vec2 pivot, float fx, float fy) {
     std::visit(overloaded{
-        [&](PointLight& pl) { pl.pos = scale_around(pl.pos, pivot, fx, fy); },
+        [&](PointLight& pl) { pl.position = scale_around(pl.position, pivot, fx, fy); },
         [&](SegmentLight& sl) { sl.a = scale_around(sl.a, pivot, fx, fy); sl.b = scale_around(sl.b, pivot, fx, fy); },
         [&](ProjectorLight& pl) {
             float uniform = std::sqrt(fx * fy);
@@ -533,7 +533,7 @@ std::vector<Handle> get_handles(const Scene& scene, const std::vector<SelectionR
         if (const Light* light = resolve_light(scene, id)) {
             std::visit(overloaded{
                 [&](const PointLight& l) {
-                    handles.push_back({Handle::Position, id, 0, l.pos});
+                    handles.push_back({Handle::Position, id, 0, l.position});
                 },
                 [&](const SegmentLight& l) {
                     handles.push_back({Handle::Position, id, 0, l.a});
@@ -635,7 +635,7 @@ void apply_handle_drag(Scene& scene, const Handle& handle, Vec2 wp) {
     if (Light* light = resolve_light(scene, obj)) {
         std::visit(overloaded{
             [&](PointLight& l) {
-                l.pos = wp;
+                l.position = wp;
             },
             [&](SegmentLight& l) {
                 if (handle.param_index == 0) l.a = wp;

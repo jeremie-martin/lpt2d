@@ -84,7 +84,7 @@ static uint32_t trace_dispatch_seed(const TraceConfig& cfg, uint32_t batch_count
     if (cfg.seed_mode == SeedMode::Deterministic)
         return seed;
 
-    uint32_t frame_salt = mix_seed_component(static_cast<uint32_t>(cfg.frame_index) + 0x9e3779b9u);
+    uint32_t frame_salt = mix_seed_component(static_cast<uint32_t>(cfg.frame) + 0x9e3779b9u);
     return seed ^ frame_salt;
 }
 
@@ -388,7 +388,7 @@ bool Renderer::create_trace_shader() {
     trace_loc_num_beziers_ = glGetUniformLocation(trace_program_, "uNumBeziers");
     trace_loc_num_ellipses_ = glGetUniformLocation(trace_program_, "uNumEllipses");
     trace_loc_num_lights_ = glGetUniformLocation(trace_program_, "uNumLights");
-    trace_loc_max_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
+    trace_loc_depth_ = glGetUniformLocation(trace_program_, "uMaxDepth");
     trace_loc_seed_ = glGetUniformLocation(trace_program_, "uSeed");
     trace_loc_intensity_ = glGetUniformLocation(trace_program_, "uIntensity");
     trace_loc_batch_rays_ = glGetUniformLocation(trace_program_, "uBatchRays");
@@ -437,7 +437,7 @@ bool Renderer::create_pp_shader() {
     loc_exposure_ = glGetUniformLocation(pp_program_, "uExposureMult");
     loc_contrast_ = glGetUniformLocation(pp_program_, "uContrast");
     loc_inv_gamma_ = glGetUniformLocation(pp_program_, "uInvGamma");
-    loc_tone_map_ = glGetUniformLocation(pp_program_, "uToneMapOp");
+    loc_tonemap_ = glGetUniformLocation(pp_program_, "uToneMapOp");
     loc_white_point_ = glGetUniformLocation(pp_program_, "uWhitePoint");
     loc_float_tex_ = glGetUniformLocation(pp_program_, "uFloatTexture");
     loc_ambient_ = glGetUniformLocation(pp_program_, "uAmbient");
@@ -698,7 +698,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
             [&](const PointLight& l) {
                 gl.type = 0;
                 gl.intensity = l.intensity;
-                gl.pos_a[0] = l.pos.x; gl.pos_a[1] = l.pos.y;
+                gl.pos_a[0] = l.position.x; gl.pos_a[1] = l.position.y;
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
             },
@@ -953,7 +953,7 @@ void Renderer::trace_and_draw(const TraceConfig& cfg) {
 }
 
 void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) {
-    size_t max_segs = (size_t)cfg.batch_size * (size_t)cfg.max_depth * (size_t)num_dispatches;
+    size_t max_segs = (size_t)cfg.batch_size * (size_t)cfg.depth * (size_t)num_dispatches;
 
     // Reallocate output SSBO if needed (sized for all dispatches)
     if (max_segs > max_output_segments_) {
@@ -985,7 +985,7 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glUseProgram(trace_program_);
     glUniform1ui(trace_loc_batch_rays_, (GLuint)cfg.batch_size);
     glUniform1ui(trace_loc_num_dispatches_, (GLuint)num_dispatches);
-    glUniform1ui(trace_loc_max_depth_, cfg.max_depth);
+    glUniform1ui(trace_loc_depth_, cfg.depth);
     glUniform1f(trace_loc_intensity_, cfg.intensity);
     glUniform1ui(trace_loc_max_segments_, max_segs);
     GLuint dispatch_seeds[16] = {};
@@ -1091,7 +1091,7 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect, const
     glUniform1f(loc_exposure_, exposure_mult);
     glUniform1f(loc_contrast_, pp.contrast);
     glUniform1f(loc_inv_gamma_, inv_gamma);
-    glUniform1i(loc_tone_map_, (int)pp.tone_map);
+    glUniform1i(loc_tonemap_, (int)pp.tonemap);
     glUniform1f(loc_white_point_, pp.white_point);
     glUniform1f(loc_ambient_, pp.ambient);
     glUniform3f(loc_background_, pp.background[0], pp.background[1], pp.background[2]);

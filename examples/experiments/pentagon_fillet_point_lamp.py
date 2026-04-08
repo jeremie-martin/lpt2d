@@ -3,7 +3,7 @@
 The scene is intentionally sparse:
 
 - one point light
-- one closed pentagon outline with native `Polygon.corner_radius` fillets
+- one closed pentagon outline with native `Polygon.corner_radius` bevel fillets
 - four perfectly absorbing walls
 
 The goal is to isolate mirror reflection behavior without secondary room
@@ -95,7 +95,7 @@ def _base_scene(corner_radius: float) -> Scene:
         lights=[
             PointLight(
                 id="lamp",
-                pos=[-0.58, 0.28],
+                position=[-0.58, 0.28],
                 intensity=1.6,
             )
         ],
@@ -160,12 +160,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--corner-radius",
         type=float,
         default=DEFAULT_CORNER_RADIUS,
-        help="native Polygon.corner_radius fillet radius in scene units",
+        help="native Polygon.corner_radius bevel-fillet radius in scene units",
     )
     parser.add_argument(
         "--bevel-quality",
         type=int,
-        help="deprecated compatibility flag; ignored because native bevels are analytic",
+        help="deprecated compatibility flag; ignored because native bevel fillets are analytic",
     )
     parser.add_argument(
         "--save-json",

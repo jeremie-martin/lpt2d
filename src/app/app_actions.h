@@ -34,7 +34,7 @@ struct CompareSnapshot {
     bool showing_a = false;
     bool metrics_valid = false;
     Shot shot;
-    int frame_index = 0;
+    int frame = 0;
     Bounds view_bounds{{-1, -1}, {1, 1}};
     FrameMetrics metrics{};
     GLuint texture = 0;
@@ -59,7 +59,7 @@ struct LightContributionView {
 Bounds scene_default_bounds(const Scene& scene);
 Scene build_render_scene_for(const Shot& shot, const RenderFilterState& filters);
 Bounds current_display_view(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h);
-Camera current_display_camera(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h);
+EditorCamera current_display_camera(const EditorState& ed, const CompareSnapshot& compare_ab, int win_w, int win_h);
 
 // ─── Scene actions ──────────────────────────────────────────────────
 
@@ -69,7 +69,7 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
                   int win_w, int win_h, bool mark_dirty = true);
 
 // Export a high-quality PNG render of the given shot at a specific runtime frame index.
-bool export_authored_png(const Shot& source_shot, int frame_index = 0);
+bool export_authored_png(const Shot& source_shot, int frame = 0);
 
 // Save the current shot to JSON.
 void do_save(EditorState& ed);

@@ -55,7 +55,7 @@ def point_light(x, y, intensity=1.0):
     return {
         "id": f"point_light_{next(_LIGHT_IDS)}",
         "type": "point",
-        "pos": [x, y],
+        "position": [x, y],
         "intensity": intensity,
         "wavelength_min": 380.0,
         "wavelength_max": 780.0,

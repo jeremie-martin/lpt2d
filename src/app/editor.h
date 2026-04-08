@@ -22,7 +22,7 @@ struct SelectionRef {
 
 // ─── Camera ────────────────────────────────────────────────────────────
 
-struct Camera {
+struct EditorCamera {
     Vec2 center{0, 0};  // world-space center of viewport
     float zoom = 1.0f;  // pixels per world unit
 
@@ -44,7 +44,7 @@ struct Camera {
 
 // World ↔ screen coordinate transforms (camera-based)
 struct CameraView {
-    Camera cam;
+    EditorCamera cam;
     float w, h; // window size in pixels
 
     ImVec2 to_screen(Vec2 p) const {
@@ -185,12 +185,12 @@ struct EditorState {
         Clipboard clipboard;
         bool dirty = false;
         std::string save_path;
-        int frame_index = 0;
+        int frame = 0;
     } session;
 
     // View state (camera, display flags — not serialized)
     struct View {
-        Camera camera;
+        EditorCamera camera;
         Bounds scene_bounds{{-1, -1}, {1, 1}};
         bool show_grid = false;
         bool snap_to_grid = false;

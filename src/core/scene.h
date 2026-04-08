@@ -194,8 +194,8 @@ struct Polygon {
     std::string id;
     std::vector<Vec2> vertices; // closed polyline: edge i = vertices[i] → vertices[(i+1) % n]
     MaterialBinding binding;
-    float corner_radius = 0.0f; // fillet radius; 0 = sharp corners
-    std::vector<float> corner_radii; // optional per-vertex fillet override; empty = use corner_radius
+    float corner_radius = 0.0f; // bevel-fillet radius; 0 = sharp corners
+    std::vector<float> corner_radii; // optional per-vertex bevel-fillet override; empty = use corner_radius
     float smooth_angle = 0.0f; // radians; 0 = flat-shaded polygon edges
 
     Vec2 centroid() const {
@@ -335,7 +335,7 @@ using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse, Path>
 
 struct PointLight {
     std::string id;
-    Vec2 pos;
+    Vec2 position;
     float intensity = 1.0f;
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
@@ -578,17 +578,17 @@ inline const char* seed_mode_to_string(SeedMode mode) {
 
 struct TraceConfig {
     int batch_size = 200000;
-    int max_depth = 12;
+    int depth = 12;
     float intensity = 1.0f;
     SeedMode seed_mode = SeedMode::Deterministic;
-    int frame_index = 0;
+    int frame = 0;
 };
 
 struct PostProcess {
     float exposure = -5.0f;
     float contrast = 1.0f;
     float gamma = 2.0f;
-    ToneMap tone_map = ToneMap::ReinhardExtended;
+    ToneMap tonemap = ToneMap::ReinhardExtended;
     float white_point = 0.5f;
     NormalizeMode normalize = NormalizeMode::Rays;
     float normalize_ref = 0.0f; // divisor for Fixed mode
@@ -633,7 +633,7 @@ struct Look {
     float exposure = -5.0f;
     float contrast = 1.0f;
     float gamma = 2.0f;
-    ToneMap tone_map = ToneMap::ReinhardExtended;
+    ToneMap tonemap = ToneMap::ReinhardExtended;
     float white_point = 0.5f;
     NormalizeMode normalize = NormalizeMode::Rays;
     float normalize_ref = 0.0f;
@@ -653,7 +653,7 @@ struct Look {
     float chromatic_aberration = 0.0f;
 
     PostProcess to_post_process() const {
-        return {exposure, contrast, gamma, tone_map, white_point, normalize,
+        return {exposure, contrast, gamma, tonemap, white_point, normalize,
                 normalize_ref, normalize_pct, ambient,
                 {background[0], background[1], background[2]},
                 opacity, saturation, vignette, vignette_radius,
@@ -669,7 +669,7 @@ struct TraceDefaults {
     float intensity = 1.0f;
     SeedMode seed_mode = SeedMode::Deterministic;
 
-    TraceConfig to_trace_config(int frame_index = 0) const;
+    TraceConfig to_trace_config(int frame = 0) const;
 };
 
 struct Shot {

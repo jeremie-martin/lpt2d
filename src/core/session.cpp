@@ -35,7 +35,7 @@ RenderSession::~RenderSession() { close(); }
 RenderSession::RenderSession(RenderSession&&) noexcept = default;
 RenderSession& RenderSession::operator=(RenderSession&&) noexcept = default;
 
-RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
+RenderResult RenderSession::render_shot(const Shot& shot, int frame) {
     if (!impl_)
         throw std::runtime_error("RenderSession: session is closed");
 
@@ -48,7 +48,7 @@ RenderResult RenderSession::render_shot(const Shot& shot, int frame_index) {
     Bounds bounds = shot.camera.resolve(shot.canvas.aspect(), scene_bounds);
 
     // Convert authored types to runtime types
-    TraceConfig tcfg = shot.trace.to_trace_config(frame_index);
+    TraceConfig tcfg = shot.trace.to_trace_config(frame);
     PostProcess pp = shot.look.to_post_process();
     int64_t total_rays = shot.trace.rays;
 

@@ -15,17 +15,17 @@ CLI, Python, and export paths. That makes it authored trace intent, not a
 frontend-only toggle and not hidden renderer session state.
 
 The authored shot stores `seed_mode`. The runtime render call separately
-provides `frame_index`.
+provides `frame`.
 
-## Why `frame_index` Is Runtime-Only
+## Why `frame` Is Runtime-Only
 
-`frame_index` is not part of the authored document. It is render context:
+`frame` is not part of the authored document. It is render context:
 
 - Python animation renders derive it from the timeline frame
 - CLI can accept it explicitly
 - GUI preview/export can point at a chosen frame number
 
-Persisting `frame_index` in shot JSON would mix timeline position into authored
+Persisting `frame` in shot JSON would mix timeline position into authored
 trace defaults and would make static shots carry accidental runtime state.
 
 ## Decorrelated Semantics
@@ -33,7 +33,7 @@ trace defaults and would make static shots carry accidental runtime state.
 `decorrelated` means:
 
 - keep the renderer's existing per-dispatch seed progression
-- add a stable salt derived from `frame_index`
+- add a stable salt derived from `frame`
 
 This gives:
 
