@@ -91,6 +91,29 @@ static ProjectorSource parse_projector_source_arg(nb::object obj) {
     return nb::cast<ProjectorSource>(obj);
 }
 
+static PolygonJoinMode parse_polygon_join_mode_arg(nb::object obj) {
+    if (nb::isinstance<nb::str>(obj)) {
+        auto s = nb::cast<std::string>(obj);
+        if (auto mode = parse_polygon_join_mode(s)) return *mode;
+        throw nb::value_error(("invalid polygon join mode: " + s).c_str());
+    }
+    return nb::cast<PolygonJoinMode>(obj);
+}
+
+static std::vector<PolygonJoinMode> parse_polygon_join_modes_arg(nb::object obj) {
+    if (obj.is_none())
+        return {};
+    if (!(nb::isinstance<nb::tuple>(obj) || nb::isinstance<nb::list>(obj)))
+        throw nb::type_error("join_modes must be a sequence");
+
+    nb::sequence seq = nb::borrow<nb::sequence>(obj);
+    std::vector<PolygonJoinMode> join_modes;
+    join_modes.reserve((size_t)nb::len(seq));
+    for (nb::handle item : seq)
+        join_modes.push_back(parse_polygon_join_mode_arg(nb::borrow<nb::object>(item)));
+    return join_modes;
+}
+
 // ─── Module ──────────────────────────────────────────────────────
 
 NB_MODULE(_lpt2d, m) {
@@ -126,6 +149,11 @@ NB_MODULE(_lpt2d, m) {
     nb::enum_<ProjectorSource>(m, "ProjectorSource")
         .value("line", ProjectorSource::Line)
         .value("ball", ProjectorSource::Ball);
+
+    nb::enum_<PolygonJoinMode>(m, "PolygonJoinMode")
+        .value("auto", PolygonJoinMode::Auto)
+        .value("sharp", PolygonJoinMode::Sharp)
+        .value("smooth", PolygonJoinMode::Smooth);
 
     // ── Material ─────────────────────────────────────────────────
     nb::class_<Material>(m, "Material")
@@ -299,7 +327,7 @@ NB_MODULE(_lpt2d, m) {
     nb::class_<Polygon>(m, "Polygon")
         .def("__init__", [=](Polygon* p, std::string id, std::vector<Vec2> vertices,
                              nb::object material, std::string material_id, float corner_radius,
-                             std::vector<float> corner_radii, float smooth_angle) {
+                             std::vector<float> corner_radii, float smooth_angle, nb::object join_modes_obj) {
             new (p) Polygon{};
             p->id = std::move(id);
             p->vertices = std::move(vertices);
@@ -307,13 +335,17 @@ NB_MODULE(_lpt2d, m) {
             p->corner_radius = corner_radius;
             p->corner_radii = std::move(corner_radii);
             p->smooth_angle = smooth_angle;
+            p->join_modes = parse_polygon_join_modes_arg(join_modes_obj);
         }, "id"_a = "", "vertices"_a = std::vector<Vec2>{},
            "material"_a = nb::none(), "material_id"_a = "", "corner_radius"_a = 0.0f,
-           "corner_radii"_a = std::vector<float>{}, "smooth_angle"_a = 0.0f)
+           "corner_radii"_a = std::vector<float>{}, "smooth_angle"_a = 0.0f, "join_modes"_a = nb::none())
         .def_rw("id", &Polygon::id)
         .def_rw("vertices", &Polygon::vertices)
         .def_rw("corner_radius", &Polygon::corner_radius)
         .def_rw("corner_radii", &Polygon::corner_radii)
+        .def_prop_rw("join_modes",
+            [](const Polygon& p) { return p.join_modes; },
+            [](Polygon& p, nb::object obj) { p.join_modes = parse_polygon_join_modes_arg(obj); })
         .def_rw("smooth_angle", &Polygon::smooth_angle)
         .def_prop_rw("material",
             [=](const Polygon& p) { return mat_getter(p); },

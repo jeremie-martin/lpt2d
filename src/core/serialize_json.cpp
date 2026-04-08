@@ -126,6 +126,21 @@ std::vector<float> read_float_array(const Json& json, std::string_view context) 
     return values;
 }
 
+std::vector<PolygonJoinMode> read_polygon_join_mode_array(const Json& json, std::string_view context) {
+    expect_array(json, context);
+    std::vector<PolygonJoinMode> values;
+    values.reserve(json.size());
+    for (size_t i = 0; i < json.size(); ++i) {
+        std::string value = read_string(json[i], std::string(context) + "[" + std::to_string(i) + "]");
+        if (auto parsed = parse_polygon_join_mode(value)) {
+            values.push_back(*parsed);
+            continue;
+        }
+        fail(std::string(context) + "[" + std::to_string(i) + "] must be one of auto, sharp, smooth");
+    }
+    return values;
+}
+
 Json vec2_json(Vec2 value) { return Json::array({value.x, value.y}); }
 Json rgb_json(const float value[3]) { return Json::array({value[0], value[1], value[2]}); }
 Json bounds_json(const Bounds& value) { return Json::array({value.min.x, value.min.y, value.max.x, value.max.y}); }
@@ -254,7 +269,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     }
     if (type == "polygon") {
         reject_unknown_keys(json, {"id", "type", "vertices", "corner_radius", "corner_radii",
-                                   "smooth_angle", "material", "material_id"}, context);
+                                   "join_modes", "smooth_angle", "material", "material_id"}, context);
         Polygon polygon;
         polygon.id = id;
          {
@@ -267,6 +282,8 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
             polygon.corner_radius = read_float(json["corner_radius"], std::string(context) + ".corner_radius");
         if (json.contains("corner_radii"))
             polygon.corner_radii = read_float_array(json["corner_radii"], std::string(context) + ".corner_radii");
+        if (json.contains("join_modes"))
+            polygon.join_modes = read_polygon_join_mode_array(json["join_modes"], std::string(context) + ".join_modes");
         if (json.contains("smooth_angle"))
             polygon.smooth_angle = read_float(json["smooth_angle"], std::string(context) + ".smooth_angle");
         if (PolygonFieldValidationResult polygon_validation = validate_polygon_fields(polygon);
@@ -350,6 +367,12 @@ Json write_shape(const Shape& shape) {
                 for (float radius : value.corner_radii)
                     corner_radii.push_back(radius);
                 json["corner_radii"] = std::move(corner_radii);
+            }
+            if (!value.join_modes.empty()) {
+                Json join_modes = Json::array();
+                for (PolygonJoinMode mode : value.join_modes)
+                    join_modes.push_back(polygon_join_mode_to_string(mode));
+                json["join_modes"] = std::move(join_modes);
             }
             if (value.smooth_angle > 0.0f)
                 json["smooth_angle"] = value.smooth_angle;

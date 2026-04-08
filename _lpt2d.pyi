@@ -46,6 +46,13 @@ class ProjectorSource(enum.Enum):
 
     ball = 1
 
+class PolygonJoinMode(enum.Enum):
+    auto = 0
+
+    sharp = 1
+
+    smooth = 2
+
 class Material:
     def __init__(
         self,
@@ -271,6 +278,7 @@ class Polygon:
         corner_radius: float = 0.0,
         corner_radii: Sequence[float] = [],
         smooth_angle: float = 0.0,
+        join_modes: Sequence[PolygonJoinMode | str] | None = None,
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -288,6 +296,10 @@ class Polygon:
     def corner_radii(self) -> list[float]: ...
     @corner_radii.setter
     def corner_radii(self, arg: Sequence[float], /) -> None: ...
+    @property
+    def join_modes(self) -> list[PolygonJoinMode]: ...
+    @join_modes.setter
+    def join_modes(self, arg: Sequence[PolygonJoinMode | str] | None, /) -> None: ...
     @property
     def smooth_angle(self) -> float: ...
     @smooth_angle.setter

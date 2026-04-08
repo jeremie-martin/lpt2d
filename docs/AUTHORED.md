@@ -30,17 +30,20 @@ the committed repo baseline uses named materials and explicit bindings.
 
 ## Polygon Fields
 
-`Polygon` supports three authored corner/shading controls:
+`Polygon` supports four authored corner/shading controls:
 
 - `corner_radius`
   Uniform convex corner bevel-fillet radius.
 - `corner_radii`
   Optional per-vertex bevel-fillet override. When non-empty, it must match
   `vertices.size()` and overrides `corner_radius`.
+- `join_modes`
+  Optional per-vertex shading join override. When non-empty, it must match
+  `vertices.size()`. Entries are `auto`, `sharp`, or `smooth`.
 - `smooth_angle`
-  Optional shading-normal threshold in radians. It only affects polygon edge
-  shading; intersection geometry, fill, perimeter, and emission remain
-  geometric.
+  Optional shading-normal threshold in radians for `auto` polygon joins. It
+  only affects polygon edge shading; intersection geometry, fill, perimeter,
+  and emission remain geometric.
 
 Concave polygon vertices stay sharp for both smoothing and bevel-filleting.
 

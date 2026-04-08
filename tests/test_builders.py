@@ -7,7 +7,7 @@ import pytest
 
 from anim import mirror_block
 from anim.builders import biconvex_lens, double_slit, mirror_box, rectangle, regular_polygon, thick_arc, waveguide
-from anim.types import Material, Polygon, Segment
+from anim.types import Material, Polygon, PolygonJoinMode, Segment
 
 
 def _polygon_area2(vertices: list[tuple[float, float]]) -> float:
@@ -65,6 +65,16 @@ def test_thick_arc_supports_smooth_angle_and_end_cap_radii():
     expected[-1] = 0.08
     assert shape.corner_radii == pytest.approx(expected)
 
+    expected_join_modes = [PolygonJoinMode.auto] * len(shape.vertices)
+    expected_join_modes[steps] = PolygonJoinMode.sharp
+    expected_join_modes[steps + 1] = PolygonJoinMode.sharp
+    expected_join_modes[0] = PolygonJoinMode.sharp
+    expected_join_modes[-1] = PolygonJoinMode.sharp
+    assert list(shape.join_modes) == expected_join_modes
+
+    shape.smooth_angle = 0.0
+    assert list(shape.join_modes) == expected_join_modes
+
 
 @pytest.mark.parametrize(
     ("builder", "kwargs", "expected_vertex_count"),
@@ -73,15 +83,19 @@ def test_thick_arc_supports_smooth_angle_and_end_cap_radii():
         (regular_polygon, {"center": (0.0, 0.0), "radius": 1.0, "n": 5}, 5),
     ],
 )
-def test_polygon_wrappers_forward_corner_radii_and_smooth_angle(
+def test_polygon_wrappers_forward_corner_radii_join_modes_and_smooth_angle(
     builder: Any,
     kwargs: dict[str, Any],
     expected_vertex_count: int,
 ):
+    join_modes = [PolygonJoinMode.auto] * expected_vertex_count
+    if expected_vertex_count > 0:
+        join_modes[-1] = PolygonJoinMode.smooth
     shape = builder(
         material=Material(transmission=1.0, ior=1.5),
         corner_radius=0.25,
         corner_radii=[0.0] * expected_vertex_count,
+        join_modes=join_modes,
         smooth_angle=1.0,
         **kwargs,
     )
@@ -90,7 +104,23 @@ def test_polygon_wrappers_forward_corner_radii_and_smooth_angle(
     assert len(shape.vertices) == expected_vertex_count
     assert shape.corner_radius == pytest.approx(0.25)
     assert shape.corner_radii == pytest.approx([0.0] * expected_vertex_count)
+    assert list(shape.join_modes) == join_modes
     assert shape.smooth_angle == pytest.approx(1.0)
+
+
+def test_polygon_positional_constructor_keeps_smooth_angle_slot():
+    shape = Polygon(
+        "poly",
+        [(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+        Material(),
+        "",
+        0.0,
+        [],
+        1.25,
+    )
+
+    assert shape.smooth_angle == pytest.approx(1.25)
+    assert list(shape.join_modes) == []
 
 
 def test_mirror_block_returns_clockwise_per_face_segments():

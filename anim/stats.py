@@ -584,6 +584,7 @@ def _copy_shape(shape: Shape, **overrides) -> Shape:
             vertices=overrides.get("vertices", shape.vertices),
             corner_radius=overrides.get("corner_radius", shape.corner_radius),
             corner_radii=overrides.get("corner_radii", shape.corner_radii),
+            join_modes=overrides.get("join_modes", shape.join_modes),
             smooth_angle=overrides.get("smooth_angle", shape.smooth_angle),
             **binding,
         )

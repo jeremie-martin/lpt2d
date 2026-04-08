@@ -219,11 +219,14 @@ std::vector<PolygonVertexNormalBuild> compute_polygon_vertex_normals(
         const std::vector<Vec2>& edge_flat_normals) {
     int n = (int)poly.vertices.size();
     std::vector<PolygonVertexNormalBuild> normals(n);
-    if (n < 3 || poly.smooth_angle <= 0.0f)
+    if (n < 3)
         return normals;
 
     bool cw = polygon_is_clockwise(poly);
     for (int i = 0; i < n; ++i) {
+        PolygonJoinMode join_mode = polygon_effective_join_mode(poly, i);
+        if (join_mode == PolygonJoinMode::Sharp)
+            continue;
         if (rounded[i].has_bevel_fillet) continue;
 
         int prev_edge = (i - 1 + n) % n;
@@ -240,11 +243,17 @@ std::vector<PolygonVertexNormalBuild> compute_polygon_vertex_normals(
         bool convex = false;
         if (!compute_polygon_vertex_frame(poly, i, cw, dp, dn, len_prev, len_next, cos_a, convex))
             continue;
-        if (!convex) continue;
 
-        float angle = std::acos(std::clamp(prev_normal.dot(next_normal), -1.0f, 1.0f));
-        if (angle > poly.smooth_angle)
-            continue;
+        if (join_mode == PolygonJoinMode::Auto) {
+            if (poly.smooth_angle <= 0.0f)
+                continue;
+            if (!convex)
+                continue;
+
+            float angle = std::acos(std::clamp(prev_normal.dot(next_normal), -1.0f, 1.0f));
+            if (angle > poly.smooth_angle)
+                continue;
+        }
 
         Vec2 smooth = prev_normal + next_normal;
         if (smooth.length_sq() < 1e-10f)

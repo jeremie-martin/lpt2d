@@ -306,6 +306,79 @@ class TestRayIntersect:
         assert result[2][0] == pytest.approx(1.0, abs=1e-6)
         assert abs(result[2][1]) < 1e-3
 
+    def test_polygon_explicit_smooth_can_smooth_a_concave_join(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, PolygonJoinMode, Scene
+
+        poly = Polygon(
+            id="concave_smooth",
+            vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
+            material=Material(),
+            join_modes=[
+                PolygonJoinMode.auto,
+                PolygonJoinMode.auto,
+                PolygonJoinMode.auto,
+                PolygonJoinMode.smooth,
+                PolygonJoinMode.auto,
+                PolygonJoinMode.auto,
+            ],
+            smooth_angle=0.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.0, 1.001), (1.0, 0.0))
+        assert result is not None
+        assert result[2][0] < 1.0
+        assert result[2][0] > 0.6
+        assert result[2][1] > 0.2
+        assert math.hypot(*result[2]) == pytest.approx(1.0)
+
+    def test_polygon_explicit_sharp_overrides_auto_smoothing(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, PolygonJoinMode, Scene
+
+        poly = Polygon(
+            id="forced_sharp",
+            vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+            material=Material(),
+            join_modes=[
+                PolygonJoinMode.auto,
+                PolygonJoinMode.sharp,
+                PolygonJoinMode.sharp,
+                PolygonJoinMode.auto,
+            ],
+            smooth_angle=2.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
+        assert result is not None
+        assert result[2] == pytest.approx((0.0, 1.0))
+
+    def test_polygon_explicit_smooth_ignores_zero_auto_threshold(self):
+        from anim.analysis import ray_intersect
+        from anim.types import Material, Polygon, PolygonJoinMode, Scene
+
+        poly = Polygon(
+            id="forced_smooth",
+            vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
+            material=Material(),
+            join_modes=[
+                PolygonJoinMode.auto,
+                PolygonJoinMode.auto,
+                PolygonJoinMode.smooth,
+                PolygonJoinMode.auto,
+            ],
+            smooth_angle=0.0,
+        )
+        scene = Scene(shapes=[poly])
+
+        result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
+        assert result is not None
+        assert result[2][0] > 0.2
+        assert result[2][1] < 0.98
+        assert math.hypot(*result[2]) == pytest.approx(1.0)
+
     def test_polygon_edge_can_mix_smooth_and_beveled_endpoints(self):
         from anim.analysis import ray_intersect
         from anim.types import Material, Polygon, Scene

@@ -14,6 +14,7 @@ from anim.types import (
     Look,
     Material,
     Polygon,
+    PolygonJoinMode,
     ProjectorLight,
     RenderSession,
     Scene,
@@ -579,8 +580,30 @@ def test_validate_scene_rejects_invalid_polygon_fields():
         _lpt2d.validate_scene(scene)
 
 
-def test_polygon_round_trip_preserves_corner_radii_and_smooth_angle(tmp_path):
+def test_validate_scene_rejects_bad_polygon_join_modes_length():
+    scene = Scene(
+        shapes=[
+            Polygon(
+                id="poly",
+                vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                material=Material(),
+                join_modes=[PolygonJoinMode.auto, PolygonJoinMode.smooth],
+            )
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="join_modes"):
+        _lpt2d.validate_scene(scene)
+
+
+def test_polygon_round_trip_preserves_corner_radii_join_modes_and_smooth_angle(tmp_path):
     path = tmp_path / "polygon_round_trip.json"
+    expected_join_modes = [
+        PolygonJoinMode.auto,
+        PolygonJoinMode.sharp,
+        PolygonJoinMode.smooth,
+        PolygonJoinMode.auto,
+    ]
     shot = Shot(
         name="poly_round_trip",
         scene=Scene(
@@ -591,6 +614,7 @@ def test_polygon_round_trip_preserves_corner_radii_and_smooth_angle(tmp_path):
                     material=Material(fill=1.0),
                     corner_radius=0.25,
                     corner_radii=[0.0, 0.1, 0.2, 0.0],
+                    join_modes=expected_join_modes,
                     smooth_angle=1.25,
                 )
             ],
@@ -603,6 +627,7 @@ def test_polygon_round_trip_preserves_corner_radii_and_smooth_angle(tmp_path):
     assert isinstance(polygon, Polygon)
     assert polygon.corner_radius == pytest.approx(0.25)
     assert polygon.corner_radii == pytest.approx([0.0, 0.1, 0.2, 0.0])
+    assert list(polygon.join_modes) == expected_join_modes
     assert polygon.smooth_angle == pytest.approx(1.25)
 
 
@@ -639,6 +664,76 @@ def test_authored_polygon_rejects_bad_corner_radii_length(tmp_path):
     _write_json(path, data)
 
     with pytest.raises(RuntimeError, match="corner_radii"):
+        Shot.load(path)
+
+
+def test_authored_polygon_rejects_bad_join_modes_length(tmp_path):
+    path = tmp_path / "bad_polygon_join_modes_length.json"
+    data = _make_valid_shot_json(
+        materials={
+            "mat": {
+                "ior": 1.0,
+                "roughness": 0.0,
+                "metallic": 0.0,
+                "transmission": 0.0,
+                "absorption": 0.0,
+                "cauchy_b": 0.0,
+                "albedo": 1.0,
+                "emission": 0.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 1.0,
+            }
+        },
+        shapes=[
+            {
+                "id": "poly",
+                "type": "polygon",
+                "vertices": [[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                "join_modes": ["auto", "smooth"],
+                "material_id": "mat",
+            }
+        ]
+    )
+    _write_json(path, data)
+
+    with pytest.raises(RuntimeError, match="join_modes"):
+        Shot.load(path)
+
+
+def test_authored_polygon_rejects_invalid_join_mode_value(tmp_path):
+    path = tmp_path / "bad_polygon_join_modes_value.json"
+    data = _make_valid_shot_json(
+        materials={
+            "mat": {
+                "ior": 1.0,
+                "roughness": 0.0,
+                "metallic": 0.0,
+                "transmission": 0.0,
+                "absorption": 0.0,
+                "cauchy_b": 0.0,
+                "albedo": 1.0,
+                "emission": 0.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 1.0,
+            }
+        },
+        shapes=[
+            {
+                "id": "poly",
+                "type": "polygon",
+                "vertices": [[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
+                "join_modes": ["auto", "bogus", "smooth", "sharp"],
+                "material_id": "mat",
+            }
+        ]
+    )
+    _write_json(path, data)
+
+    with pytest.raises(RuntimeError, match="join_modes"):
         Shot.load(path)
 
 

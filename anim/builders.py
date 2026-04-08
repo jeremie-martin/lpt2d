@@ -6,7 +6,7 @@ import math
 from collections.abc import Sequence
 from typing import Literal
 
-from .types import Arc, Circle, Ellipse, Material, Path, Polygon, Segment, Shape
+from .types import Arc, Circle, Ellipse, Material, Path, Polygon, PolygonJoinMode, Segment, Shape
 
 
 def _shape_id(id_prefix: str | None, suffix: str) -> str:
@@ -21,15 +21,16 @@ def polygon(
     *,
     corner_radius: float = 0.0,
     corner_radii: Sequence[float] | None = None,
+    join_modes: Sequence[PolygonJoinMode | str] | None = None,
     smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
     """Closed polygon from a list of [x, y] vertices.
 
     ``corner_radius`` applies one uniform convex bevel-fillet radius. ``corner_radii``
-    overrides that per vertex when provided. ``smooth_angle`` is a radians
-    threshold for smooth-shaded polygon edge normals on convex zero-radius
-    corners.
+    overrides that per vertex when provided. ``join_modes`` optionally sets
+    per-vertex shading join intent (`auto`, `sharp`, `smooth`). ``smooth_angle``
+    is the radians threshold for auto-smoothed polygon joins.
     """
     return Polygon(
         id=_shape_id(id_prefix, "body"),
@@ -37,6 +38,7 @@ def polygon(
         material=material,
         corner_radius=corner_radius,
         corner_radii=[] if corner_radii is None else list(corner_radii),
+        join_modes=[] if join_modes is None else list(join_modes),
         smooth_angle=smooth_angle,
     )
 
@@ -50,6 +52,7 @@ def regular_polygon(
     *,
     corner_radius: float = 0.0,
     corner_radii: Sequence[float] | None = None,
+    join_modes: Sequence[PolygonJoinMode | str] | None = None,
     smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
@@ -71,6 +74,7 @@ def regular_polygon(
         material,
         corner_radius=corner_radius,
         corner_radii=corner_radii,
+        join_modes=join_modes,
         smooth_angle=smooth_angle,
         id_prefix=id_prefix,
     )
@@ -84,6 +88,7 @@ def rectangle(
     *,
     corner_radius: float = 0.0,
     corner_radii: Sequence[float] | None = None,
+    join_modes: Sequence[PolygonJoinMode | str] | None = None,
     smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
@@ -99,6 +104,7 @@ def rectangle(
         material,
         corner_radius=corner_radius,
         corner_radii=corner_radii,
+        join_modes=join_modes,
         smooth_angle=smooth_angle,
         id_prefix=id_prefix,
     )
@@ -155,9 +161,10 @@ def thick_arc(
     """Arc with physical thickness, approximated as a polygonal annular sector.
 
     *radius* is the mid-line radius; the shape spans from ``radius - thickness/2``
-    to ``radius + thickness/2``. ``smooth_angle`` smooths the curved polygon
-    span without changing geometry. ``end_cap_radii`` rounds the two flat caps;
-    pass either one radius for both caps or ``(start_cap, end_cap)``.
+    to ``radius + thickness/2``. ``smooth_angle`` enables polygon auto-smoothing
+    without changing geometry, while the two flat cap joins remain explicitly
+    sharp. ``end_cap_radii`` rounds the two flat caps; pass either one radius
+    for both caps or ``(start_cap, end_cap)``.
     """
     if thickness <= 0:
         raise ValueError("thickness must be positive")
@@ -199,12 +206,20 @@ def thick_arc(
         corner_radii[steps + 1] = start_cap_radius
         corner_radii[0] = end_cap_radius
         corner_radii[-1] = end_cap_radius
+    join_modes: list[PolygonJoinMode] = []
+    if smooth_angle > 0.0:
+        join_modes = [PolygonJoinMode.auto] * (2 * steps + 2)
+        join_modes[0] = PolygonJoinMode.sharp
+        join_modes[steps] = PolygonJoinMode.sharp
+        join_modes[steps + 1] = PolygonJoinMode.sharp
+        join_modes[-1] = PolygonJoinMode.sharp
     return [
         Polygon(
             id=_shape_id(id_prefix, "sector"),
             vertices=outer + inner,
             material=material,
             corner_radii=corner_radii,
+            join_modes=join_modes,
             smooth_angle=smooth_angle,
         )
     ]
