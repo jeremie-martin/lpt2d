@@ -26,7 +26,7 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 | **Segment** | Line segment between two points. Fields: `a`, `b`. |
 | **Arc** | Circular arc. Fields: `center`, `radius`, `angle_start`, `sweep`. |
 | **Bezier** | Quadratic Bezier curve. Fields: `p0` (start), `p1` (control), `p2` (end). |
-| **Polygon** | Closed polyline from `vertices`. Supports `corner_radius`, `corner_radii`, `smooth_angle`. |
+| **Polygon** | Closed polyline from `vertices`. Supports `corner_radius`, `corner_radii`, `join_modes`, and `smooth_angle`. |
 | **Ellipse** | Axis-aligned then rotated ellipse. Fields: `center`, `semi_a`, `semi_b`, `rotation`. |
 | **Path** | Chain of quadratic Bezier segments. Fields: `points` (2N+1 for N segments), `closed`. |
 | **Shape** | Union type of all shape variants. |
@@ -38,6 +38,7 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 | **vertex / vertices** | Polygon corner positions. Always `vertices`, never "points" or "corners". |
 | **edge** | Implicit segment connecting `vertices[i]` to `vertices[(i+1) % n]`. |
 | **join** | Authored connection at a polygon vertex between the incoming and outgoing edges. |
+| **PolygonJoinMode** | Per-vertex shading join enum: `auto`, `sharp`, or `smooth`. |
 | **corner_radius** | Uniform bevel-fillet radius applied to convex corners. 0 = sharp. |
 | **corner_radii** | Optional per-vertex bevel-fillet override. Must match `vertices.size()` if non-empty. |
 | **join_modes** | Optional per-vertex shading join override. Entries are `auto`, `sharp`, or `smooth`. |
