@@ -875,6 +875,27 @@ int App::run(const AppConfig& config) {
             if (io.MouseWheel != 0) {
                 if (io.KeyAlt && !ImGui::IsMouseDragging(0)) {
                     ed.shot.look.exposure += io.MouseWheel * 0.5f;
+                } else if (io.KeyShift && !ImGui::IsMouseDragging(0)) {
+                    // Shift+Scroll: adjust intensity of hovered or selected light
+                    auto adjust_light_intensity = [&](Light& light) {
+                        float& intensity = std::visit([](auto& l) -> float& { return l.intensity; }, light);
+                        float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
+                        intensity = std::max(intensity * factor, 0.001f);
+                    };
+                    SelectionRef target = ed.interaction.hovered;
+                    if (target.type != SelectionRef::Light || target.id.empty()) {
+                        // Fall back to active selection if not hovering a light
+                        if (const auto* active = ed.active_selection();
+                            active && active->type == SelectionRef::Light)
+                            target = *active;
+                    }
+                    if (target.type == SelectionRef::Light && !target.id.empty()) {
+                        if (Light* light = resolve_light(ed.shot.scene, target)) {
+                            ed.session.undo.push(ed.shot.scene);
+                            adjust_light_intensity(*light);
+                            reload();
+                        }
+                    }
                 } else if (!compare_view_locked) {
                     Vec2 world_before = cv.to_world(io.MousePos);
                     float factor = (io.MouseWheel > 0) ? 1.1f : (1.0f / 1.1f);
@@ -1547,6 +1568,7 @@ int App::run(const AppConfig& config) {
                 row("V", "Toggle wireframe");
                 row("Shift+1-6", "Look presets");
                 row("[ / ]", "Exposure nudge");
+                row("Shift+Scroll", "Light intensity");
                 row("Space", "Pause / unpause");
 
                 section("Comparison");
@@ -1677,9 +1699,12 @@ int App::run(const AppConfig& config) {
                     panel.open_add_popup = true;
                 }
 
-                // Shortcut reference: ?
-                if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Slash)) {
-                    panel.show_shortcuts_help = !panel.show_shortcuts_help;
+                // Shortcut reference: ? (character-based for layout independence)
+                for (int ci = 0; ci < io.InputQueueCharacters.Size; ++ci) {
+                    if (io.InputQueueCharacters[ci] == '?') {
+                        panel.show_shortcuts_help = !panel.show_shortcuts_help;
+                        break;
+                    }
                 }
 
                 // Select all
