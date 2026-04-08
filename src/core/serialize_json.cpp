@@ -27,7 +27,6 @@ namespace {
 
 using Json = nlohmann::ordered_json;
 constexpr int SHOT_JSON_VERSION = 10;
-enum class Schema { Authored, Stream };
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
@@ -161,34 +160,22 @@ ProjectorSource read_projector_source(const Json& json, std::string_view context
     fail("invalid projector source: " + value);
 }
 
-Material read_material(const Json& json, Schema schema, std::string_view context) {
+Material read_material(const Json& json, std::string_view context) {
     reject_unknown_keys(json, {"ior", "roughness", "metallic", "transmission", "absorption",
                                "cauchy_b", "albedo", "emission",
                                "spectral_c0", "spectral_c1", "spectral_c2", "fill"}, context);
     Material material;
-    if (schema == Schema::Authored || json.contains("ior"))
         material.ior = read_required_float(json, "ior", context);
-    if (schema == Schema::Authored || json.contains("roughness"))
         material.roughness = read_required_float(json, "roughness", context);
-    if (schema == Schema::Authored || json.contains("metallic"))
         material.metallic = read_required_float(json, "metallic", context);
-    if (schema == Schema::Authored || json.contains("transmission"))
         material.transmission = read_required_float(json, "transmission", context);
-    if (schema == Schema::Authored || json.contains("absorption"))
         material.absorption = read_required_float(json, "absorption", context);
-    if (schema == Schema::Authored || json.contains("cauchy_b"))
         material.cauchy_b = read_required_float(json, "cauchy_b", context);
-    if (schema == Schema::Authored || json.contains("albedo"))
         material.albedo = read_required_float(json, "albedo", context);
-    if (schema == Schema::Authored || json.contains("emission"))
         material.emission = read_required_float(json, "emission", context);
-    if (schema == Schema::Authored || json.contains("spectral_c0"))
         material.spectral_c0 = read_required_float(json, "spectral_c0", context);
-    if (schema == Schema::Authored || json.contains("spectral_c1"))
         material.spectral_c1 = read_required_float(json, "spectral_c1", context);
-    if (schema == Schema::Authored || json.contains("spectral_c2"))
         material.spectral_c2 = read_required_float(json, "spectral_c2", context);
-    if (schema == Schema::Authored || json.contains("fill"))
         material.fill = read_required_float(json, "fill", context);
     return material;
 }
@@ -212,7 +199,7 @@ Json write_material(const Material& material) {
 
 MaterialBinding read_shape_material(const Json& json,
                                     const std::map<std::string, Material>& materials,
-                                    Schema schema, std::string_view context) {
+                                    std::string_view context) {
     const bool has_material = json.contains("material");
     const bool has_material_id = json.contains("material_id");
     if (has_material == has_material_id)
@@ -223,57 +210,46 @@ MaterialBinding read_shape_material(const Json& json,
         if (!materials.contains(mid)) fail("unknown material_id: " + mid);
         return MaterialBinding(mid);
     }
-    return MaterialBinding(read_material(require_key(json, "material", context), schema,
+    return MaterialBinding(read_material(require_key(json, "material", context),
                                           std::string(context) + ".material"));
 }
 
 Shape read_shape(const Json& json, const std::map<std::string, Material>& materials,
-                 Schema schema, std::string_view context) {
+                 std::string_view context) {
     const std::string type = read_required_string(json, "type", context);
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("shape ids must be non-empty");
-    auto binding = read_shape_material(json, materials, schema, context);
+    auto binding = read_shape_material(json, materials, context);
     if (type == "circle") {
         reject_unknown_keys(json, {"id", "type", "center", "radius", "material", "material_id"}, context);
         Circle circle{id, {}, 0.1f, std::move(binding)};
-        if (schema == Schema::Authored || json.contains("center"))
-            circle.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
-        if (schema == Schema::Authored || json.contains("radius"))
-            circle.radius = read_required_float(json, "radius", context);
+                circle.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
+                circle.radius = read_required_float(json, "radius", context);
         return circle;
     }
     if (type == "segment") {
         reject_unknown_keys(json, {"id", "type", "a", "b", "material", "material_id"}, context);
         Segment segment{id, {}, {}, std::move(binding)};
-        if (schema == Schema::Authored || json.contains("a"))
-            segment.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
-        if (schema == Schema::Authored || json.contains("b"))
-            segment.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
+                segment.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
+                segment.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
         return segment;
     }
     if (type == "arc") {
         reject_unknown_keys(json, {"id", "type", "center", "radius", "angle_start", "sweep",
                                    "material", "material_id"}, context);
         Arc arc{id, {}, 0.1f, 0.0f, TWO_PI, std::move(binding)};
-        if (schema == Schema::Authored || json.contains("center"))
-            arc.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
-        if (schema == Schema::Authored || json.contains("radius"))
-            arc.radius = read_required_float(json, "radius", context);
-        if (schema == Schema::Authored || json.contains("angle_start"))
-            arc.angle_start = normalize_angle(read_required_float(json, "angle_start", context));
-        if (schema == Schema::Authored || json.contains("sweep"))
-            arc.sweep = clamp_arc_sweep(read_required_float(json, "sweep", context));
+                arc.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
+                arc.radius = read_required_float(json, "radius", context);
+                arc.angle_start = normalize_angle(read_required_float(json, "angle_start", context));
+                arc.sweep = clamp_arc_sweep(read_required_float(json, "sweep", context));
         return arc;
     }
     if (type == "bezier") {
         reject_unknown_keys(json, {"id", "type", "p0", "p1", "p2", "material", "material_id"}, context);
         Bezier bezier{id, {}, {0.5f, 0.5f}, {1.0f, 0.0f}, std::move(binding)};
-        if (schema == Schema::Authored || json.contains("p0"))
-            bezier.p0 = read_vec2(require_key(json, "p0", context), std::string(context) + ".p0");
-        if (schema == Schema::Authored || json.contains("p1"))
-            bezier.p1 = read_vec2(require_key(json, "p1", context), std::string(context) + ".p1");
-        if (schema == Schema::Authored || json.contains("p2"))
-            bezier.p2 = read_vec2(require_key(json, "p2", context), std::string(context) + ".p2");
+                bezier.p0 = read_vec2(require_key(json, "p0", context), std::string(context) + ".p0");
+                bezier.p1 = read_vec2(require_key(json, "p1", context), std::string(context) + ".p1");
+                bezier.p2 = read_vec2(require_key(json, "p2", context), std::string(context) + ".p2");
         return bezier;
     }
     if (type == "polygon") {
@@ -281,7 +257,7 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                                    "smooth_angle", "material", "material_id"}, context);
         Polygon polygon;
         polygon.id = id;
-        if (schema == Schema::Authored || json.contains("vertices")) {
+         {
             expect_array(require_key(json, "vertices", context), std::string(context) + ".vertices");
             for (size_t i = 0; i < json["vertices"].size(); ++i)
                 polygon.vertices.push_back(read_vec2(json["vertices"][i],
@@ -303,27 +279,23 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         reject_unknown_keys(json, {"id", "type", "center", "semi_a", "semi_b", "rotation",
                                    "material", "material_id"}, context);
         Ellipse ellipse{id, {}, 0.2f, 0.1f, 0.0f, std::move(binding)};
-        if (schema == Schema::Authored || json.contains("center"))
-            ellipse.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
-        if (schema == Schema::Authored || json.contains("semi_a"))
-            ellipse.semi_a = read_required_float(json, "semi_a", context);
-        if (schema == Schema::Authored || json.contains("semi_b"))
-            ellipse.semi_b = read_required_float(json, "semi_b", context);
-        if (schema == Schema::Authored || json.contains("rotation"))
-            ellipse.rotation = read_required_float(json, "rotation", context);
+                ellipse.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
+                ellipse.semi_a = read_required_float(json, "semi_a", context);
+                ellipse.semi_b = read_required_float(json, "semi_b", context);
+                ellipse.rotation = read_required_float(json, "rotation", context);
         return ellipse;
     }
     if (type == "path") {
         reject_unknown_keys(json, {"id", "type", "points", "closed", "material", "material_id"}, context);
         Path path;
         path.id = id;
-        if (schema == Schema::Authored || json.contains("points")) {
+         {
             expect_array(require_key(json, "points", context), std::string(context) + ".points");
             for (size_t i = 0; i < json["points"].size(); ++i)
                 path.points.push_back(read_vec2(json["points"][i],
                                                  std::string(context) + ".points[" + std::to_string(i) + "]"));
         }
-        if (schema == Schema::Authored && (path.points.size() < 3 || path.points.size() % 2 == 0))
+        if ((path.points.size() < 3 || path.points.size() % 2 == 0))
             fail(std::string(context) + ".points must have 2N+1 entries (N >= 1), got " +
                  std::to_string(path.points.size()));
         if (json.contains("closed"))
@@ -403,62 +375,44 @@ Json write_shape(const Shape& shape) {
     }, shape);
 }
 
-Light read_light(const Json& json, Schema schema, std::string_view context) {
+Light read_light(const Json& json, std::string_view context) {
     const std::string type = read_required_string(json, "type", context);
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("light ids must be non-empty");
     if (type == "point") {
         reject_unknown_keys(json, {"id", "type", "position", "intensity", "wavelength_min", "wavelength_max"}, context);
         PointLight light{id, {}, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("position"))
-            light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
-        if (schema == Schema::Authored || json.contains("intensity"))
-            light.intensity = read_required_float(json, "intensity", context);
-        if (schema == Schema::Authored || json.contains("wavelength_min"))
-            light.wavelength_min = read_required_float(json, "wavelength_min", context);
-        if (schema == Schema::Authored || json.contains("wavelength_max"))
-            light.wavelength_max = read_required_float(json, "wavelength_max", context);
+                light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
+                light.intensity = read_required_float(json, "intensity", context);
+                light.wavelength_min = read_required_float(json, "wavelength_min", context);
+                light.wavelength_max = read_required_float(json, "wavelength_max", context);
         return light;
     }
     if (type == "segment") {
         reject_unknown_keys(json, {"id", "type", "a", "b", "intensity", "wavelength_min", "wavelength_max"}, context);
         SegmentLight light{id, {}, {}, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("a"))
-            light.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
-        if (schema == Schema::Authored || json.contains("b"))
-            light.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
-        if (schema == Schema::Authored || json.contains("intensity"))
-            light.intensity = read_required_float(json, "intensity", context);
-        if (schema == Schema::Authored || json.contains("wavelength_min"))
-            light.wavelength_min = read_required_float(json, "wavelength_min", context);
-        if (schema == Schema::Authored || json.contains("wavelength_max"))
-            light.wavelength_max = read_required_float(json, "wavelength_max", context);
+                light.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
+                light.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
+                light.intensity = read_required_float(json, "intensity", context);
+                light.wavelength_min = read_required_float(json, "wavelength_min", context);
+                light.wavelength_max = read_required_float(json, "wavelength_max", context);
         return light;
     }
     if (type == "projector") {
         reject_unknown_keys(json, {"id", "type", "position", "direction", "source_radius", "spread",
                                    "profile", "source", "softness", "intensity", "wavelength_min", "wavelength_max"}, context);
         ProjectorLight light{id, {}, {1.0f, 0.0f}, 0.03f, 0.1f, ProjectorProfile::Uniform, ProjectorSource::Line, 0.0f, 1.0f, 380.0f, 780.0f};
-        if (schema == Schema::Authored || json.contains("position"))
-            light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
-        if (schema == Schema::Authored || json.contains("direction"))
-            light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
-        if (schema == Schema::Authored || json.contains("source_radius"))
-            light.source_radius = read_required_float(json, "source_radius", context);
-        if (schema == Schema::Authored || json.contains("spread"))
-            light.spread = read_required_float(json, "spread", context);
-        if (schema == Schema::Authored || json.contains("profile"))
-            light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
+                light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
+                light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
+                light.source_radius = read_required_float(json, "source_radius", context);
+                light.spread = read_required_float(json, "spread", context);
+                light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
         if (json.contains("source"))
             light.source = read_projector_source(require_key(json, "source", context), std::string(context) + ".source");
-        if (schema == Schema::Authored || json.contains("softness"))
-            light.softness = read_required_float(json, "softness", context);
-        if (schema == Schema::Authored || json.contains("intensity"))
-            light.intensity = read_required_float(json, "intensity", context);
-        if (schema == Schema::Authored || json.contains("wavelength_min"))
-            light.wavelength_min = read_required_float(json, "wavelength_min", context);
-        if (schema == Schema::Authored || json.contains("wavelength_max"))
-            light.wavelength_max = read_required_float(json, "wavelength_max", context);
+                light.softness = read_required_float(json, "softness", context);
+                light.intensity = read_required_float(json, "intensity", context);
+                light.wavelength_min = read_required_float(json, "wavelength_min", context);
+                light.wavelength_max = read_required_float(json, "wavelength_max", context);
         light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1, 0};
         light.source_radius = std::max(light.source_radius, 0.0f);
         light.spread = std::clamp(light.spread, 0.0f, PI);
@@ -502,8 +456,7 @@ Json write_transform(const Transform2D& transform) {
 }
 
 Group read_group(const Json& json, const std::map<std::string, Material>& materials,
-                 Schema schema, std::string_view context) {
-    (void)schema;
+                 std::string_view context) {
     reject_unknown_keys(json, {"id", "transform", "shapes", "lights"}, context);
     Group group;
     group.id = read_required_string(json, "id", context);
@@ -511,11 +464,11 @@ Group read_group(const Json& json, const std::map<std::string, Material>& materi
     group.transform = read_transform(require_key(json, "transform", context), std::string(context) + ".transform");
     expect_array(require_key(json, "shapes", context), std::string(context) + ".shapes");
     for (size_t i = 0; i < json["shapes"].size(); ++i)
-        group.shapes.push_back(read_shape(json["shapes"][i], materials, schema,
+        group.shapes.push_back(read_shape(json["shapes"][i], materials,
                                           std::string(context) + ".shapes[" + std::to_string(i) + "]"));
     expect_array(require_key(json, "lights", context), std::string(context) + ".lights");
     for (size_t i = 0; i < json["lights"].size(); ++i)
-        group.lights.push_back(read_light(json["lights"][i], schema,
+        group.lights.push_back(read_light(json["lights"][i],
                                           std::string(context) + ".lights[" + std::to_string(i) + "]"));
     return group;
 }
@@ -564,59 +517,39 @@ Canvas read_canvas(const Json& json, std::string_view context) {
 
 Json write_canvas(const Canvas& canvas) { return Json{{"width", canvas.width}, {"height", canvas.height}}; }
 
-Look read_look(const Json& json, Schema schema, std::string_view context) {
+Look read_look(const Json& json, std::string_view context) {
     reject_unknown_keys(json, {"exposure", "contrast", "gamma", "tonemap", "white_point",
                                "normalize", "normalize_ref", "normalize_pct", "ambient",
                                "background", "opacity", "saturation", "vignette", "vignette_radius",
                                "temperature", "highlights", "shadows", "hue_shift",
                                "grain", "grain_seed", "chromatic_aberration"}, context);
     Look look;
-    if (schema == Schema::Authored || json.contains("exposure"))
         look.exposure = read_required_float(json, "exposure", context);
-    if (schema == Schema::Authored || json.contains("contrast"))
         look.contrast = read_required_float(json, "contrast", context);
-    if (schema == Schema::Authored || json.contains("gamma"))
         look.gamma = read_required_float(json, "gamma", context);
-    if (schema == Schema::Authored || json.contains("tonemap"))
         look.tonemap = read_tonemap(require_key(json, "tonemap", context), std::string(context) + ".tonemap");
-    if (schema == Schema::Authored || json.contains("white_point"))
         look.white_point = read_required_float(json, "white_point", context);
-    if (schema == Schema::Authored || json.contains("normalize"))
         look.normalize = read_normalize_mode(require_key(json, "normalize", context),
                                              std::string(context) + ".normalize");
-    if (schema == Schema::Authored || json.contains("normalize_ref"))
         look.normalize_ref = read_required_float(json, "normalize_ref", context);
-    if (schema == Schema::Authored || json.contains("normalize_pct"))
         look.normalize_pct = read_required_float(json, "normalize_pct", context);
-    if (schema == Schema::Authored || json.contains("ambient"))
         look.ambient = read_required_float(json, "ambient", context);
-    if (schema == Schema::Authored || json.contains("background")) {
+     {
         const auto background = read_rgb(require_key(json, "background", context), std::string(context) + ".background");
         look.background[0] = background[0];
         look.background[1] = background[1];
         look.background[2] = background[2];
     }
-    if (schema == Schema::Authored || json.contains("opacity"))
         look.opacity = read_required_float(json, "opacity", context);
-    if (schema == Schema::Authored || json.contains("saturation"))
         look.saturation = read_required_float(json, "saturation", context);
-    if (schema == Schema::Authored || json.contains("vignette"))
         look.vignette = read_required_float(json, "vignette", context);
-    if (schema == Schema::Authored || json.contains("vignette_radius"))
         look.vignette_radius = read_required_float(json, "vignette_radius", context);
-    if (schema == Schema::Authored || json.contains("temperature"))
         look.temperature = read_required_float(json, "temperature", context);
-    if (schema == Schema::Authored || json.contains("highlights"))
         look.highlights = read_required_float(json, "highlights", context);
-    if (schema == Schema::Authored || json.contains("shadows"))
         look.shadows = read_required_float(json, "shadows", context);
-    if (schema == Schema::Authored || json.contains("hue_shift"))
         look.hue_shift = read_required_float(json, "hue_shift", context);
-    if (schema == Schema::Authored || json.contains("grain"))
         look.grain = read_required_float(json, "grain", context);
-    if (schema == Schema::Authored || json.contains("grain_seed"))
         look.grain_seed = read_int(require_key(json, "grain_seed", context), std::string(context) + ".grain_seed");
-    if (schema == Schema::Authored || json.contains("chromatic_aberration"))
         look.chromatic_aberration = read_required_float(json, "chromatic_aberration", context);
     return look;
 }
@@ -635,18 +568,13 @@ Json write_look(const Look& look) {
                 {"chromatic_aberration", look.chromatic_aberration}};
 }
 
-TraceDefaults read_trace(const Json& json, Schema schema, std::string_view context) {
+TraceDefaults read_trace(const Json& json, std::string_view context) {
     reject_unknown_keys(json, {"rays", "batch", "depth", "intensity", "seed_mode"}, context);
     TraceDefaults trace;
-    if (schema == Schema::Authored || json.contains("rays"))
         trace.rays = read_int64(require_key(json, "rays", context), std::string(context) + ".rays");
-    if (schema == Schema::Authored || json.contains("batch"))
         trace.batch = read_int(require_key(json, "batch", context), std::string(context) + ".batch");
-    if (schema == Schema::Authored || json.contains("depth"))
         trace.depth = read_int(require_key(json, "depth", context), std::string(context) + ".depth");
-    if (schema == Schema::Authored || json.contains("intensity"))
         trace.intensity = read_required_float(json, "intensity", context);
-    if (schema == Schema::Authored || json.contains("seed_mode"))
         trace.seed_mode = read_seed_mode(require_key(json, "seed_mode", context),
                                          std::string(context) + ".seed_mode");
     return trace;
@@ -658,38 +586,30 @@ Json write_trace(const TraceDefaults& trace) {
                 {"seed_mode", seed_mode_to_string(trace.seed_mode)}};
 }
 
-Scene read_scene(const Json& root, Schema schema) {
+Scene read_scene(const Json& root) {
     Scene scene;
-    const Json* materials_json = find_key(root, "materials");
-    const Json* shapes_json = find_key(root, "shapes");
-    const Json* lights_json = find_key(root, "lights");
-    const Json* groups_json = find_key(root, "groups");
-    const Json& materials = schema == Schema::Authored ? require_key(root, "materials", "shot")
-                                                       : (materials_json ? *materials_json : Json::object());
+    const Json& materials = require_key(root, "materials", "shot");
     expect_object(materials, "materials");
     for (const auto& [name, value] : materials.items()) {
         if (name.empty()) fail("material ids must be non-empty");
-        scene.materials[name] = read_material(value, schema, "materials." + name);
+        scene.materials[name] = read_material(value, "materials." + name);
     }
 
-    const Json& shapes = schema == Schema::Authored ? require_key(root, "shapes", "shot")
-                                                    : (shapes_json ? *shapes_json : Json::array());
+    const Json& shapes = require_key(root, "shapes", "shot");
     expect_array(shapes, "shapes");
     for (size_t i = 0; i < shapes.size(); ++i)
-        scene.shapes.push_back(read_shape(shapes[i], scene.materials, schema,
+        scene.shapes.push_back(read_shape(shapes[i], scene.materials,
                                           "shapes[" + std::to_string(i) + "]"));
 
-    const Json& lights = schema == Schema::Authored ? require_key(root, "lights", "shot")
-                                                    : (lights_json ? *lights_json : Json::array());
+    const Json& lights = require_key(root, "lights", "shot");
     expect_array(lights, "lights");
     for (size_t i = 0; i < lights.size(); ++i)
-        scene.lights.push_back(read_light(lights[i], schema, "lights[" + std::to_string(i) + "]"));
+        scene.lights.push_back(read_light(lights[i], "lights[" + std::to_string(i) + "]"));
 
-    const Json& groups = schema == Schema::Authored ? require_key(root, "groups", "shot")
-                                                    : (groups_json ? *groups_json : Json::array());
+    const Json& groups = require_key(root, "groups", "shot");
     expect_array(groups, "groups");
     for (size_t i = 0; i < groups.size(); ++i)
-        scene.groups.push_back(read_group(groups[i], scene.materials, schema,
+        scene.groups.push_back(read_group(groups[i], scene.materials,
                                           "groups[" + std::to_string(i) + "]"));
 
     std::string error;
@@ -734,31 +654,12 @@ Shot read_authored_shot(const Json& root) {
     shot.name = read_required_string(root, "name", "shot");
     shot.camera = read_camera(require_key(root, "camera", "shot"), "camera");
     shot.canvas = read_canvas(require_key(root, "canvas", "shot"), "canvas");
-    shot.look = read_look(require_key(root, "look", "shot"), Schema::Authored, "look");
-    shot.trace = read_trace(require_key(root, "trace", "shot"), Schema::Authored, "trace");
-    shot.scene = read_scene(root, Schema::Authored);
+    shot.look = read_look(require_key(root, "look", "shot"), "look");
+    shot.trace = read_trace(require_key(root, "trace", "shot"), "trace");
+    shot.scene = read_scene(root);
     return shot;
 }
 
-Shot read_stream_shot(const Json& root) {
-    reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace",
-                               "materials", "shapes", "lights", "groups"}, "stream");
-    if (root.contains("version"))
-        (void)read_version(root);
-
-    Shot shot;
-    shot.name = root.contains("name") ? read_required_string(root, "name", "stream") : "stream";
-    if (const Json* camera = find_key(root, "camera"))
-        shot.camera = read_camera(*camera, "camera");
-    if (const Json* canvas = find_key(root, "canvas"))
-        shot.canvas = read_canvas(*canvas, "canvas");
-    if (const Json* look = find_key(root, "look"))
-        shot.look = read_look(*look, Schema::Stream, "look");
-    if (const Json* trace = find_key(root, "trace"))
-        shot.trace = read_trace(*trace, Schema::Stream, "trace");
-    shot.scene = read_scene(root, Schema::Stream);
-    return shot;
-}
 
 Json write_shot(const Shot& shot) {
     Json json = Json::object();
@@ -804,9 +705,7 @@ std::optional<Shot> try_load_shot_json_string(std::string_view json_content, std
     return parse_shot(json_content, error, [](const Json& root) { return read_authored_shot(root); });
 }
 
-std::optional<Shot> try_load_stream_shot_json_string(std::string_view json_content, std::string* error) {
-    return parse_shot(json_content, error, [](const Json& root) { return read_stream_shot(root); });
-}
+
 
 Shot load_shot_json_string(std::string_view json_content) {
     if (auto shot = try_load_shot_json_string(json_content)) return *shot;
