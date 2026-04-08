@@ -63,7 +63,7 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _make_valid_shot_json(**overrides) -> dict:
-    """Return a minimal valid v6 shot JSON dict."""
+    """Return a minimal valid authored shot JSON dict."""
     base = {
         "version": 9,
         "name": "test",
@@ -145,9 +145,9 @@ def _render_pixels(shot: Shot, frame_index: int) -> bytes:
 # ─── Round-trip serialization via C++ ──────────────────────────────────
 
 
-def test_v6_round_trip_preserves_ids_and_material_bindings(tmp_path):
+def test_authored_round_trip_preserves_ids_and_material_bindings(tmp_path):
     path = tmp_path / "roundtrip.json"
-    shot = Shot(name="authored_v6", scene=_make_bound_scene())
+    shot = Shot(name="authored_format", scene=_make_bound_scene())
     shot.save(path)
 
     loaded = Shot.load(path)
@@ -162,7 +162,7 @@ def test_v6_round_trip_preserves_ids_and_material_bindings(tmp_path):
 # ─── Scene validation via C++ ──────────────────────────────────────────
 
 
-def test_v6_rejects_duplicate_entity_ids():
+def test_authored_rejects_duplicate_entity_ids():
     scene = Scene(
         shapes=[
             Circle(id="dup", radius=0.2),
@@ -174,14 +174,14 @@ def test_v6_rejects_duplicate_entity_ids():
         _lpt2d.validate_scene(scene)
 
 
-def test_v6_rejects_unknown_material_id():
+def test_authored_rejects_unknown_material_id():
     scene = Scene(shapes=[Circle(id="lens", radius=0.2, material_id="missing")])
 
     with pytest.raises(RuntimeError, match="unknown material_id: missing"):
         _lpt2d.validate_scene(scene)
 
 
-def test_v6_rejects_shape_without_material_payload(tmp_path):
+def test_authored_rejects_shape_without_material_payload(tmp_path):
     path = tmp_path / "bad.json"
     data = _make_valid_shot_json(
         name="bad",
@@ -247,7 +247,7 @@ def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
 # ─── Authored JSON format validation ──────────────────────────────────
 
 
-def test_v6_rejects_older_shot_version(tmp_path):
+def test_authored_rejects_older_shot_version(tmp_path):
     path = tmp_path / "outdated.json"
     data = _make_valid_shot_json(version=4)
     _write_json(path, data)
@@ -256,7 +256,7 @@ def test_v6_rejects_older_shot_version(tmp_path):
         Shot.load(path)
 
 
-def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
+def test_authored_rejects_sparse_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
         "version": 9,
@@ -272,7 +272,7 @@ def test_v6_rejects_sparse_authored_json_missing_explicit_blocks(tmp_path):
         Shot.load(path)
 
 
-def test_v6_authored_json_is_fully_explicit_for_defaults(tmp_path):
+def test_authored_json_is_fully_explicit_for_defaults(tmp_path):
     path = tmp_path / "defaults.json"
     shot = Shot(name="explicit_defaults")
     shot.save(path)
@@ -308,7 +308,7 @@ def test_v6_authored_json_is_fully_explicit_for_defaults(tmp_path):
     assert data["groups"] == []
 
 
-def test_v6_round_trip_preserves_seed_mode(tmp_path):
+def test_authored_round_trip_preserves_seed_mode(tmp_path):
     path = tmp_path / "seed_mode.json"
     shot = Shot(
         name="seed_mode", trace=TraceDefaults(seed_mode="decorrelated"), scene=_make_bound_scene()
@@ -361,7 +361,7 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
 def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
     bad_path = tmp_path / "trailing_garbage.json"
     output = tmp_path / "trailing_garbage.png"
-    bad_path.write_text('{"version":6,"shapes":[],"lights":[],"groups":[]} trailing')
+    bad_path.write_text('{"version":9,"shapes":[],"lights":[],"groups":[]} trailing')
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
@@ -420,7 +420,7 @@ def test_cpp_cli_rejects_noncanonical_tonemap_alias():
 # ─── CLI save-shot round-trip ──────────────────────────────────────────
 
 
-def test_cpp_save_shot_round_trip_preserves_v6_ids_and_material_bindings(tmp_path):
+def test_cpp_save_shot_round_trip_preserves_ids_and_material_bindings(tmp_path):
     source_path = tmp_path / "source.json"
     saved_path = tmp_path / "saved.json"
 

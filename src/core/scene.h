@@ -231,6 +231,34 @@ inline float polygon_effective_corner_radius(const Polygon& p, int index) {
     return p.corner_radius;
 }
 
+inline bool polygon_has_any_rounded_corner(const Polygon& p) {
+    for (int i = 0; i < (int)p.vertices.size(); ++i)
+        if (polygon_effective_corner_radius(p, i) > 0.0f)
+            return true;
+    return false;
+}
+
+inline bool polygon_vertex_is_convex(const Polygon& p, int index) {
+    int n = (int)p.vertices.size();
+    if (n < 3 || index < 0 || index >= n) return false;
+
+    Vec2 prev = p.vertices[(index - 1 + n) % n];
+    Vec2 curr = p.vertices[index];
+    Vec2 next = p.vertices[(index + 1) % n];
+
+    Vec2 to_prev = prev - curr;
+    Vec2 to_next = next - curr;
+    float len_prev = to_prev.length();
+    float len_next = to_next.length();
+    if (len_prev < 1e-6f || len_next < 1e-6f)
+        return false;
+
+    Vec2 dp = to_prev * (1.0f / len_prev);
+    Vec2 dn = to_next * (1.0f / len_next);
+    float turn = dp.x * dn.y - dp.y * dn.x;
+    return polygon_is_clockwise(p) ? (turn > 0.0f) : (turn < 0.0f);
+}
+
 enum class PolygonFieldValidationError {
     None,
     NegativeCornerRadius,

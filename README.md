@@ -6,7 +6,7 @@ surface, strict JSON shot interchange, and a GUI for exploration.
 
 ## Current Baseline
 
-- authored shot JSON is strict `version: 7`
+- authored shot JSON is strict `version: 9`
 - Python and CLI rendering both go through the C++ `RenderSession`
 - committed scenes use named material libraries plus `material_id` bindings
 - the canonical example pack lives in [`examples/python/`](/home/holo/prog/lpt2d/examples/python)
@@ -84,7 +84,7 @@ cmake --build build --target static-analysis-iwyu
 
 - [docs/README.md](/home/holo/prog/lpt2d/docs/README.md)
   Documentation index.
-- [docs/AUTHORED_V7.md](/home/holo/prog/lpt2d/docs/AUTHORED_V7.md)
+- [docs/AUTHORED.md](/home/holo/prog/lpt2d/docs/AUTHORED.md)
   Authored JSON policy and committed scene conventions.
 - [docs/VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current look-development, comparison, and diagnostic workflow.

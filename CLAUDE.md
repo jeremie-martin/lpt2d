@@ -68,7 +68,7 @@ baseline = load_baseline("baselines/scene_name")
 
 ## Current Repo Truth
 
-- Authored shot JSON is strict `version: 7`.
+- Authored shot JSON is strict `version: 9`.
 - Committed scene and benchmark JSON use named materials plus `material_id`
   bindings.
 - The C++ authored model uses `MaterialBinding` (`Material` or material-id
@@ -92,7 +92,7 @@ The central authored document is `Shot`:
 Main runtime layers:
 
 - `src/core/scene.*` - scene model, validation, transforms, geometry helpers
-- `src/core/serialize_json.cpp` - strict authored v7 JSON save/load using
+- `src/core/serialize_json.cpp` - strict authored JSON save/load using
   `nlohmann::ordered_json`
 - `src/core/session.*` - `RenderSession`, the headless render entry point used
   by Python and CLI

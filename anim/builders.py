@@ -24,7 +24,13 @@ def polygon(
     smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
-    """Closed polygon from a list of [x, y] vertices."""
+    """Closed polygon from a list of [x, y] vertices.
+
+    ``corner_radius`` applies one uniform convex bevel radius. ``corner_radii``
+    overrides that per vertex when provided. ``smooth_angle`` is a radians
+    threshold for smooth-shaded polygon edge normals on convex zero-radius
+    corners.
+    """
     return Polygon(
         id=_shape_id(id_prefix, "body"),
         vertices=[list(v) for v in vertices],
@@ -49,7 +55,8 @@ def regular_polygon(
 ) -> Polygon:
     """Regular *n*-sided polygon inscribed in a circle.
 
-    *rotation* offsets the first vertex (radians, 0 = right).
+    *rotation* offsets the first vertex (radians, 0 = right). Polygon corner
+    bevel and smooth-shading options forward to :func:`polygon`.
     """
     cx, cy = center
     verts = [
@@ -80,7 +87,11 @@ def rectangle(
     smooth_angle: float = 0.0,
     id_prefix: str | None = None,
 ) -> Polygon:
-    """Axis-aligned rectangle centered at *center*."""
+    """Axis-aligned rectangle centered at *center*.
+
+    Polygon corner bevel and smooth-shading options forward to
+    :func:`polygon`.
+    """
     cx, cy = center
     hw, hh = width / 2, height / 2
     return polygon(
@@ -144,7 +155,9 @@ def thick_arc(
     """Arc with physical thickness, approximated as a polygonal annular sector.
 
     *radius* is the mid-line radius; the shape spans from ``radius - thickness/2``
-    to ``radius + thickness/2``.
+    to ``radius + thickness/2``. ``smooth_angle`` smooths the curved polygon
+    span without changing geometry. ``end_cap_radii`` rounds the two flat caps;
+    pass either one radius for both caps or ``(start_cap, end_cap)``.
     """
     if thickness <= 0:
         raise ValueError("thickness must be positive")

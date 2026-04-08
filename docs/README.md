@@ -9,7 +9,7 @@ useful over time.
   Project overview, build, run, and doc entry points.
 - [AUTONOMOUS_OPTIMIZATION_SCOPE.md](/home/holo/prog/lpt2d/docs/AUTONOMOUS_OPTIMIZATION_SCOPE.md)
   Problem statement and scope for future autonomous optimization work.
-- [AUTHORED_V7.md](/home/holo/prog/lpt2d/docs/AUTHORED_V7.md)
+- [AUTHORED.md](/home/holo/prog/lpt2d/docs/AUTHORED.md)
   The authored JSON contract used by committed scenes and benchmark shots.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current Python and GUI workflow for look development and diagnostics.

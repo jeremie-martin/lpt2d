@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <optional>
 #include <string_view>
@@ -247,6 +248,73 @@ void sync_material_panel_to_active_object(EditorState& ed, PanelState& panel) {
         return;
     panel.material_panel.selected_name = std::string(ref);
     panel.material_panel.rename_buffer = panel.material_panel.selected_name;
+}
+
+enum class PolygonCornerMode : int {
+    Sharp = 0,
+    Uniform = 1,
+    PerVertex = 2,
+};
+
+PolygonCornerMode polygon_corner_mode(const Polygon& polygon) {
+    if (polygon_uses_per_vertex_corner_radii(polygon))
+        return PolygonCornerMode::PerVertex;
+    if (polygon.corner_radius > 0.0f)
+        return PolygonCornerMode::Uniform;
+    return PolygonCornerMode::Sharp;
+}
+
+float polygon_uniform_corner_radius_seed(const Polygon& polygon) {
+    if (!polygon_uses_per_vertex_corner_radii(polygon))
+        return std::max(polygon.corner_radius, 0.0f);
+
+    float min_radius = std::numeric_limits<float>::infinity();
+    float max_radius = 0.0f;
+    float positive_sum = 0.0f;
+    int positive_count = 0;
+    for (float radius : polygon.corner_radii) {
+        min_radius = std::min(min_radius, radius);
+        max_radius = std::max(max_radius, radius);
+        if (radius > 0.0f) {
+            positive_sum += radius;
+            ++positive_count;
+        }
+    }
+    if (!std::isfinite(min_radius))
+        return 0.0f;
+    if (max_radius - min_radius <= 1e-6f)
+        return max_radius;
+    return positive_count > 0 ? positive_sum / positive_count : 0.0f;
+}
+
+std::vector<float> polygon_seed_corner_radii(const Polygon& polygon) {
+    std::vector<float> radii(polygon.vertices.size(), 0.0f);
+    for (int i = 0; i < (int)polygon.vertices.size(); ++i)
+        radii[(size_t)i] = std::max(polygon_effective_corner_radius(polygon, i), 0.0f);
+    return radii;
+}
+
+void set_polygon_corner_mode(Polygon& polygon, PolygonCornerMode mode) {
+    switch (mode) {
+        case PolygonCornerMode::Sharp:
+            polygon.corner_radius = 0.0f;
+            polygon.corner_radii.clear();
+            break;
+        case PolygonCornerMode::Uniform:
+            polygon.corner_radius = polygon_uniform_corner_radius_seed(polygon);
+            polygon.corner_radii.clear();
+            break;
+        case PolygonCornerMode::PerVertex:
+            polygon.corner_radii = polygon_seed_corner_radii(polygon);
+            polygon.corner_radius = 0.0f;
+            break;
+    }
+}
+
+float& polygon_bulk_corner_radius_state(const Polygon& polygon) {
+    static std::map<std::string, float> state;
+    auto [it, _] = state.try_emplace(polygon.id, polygon_uniform_corner_radius_seed(polygon));
+    return it->second;
 }
 
 } // namespace
@@ -895,13 +963,106 @@ void draw_controls_panel(
                     changed |= edit_shape_material_binding(shape);
                 },
                 [&](Polygon& p) {
-                    ImGui::Text("Vertices: %d", (int)p.vertices.size());
-                    changed |= ImGui::DragFloat("Corner radius", &p.corner_radius, 0.001f, 0.0f, 1.0f);
-                    for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
-                        char vlbl[16];
-                        std::snprintf(vlbl, sizeof(vlbl), "V%d", vi);
-                        changed |= ImGui::DragFloat2(vlbl, &p.vertices[vi].x, 0.01f);
+                    static std::optional<SelectionRef> polygon_corner_mode_target;
+                    static PolygonCornerMode polygon_corner_mode_ui_value = PolygonCornerMode::Sharp;
+                    if (!polygon_corner_mode_target || *polygon_corner_mode_target != sid) {
+                        polygon_corner_mode_target = sid;
+                        polygon_corner_mode_ui_value = polygon_corner_mode(p);
                     }
+
+                    ImGui::Text("Vertices: %d", (int)p.vertices.size());
+
+                    float smooth_angle_degrees = p.smooth_angle * 180.0f / PI;
+                    if (ImGui::SliderFloat("Smooth angle", &smooth_angle_degrees, 0.0f, 180.0f, "%.1f deg")) {
+                        p.smooth_angle = smooth_angle_degrees * PI / 180.0f;
+                        changed = true;
+                    }
+                    ImGui::TextDisabled("Shading only. Concave or beveled corners stay sharp.");
+
+                    int mode = static_cast<int>(polygon_corner_mode_ui_value);
+                    if (ImGui::Combo("Corner mode", &mode, "Sharp\0Uniform\0Per-vertex\0")) {
+                        polygon_corner_mode_ui_value = static_cast<PolygonCornerMode>(mode);
+                        set_polygon_corner_mode(p, polygon_corner_mode_ui_value);
+                        polygon_bulk_corner_radius_state(p) = polygon_uniform_corner_radius_seed(p);
+                        changed = true;
+                    }
+                    ImGui::TextDisabled("Rounded corners apply only on convex vertices.");
+
+                    PolygonCornerMode active_mode = polygon_corner_mode_ui_value;
+                    if (active_mode == PolygonCornerMode::Uniform) {
+                        changed |= ImGui::DragFloat("Corner radius", &p.corner_radius, 0.001f, 0.0f, 1000.0f, "%.3f");
+                    } else if (active_mode == PolygonCornerMode::PerVertex) {
+                        if (!polygon_uses_per_vertex_corner_radii(p))
+                            p.corner_radii = polygon_seed_corner_radii(p);
+
+                        float& bulk_radius = polygon_bulk_corner_radius_state(p);
+                        ImGui::DragFloat("Set all convex", &bulk_radius, 0.001f, 0.0f, 1000.0f, "%.3f");
+                        if (ImGui::Button("Apply To Convex")) {
+                            for (int vi = 0; vi < (int)p.corner_radii.size(); ++vi)
+                                p.corner_radii[(size_t)vi] = polygon_vertex_is_convex(p, vi) ? bulk_radius : 0.0f;
+                            changed = true;
+                        }
+                        ImGui::SameLine();
+                        if (ImGui::Button("Clear All")) {
+                            std::fill(p.corner_radii.begin(), p.corner_radii.end(), 0.0f);
+                            changed = true;
+                        }
+
+                        ImGui::TextDisabled("Only convex vertices can bevel. Concave entries stay sharp.");
+                        ImGui::BeginChild("PolygonCornerRadii", ImVec2(0.0f, 180.0f), true);
+                        if (ImGui::BeginTable("PolygonCornerTable", 4,
+                                              ImGuiTableFlags_BordersInnerH |
+                                              ImGuiTableFlags_RowBg |
+                                              ImGuiTableFlags_ScrollY |
+                                              ImGuiTableFlags_SizingStretchProp)) {
+                            ImGui::TableSetupColumn("Vertex", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+                            ImGui::TableSetupColumn("Position", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+                            ImGui::TableSetupColumn("Radius", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+                            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthStretch, 1.1f);
+                            ImGui::TableHeadersRow();
+
+                            for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
+                                bool convex = polygon_vertex_is_convex(p, vi);
+                                ImGui::PushID(vi);
+                                ImGui::TableNextRow();
+
+                                ImGui::TableSetColumnIndex(0);
+                                ImGui::Text("V%d", vi);
+
+                                ImGui::TableSetColumnIndex(1);
+                                ImGui::Text("(%.3f, %.3f)", p.vertices[vi].x, p.vertices[vi].y);
+
+                                ImGui::TableSetColumnIndex(2);
+                                if (convex) {
+                                    changed |= ImGui::DragFloat("##radius", &p.corner_radii[(size_t)vi],
+                                                                0.001f, 0.0f, 1000.0f, "%.3f");
+                                } else {
+                                    ImGui::TextDisabled("%.3f", p.corner_radii[(size_t)vi]);
+                                }
+
+                                ImGui::TableSetColumnIndex(3);
+                                if (convex)
+                                    ImGui::TextUnformatted(p.corner_radii[(size_t)vi] > 0.0f ? "Beveled" : "Convex");
+                                else
+                                    ImGui::TextDisabled("Concave");
+
+                                ImGui::PopID();
+                            }
+                            ImGui::EndTable();
+                        }
+                        ImGui::EndChild();
+                    }
+
+                    if (ImGui::CollapsingHeader("Vertices")) {
+                        ImGui::BeginChild("PolygonVertices", ImVec2(0.0f, 180.0f), true);
+                        for (int vi = 0; vi < (int)p.vertices.size(); ++vi) {
+                            char vlbl[16];
+                            std::snprintf(vlbl, sizeof(vlbl), "V%d", vi);
+                            changed |= ImGui::DragFloat2(vlbl, &p.vertices[vi].x, 0.01f);
+                        }
+                        ImGui::EndChild();
+                    }
+
                     changed |= edit_shape_material_binding(shape);
                 },
                 [&](Ellipse& e) {
