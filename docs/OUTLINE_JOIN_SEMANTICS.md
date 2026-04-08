@@ -1,8 +1,9 @@
 # Outline Join Semantics
 
 This document defines the conceptual model for hard, smooth, and rounded
-boundary joins in lpt2d. It is a design reference, not an implementation
-plan. Use it to evaluate whether future renderer, GUI, Python, JSON, and
+boundary joins in lpt2d. It is both a reference for the polygon join semantics
+that are already shipped today and a design guide for how that model should
+extend further. Use it to evaluate whether renderer, GUI, Python, JSON, and
 authoring changes are moving the engine in the intended direction.
 
 ## Why This Exists
@@ -24,25 +25,31 @@ The engine needs a model centered on authored surface intent rather than on
 
 ## Current State
 
-Today, `Polygon` exposes two different classes of controls:
+Today, polygon join semantics are partially shipped.
 
+`Polygon` exposes three related classes of controls:
+
+- `join_modes`
+  Optional per-vertex authored join intent: `auto`, `sharp`, or `smooth`.
 - `smooth_angle`
-  Shading-only normal interpolation on eligible polygon joins.
+  The shading-only threshold used by `auto` joins.
 - `corner_radius` / `corner_radii`
   Real rounded boundary geometry.
 
-The current smooth-shading behavior is intentionally conservative:
+The current polygon behavior is:
 
-- smoothing is enabled only when `smooth_angle > 0`
-- only convex zero-radius polygon joins are eligible
-- concave joins stay flat
+- `auto` smoothing is enabled only when `smooth_angle > 0`
+- `auto` remains conservative: only convex zero-radius polygon joins are
+  eligible
+- `sharp` forces a flat shading join
+- `smooth` explicitly requests shading continuity, including on concave joins,
+  subject to the existing normal-safety guards
 - beveled joins stay flat at the arc-adjacent ends
 
-This is defensible as a safety heuristic, especially in a path tracer where the
-shading normal affects bounce direction. But it is not the right long-term
-model, because the heuristic is answering the wrong question. It is asking
-"is this join convex?" when the engine really needs to answer "is this join
-intended to be hard, smooth, or rounded?"
+This is a useful step forward because the engine now has first-class authored
+join semantics for polygons. It is still not the full long-term model, because
+`auto` remains convexity-gated and mixed line/arc/bezier closed outlines do not
+yet share the same authored join system.
 
 ## Problem Statement
 
@@ -220,7 +227,8 @@ line segment.
 
 ## Desired Join Modes
 
-For shading continuity, the intended conceptual join modes are:
+For shading continuity, the current polygon join modes and intended long-term
+outline join modes are:
 
 - `auto`
 - `sharp`
@@ -240,9 +248,11 @@ The intended meaning is:
 
 Explicit join intent should override auto inference.
 
-## Expected Behavior
+## Reference Behavior
 
-The following examples define the intended semantics.
+The following examples define the intended semantics. Where current shipped
+polygon behavior is still more conservative than the target model, that is
+called out explicitly.
 
 ### Square
 
@@ -256,8 +266,11 @@ explicitly overrides a join or changes the geometry.
 
 A segmented thick arc that reads as a `C` should behave like this:
 
-- both curved chains may smooth under `auto` if they are clearly approximating
-  one continuous curved run
+- today, the polygon-only implementation keeps the cap joins sharp and leaves
+  the curved chains in `auto`; the inner concave chain still needs explicit
+  `smooth` overrides if the author wants shading continuity there
+- longer-term, both curved chains may smooth under `auto` if they are clearly
+  approximating one continuous curved run
 - the cap joins should stay sharp unless explicitly rounded
 - if the cap geometry is actually rounded, then it should be rounded because of
   geometry, not because smooth shading invented the result
@@ -323,9 +336,10 @@ logic.
 
 Today:
 
-- polygon smoothing is a convexity-gated heuristic
+- polygons have first-class authored join semantics via `join_modes`
+- polygon `auto` smoothing is still a convexity-gated heuristic
 - polygon rounding is a real geometric operation
-- there is no first-class authored join semantics model yet
+- mixed line/arc/bezier closed outlines do not yet share the same join model
 
 Target direction:
 

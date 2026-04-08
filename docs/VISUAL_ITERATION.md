@@ -43,8 +43,9 @@ The GUI supports three related iteration loops:
   scene warnings come from `diagnose_scene`, and `Analyze Contributions` uses
   the authored shot framing plus a neutral fixed-reference look
 
-Polygon authoring is inspector-first: the polygon panel exposes `smooth_angle`,
-uniform or per-vertex bevel editing, and the viewport overlay follows rounded
+Polygon authoring is inspector-first: the polygon panel exposes the
+`Auto smooth angle`, per-vertex `join_modes` (`auto`, `sharp`, `smooth`), and
+uniform or per-vertex bevel editing. The viewport overlay follows rounded
 polygon geometry instead of always drawing the raw vertex chain.
 
 Useful shortcuts:

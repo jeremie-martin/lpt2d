@@ -1,4 +1,11 @@
-"""Collimated beam reflecting off a concave mirror arc."""
+"""Collimated beam reflecting off a thick-arc mirror polygon.
+
+Shows the current polygon join model on a thick arc:
+
+- `smooth_angle` drives the conservative `auto` join heuristic
+- the flat cap joins stay explicitly sharp
+- one end cap is geometrically rounded with a bevel fillet
+"""
 
 from __future__ import annotations
 
@@ -41,6 +48,8 @@ def frame(_ctx: FrameContext) -> Frame:
     arc_mat = mirror(1.0)
     wall_mat = absorber()
 
+    # thick_arc() preserves smooth_angle as a real threshold by leaving the
+    # curved-chain joins in auto mode while forcing the flat caps sharp.
     arc = thick_arc((0, 0), radius=0.5, thickness=0.15,
                     angle_start=math.pi / 2, sweep=math.pi,
                     material=arc_mat, smooth_angle=1.0,

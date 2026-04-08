@@ -14,7 +14,8 @@ is meant to be used now.
 - [solid_surface_gallery.py](/home/holo/prog/lpt2d/examples/python/solid_surface_gallery.py)
   A compact survey of solid-object surface authoring and simple group animation.
 - [thick_arc_demo.py](/home/holo/prog/lpt2d/examples/python/thick_arc_demo.py)
-  Smooth polygon shading plus selective end-cap beveling on a thick arc.
+  Auto-smoothed thick-arc shading, explicit sharp cap joins, and selective
+  end-cap beveling.
 - [twin_prisms_scene_patch.py](/home/holo/prog/lpt2d/examples/python/twin_prisms_scene_patch.py)
   Load, patch, and animate an authored shot.
 - [three_spheres_center_zoom.py](/home/holo/prog/lpt2d/examples/python/three_spheres_center_zoom.py)
@@ -37,6 +38,19 @@ Shared example flags:
 - `--frame N` - render a still instead of a movie
 - `--output PATH` - override the default output path
 - `--fast` - enable the renderer's half-float fast mode
+
+## Polygon Join Notes
+
+- `thick_arc_demo.py` shows the current builder behavior: `smooth_angle`
+  drives polygon `auto` smoothing, the flat cap joins are authored `sharp`, and
+  end-cap beveling remains separate geometric rounding.
+- Explicit per-vertex polygon join overrides are authored with
+  `Polygon(..., join_modes=[...])`; see
+  [docs/AUTHORED.md](/home/holo/prog/lpt2d/docs/AUTHORED.md) for concrete
+  Python and JSON examples.
+- The conceptual distinction between `auto`, `sharp`, `smooth`, and geometric
+  rounding is documented in
+  [docs/OUTLINE_JOIN_SEMANTICS.md](/home/holo/prog/lpt2d/docs/OUTLINE_JOIN_SEMANTICS.md).
 
 ## Relationship To Other Surfaces
 

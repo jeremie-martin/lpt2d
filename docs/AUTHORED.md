@@ -45,7 +45,58 @@ the committed repo baseline uses named materials and explicit bindings.
   only affects polygon edge shading; intersection geometry, fill, perimeter,
   and emission remain geometric.
 
-Concave polygon vertices stay sharp for both smoothing and bevel-filleting.
+For shading:
+
+- `auto` keeps the conservative angle-based heuristic
+- `sharp` forces a flat shading join
+- `smooth` forces shading continuity even on concave joins when the normal
+  build remains well-defined
+
+Concave polygon joins stay sharp in `auto`, and concave polygon vertices remain
+ineligible for bevel fillets. Explicit `join_modes: smooth` can still request
+shading continuity at a concave join. Fillets remain convex-only geometry.
+
+## Polygon Examples
+
+Python authoring example:
+
+```python
+from anim import Polygon, mirror
+
+Polygon(
+    id="blade",
+    vertices=[
+        [-0.8, -0.2],
+        [-0.8, 0.2],
+        [0.7, 0.2],
+        [1.0, 0.0],
+        [0.7, -0.2],
+    ],
+    material=mirror(1.0),
+    join_modes=["auto", "sharp", "smooth", "smooth", "auto"],
+    corner_radii=[0.0, 0.0, 0.02, 0.0, 0.0],
+    smooth_angle=0.9,
+)
+```
+
+Authored JSON example:
+
+```json
+{
+  "id": "blade",
+  "type": "polygon",
+  "vertices": [[-0.8, -0.2], [-0.8, 0.2], [0.7, 0.2], [1.0, 0.0], [0.7, -0.2]],
+  "join_modes": ["auto", "sharp", "smooth", "smooth", "auto"],
+  "corner_radii": [0.0, 0.0, 0.02, 0.0, 0.0],
+  "smooth_angle": 0.9,
+  "material_id": "steel"
+}
+```
+
+`builders.thick_arc(...)` is a specialized convenience case: when
+`smooth_angle > 0`, it keeps the four flat cap joins explicitly `sharp` and
+leaves the curved-chain joins in `auto`, so later edits to `smooth_angle`
+remain a real threshold rather than a baked smoothing override.
 
 ## Surface Alignment
 
