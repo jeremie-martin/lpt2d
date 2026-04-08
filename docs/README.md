@@ -15,8 +15,12 @@ useful over time.
   Conceptual model for hard, smooth, and rounded shape joins.
 - [VISUAL_ITERATION.md](/home/holo/prog/lpt2d/docs/VISUAL_ITERATION.md)
   Current Python and GUI workflow for look development and diagnostics.
+- [GUI_UX.md](/home/holo/prog/lpt2d/docs/GUI_UX.md)
+  GUI identity, friction analysis, and improvement directions.
 - [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
   Shared semantics for deterministic and decorrelated rendering.
+- [FILL_SEMANTICS.md](/home/holo/prog/lpt2d/docs/FILL_SEMANTICS.md)
+  Fill pipeline position, tonemap desaturation, and candidate fixes.
 - [IDEAS.md](/home/holo/prog/lpt2d/IDEAS.md)
   Centralized unscheduled ideas and follow-up work.
 

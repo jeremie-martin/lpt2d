@@ -14,7 +14,7 @@ struct ImGuiIO;
 
 // ─── Panel-local UI state ────────────────────────────────────────────
 
-struct LoadSceneDialogState {
+struct PathDialogState {
     std::array<char, 256> path{};
     std::string error;
 };
@@ -37,15 +37,18 @@ struct MaterialLibraryPanelState {
 
 // Aggregate of all panel-local state (lives in App::run, passed to draw_controls_panel).
 struct PanelState {
-    LoadSceneDialogState load_dialog;
+    PathDialogState load_dialog;
     IdEditorState id_editor;
     MaterialLibraryPanelState material_panel;
     std::vector<LightContributionView> light_analysis;
     bool light_analysis_valid = false;
+    PathDialogState save_as_dialog;
     int current_scene = 0;
     bool open_load_popup = false;
+    bool open_save_as_popup = false;
     bool show_wireframe = true;
     bool paused = false;
+    bool show_controls_panel = true;
 };
 
 // ─── Controls panel ─────────────────────────────────────────────────
@@ -67,3 +70,6 @@ void draw_controls_panel(
     float frame_ms,
     int win_w, int win_h, int fb_w, int fb_h
 );
+
+// Apply a numbered look preset (0-based index) to the given Look.
+void apply_look_preset(Look& look, int index);

@@ -279,10 +279,33 @@ int App::run(const AppConfig& config) {
         };
     };
 
+    // ── Drag-and-drop file loading ─────────────────────────────────────
+
+    struct DropState { std::string pending_path; };
+    DropState drop_state;
+    glfwSetWindowUserPointer(window, &drop_state);
+    glfwSetDropCallback(window, [](GLFWwindow* w, int count, const char** paths) {
+        if (count > 0)
+            static_cast<DropState*>(glfwGetWindowUserPointer(w))->pending_path = paths[0];
+    });
+
     // ── Main loop ───────────────────────────────────────────────────────
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        // Handle file drop
+        if (!drop_state.pending_path.empty()) {
+            std::string error;
+            if (try_load_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
+                               force_live_metrics_refresh, win_w, win_h,
+                               drop_state.pending_path, &error)) {
+                panel.current_scene = -1;
+            } else {
+                std::cerr << "Drop load failed: " << error << "\n";
+            }
+            drop_state.pending_path.clear();
+        }
 
         // Handle resize
         int new_fb_w, new_fb_h;
@@ -1164,9 +1187,15 @@ int App::run(const AppConfig& config) {
 
         // ── Controls panel ──────────────────────────────────────────────
 
-        draw_controls_panel(ed, renderer, compare_ab, panel, live_metrics,
-                            force_live_metrics_refresh, io, dpi_scale,
-                            frame_ms, win_w, win_h, fb_w, fb_h);
+        // Re-show the panel when a dialog popup is requested while hidden,
+        // so Ctrl+O and Ctrl+Shift+S work in fullscreen mode.
+        if (!panel.show_controls_panel && (panel.open_load_popup || panel.open_save_as_popup))
+            panel.show_controls_panel = true;
+
+        if (panel.show_controls_panel)
+            draw_controls_panel(ed, renderer, compare_ab, panel, live_metrics,
+                                force_live_metrics_refresh, io, dpi_scale,
+                                frame_ms, win_w, win_h, fb_w, fb_h);
 
         // ── Keyboard shortcuts ──────────────────────────────────────────
 
@@ -1247,6 +1276,17 @@ int App::run(const AppConfig& config) {
                 if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) ed.shot.look.exposure -= 0.5f;
                 if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) ed.shot.look.exposure += 0.5f;
 
+                // Panel toggle: Tab
+                if (ImGui::IsKeyPressed(ImGuiKey_Tab))
+                    panel.show_controls_panel = !panel.show_controls_panel;
+
+                // Look presets: Shift+1 through Shift+6
+                if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt) {
+                    for (int k = ImGuiKey_1; k <= ImGuiKey_6; ++k)
+                        if (ImGui::IsKeyPressed((ImGuiKey)k))
+                            apply_look_preset(ed.shot.look, k - ImGuiKey_1);
+                }
+
                 // A/B look toggle: ` (grave accent)
                 if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent) && compare_ab.active) {
                     compare_ab.showing_a = !compare_ab.showing_a;
@@ -1256,7 +1296,11 @@ int App::run(const AppConfig& config) {
                 }
 
                 // Save/Load
-                if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) { do_save(ed); }
+                if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_S)) {
+                    panel.open_save_as_popup = true;
+                } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_S)) {
+                    do_save(ed);
+                }
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
                     panel.open_load_popup = true;
                 }
@@ -1386,6 +1430,62 @@ int App::run(const AppConfig& config) {
                     if (ImGui::IsKeyPressed(ImGuiKey_T)) switch_tool(EditTool::SegmentLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_W)) switch_tool(EditTool::ProjectorLight);
                     if (ImGui::IsKeyPressed(ImGuiKey_M)) switch_tool(EditTool::Measure);
+
+                    // Wireframe toggle: V
+                    if (ImGui::IsKeyPressed(ImGuiKey_V))
+                        panel.show_wireframe = !panel.show_wireframe;
+
+                    // Material cycling: N / Shift+N
+                    if (ImGui::IsKeyPressed(ImGuiKey_N) && !ed.interaction.selection.empty()) {
+                        auto& mats = ed.shot.scene.materials;
+                        if (!mats.empty()) {
+                            // Find the first selected shape's material
+                            for (auto& sid : ed.interaction.selection) {
+                                if (Shape* shape = resolve_shape(ed.shot.scene, sid)) {
+                                    const std::string& cur = shape_material_id(*shape);
+                                    auto it = mats.find(cur);
+                                    if (io.KeyShift) {
+                                        if (it == mats.end() || it == mats.begin())
+                                            it = std::prev(mats.end());
+                                        else
+                                            --it;
+                                    } else {
+                                        if (it == mats.end())
+                                            it = mats.begin();
+                                        else if (++it == mats.end())
+                                            it = mats.begin();
+                                    }
+                                    ed.session.undo.push(ed.shot.scene);
+                                    bind_material(*shape, ed.shot.scene, it->first);
+                                    reload();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Join mode cycle: J (polygon only)
+                    // Auto → Sharp → Smooth → Auto (mixed resets to Auto)
+                    if (ImGui::IsKeyPressed(ImGuiKey_J) && !ed.interaction.selection.empty()) {
+                        for (auto& sid : ed.interaction.selection) {
+                            if (Shape* shape = resolve_shape(ed.shot.scene, sid)) {
+                                if (auto* poly = std::get_if<Polygon>(shape)) {
+                                    if (poly->vertices.empty()) break;
+                                    ed.session.undo.push(ed.shot.scene);
+                                    if (poly->join_modes.empty()) {
+                                        poly->join_modes.assign(poly->vertices.size(), PolygonJoinMode::Sharp);
+                                    } else if (std::all_of(poly->join_modes.begin(), poly->join_modes.end(),
+                                                   [](PolygonJoinMode m) { return m == PolygonJoinMode::Sharp; })) {
+                                        poly->join_modes.assign(poly->vertices.size(), PolygonJoinMode::Smooth);
+                                    } else {
+                                        poly->join_modes.clear();
+                                    }
+                                    reload();
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Visibility: H = toggle selected, Alt+H = show all

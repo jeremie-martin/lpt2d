@@ -21,6 +21,44 @@
 #include <utility>
 #include <variant>
 
+// ─── Look presets (shared between panel combo and keyboard shortcuts) ─
+
+struct LookPreset {
+    const char* name;
+    float exp, contrast, gamma;
+    ToneMap tm;
+    float wp;
+    NormalizeMode norm;
+    float ambient;
+};
+
+static const LookPreset kLookPresets[] = {
+    {"Default",      -5.0f, 1.0f, 2.0f, ToneMap::ReinhardExtended, 0.5f, NormalizeMode::Rays, 0.0f},
+    {"Bright",        4.0f, 1.1f, 2.2f, ToneMap::ACES,             1.5f, NormalizeMode::Rays, 0.0f},
+    {"Dark/Moody",    1.0f, 1.3f, 2.4f, ToneMap::ACES,             0.8f, NormalizeMode::Rays, 0.0f},
+    {"Linear",        0.0f, 1.0f, 1.0f, ToneMap::None,             1.0f, NormalizeMode::Max,  0.0f},
+    {"High Contrast", 3.0f, 1.5f, 2.2f, ToneMap::ReinhardExtended, 2.0f, NormalizeMode::Rays, 0.0f},
+    {"Soft",          2.5f, 0.8f, 2.0f, ToneMap::Reinhard,         1.0f, NormalizeMode::Rays, 0.02f},
+};
+static constexpr int kNumLookPresets = sizeof(kLookPresets) / sizeof(kLookPresets[0]);
+
+// Applies core tone-mapping fields only; leaves creative effects (temperature,
+// grain, chromatic aberration, etc.) as user overrides.
+void apply_look_preset(Look& look, int index) {
+    if (index < 0 || index >= kNumLookPresets) return;
+    const auto& p = kLookPresets[index];
+    look.exposure = p.exp;
+    look.contrast = p.contrast;
+    look.gamma = p.gamma;
+    look.tonemap = p.tm;
+    look.white_point = p.wp;
+    look.normalize = p.norm;
+    look.ambient = p.ambient;
+    look.saturation = 1.0f;
+    look.vignette = 0.0f;
+    look.vignette_radius = 0.7f;
+}
+
 namespace {
 
 constexpr float kDefaultRoomHalfWidth = 1.0f;
@@ -345,46 +383,88 @@ void draw_controls_panel(
                          force_live_metrics_refresh, win_w, win_h);
         }
 
-        // Save/Load
+        // Save/Load/Save As
         ImGui::SameLine();
         if (ImGui::Button("Save")) { do_save(ed); }
         ImGui::SameLine();
-        if (ImGui::Button("Load")) {
-            ImGui::OpenPopup("Load Scene##popup");
-        }
-
-        // Load popup (can be triggered by Ctrl+O shortcut)
-        if (panel.open_load_popup) { ImGui::OpenPopup("Load Scene##popup"); panel.open_load_popup = false; }
-        if (ImGui::BeginPopup("Load Scene##popup")) {
-            ImGui::Text("File path:");
-            if (ImGui::InputText("##loadpath", panel.load_dialog.path.data(), panel.load_dialog.path.size()))
-                panel.load_dialog.error.clear();
-            if (!panel.load_dialog.error.empty())
-                ImGui::TextWrapped("%s", panel.load_dialog.error.c_str());
-            if (ImGui::Button("OK") && panel.load_dialog.path[0]) {
-                std::string error;
-                if (auto loaded = try_load_shot_json(panel.load_dialog.path.data(), &error)) {
-                    ed.shot = *loaded;
-                    ed.shot.trace.batch = kGuiTraceBatch;
-                    ed.session.save_path = panel.load_dialog.path.data();
-                    panel.current_scene = -1;
-                    panel.load_dialog.error.clear();
-                    reset_editor(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                 force_live_metrics_refresh, win_w, win_h);
-                } else {
-                    panel.load_dialog.error = error.empty() ? "Failed to load scene" : error;
-                }
-                if (panel.load_dialog.error.empty())
-                    ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) {
-                panel.load_dialog.error.clear();
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::EndPopup();
-        }
+        if (ImGui::Button("Save As")) { panel.open_save_as_popup = true; }
+        ImGui::SameLine();
+        if (ImGui::Button("Load")) { panel.open_load_popup = true; }
         ImGui::PopID();
+    }
+
+    // Popup handling lives outside the Scene header so Ctrl+O and
+    // Ctrl+Shift+S work even when the Scene section is collapsed.
+
+    // Save As popup
+    if (panel.open_save_as_popup) {
+        std::string name = ed.shot.name.empty() ? "untitled" : ed.shot.name;
+        std::string prefill = ed.session.save_path.empty()
+            ? name + ".json" : ed.session.save_path;
+        std::snprintf(panel.save_as_dialog.path.data(), panel.save_as_dialog.path.size(),
+                      "%s", prefill.c_str());
+        panel.save_as_dialog.error.clear();
+        ImGui::OpenPopup("Save As##popup");
+        panel.open_save_as_popup = false;
+    }
+    if (ImGui::BeginPopup("Save As##popup")) {
+        ImGui::Text("Save path:");
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        bool enter_pressed = ImGui::InputText("##saveaspath", panel.save_as_dialog.path.data(),
+            panel.save_as_dialog.path.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+        if (!panel.save_as_dialog.error.empty())
+            ImGui::TextWrapped("%s", panel.save_as_dialog.error.c_str());
+        if ((ImGui::Button("OK") || enter_pressed) && panel.save_as_dialog.path[0]) {
+            std::string error;
+            if (do_save_to(ed, panel.save_as_dialog.path.data(), &error)) {
+                panel.save_as_dialog.error.clear();
+            } else {
+                panel.save_as_dialog.error = error;
+            }
+            if (panel.save_as_dialog.error.empty())
+                ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            panel.save_as_dialog.error.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Load popup
+    if (panel.open_load_popup) { ImGui::OpenPopup("Load Scene##popup"); panel.open_load_popup = false; }
+    if (ImGui::BeginPopup("Load Scene##popup")) {
+        ImGui::Text("File path:");
+        if (ImGui::IsWindowAppearing()) {
+            ImGui::SetKeyboardFocusHere();
+            if (panel.load_dialog.path[0] == '\0' && !ed.session.save_path.empty())
+                std::snprintf(panel.load_dialog.path.data(), panel.load_dialog.path.size(),
+                              "%s", ed.session.save_path.c_str());
+        }
+        bool enter_pressed = ImGui::InputText("##loadpath", panel.load_dialog.path.data(),
+            panel.load_dialog.path.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+        if (!panel.load_dialog.error.empty())
+            ImGui::TextWrapped("%s", panel.load_dialog.error.c_str());
+        if ((ImGui::Button("OK") || enter_pressed) && panel.load_dialog.path[0]) {
+            std::string error;
+            if (try_load_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
+                               force_live_metrics_refresh, win_w, win_h,
+                               panel.load_dialog.path.data(), &error)) {
+                panel.current_scene = -1;
+                panel.load_dialog.error.clear();
+            } else {
+                panel.load_dialog.error = error;
+            }
+            if (panel.load_dialog.error.empty())
+                ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            panel.load_dialog.error.clear();
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 
     // -- Edit --
@@ -1461,29 +1541,10 @@ void draw_controls_panel(
     if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Display");
 
-        static const struct { const char* name; float exp; float contrast; float gamma;
-                              ToneMap tm; float wp; NormalizeMode norm; float ambient; } look_presets[] = {
-            {"Default",      -5.0f, 1.0f, 2.0f, ToneMap::ReinhardExtended, 0.5f, NormalizeMode::Rays, 0.0f},
-            {"Bright",        4.0f, 1.1f, 2.2f, ToneMap::ACES,             1.5f, NormalizeMode::Rays, 0.0f},
-            {"Dark/Moody",    1.0f, 1.3f, 2.4f, ToneMap::ACES,             0.8f, NormalizeMode::Rays, 0.0f},
-            {"Linear",        0.0f, 1.0f, 1.0f, ToneMap::None,             1.0f, NormalizeMode::Max,  0.0f},
-            {"High Contrast", 3.0f, 1.5f, 2.2f, ToneMap::ReinhardExtended, 2.0f, NormalizeMode::Rays, 0.0f},
-            {"Soft",          2.5f, 0.8f, 2.0f, ToneMap::Reinhard,         1.0f, NormalizeMode::Rays, 0.02f},
-        };
         if (ImGui::BeginCombo("Preset", "(select)")) {
-            for (auto& p : look_presets) {
-                if (ImGui::Selectable(p.name)) {
-                    ed.shot.look.exposure = p.exp;
-                    ed.shot.look.contrast = p.contrast;
-                    ed.shot.look.gamma = p.gamma;
-                    ed.shot.look.tonemap = p.tm;
-                    ed.shot.look.white_point = p.wp;
-                    ed.shot.look.normalize = p.norm;
-                    ed.shot.look.ambient = p.ambient;
-                    ed.shot.look.saturation = 1.0f;
-                    ed.shot.look.vignette = 0.0f;
-                    ed.shot.look.vignette_radius = 0.7f;
-                }
+            for (int i = 0; i < kNumLookPresets; ++i) {
+                if (ImGui::Selectable(kLookPresets[i].name))
+                    apply_look_preset(ed.shot.look, i);
             }
             ImGui::EndCombo();
         }
