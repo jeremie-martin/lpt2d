@@ -49,8 +49,7 @@ MIN_REFERENCE_MEAN = 30.0  # reject near-black images
 MAX_REFERENCE_MEAN = 230.0  # reject near-white images
 MAX_WHITE_FRACTION = 0.10  # at most 10% of pixels may be clipped white
 
-
-from evaluation import compute_psnr, compute_ssim
+from evaluation import compute_psnr, compute_ssim  # noqa: E402
 
 
 @dataclass(frozen=True)

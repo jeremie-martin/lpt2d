@@ -44,7 +44,15 @@ def make_scene(lights: list[dict], name: str = "test") -> dict:
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {"ior": 1.5, "transmission": 1.0, "cauchy_b": 0.004, "spectral_c0": 0.0, "spectral_c1": 0.0, "spectral_c2": 0.0, "fill": 0.0},
+                "material": {
+                    "ior": 1.5,
+                    "transmission": 1.0,
+                    "cauchy_b": 0.004,
+                    "spectral_c0": 0.0,
+                    "spectral_c1": 0.0,
+                    "spectral_c2": 0.0,
+                    "fill": 0.0,
+                },
             }
         ],
         "lights": lights,
@@ -139,12 +147,16 @@ def _render(
 
 def render(scene_json: str, **kw) -> FrameResult:
     kw["return_pixels"] = False
-    return _render(scene_json, **kw)
+    result = _render(scene_json, **kw)
+    assert isinstance(result, FrameResult)
+    return result
 
 
 def render_px(scene_json: str, **kw) -> tuple[FrameResult, bytes]:
     kw["return_pixels"] = True
-    return _render(scene_json, **kw)
+    result = _render(scene_json, **kw)
+    assert isinstance(result, tuple)
+    return result
 
 
 def mean_brightness(pixel_data: bytes) -> float:

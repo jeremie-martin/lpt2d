@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import math
 
-import _lpt2d
 import pytest
+
+import _lpt2d
 
 
 def _polygon_area(vertices: list[tuple[float, float]]) -> float:
@@ -20,11 +21,7 @@ def _triangles_area(vertices: list[tuple[float, float]], indices: list[int]) -> 
         a = vertices[indices[i]]
         b = vertices[indices[i + 1]]
         c = vertices[indices[i + 2]]
-        total += abs(
-            a[0] * (b[1] - c[1])
-            + b[0] * (c[1] - a[1])
-            + c[0] * (a[1] - b[1])
-        ) * 0.5
+        total += abs(a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])) * 0.5
     return total
 
 
@@ -57,4 +54,6 @@ def test_polygon_fill_handles_concave_polygon_with_partial_rounding() -> None:
     assert len(boundary) > len(polygon.vertices)
     assert len(indices) >= 9
     assert len(indices) % 3 == 0
-    assert _triangles_area(boundary, indices) == pytest.approx(_polygon_area(boundary), rel=1e-4, abs=1e-4)
+    assert _triangles_area(boundary, indices) == pytest.approx(
+        _polygon_area(boundary), rel=1e-4, abs=1e-4
+    )

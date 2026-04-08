@@ -147,6 +147,7 @@ EASING_DERIVATIVES: dict[str, Callable[[float], float]] = {
     "step": step_d,
 }
 
+
 def resolve_easing(ease: str | Callable[[float], float]) -> Callable[[float], float]:
     """Resolve an easing name or callable. Raises ValueError on unknown names."""
     if callable(ease):

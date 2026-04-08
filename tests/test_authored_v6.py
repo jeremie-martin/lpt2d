@@ -8,7 +8,6 @@ import pytest
 
 import _lpt2d
 from anim.types import (
-    Camera2D,
     Canvas,
     Circle,
     Group,
@@ -189,7 +188,9 @@ def test_v6_rejects_shape_without_material_payload(tmp_path):
     )
     _write_json(path, data)
 
-    with pytest.raises(RuntimeError, match="shape entries must declare exactly one of material and material_id"):
+    with pytest.raises(
+        RuntimeError, match="shape entries must declare exactly one of material and material_id"
+    ):
         Shot.load(path)
 
 
@@ -224,7 +225,12 @@ def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
         materials={"glass": Material(ior=1.5, transmission=1.0)},
         shapes=[
             Circle(id="bound", center=[-0.5, 0.0], radius=0.2, material_id="glass"),
-            Circle(id="inline", center=[0.5, 0.0], radius=0.2, material=Material(ior=1.8, transmission=1.0)),
+            Circle(
+                id="inline",
+                center=[0.5, 0.0],
+                radius=0.2,
+                material=Material(ior=1.8, transmission=1.0),
+            ),
         ],
         lights=[ProjectorLight(id="beam", position=[-1, 0], direction=[1, 0], source_radius=0.0)],
     )
@@ -303,7 +309,9 @@ def test_v6_authored_json_is_fully_explicit_for_defaults(tmp_path):
 
 def test_v6_round_trip_preserves_seed_mode(tmp_path):
     path = tmp_path / "seed_mode.json"
-    shot = Shot(name="seed_mode", trace=TraceDefaults(seed_mode="decorrelated"), scene=_make_bound_scene())
+    shot = Shot(
+        name="seed_mode", trace=TraceDefaults(seed_mode="decorrelated"), scene=_make_bound_scene()
+    )
     shot.save(path)
 
     data = json.loads(path.read_text())
@@ -527,6 +535,7 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
     beam.position = [-1.0, 0.15]
 
     lens = loaded.scene.require_shape("lens_a")
+    assert isinstance(lens, Circle)
     lens.radius = 0.35
 
     loaded.scene.require_group("cluster").transform.translate = [0.25, -0.1]
@@ -534,6 +543,7 @@ def test_save_load_modify_by_id_preserves_shared_material_meaning(tmp_path):
 
     reloaded = Shot.load(path)
     lens_reloaded = reloaded.scene.require_shape("lens_a")
+    assert isinstance(lens_reloaded, Circle)
     beam_reloaded = reloaded.scene.require_light("beam_main")
 
     assert lens_reloaded.radius == pytest.approx(0.35)

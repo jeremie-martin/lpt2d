@@ -194,7 +194,6 @@ def main() -> None:
             str(output),
             settings=shot,
             camera=layout.camera,
-            binary=str(BINARY),
             crf=crf,
             start=args.start,
             end=args.end,

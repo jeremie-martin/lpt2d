@@ -279,7 +279,9 @@ def _replace_directory(source: Path, target: Path) -> None:
     shutil.move(str(source), str(target))
 
 
-def _write_case_json_artifacts(scene_dir: Path, *, case_scene_jsons: dict[int, str], warmup_scene_json: str) -> dict:
+def _write_case_json_artifacts(
+    scene_dir: Path, *, case_scene_jsons: dict[int, str], warmup_scene_json: str
+) -> dict:
     warmup_name = "warmup.json"
     (scene_dir / warmup_name).write_text(warmup_scene_json)
 
@@ -306,9 +308,7 @@ def _load_and_validate_baseline_corpus(
     from .baseline import load_baseline_set
 
     if not BASELINES_DIR.is_dir():
-        raise EvaluationSetupError(
-            "no baselines found. Run `python -m evaluation capture` first."
-        )
+        raise EvaluationSetupError("no baselines found. Run `python -m evaluation capture` first.")
 
     baseline_sets: dict[str, dict] = {}
     errors: list[str] = []
@@ -362,7 +362,10 @@ def _load_and_validate_baseline_corpus(
         case_error = False
         for case_index in expected_case_indexes:
             baseline_case = baseline_cases[case_index]
-            if baseline_case["width"] != settings["width"] or baseline_case["height"] != settings["height"]:
+            if (
+                baseline_case["width"] != settings["width"]
+                or baseline_case["height"] != settings["height"]
+            ):
                 errors.append(
                     f"{name}: baseline case {case_index} resolution "
                     f"{baseline_case['width']}x{baseline_case['height']}"
@@ -407,7 +410,9 @@ def _load_and_validate_baseline_corpus(
 # ── Capture ──────────────────────────────────────────────────────────────
 
 
-def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, width: int, height: int, rays: int) -> None:
+def _run_capture(
+    skip_build: bool, frames: int, launches: int, warmup: int, width: int, height: int, rays: int
+) -> None:
     if not skip_build:
         if not _build():
             sys.exit(2)
@@ -431,7 +436,9 @@ def _run_capture(skip_build: bool, frames: int, launches: int, warmup: int, widt
     print("=" * 60)
 
     try:
-        with tempfile.TemporaryDirectory(prefix="evaluation-capture-", dir=str(PROJECT_DIR)) as tmpdir:
+        with tempfile.TemporaryDirectory(
+            prefix="evaluation-capture-", dir=str(PROJECT_DIR)
+        ) as tmpdir:
             staging_root = Path(tmpdir)
 
             for scene_path in scenes:
@@ -627,17 +634,25 @@ def _run_evaluate(
                     warmup_scene_json=measurement.warmup_scene_json,
                 )
 
-                case_samples: dict[int, list[dict]] = {case_index: [] for case_index in range(frames)}
-                case_verdicts: dict[int, list[str]] = {case_index: [] for case_index in range(frames)}
+                case_samples: dict[int, list[dict]] = {
+                    case_index: [] for case_index in range(frames)
+                }
+                case_verdicts: dict[int, list[str]] = {
+                    case_index: [] for case_index in range(frames)
+                }
                 sample_verdicts: list[str] = []
                 sample_non_pass: list[str] = []
 
                 for sample in measurement.samples:
                     img_name = f"launch_{sample.launch_index:02d}_case_{sample.frame_index:04d}.png"
                     img_path = scene_dir / img_name
-                    _save_image(sample.result.pixels, sample.result.width, sample.result.height, img_path)
+                    _save_image(
+                        sample.result.pixels, sample.result.width, sample.result.height, img_path
+                    )
 
-                    fidelity = compare_to_baseline(sample.result, baseline_cases[sample.frame_index])
+                    fidelity = compare_to_baseline(
+                        sample.result, baseline_cases[sample.frame_index]
+                    )
                     verdict_value = fidelity.verdict.value
                     sample_verdicts.append(verdict_value)
                     case_verdicts[sample.frame_index].append(verdict_value)
@@ -697,15 +712,23 @@ def _run_evaluate(
                     baseline_render_summary = baseline_render_summaries[case_index]
                     baseline_wall_summary = baseline_wall_summaries[case_index]
                     case_verdict = _combine_verdicts(case_verdicts[case_index])
-                    render_ratio = case_benchmark.render_summary.median_ms / baseline_render_summary.median_ms
-                    wall_ratio = case_benchmark.wall_summary.median_ms / baseline_wall_summary.median_ms
+                    render_ratio = (
+                        case_benchmark.render_summary.median_ms / baseline_render_summary.median_ms
+                    )
+                    wall_ratio = (
+                        case_benchmark.wall_summary.median_ms / baseline_wall_summary.median_ms
+                    )
                     scene_render_case_ratios.append(render_ratio)
                     scene_wall_case_ratios.append(wall_ratio)
                     all_render_case_ratios.append(render_ratio)
                     all_wall_case_ratios.append(wall_ratio)
 
-                    render_speedup = classify_speedup(baseline_render_summary, case_benchmark.render_summary)
-                    wall_speedup = classify_speedup(baseline_wall_summary, case_benchmark.wall_summary)
+                    render_speedup = classify_speedup(
+                        baseline_render_summary, case_benchmark.render_summary
+                    )
+                    wall_speedup = classify_speedup(
+                        baseline_wall_summary, case_benchmark.wall_summary
+                    )
                     render_sample_total_ms = _timing_total_ms(case_benchmark.render_summary)
                     baseline_render_sample_total_ms = _timing_total_ms(baseline_render_summary)
                     wall_sample_total_ms = _timing_total_ms(case_benchmark.wall_summary)

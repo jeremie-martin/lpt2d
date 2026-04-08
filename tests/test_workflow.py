@@ -6,22 +6,18 @@ import pytest
 
 from anim import analysis as analysis_mod
 from anim import renderer as renderer_mod
+from anim.stats import FrameStats
 from anim.types import (
     Camera2D,
     Canvas,
     Circle,
-    Frame,
-    FrameReport,
     Group,
     Look,
     Material,
-    PointLight,
     Scene,
     Shot,
     TraceDefaults,
 )
-from anim.stats import FrameStats
-
 
 # ── Pure API tests ────────────────────────────────────────────────
 
@@ -30,8 +26,10 @@ def test_scene_find_group():
     g1 = Group(id="prism")
     g2 = Group(id="mirror")
     scene = Scene(groups=[g1, g2])
-    assert scene.find_group("prism").id == "prism"
-    assert scene.find_group("mirror").id == "mirror"
+    prism = scene.find_group("prism")
+    assert prism is not None and prism.id == "prism"
+    mirror = scene.find_group("mirror")
+    assert mirror is not None and mirror.id == "mirror"
     assert scene.find_group("nonexistent") is None
 
 
@@ -44,9 +42,13 @@ def test_scene_clone():
     mat = Material(ior=1.5)
     scene = Scene(shapes=[Circle(center=[0, 0], radius=1.0, material=mat)])
     cloned = scene.clone()
-    assert cloned.shapes[0].center == (0, 0)
-    cloned.shapes[0].center = [1, 1]
-    assert scene.shapes[0].center == (0, 0)
+    c0 = cloned.shapes[0]
+    assert isinstance(c0, Circle)
+    assert c0.center == (0, 0)
+    c0.center = [1, 1]
+    o0 = scene.shapes[0]
+    assert isinstance(o0, Circle)
+    assert o0.center == (0, 0)
 
 
 def test_shot_with_look():
@@ -122,9 +124,17 @@ def test_look_with_overrides():
 
 def test_auto_look_defaults_to_rays_normalization(monkeypatch):
     sample = FrameStats(
-        mean=64.0, max=200, min=0, std=10.0,
-        pct_black=0.2, pct_clipped=0.0, p05=1.0, p50=40.0, p95=120.0,
-        width=100, height=100,
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=100,
+        height=100,
     )
 
     def fake_render_stats(*args, **kwargs):
@@ -140,9 +150,17 @@ def test_auto_look_defaults_to_rays_normalization(monkeypatch):
 
 def test_auto_look_respects_explicit_normalize(monkeypatch):
     sample = FrameStats(
-        mean=64.0, max=200, min=0, std=10.0,
-        pct_black=0.2, pct_clipped=0.0, p05=1.0, p50=40.0, p95=120.0,
-        width=100, height=100,
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=100,
+        height=100,
     )
 
     called = {"count": 0}
@@ -166,9 +184,17 @@ def test_auto_look_respects_explicit_normalize(monkeypatch):
 
 def test_auto_look_shot_subject_uses_authored_settings(monkeypatch):
     sample = FrameStats(
-        mean=64.0, max=200, min=0, std=10.0,
-        pct_black=0.2, pct_clipped=0.0, p05=1.0, p50=40.0, p95=120.0,
-        width=480, height=270,
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=480,
+        height=270,
     )
     captured: dict = {}
     shot = Shot(
@@ -197,9 +223,17 @@ def test_auto_look_shot_subject_uses_authored_settings(monkeypatch):
 
 def test_auto_look_preserves_authored_look_fields(monkeypatch):
     sample = FrameStats(
-        mean=64.0, max=200, min=0, std=10.0,
-        pct_black=0.2, pct_clipped=0.0, p05=1.0, p50=40.0, p95=120.0,
-        width=480, height=270,
+        mean=64.0,
+        max=200,
+        min=0,
+        std=10.0,
+        pct_black=0.2,
+        pct_clipped=0.0,
+        p05=1.0,
+        p50=40.0,
+        p95=120.0,
+        width=480,
+        height=270,
     )
     captured: dict = {}
     shot = Shot(

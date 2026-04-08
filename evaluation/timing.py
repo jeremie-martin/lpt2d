@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import math
-from pathlib import Path
-from statistics import mean, median, stdev
 import json
+import math
 import tempfile
 import time
+from dataclasses import dataclass
+from pathlib import Path
+from statistics import mean, median, stdev
 from typing import Any
 
 
@@ -354,9 +354,7 @@ def benchmark_scene(
         case_render_summary=summarize_times(
             [case.render_summary.median_ms for case in cases.values()]
         ),
-        case_wall_summary=summarize_times(
-            [case.wall_summary.median_ms for case in cases.values()]
-        ),
+        case_wall_summary=summarize_times([case.wall_summary.median_ms for case in cases.values()]),
         launches=launches,
         frames_per_launch=frames,
         warmup=warmup,

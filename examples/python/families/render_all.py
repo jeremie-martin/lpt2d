@@ -43,9 +43,9 @@ FAMILIES = [
 
 def render_family(family_name: str, n: int, seed: int) -> None:
     """Generate n valid variants for one family."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"FAMILY: {family_name} ({n} variants, seed={seed})")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     m = importlib.import_module(f"families.{family_name}")
 
@@ -64,7 +64,9 @@ def render_family(family_name: str, n: int, seed: int) -> None:
 
         found += 1
         out_dir = out_base / f"{found:03d}"
-        print(f"  [{attempt}] FOUND #{found} — rendering {WIDTH}x{HEIGHT} {RAYS/1e6:.0f}M rays...")
+        print(
+            f"  [{attempt}] FOUND #{found} — rendering {WIDTH}x{HEIGHT} {RAYS / 1e6:.0f}M rays..."
+        )
         t0 = time.monotonic()
         m.render_and_save(p, out_dir, WIDTH, HEIGHT, RAYS)
         elapsed = time.monotonic() - t0
@@ -79,7 +81,7 @@ def render_family(family_name: str, n: int, seed: int) -> None:
 
 def main() -> None:
     print(f"Rendering {len(FAMILIES)} families: {VARIANTS_PER_FAMILY} variants each")
-    print(f"Resolution: {WIDTH}x{HEIGHT}, Rays: {RAYS/1e6:.0f}M, HQ={HQ}")
+    print(f"Resolution: {WIDTH}x{HEIGHT}, Rays: {RAYS / 1e6:.0f}M, HQ={HQ}")
 
     total_start = time.monotonic()
 
@@ -88,10 +90,12 @@ def main() -> None:
         render_family(family, VARIANTS_PER_FAMILY, family_seed)
 
     total_elapsed = time.monotonic() - total_start
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     n_videos = len(FAMILIES) * VARIANTS_PER_FAMILY
-    print(f"ALL DONE — {len(FAMILIES)} families x {VARIANTS_PER_FAMILY} variants = {n_videos} videos")
-    print(f"Total time: {total_elapsed/60:.1f} minutes")
+    print(
+        f"ALL DONE — {len(FAMILIES)} families x {VARIANTS_PER_FAMILY} variants = {n_videos} videos"
+    )
+    print(f"Total time: {total_elapsed / 60:.1f} minutes")
     print(f"Output: {BASE_DIR}/")
 
 

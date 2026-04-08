@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -24,8 +24,8 @@ from evaluation import (
     save_baseline,
     save_baseline_set,
 )
-from evaluation.animate import animate_scene
 from evaluation.__main__ import _parse_resolution, _run_capture, _run_evaluate
+from evaluation.animate import animate_scene
 from evaluation.compare import compare_metrics
 from evaluation.timing import (
     CaseBenchmark,
@@ -280,7 +280,10 @@ class TestBaseline:
             },
             metadata={"scene": "test", "frames": 4},
             timing_by_case={
-                0: {"render_timing": {"times_ms": [40.0, 41.0]}, "wall_timing": {"times_ms": [42.0, 43.0]}},
+                0: {
+                    "render_timing": {"times_ms": [40.0, 41.0]},
+                    "wall_timing": {"times_ms": [42.0, 43.0]},
+                },
                 3: {"render_timing": {"times_ms": [44.0, 45.0]}},
             },
             scene_json_by_case={
@@ -584,9 +587,11 @@ class TestEvaluationStrictness:
         monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [ok_scene, bad_scene])
         monkeypatch.setattr(
             "evaluation.timing.benchmark_scene",
-            lambda path, **kwargs: measurement
-            if Path(path).stem == "ok"
-            else (_ for _ in ()).throw(RuntimeError("boom")),
+            lambda path, **kwargs: (
+                measurement
+                if Path(path).stem == "ok"
+                else (_ for _ in ()).throw(RuntimeError("boom"))
+            ),
         )
 
         with pytest.raises(SystemExit) as excinfo:
@@ -650,7 +655,9 @@ class TestEvaluationStrictness:
 
         monkeypatch.setattr("evaluation.__main__.BASELINES_DIR", baselines_dir)
         monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
-        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+        monkeypatch.setattr(
+            "evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement
+        )
 
         _run_capture(
             skip_build=True,
@@ -690,7 +697,12 @@ class TestEvaluationStrictness:
                 "launches": 1,
                 "warmup": 0,
                 "warmup_mode": "base_scene",
-                "render_settings": {"width": 32, "height": 32, "resolution": "32x32", "rays": 1_000_000},
+                "render_settings": {
+                    "width": 32,
+                    "height": 32,
+                    "resolution": "32x32",
+                    "rays": 1_000_000,
+                },
             },
             scene_json_by_case={0: '{\n  "case": 0\n}\n'},
             warmup_scene_json='{\n  "warmup": true\n}\n',
@@ -731,8 +743,13 @@ class TestEvaluationStrictness:
         monkeypatch.setattr("evaluation.__main__.RUNS_DIR", runs_dir)
         monkeypatch.setattr("evaluation.__main__.SCENE_MANIFEST", manifest_path)
         monkeypatch.setattr("evaluation.__main__._discover_scenes", lambda: [scene_path])
-        monkeypatch.setattr("evaluation.__main__._git_info", lambda: {"commit": "abc123", "branch": "test", "dirty": False})
-        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+        monkeypatch.setattr(
+            "evaluation.__main__._git_info",
+            lambda: {"commit": "abc123", "branch": "test", "dirty": False},
+        )
+        monkeypatch.setattr(
+            "evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement
+        )
 
         with pytest.raises(SystemExit) as excinfo:
             _run_evaluate(
@@ -776,11 +793,22 @@ class TestEvaluationStrictness:
                 "launches": 2,
                 "warmup": 1,
                 "warmup_mode": "base_scene",
-                "render_settings": {"width": 32, "height": 32, "resolution": "32x32", "rays": 1_000_000},
+                "render_settings": {
+                    "width": 32,
+                    "height": 32,
+                    "resolution": "32x32",
+                    "rays": 1_000_000,
+                },
             },
             timing_by_case={
-                0: {"render_timing": {"times_ms": [40.0, 41.0]}, "wall_timing": {"times_ms": [42.0, 43.0]}},
-                1: {"render_timing": {"times_ms": [50.0, 51.0]}, "wall_timing": {"times_ms": [52.0, 53.0]}},
+                0: {
+                    "render_timing": {"times_ms": [40.0, 41.0]},
+                    "wall_timing": {"times_ms": [42.0, 43.0]},
+                },
+                1: {
+                    "render_timing": {"times_ms": [50.0, 51.0]},
+                    "wall_timing": {"times_ms": [52.0, 53.0]},
+                },
             },
             scene_json_by_case={
                 0: '{\n  "case": 0\n}\n',
@@ -835,7 +863,9 @@ class TestEvaluationStrictness:
             "evaluation.__main__.datetime",
             SimpleNamespace(now=lambda: SimpleNamespace(strftime=lambda fmt: "20260407-000000")),
         )
-        monkeypatch.setattr("evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement)
+        monkeypatch.setattr(
+            "evaluation.timing.benchmark_scene", lambda *args, **kwargs: measurement
+        )
 
         with pytest.raises(SystemExit) as excinfo:
             _run_evaluate(
