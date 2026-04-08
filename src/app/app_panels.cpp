@@ -509,23 +509,23 @@ void draw_controls_panel(
 
         if (ImGui::BeginPopup("Add##popup")) {
             ImGui::TextDisabled("Shapes");
-            auto add_item = [&](const char* name, EditTool tool, const char* shortcut) {
+            auto add_item = [&](const char* name, EditTool tool) {
                 std::string label = std::string(name) + "##" + name;
-                if (ImGui::MenuItem(label.c_str(), shortcut))
+                if (ImGui::MenuItem(label.c_str()))
                     select_tool(tool);
             };
-            add_item("Circle", EditTool::Circle, "C");
-            add_item("Segment", EditTool::Segment, "L");
-            add_item("Arc", EditTool::Arc, "A");
-            add_item("Bezier", EditTool::Bezier, "B");
-            add_item("Polygon", EditTool::Polygon, nullptr);
-            add_item("Ellipse", EditTool::Ellipse, "E");
-            add_item("Path", EditTool::Path, "D");
+            add_item("Circle", EditTool::Circle);
+            add_item("Segment", EditTool::Segment);
+            add_item("Arc", EditTool::Arc);
+            add_item("Bezier", EditTool::Bezier);
+            add_item("Polygon", EditTool::Polygon);
+            add_item("Ellipse", EditTool::Ellipse);
+            add_item("Path", EditTool::Path);
             ImGui::Separator();
             ImGui::TextDisabled("Lights");
-            add_item("Point Light", EditTool::PointLight, "P");
-            add_item("Segment Light", EditTool::SegmentLight, "T");
-            add_item("Projector", EditTool::ProjectorLight, "W");
+            add_item("Point Light", EditTool::PointLight);
+            add_item("Segment Light", EditTool::SegmentLight);
+            add_item("Projector", EditTool::ProjectorLight);
             ImGui::EndPopup();
         }
 

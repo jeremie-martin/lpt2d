@@ -106,7 +106,8 @@ containing 10 collapsible sections, all open by default:
 
 | Shortcut            | Action                        | Status     |
 |---------------------|-------------------------------|------------|
-| Q/C/L/A/B/E/D/...  | Tool switching                | works      |
+| Q                   | Select tool                   | works      |
+| X / M               | Erase / Measure tool          | works      |
 | G / R / S           | Grab / Rotate / Scale         | works      |
 | `[` / `]`           | Exposure nudge                | works      |
 | Ctrl+Z / Ctrl+Sh+Z | Undo / Redo                   | works      |
