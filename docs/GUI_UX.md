@@ -149,13 +149,14 @@ no way to click a corner in the viewport and adjust it directly.
 
 Planned: viewport-based vertex editing (Phase 3 in the implementation plan).
 
-### 3.4 Join mode editing is indirect — (done)
+### 3.4 Join mode editing is indirect — (partial)
 
-J cycles all vertices through Auto/Sharp/Smooth. Right-click a polygon vertex
-handle to cycle its individual join mode (Auto→Sharp→Smooth→Auto). Vertex
-handles show the join mode visually: filled square = Auto, outlined square =
-Sharp, filled circle = Smooth. Vertex labels (V0, V1, ...) are drawn next to
-each handle.
+J cycles all vertices through Auto/Sharp/Smooth. Vertex handles show the join
+mode visually: filled square = Auto, outlined square = Sharp, filled circle =
+Smooth.
+
+Per-vertex editing will be available through the right-click context menu
+(section 5.1).
 
 ### 3.5 Too many clicks, not enough keystrokes — (partial)
 
@@ -216,19 +217,40 @@ every parameter as an independent panel entry.
 
 ## 5. Directions for Improvement
 
-### 5.1 Panel management — (open)
+### 5.1 Right-click context menu — (open)
 
-**Context-sensitive collapse.** When an object is selected, auto-expand
-Properties and collapse less relevant sections (Scene, Camera). When nothing is
-selected, keep Display prominent. This does not remove access -- sections stay
-manually expandable -- but it reduces the default scroll depth.
+**Core interaction pattern.** Right-click anything in the viewport to see
+everything you can do to it, right there. The menu content depends on what was
+clicked. This is the primary way to discover and access contextual actions.
+
+The hit-testing order matches left-click: handle first, then shape/light/group,
+then empty space.
+
+| Right-click target        | Menu items                                       |
+|---------------------------|--------------------------------------------------|
+| **Empty space**           | Add (submenu), Paste, Fit to Scene, Select All   |
+| **Shape** (non-polygon)   | Material (submenu), Duplicate, Delete, Group, Hide |
+| **Polygon** (the shape)   | Same as Shape + All Smooth / All Sharp / All Auto |
+| **Polygon vertex handle** | Join Mode (Auto / Sharp / Smooth), Corner Radius... |
+| **Light**                 | Duplicate, Delete, Solo, Hide                    |
+| **Group**                 | Enter Group, Ungroup, Duplicate, Delete, Hide    |
+
+For "Corner Radius..." on a polygon vertex, the menu could include an inline
+DragFloat, or could enter a drag mode where mouse movement sets the radius.
+
+This pattern is intentional — defining the menu for every element forces us to
+think about what actions are meaningful at each point, rather than accumulating
+features ad hoc. The context menu should be one of the most well-defined and
+well-maintained parts of the GUI.
+
+### 5.2 Panel management — (open)
 
 **Panel pinning or tabs.** Instead of one long scroll, organize panels into
 tabs or allow pinning a few sections to stay visible while others collapse. For
 example, a "Look" tab (Display + Output + Stats) vs an "Edit" tab (Objects +
 Properties + Material Library) would match the natural workflow clusters.
 
-### 5.2 More keyboard shortcuts — (open)
+### 5.3 More keyboard shortcuts — (open)
 
 Remaining candidates:
 
@@ -236,28 +258,16 @@ Remaining candidates:
   selected or hovered
 - **Post-processing slider shortcuts** for common adjustments beyond exposure
 
-### 5.3 Viewport-based polygon editing — (partial)
+### 5.4 Viewport-based polygon editing — (partial)
 
-Done: vertex labels (V0, V1, ...), join-mode-dependent handle shapes, and
-right-click to cycle per-vertex join mode.
+Done: join-mode-dependent handle shapes (square=Auto, outline=Sharp,
+circle=Smooth).
 
 Remaining:
 
-**Drag handle for corner radius.** When hovering near a convex vertex, show a
-radius handle that can be dragged to visually set the fillet size. This would
-make corner radius editing feel as direct as moving a circle's center.
-
-### 5.4 Hover-based quick adjustments — (open)
-
-When hovering over a light in the viewport, scroll wheel could adjust intensity
-(or a modifier + scroll for wavelength). This avoids navigating to the
-Properties panel entirely for the single most common light adjustment.
-
-Similarly, hovering over a shape and using a modifier + scroll could cycle
-materials or adjust a primary property.
-
-This pattern turns the viewport into the primary editing surface rather than
-just a display.
+**Corner radius editing.** Currently table-only. Needs a viewport interaction
+for adjusting corner radius directly — either through the context menu
+(section 5.1) or a dedicated drag handle.
 
 ### 5.5 Viewport navigation improvements — (open)
 
