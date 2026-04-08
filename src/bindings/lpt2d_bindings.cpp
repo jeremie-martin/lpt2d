@@ -629,6 +629,13 @@ NB_MODULE(_lpt2d, m) {
         return *shot;
     }, "path"_a);
 
+    m.def("load_shot_json_string", [](const std::string& json_content) -> Shot {
+        std::string error;
+        auto shot = try_load_shot_json_string(json_content, &error);
+        if (!shot) throw std::runtime_error(error.empty() ? "Failed to parse shot JSON" : error);
+        return *shot;
+    }, "json_content"_a);
+
     m.def("save_shot", [](const Shot& shot, const std::string& path) {
         if (!save_shot_json(shot, path))
             throw std::runtime_error("Failed to save shot to " + path);
