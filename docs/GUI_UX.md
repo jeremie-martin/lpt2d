@@ -121,6 +121,7 @@ containing 10 collapsible sections, all open by default:
 | J                   | Join mode cycle (polygon)     | works      |
 | Shift+1-6           | Look presets                  | works      |
 | Ctrl+Shift+S        | Save As                       | works      |
+| Shift+Scroll        | Light intensity (hover/sel)   | works      |
 | A                   | Add menu at cursor            | works      |
 | Right-click         | Context menu                  | works      |
 | ?                   | Shortcut reference overlay    | works      |
@@ -142,22 +143,17 @@ Remaining: context-sensitive collapse of other panels, tabs or pinning.
 Tab toggles the controls panel, giving a fullscreen viewport for evaluation.
 `648a1f5`
 
-### 3.3 Corner radius editing is indirect — (open)
+### 3.3 Corner radius editing is indirect — (partial)
 
-Editing per-vertex corner radii on a polygon requires finding the vertex index
-in a 180px scrollable table and mentally matching it to the viewport. There is
-no way to click a corner in the viewport and adjust it directly.
+Right-click a polygon vertex handle to get an inline Corner Radius DragFloat
+in the context menu. The panel table is still available for precise multi-vertex
+editing.
 
-Planned: viewport-based vertex editing (Phase 3 in the implementation plan).
-
-### 3.4 Join mode editing is indirect — (partial)
+### 3.4 Join mode editing is indirect — (done)
 
 J cycles all vertices through Auto/Sharp/Smooth. Vertex handles show the join
 mode visually: filled square = Auto, outlined square = Sharp, filled circle =
-Smooth.
-
-Per-vertex editing will be available through the right-click context menu
-(section 5.1).
+Smooth. Per-vertex editing via right-click context menu on vertex handles.
 
 ### 3.5 Too many clicks, not enough keystrokes — (partial)
 
@@ -250,24 +246,19 @@ tabs or allow pinning a few sections to stay visible while others collapse. For
 example, a "Look" tab (Display + Output + Stats) vs an "Edit" tab (Objects +
 Properties + Material Library) would match the natural workflow clusters.
 
-### 5.3 More keyboard shortcuts — (open)
+### 5.3 More keyboard shortcuts — (partial)
+
+Done: Shift+Scroll adjusts intensity of hovered or selected light.
 
 Remaining candidates:
 
-- **Light intensity adjustment** via scroll or shortcut while a light is
-  selected or hovered
 - **Post-processing slider shortcuts** for common adjustments beyond exposure
 
-### 5.4 Viewport-based polygon editing — (partial)
+### 5.4 Viewport-based polygon editing — (done)
 
-Done: join-mode-dependent handle shapes (square=Auto, outline=Sharp,
-circle=Smooth).
-
-Remaining:
-
-**Corner radius editing.** Currently table-only. Needs a viewport interaction
-for adjusting corner radius directly — either through the context menu
-(section 5.1) or a dedicated drag handle.
+Join-mode-dependent handle shapes (square=Auto, outline=Sharp, circle=Smooth).
+Per-vertex join mode and corner radius editing via right-click context menu on
+vertex handles.
 
 ### 5.5 Viewport navigation improvements — (open)
 
