@@ -8,6 +8,40 @@
 #include <cmath>
 #include <variant>
 
+namespace {
+
+void draw_arc_overlay(ImDrawList* dl, const CameraView& cv, Vec2 center, float radius,
+                      float angle_start, float sweep, ImU32 col, float th) {
+    if (radius <= 0.0f || sweep <= 0.0f) return;
+
+    int segments = std::max(1, (int)std::ceil(64.0f * sweep / TWO_PI));
+    for (int j = 0; j < segments; ++j) {
+        float t0 = angle_start + sweep * j / segments;
+        float t1 = angle_start + sweep * (j + 1) / segments;
+        Vec2 p0 = center + Vec2{std::cos(t0) * radius, std::sin(t0) * radius};
+        Vec2 p1 = center + Vec2{std::cos(t1) * radius, std::sin(t1) * radius};
+        dl->AddLine(cv.to_screen(p0), cv.to_screen(p1), col, th);
+    }
+}
+
+void draw_polygon_boundary_overlay(ImDrawList* dl, const CameraView& cv, const Polygon& p,
+                                   ImU32 col, float th) {
+    if (!polygon_has_any_rounded_corner(p)) {
+        int n = (int)p.vertices.size();
+        for (int i = 0; i < n; ++i)
+            dl->AddLine(cv.to_screen(p.vertices[i]), cv.to_screen(p.vertices[(i + 1) % n]), col, th);
+        return;
+    }
+
+    RoundedPolygonParts parts = decompose_rounded_polygon(p);
+    for (const auto& edge : parts.edges)
+        dl->AddLine(cv.to_screen(edge.a), cv.to_screen(edge.b), col, th);
+    for (const auto& corner : parts.corners)
+        draw_arc_overlay(dl, cv, corner.center, corner.radius, corner.angle_start, corner.sweep, col, th);
+}
+
+} // namespace
+
 ImVec4 material_color(const Material& m) {
     if (m.emission > 0.0f) return {1.0f, 0.95f, 0.3f, 1.0f};
     if (m.spectral_c0 != 0.0f || m.spectral_c1 != 0.0f || m.spectral_c2 != 0.0f) {
@@ -157,9 +191,7 @@ void draw_shape_overlay(ImDrawList* dl, const CameraView& cv, const Shape& shape
             dl->AddCircleFilled(cv.to_screen(b.p1), 3.0f, col);
         },
         [&](const Polygon& p) {
-            int n = (int)p.vertices.size();
-            for (int i = 0; i < n; ++i)
-                dl->AddLine(cv.to_screen(p.vertices[i]), cv.to_screen(p.vertices[(i + 1) % n]), col, th);
+            draw_polygon_boundary_overlay(dl, cv, p, col, th);
         },
         [&](const Ellipse& e) {
             constexpr int N = 64;

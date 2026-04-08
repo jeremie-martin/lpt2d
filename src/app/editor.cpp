@@ -110,6 +110,30 @@ static float point_seg_dist(Vec2 p, Vec2 a, Vec2 b) {
     return (p - (a + ab * t)).length();
 }
 
+static float polygon_boundary_dist(Vec2 wp, const Polygon& polygon) {
+    if (!polygon_has_any_rounded_corner(polygon)) {
+        float best = 1e30f;
+        int n = (int)polygon.vertices.size();
+        for (int i = 0; i < n; ++i)
+            best = std::min(best, point_seg_dist(wp, polygon.vertices[i], polygon.vertices[(i + 1) % n]));
+        return best;
+    }
+
+    float best = 1e30f;
+    RoundedPolygonParts parts = decompose_rounded_polygon(polygon);
+    for (const auto& edge : parts.edges)
+        best = std::min(best, point_seg_dist(wp, edge.a, edge.b));
+    for (const auto& corner : parts.corners) {
+        Arc arc;
+        arc.center = corner.center;
+        arc.radius = corner.radius;
+        arc.angle_start = corner.angle_start;
+        arc.sweep = corner.sweep;
+        best = std::min(best, point_arc_distance(wp, arc));
+    }
+    return best;
+}
+
 static float shape_distance(Vec2 wp, const Shape& shape) {
     return std::visit(overloaded{
         [&](const Circle& c) -> float {
@@ -126,13 +150,7 @@ static float shape_distance(Vec2 wp, const Shape& shape) {
             }
             return best;
         },
-        [&](const Polygon& p) -> float {
-            float best = 1e30f;
-            int n = (int)p.vertices.size();
-            for (int i = 0; i < n; ++i)
-                best = std::min(best, point_seg_dist(wp, p.vertices[i], p.vertices[(i + 1) % n]));
-            return best;
-        },
+        [&](const Polygon& p) -> float { return polygon_boundary_dist(wp, p); },
         [&](const Ellipse& e) -> float {
             // Transform point to local coords
             float cr = std::cos(-e.rotation), sr = std::sin(-e.rotation);

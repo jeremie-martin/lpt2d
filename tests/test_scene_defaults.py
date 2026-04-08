@@ -101,7 +101,7 @@ def test_authored_json_uses_explicit_look_trace_and_groups():
         assert isinstance(data["groups"], list), f"{path} groups must be an array"
 
 
-def test_repo_authored_json_is_strict_v6_and_id_coherent():
+def test_repo_authored_json_is_strict_and_id_coherent():
     for path in _iter_scene_paths():
         data = _load(path)
         assert data.get("version") == 9, f"{path} must declare version 9"
