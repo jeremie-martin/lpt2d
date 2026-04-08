@@ -40,7 +40,7 @@ def test_scene_find_group_empty():
 
 def test_scene_clone():
     mat = Material(ior=1.5)
-    scene = Scene(shapes=[Circle(center=[0, 0], radius=1.0, material=mat)])
+    scene = Scene(materials={"glass": mat}, shapes=[Circle(center=[0, 0], radius=1.0, material_id="glass")])
     cloned = scene.clone()
     c0 = cloned.shapes[0]
     assert isinstance(c0, Circle)

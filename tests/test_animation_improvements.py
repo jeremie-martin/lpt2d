@@ -259,10 +259,10 @@ class TestRayIntersect:
         poly = Polygon(
             id="smooth",
             vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-            material=Material(),
+            material_id="mat",
             smooth_angle=2.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
         assert result is not None
@@ -280,10 +280,10 @@ class TestRayIntersect:
         poly = Polygon(
             id="sharp",
             vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-            material=Material(),
+            material_id="mat",
             smooth_angle=1.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
         assert result is not None
@@ -296,10 +296,10 @@ class TestRayIntersect:
         poly = Polygon(
             id="concave",
             vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
-            material=Material(),
+            material_id="mat",
             smooth_angle=3.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.0, 1.001), (1.0, 0.0))
         assert result is not None
@@ -313,7 +313,7 @@ class TestRayIntersect:
         poly = Polygon(
             id="concave_smooth",
             vertices=[(0.0, 0.0), (0.0, 3.0), (1.0, 3.0), (1.0, 1.0), (3.0, 1.0), (3.0, 0.0)],
-            material=Material(),
+            material_id="mat",
             join_modes=[
                 PolygonJoinMode.auto,
                 PolygonJoinMode.auto,
@@ -324,7 +324,7 @@ class TestRayIntersect:
             ],
             smooth_angle=0.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.0, 1.001), (1.0, 0.0))
         assert result is not None
@@ -340,7 +340,7 @@ class TestRayIntersect:
         poly = Polygon(
             id="forced_sharp",
             vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-            material=Material(),
+            material_id="mat",
             join_modes=[
                 PolygonJoinMode.auto,
                 PolygonJoinMode.sharp,
@@ -349,7 +349,7 @@ class TestRayIntersect:
             ],
             smooth_angle=2.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
         assert result is not None
@@ -362,7 +362,7 @@ class TestRayIntersect:
         poly = Polygon(
             id="forced_smooth",
             vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-            material=Material(),
+            material_id="mat",
             join_modes=[
                 PolygonJoinMode.auto,
                 PolygonJoinMode.auto,
@@ -371,7 +371,7 @@ class TestRayIntersect:
             ],
             smooth_angle=0.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (0.8, 2.0), (0.0, -1.0))
         assert result is not None
@@ -386,11 +386,11 @@ class TestRayIntersect:
         poly = Polygon(
             id="mixed",
             vertices=[(-1.0, -1.0), (-1.0, 1.0), (1.0, 1.0), (1.0, -1.0)],
-            material=Material(),
+            material_id="mat",
             corner_radii=[0.0, 0.0, 0.25, 0.0],
             smooth_angle=2.0,
         )
-        scene = Scene(shapes=[poly])
+        scene = Scene(materials={"mat": Material()}, shapes=[poly])
 
         result = ray_intersect(scene, (-0.75, 2.0), (0.0, -1.0))
         assert result is not None
@@ -403,8 +403,8 @@ class TestRayIntersect:
         from anim.analysis import ray_intersect
         from anim.types import Material, Scene, Segment
 
-        seg = Segment(id="wall", a=(0.0, -1.0), b=(0.0, 1.0), material=Material())
-        scene = Scene(shapes=[seg])
+        seg = Segment(id="wall", a=(0.0, -1.0), b=(0.0, 1.0), material_id="mat")
+        scene = Scene(materials={"mat": Material()}, shapes=[seg])
 
         result = ray_intersect(scene, (-1.0, 0.0), (1.0, 0.0))
         assert result is not None
@@ -418,8 +418,8 @@ class TestRayIntersect:
         from anim.analysis import ray_intersect
         from anim.types import Material, Scene, Segment
 
-        seg = Segment(id="wall", a=(0.0, -1.0), b=(0.0, 1.0), material=Material())
-        scene = Scene(shapes=[seg])
+        seg = Segment(id="wall", a=(0.0, -1.0), b=(0.0, 1.0), material_id="mat")
+        scene = Scene(materials={"mat": Material()}, shapes=[seg])
 
         # Shoot parallel to the segment
         result = ray_intersect(scene, (-1.0, 0.0), (0.0, 1.0))
@@ -429,9 +429,9 @@ class TestRayIntersect:
         from anim.analysis import ray_intersect
         from anim.types import Material, Scene, Segment
 
-        near = Segment(id="near", a=(1.0, -1.0), b=(1.0, 1.0), material=Material())
-        far = Segment(id="far", a=(3.0, -1.0), b=(3.0, 1.0), material=Material())
-        scene = Scene(shapes=[far, near])  # order shouldn't matter
+        near = Segment(id="near", a=(1.0, -1.0), b=(1.0, 1.0), material_id="mat")
+        far = Segment(id="far", a=(3.0, -1.0), b=(3.0, 1.0), material_id="mat")
+        scene = Scene(materials={"mat": Material()}, shapes=[far, near])  # order shouldn't matter
 
         result = ray_intersect(scene, (0.0, 0.0), (1.0, 0.0))
         assert result is not None
@@ -441,9 +441,9 @@ class TestRayIntersect:
         from anim.analysis import ray_intersect
         from anim.types import Group, Material, Scene, Segment, Transform2D
 
-        seg = Segment(id="inner", a=(0.0, -1.0), b=(0.0, 1.0), material=Material())
+        seg = Segment(id="inner", a=(0.0, -1.0), b=(0.0, 1.0), material_id="mat")
         group = Group(id="g1", transform=Transform2D(), shapes=[seg])
-        scene = Scene(groups=[group])
+        scene = Scene(materials={"mat": Material()}, groups=[group])
 
         result = ray_intersect(scene, (-1.0, 0.0), (1.0, 0.0))
         assert result is not None
@@ -453,9 +453,9 @@ class TestRayIntersect:
         from anim.analysis import projector_target
         from anim.types import Material, ProjectorLight, Scene, Segment
 
-        wall = Segment(id="target", a=(2.0, -1.0), b=(2.0, 1.0), material=Material())
+        wall = Segment(id="target", a=(2.0, -1.0), b=(2.0, 1.0), material_id="mat")
         light = ProjectorLight(position=(0.0, 0.0), direction=(1.0, 0.0))
-        scene = Scene(shapes=[wall])
+        scene = Scene(materials={"mat": Material()}, shapes=[wall])
 
         assert projector_target(scene, light) == "target"
 
@@ -463,9 +463,9 @@ class TestRayIntersect:
         from anim.analysis import projector_target
         from anim.types import Material, ProjectorLight, Scene, Segment
 
-        wall = Segment(id="target", a=(2.0, -1.0), b=(2.0, 1.0), material=Material())
+        wall = Segment(id="target", a=(2.0, -1.0), b=(2.0, 1.0), material_id="mat")
         light = ProjectorLight(position=(0.0, 0.0), direction=(0.0, 1.0))
-        scene = Scene(shapes=[wall])
+        scene = Scene(materials={"mat": Material()}, shapes=[wall])
 
         assert projector_target(scene, light) is None
 

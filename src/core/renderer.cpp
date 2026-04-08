@@ -597,7 +597,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gc.radius = c.radius;
                 gc.radius_sq = c.radius * c.radius;
                 gc.inv_radius = c.radius > 0.0f ? 1.0f / c.radius : 0.0f;
-                fill_material(gc, resolve_binding(c.binding, scene.materials));
+                fill_material(gc, resolve_material_id(c.material_id, scene.materials));
                 circles.push_back(gc);
             },
             [&](const Segment& s) {
@@ -605,7 +605,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 Vec2 d = s.b - s.a;
                 Vec2 flat_normal = d.perp().normalized();
                 set_segment_geometry(gs, s.a, s.b, flat_normal, flat_normal);
-                fill_material(gs, resolve_binding(s.binding, scene.materials));
+                fill_material(gs, resolve_material_id(s.material_id, scene.materials));
                 segs.push_back(gs);
             },
             [&](const Arc& a) {
@@ -616,7 +616,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ga.sweep = a.sweep;
                 ga.radius_sq = a.radius * a.radius;
                 ga.inv_radius = a.radius > 0.0f ? 1.0f / a.radius : 0.0f;
-                fill_material(ga, resolve_binding(a.binding, scene.materials));
+                fill_material(ga, resolve_material_id(a.material_id, scene.materials));
                 gpu_arcs.push_back(ga);
             },
             [&](const Bezier& b) {
@@ -624,13 +624,13 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gb.p0[0] = b.p0.x; gb.p0[1] = b.p0.y;
                 gb.p1[0] = b.p1.x; gb.p1[1] = b.p1.y;
                 gb.p2[0] = b.p2.x; gb.p2[1] = b.p2.y;
-                fill_material(gb, resolve_binding(b.binding, scene.materials));
+                fill_material(gb, resolve_material_id(b.material_id, scene.materials));
                 gpu_beziers.push_back(gb);
             },
             [&](const Polygon& p) {
                 int n = (int)p.vertices.size();
                 if (n < 2) return;
-                const Material& mat = resolve_binding(p.binding, scene.materials);
+                const Material& mat = resolve_material_id(p.material_id, scene.materials);
                 auto parts = decompose_rounded_polygon(p);
                 for (auto& e : parts.edges) {
                     GPUSegment gs{};
@@ -659,12 +659,12 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 ge.inv_b2 = b2 > 0.0f ? 1.0f / b2 : 0.0f;
                 ge.rot_cos = std::cos(e.rotation);
                 ge.rot_sin = std::sin(e.rotation);
-                fill_material(ge, resolve_binding(e.binding, scene.materials));
+                fill_material(ge, resolve_material_id(e.material_id, scene.materials));
                 gpu_ellipses.push_back(ge);
             },
             [&](const Path& path) {
                 auto parts = decompose_path(path);
-                const Material& mat = resolve_binding(path.binding, scene.materials);
+                const Material& mat = resolve_material_id(path.material_id, scene.materials);
                 for (auto& curve : parts.curves) {
                     GPUBezier gb{};
                     gb.p0[0] = curve.p0.x; gb.p0[1] = curve.p0.y;
@@ -811,8 +811,8 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
 
     // Resolve fill color for a material; returns nullopt if shape should not be filled.
     struct FillColor { float r, g, b; };
-    auto resolve_fill = [&](const MaterialBinding& binding) -> std::optional<FillColor> {
-        const Material& mat = resolve_binding(binding, scene.materials);
+    auto resolve_fill = [&](std::string_view material_id) -> std::optional<FillColor> {
+        const Material& mat = resolve_material_id(material_id, scene.materials);
         if (mat.fill <= 0.0f) return std::nullopt;
         Vec3 rgb = spectral_fill_rgb(mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
         return FillColor{rgb.r * mat.fill, rgb.g * mat.fill, rgb.b * mat.fill};
@@ -826,7 +826,7 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
     for (const auto& shape : all_shapes) {
         std::visit(overloaded{
             [&](const Circle& c) {
-                auto fc = resolve_fill(c.binding);
+                auto fc = resolve_fill(c.material_id);
                 if (!fc) return;
                 float fr = fc->r, fg = fc->g, fb = fc->b;
                 // 64-vertex fan from center
@@ -841,7 +841,7 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
             },
             [&](const Polygon& p) {
                 if (p.vertices.size() < 3) return;
-                auto fc = resolve_fill(p.binding);
+                auto fc = resolve_fill(p.material_id);
                 if (!fc) return;
                 float fr = fc->r, fg = fc->g, fb = fc->b;
 
@@ -858,7 +858,7 @@ void Renderer::upload_fills(const Scene& scene, const Bounds& bounds) {
                 }
             },
             [&](const Ellipse& e) {
-                auto fc = resolve_fill(e.binding);
+                auto fc = resolve_fill(e.material_id);
                 if (!fc) return;
                 float fr = fc->r, fg = fc->g, fb = fc->b;
                 float cr = cosf(e.rotation), sr = sinf(e.rotation);

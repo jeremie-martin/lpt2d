@@ -26,7 +26,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 10;
+constexpr int SHOT_JSON_VERSION = 11;
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
@@ -212,21 +212,15 @@ Json write_material(const Material& material) {
     return json;
 }
 
-MaterialBinding read_shape_material(const Json& json,
-                                    const std::map<std::string, Material>& materials,
-                                    std::string_view context) {
-    const bool has_material = json.contains("material");
-    const bool has_material_id = json.contains("material_id");
-    if (has_material == has_material_id)
-        fail("shape entries must declare exactly one of material and material_id");
-    if (has_material_id) {
-        const std::string mid = read_required_string(json, "material_id", context);
-        if (mid.empty()) fail("material_id must be a non-empty string");
-        if (!materials.contains(mid)) fail("unknown material_id: " + mid);
-        return MaterialBinding(mid);
-    }
-    return MaterialBinding(read_material(require_key(json, "material", context),
-                                          std::string(context) + ".material"));
+std::string read_shape_material_id(const Json& json,
+                                   const std::map<std::string, Material>& materials,
+                                   std::string_view context) {
+    if (json.contains("material"))
+        fail("inline shape materials are no longer supported; use material_id");
+    const std::string mid = read_required_string(json, "material_id", context);
+    if (mid.empty()) fail("material_id must be a non-empty string");
+    if (!materials.contains(mid)) fail("unknown material_id: " + mid);
+    return mid;
 }
 
 Shape read_shape(const Json& json, const std::map<std::string, Material>& materials,
@@ -234,25 +228,25 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     const std::string type = read_required_string(json, "type", context);
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("shape ids must be non-empty");
-    auto binding = read_shape_material(json, materials, context);
+    const std::string material_id = read_shape_material_id(json, materials, context);
     if (type == "circle") {
-        reject_unknown_keys(json, {"id", "type", "center", "radius", "material", "material_id"}, context);
-        Circle circle{id, {}, 0.1f, std::move(binding)};
+        reject_unknown_keys(json, {"id", "type", "center", "radius", "material_id"}, context);
+        Circle circle{id, {}, 0.1f, material_id};
                 circle.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
                 circle.radius = read_required_float(json, "radius", context);
         return circle;
     }
     if (type == "segment") {
-        reject_unknown_keys(json, {"id", "type", "a", "b", "material", "material_id"}, context);
-        Segment segment{id, {}, {}, std::move(binding)};
+        reject_unknown_keys(json, {"id", "type", "a", "b", "material_id"}, context);
+        Segment segment{id, {}, {}, material_id};
                 segment.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
                 segment.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
         return segment;
     }
     if (type == "arc") {
         reject_unknown_keys(json, {"id", "type", "center", "radius", "angle_start", "sweep",
-                                   "material", "material_id"}, context);
-        Arc arc{id, {}, 0.1f, 0.0f, TWO_PI, std::move(binding)};
+                                   "material_id"}, context);
+        Arc arc{id, {}, 0.1f, 0.0f, TWO_PI, material_id};
                 arc.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
                 arc.radius = read_required_float(json, "radius", context);
                 arc.angle_start = normalize_angle(read_required_float(json, "angle_start", context));
@@ -260,8 +254,8 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         return arc;
     }
     if (type == "bezier") {
-        reject_unknown_keys(json, {"id", "type", "p0", "p1", "p2", "material", "material_id"}, context);
-        Bezier bezier{id, {}, {0.5f, 0.5f}, {1.0f, 0.0f}, std::move(binding)};
+        reject_unknown_keys(json, {"id", "type", "p0", "p1", "p2", "material_id"}, context);
+        Bezier bezier{id, {}, {0.5f, 0.5f}, {1.0f, 0.0f}, material_id};
                 bezier.p0 = read_vec2(require_key(json, "p0", context), std::string(context) + ".p0");
                 bezier.p1 = read_vec2(require_key(json, "p1", context), std::string(context) + ".p1");
                 bezier.p2 = read_vec2(require_key(json, "p2", context), std::string(context) + ".p2");
@@ -269,9 +263,10 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
     }
     if (type == "polygon") {
         reject_unknown_keys(json, {"id", "type", "vertices", "corner_radius", "corner_radii",
-                                   "join_modes", "smooth_angle", "material", "material_id"}, context);
+                                   "join_modes", "smooth_angle", "material_id"}, context);
         Polygon polygon;
         polygon.id = id;
+        polygon.material_id = material_id;
          {
             expect_array(require_key(json, "vertices", context), std::string(context) + ".vertices");
             for (size_t i = 0; i < json["vertices"].size(); ++i)
@@ -289,13 +284,12 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         if (PolygonFieldValidationResult polygon_validation = validate_polygon_fields(polygon);
             polygon_validation.error != PolygonFieldValidationError::None)
             fail(format_polygon_field_validation_error(polygon_validation, context, true));
-        polygon.binding = std::move(binding);
         return polygon;
     }
     if (type == "ellipse") {
         reject_unknown_keys(json, {"id", "type", "center", "semi_a", "semi_b", "rotation",
-                                   "material", "material_id"}, context);
-        Ellipse ellipse{id, {}, 0.2f, 0.1f, 0.0f, std::move(binding)};
+                                   "material_id"}, context);
+        Ellipse ellipse{id, {}, 0.2f, 0.1f, 0.0f, material_id};
                 ellipse.center = read_vec2(require_key(json, "center", context), std::string(context) + ".center");
                 ellipse.semi_a = read_required_float(json, "semi_a", context);
                 ellipse.semi_b = read_required_float(json, "semi_b", context);
@@ -303,9 +297,10 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
         return ellipse;
     }
     if (type == "path") {
-        reject_unknown_keys(json, {"id", "type", "points", "closed", "material", "material_id"}, context);
+        reject_unknown_keys(json, {"id", "type", "points", "closed", "material_id"}, context);
         Path path;
         path.id = id;
+        path.material_id = material_id;
          {
             expect_array(require_key(json, "points", context), std::string(context) + ".points");
             for (size_t i = 0; i < json["points"].size(); ++i)
@@ -317,49 +312,40 @@ Shape read_shape(const Json& json, const std::map<std::string, Material>& materi
                  std::to_string(path.points.size()));
         if (json.contains("closed"))
             path.closed = json["closed"].get<bool>();
-        path.binding = std::move(binding);
         return path;
     }
     fail("unknown shape type: " + type);
 }
 
 Json write_shape(const Shape& shape) {
-    auto write_binding = [](Json& json, const MaterialBinding& binding) {
-        if (is_material_ref(binding))
-            json["material_id"] = std::string(material_ref_id(binding));
-        else
-            json["material"] = write_material(std::get<Material>(binding));
-    };
     return std::visit(overloaded{
         [&](const Circle& value) {
             Json json = {{"id", value.id}, {"type", "circle"}, {"center", vec2_json(value.center)},
-                         {"radius", value.radius}};
-            write_binding(json, value.binding);
+                         {"radius", value.radius}, {"material_id", value.material_id}};
             return json;
         },
         [&](const Segment& value) {
             Json json = {{"id", value.id}, {"type", "segment"}, {"a", vec2_json(value.a)},
-                         {"b", vec2_json(value.b)}};
-            write_binding(json, value.binding);
+                         {"b", vec2_json(value.b)}, {"material_id", value.material_id}};
             return json;
         },
         [&](const Arc& value) {
             Json json = {{"id", value.id}, {"type", "arc"}, {"center", vec2_json(value.center)},
                          {"radius", value.radius}, {"angle_start", value.angle_start},
-                         {"sweep", value.sweep}};
-            write_binding(json, value.binding);
+                         {"sweep", value.sweep}, {"material_id", value.material_id}};
             return json;
         },
         [&](const Bezier& value) {
             Json json = {{"id", value.id}, {"type", "bezier"}, {"p0", vec2_json(value.p0)},
-                         {"p1", vec2_json(value.p1)}, {"p2", vec2_json(value.p2)}};
-            write_binding(json, value.binding);
+                         {"p1", vec2_json(value.p1)}, {"p2", vec2_json(value.p2)},
+                         {"material_id", value.material_id}};
             return json;
         },
         [&](const Polygon& value) {
             Json vertices = Json::array();
             for (Vec2 vertex : value.vertices) vertices.push_back(vec2_json(vertex));
-            Json json = {{"id", value.id}, {"type", "polygon"}, {"vertices", std::move(vertices)}};
+            Json json = {{"id", value.id}, {"type", "polygon"}, {"vertices", std::move(vertices)},
+                         {"material_id", value.material_id}};
             if (value.corner_radius > 0.0f)
                 json["corner_radius"] = value.corner_radius;
             if (!value.corner_radii.empty()) {
@@ -376,23 +362,21 @@ Json write_shape(const Shape& shape) {
             }
             if (value.smooth_angle > 0.0f)
                 json["smooth_angle"] = value.smooth_angle;
-            write_binding(json, value.binding);
             return json;
         },
         [&](const Ellipse& value) {
             Json json = {{"id", value.id}, {"type", "ellipse"}, {"center", vec2_json(value.center)},
                          {"semi_a", value.semi_a}, {"semi_b", value.semi_b},
-                         {"rotation", value.rotation}};
-            write_binding(json, value.binding);
+                         {"rotation", value.rotation}, {"material_id", value.material_id}};
             return json;
         },
         [&](const Path& value) {
             Json points = Json::array();
             for (Vec2 p : value.points) points.push_back(vec2_json(p));
-            Json json = {{"id", value.id}, {"type", "path"}, {"points", std::move(points)}};
+            Json json = {{"id", value.id}, {"type", "path"}, {"points", std::move(points)},
+                         {"material_id", value.material_id}};
             if (value.closed)
                 json["closed"] = true;
-            write_binding(json, value.binding);
             return json;
         },
     }, shape);

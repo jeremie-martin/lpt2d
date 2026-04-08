@@ -1,10 +1,10 @@
 # Authored Format
 
-This repo treats authored shot JSON as a strict `version: 10` format.
+This repo treats authored shot JSON as a strict `version: 11` format.
 
 ## Policy
 
-- Python and C++ loaders reject authored JSON whose `version` is not `10`.
+- Python and C++ loaders reject authored JSON whose `version` is not `11`.
 - The repo does not keep fallback readers or compatibility branches for older
   authored shot versions.
 - Format changes should land as explicit repo-wide migrations across scenes,
@@ -18,15 +18,11 @@ normalized authored model:
 - every persisted shape, light, and group has a stable non-empty authored `id`
 - committed ids do not use legacy generated names such as `root_*`
 - scenes define a top-level `materials` library
-- committed shapes use `material_id` bindings instead of inline `material`
-  payloads
+- every shape binds to that library through `material_id`
 - authored JSON keeps explicit `camera`, `canvas`, `look`, `trace`,
   `materials`, `shapes`, `lights`, and `groups` blocks
 - `look`, `trace`, and material objects store their full canonical field sets
 - authored `trace` includes `seed_mode`
-
-Inline shape materials are still supported for transient or one-off data, but
-the committed repo baseline uses named materials and explicit bindings.
 
 ## Polygon Fields
 
@@ -61,21 +57,26 @@ shading continuity at a concave join. Fillets remain convex-only geometry.
 Python authoring example:
 
 ```python
-from anim import Polygon, mirror
+from anim import Polygon, Scene, mirror
 
-Polygon(
-    id="blade",
-    vertices=[
-        [-0.8, -0.2],
-        [-0.8, 0.2],
-        [0.7, 0.2],
-        [1.0, 0.0],
-        [0.7, -0.2],
+scene = Scene(
+    materials={"steel": mirror(1.0)},
+    shapes=[
+        Polygon(
+            id="blade",
+            vertices=[
+                [-0.8, -0.2],
+                [-0.8, 0.2],
+                [0.7, 0.2],
+                [1.0, 0.0],
+                [0.7, -0.2],
+            ],
+            material_id="steel",
+            join_modes=["auto", "sharp", "smooth", "smooth", "auto"],
+            corner_radii=[0.0, 0.0, 0.02, 0.0, 0.0],
+            smooth_angle=0.9,
+        )
     ],
-    material=mirror(1.0),
-    join_modes=["auto", "sharp", "smooth", "smooth", "auto"],
-    corner_radii=[0.0, 0.0, 0.02, 0.0, 0.0],
-    smooth_angle=0.9,
 )
 ```
 

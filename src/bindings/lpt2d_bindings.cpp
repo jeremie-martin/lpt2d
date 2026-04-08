@@ -114,6 +114,22 @@ static std::vector<PolygonJoinMode> parse_polygon_join_modes_arg(nb::object obj)
     return join_modes;
 }
 
+static std::string require_non_empty_material_id(std::string material_id) {
+    if (material_id.empty())
+        throw nb::value_error("material_id must be non-empty");
+    return material_id;
+}
+
+template <typename ShapeT>
+static const std::string& shape_material_id(const ShapeT& shape) {
+    return shape.material_id;
+}
+
+template <typename ShapeT>
+static void set_shape_material_id(ShapeT& shape, std::string material_id) {
+    shape.material_id = require_non_empty_material_id(std::move(material_id));
+}
+
 // ─── Module ──────────────────────────────────────────────────────
 
 NB_MODULE(_lpt2d, m) {
@@ -223,134 +239,76 @@ NB_MODULE(_lpt2d, m) {
 
     // ── Shape types ──────────────────────────────────────────────
 
-    // Helper: build MaterialBinding from Python material + material_id kwargs.
-    // material_id takes precedence if non-empty.
-    auto make_binding = [](nb::object material, std::string material_id) -> MaterialBinding {
-        if (!material_id.empty())
-            return material_id;
-        if (!material.is_none() && nb::isinstance<Material>(material))
-            return nb::cast<Material>(material);
-        return Material{};
-    };
-
-    // Material property helpers — present material/material_id as separate Python properties
-    auto mat_getter = [](const auto& s) -> Material {
-        if (auto* mat = std::get_if<Material>(&s.binding)) return *mat;
-        return Material{};
-    };
-    auto mat_setter = [](auto& s, const Material& mat) { s.binding = mat; };
-    auto mid_getter = [](const auto& s) -> std::string {
-        if (auto* str = std::get_if<std::string>(&s.binding)) return *str;
-        return {};
-    };
-    auto mid_setter = [](auto& s, std::string id) {
-        if (id.empty()) { if (is_material_ref(s.binding)) s.binding = Material{}; }
-        else s.binding = std::move(id);
-    };
-
     nb::class_<Circle>(m, "Circle")
-        .def("__init__", [=](Circle* c, std::string id, Vec2 center, float radius,
-                             nb::object material, std::string material_id) {
-            new (c) Circle{std::move(id), center, radius, make_binding(material, std::move(material_id))};
-        }, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f,
-           "material"_a = nb::none(), "material_id"_a = "")
+        .def("__init__", [](Circle* c, std::string material_id, std::string id, Vec2 center, float radius) {
+            new (c) Circle{std::move(id), center, radius, require_non_empty_material_id(std::move(material_id))};
+        }, "material_id"_a, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f)
         .def_rw("id", &Circle::id)
         .def_rw("center", &Circle::center)
         .def_rw("radius", &Circle::radius)
-        .def_prop_rw("material",
-            [=](const Circle& c) { return mat_getter(c); },
-            [=](Circle& c, const Material& m) { mat_setter(c, m); })
-        .def_prop_rw("material_id",
-            [=](const Circle& c) { return mid_getter(c); },
-            [=](Circle& c, std::string id) { mid_setter(c, std::move(id)); })
+        .def_prop_rw("material_id", &shape_material_id<Circle>, &set_shape_material_id<Circle>)
         .def("__repr__", [](const Circle& c) {
             return "Circle(id='" + c.id + "', center=(" + std::to_string(c.center.x) + ", "
                    + std::to_string(c.center.y) + "), radius=" + std::to_string(c.radius) + ")";
         });
 
     nb::class_<Segment>(m, "Segment")
-        .def("__init__", [=](Segment* s, std::string id, Vec2 a, Vec2 b,
-                             nb::object material, std::string material_id) {
-            new (s) Segment{std::move(id), a, b, make_binding(material, std::move(material_id))};
-        }, "id"_a = "", "a"_a = Vec2{}, "b"_a = Vec2{},
-           "material"_a = nb::none(), "material_id"_a = "")
+        .def("__init__", [](Segment* s, std::string material_id, std::string id, Vec2 a, Vec2 b) {
+            new (s) Segment{std::move(id), a, b, require_non_empty_material_id(std::move(material_id))};
+        }, "material_id"_a, "id"_a = "", "a"_a = Vec2{}, "b"_a = Vec2{})
         .def_rw("id", &Segment::id)
         .def_rw("a", &Segment::a)
         .def_rw("b", &Segment::b)
-        .def_prop_rw("material",
-            [=](const Segment& s) { return mat_getter(s); },
-            [=](Segment& s, const Material& m) { mat_setter(s, m); })
-        .def_prop_rw("material_id",
-            [=](const Segment& s) { return mid_getter(s); },
-            [=](Segment& s, std::string id) { mid_setter(s, std::move(id)); });
+        .def_prop_rw("material_id", &shape_material_id<Segment>, &set_shape_material_id<Segment>);
 
     nb::class_<Arc>(m, "Arc")
-        .def("__init__", [=](Arc* a, std::string id, Vec2 center, float radius,
-                             float angle_start, float sweep,
-                             nb::object material, std::string material_id) {
+        .def("__init__", [](Arc* a, std::string material_id, std::string id, Vec2 center, float radius,
+                            float angle_start, float sweep) {
             new (a) Arc{std::move(id), center, radius, angle_start, sweep,
-                        make_binding(material, std::move(material_id))};
-        }, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f,
-           "angle_start"_a = 0.0f, "sweep"_a = TWO_PI,
-           "material"_a = nb::none(), "material_id"_a = "")
+                        require_non_empty_material_id(std::move(material_id))};
+        }, "material_id"_a, "id"_a = "", "center"_a = Vec2{}, "radius"_a = 0.1f,
+           "angle_start"_a = 0.0f, "sweep"_a = TWO_PI)
         .def_rw("id", &Arc::id)
         .def_rw("center", &Arc::center)
         .def_rw("radius", &Arc::radius)
         .def_rw("angle_start", &Arc::angle_start)
         .def_rw("sweep", &Arc::sweep)
-        .def_prop_rw("material",
-            [=](const Arc& a) { return mat_getter(a); },
-            [=](Arc& a, const Material& m) { mat_setter(a, m); })
-        .def_prop_rw("material_id",
-            [=](const Arc& a) { return mid_getter(a); },
-            [=](Arc& a, std::string id) { mid_setter(a, std::move(id)); });
+        .def_prop_rw("material_id", &shape_material_id<Arc>, &set_shape_material_id<Arc>);
 
     nb::class_<Bezier>(m, "Bezier")
-        .def("__init__", [=](Bezier* b, std::string id, Vec2 p0, Vec2 p1, Vec2 p2,
-                             nb::object material, std::string material_id) {
-            new (b) Bezier{std::move(id), p0, p1, p2, make_binding(material, std::move(material_id))};
-        }, "id"_a = "", "p0"_a = Vec2{}, "p1"_a = Vec2{0.5f, 0.5f}, "p2"_a = Vec2{1.0f, 0.0f},
-           "material"_a = nb::none(), "material_id"_a = "")
+        .def("__init__", [](Bezier* b, std::string material_id, std::string id, Vec2 p0, Vec2 p1, Vec2 p2) {
+            new (b) Bezier{std::move(id), p0, p1, p2, require_non_empty_material_id(std::move(material_id))};
+        }, "material_id"_a, "id"_a = "", "p0"_a = Vec2{}, "p1"_a = Vec2{0.5f, 0.5f}, "p2"_a = Vec2{1.0f, 0.0f})
         .def_rw("id", &Bezier::id)
         .def_rw("p0", &Bezier::p0)
         .def_rw("p1", &Bezier::p1)
         .def_rw("p2", &Bezier::p2)
-        .def_prop_rw("material",
-            [=](const Bezier& b) { return mat_getter(b); },
-            [=](Bezier& b, const Material& m) { mat_setter(b, m); })
-        .def_prop_rw("material_id",
-            [=](const Bezier& b) { return mid_getter(b); },
-            [=](Bezier& b, std::string id) { mid_setter(b, std::move(id)); });
+        .def_prop_rw("material_id", &shape_material_id<Bezier>, &set_shape_material_id<Bezier>);
 
     nb::class_<Polygon>(m, "Polygon")
-        .def("__init__", [=](Polygon* p, std::string id, std::vector<Vec2> vertices,
-                             nb::object material, std::string material_id, float corner_radius,
-                             std::vector<float> corner_radii, float smooth_angle, nb::object join_modes_obj) {
+        .def("__init__", [](Polygon* p, std::string material_id, std::string id, std::vector<Vec2> vertices,
+                            float corner_radius,
+                            std::vector<float> corner_radii, float smooth_angle, nb::object join_modes_obj) {
             new (p) Polygon{};
             p->id = std::move(id);
             p->vertices = std::move(vertices);
-            p->binding = make_binding(material, std::move(material_id));
+            p->material_id = require_non_empty_material_id(std::move(material_id));
             p->corner_radius = corner_radius;
             p->corner_radii = std::move(corner_radii);
             p->smooth_angle = smooth_angle;
             p->join_modes = parse_polygon_join_modes_arg(join_modes_obj);
-        }, "id"_a = "", "vertices"_a = std::vector<Vec2>{},
-           "material"_a = nb::none(), "material_id"_a = "", "corner_radius"_a = 0.0f,
+        }, "material_id"_a, "id"_a = "", "vertices"_a = std::vector<Vec2>{},
+           "corner_radius"_a = 0.0f,
            "corner_radii"_a = std::vector<float>{}, "smooth_angle"_a = 0.0f, "join_modes"_a = nb::none())
         .def_rw("id", &Polygon::id)
         .def_rw("vertices", &Polygon::vertices)
+        .def_prop_rw("material_id", &shape_material_id<Polygon>, &set_shape_material_id<Polygon>)
         .def_rw("corner_radius", &Polygon::corner_radius)
         .def_rw("corner_radii", &Polygon::corner_radii)
         .def_prop_rw("join_modes",
             [](const Polygon& p) { return p.join_modes; },
             [](Polygon& p, nb::object obj) { p.join_modes = parse_polygon_join_modes_arg(obj); })
-        .def_rw("smooth_angle", &Polygon::smooth_angle)
-        .def_prop_rw("material",
-            [=](const Polygon& p) { return mat_getter(p); },
-            [=](Polygon& p, const Material& m) { mat_setter(p, m); })
-        .def_prop_rw("material_id",
-            [=](const Polygon& p) { return mid_getter(p); },
-            [=](Polygon& p, std::string id) { mid_setter(p, std::move(id)); });
+        .def_rw("smooth_angle", &Polygon::smooth_angle);
 
     m.def("_polygon_fill_boundary", &polygon_fill_boundary,
           "polygon"_a, "arc_segments"_a = 8);
@@ -358,41 +316,28 @@ NB_MODULE(_lpt2d, m) {
           "vertices"_a);
 
     nb::class_<Ellipse>(m, "Ellipse")
-        .def("__init__", [=](Ellipse* e, std::string id, Vec2 center,
-                             float semi_a, float semi_b, float rotation,
-                             nb::object material, std::string material_id) {
+        .def("__init__", [](Ellipse* e, std::string material_id, std::string id, Vec2 center,
+                            float semi_a, float semi_b, float rotation) {
             new (e) Ellipse{std::move(id), center, semi_a, semi_b, rotation,
-                            make_binding(material, std::move(material_id))};
-        }, "id"_a = "", "center"_a = Vec2{}, "semi_a"_a = 0.2f, "semi_b"_a = 0.1f,
-           "rotation"_a = 0.0f, "material"_a = nb::none(), "material_id"_a = "")
+                            require_non_empty_material_id(std::move(material_id))};
+        }, "material_id"_a, "id"_a = "", "center"_a = Vec2{}, "semi_a"_a = 0.2f, "semi_b"_a = 0.1f,
+           "rotation"_a = 0.0f)
         .def_rw("id", &Ellipse::id)
         .def_rw("center", &Ellipse::center)
         .def_rw("semi_a", &Ellipse::semi_a)
         .def_rw("semi_b", &Ellipse::semi_b)
         .def_rw("rotation", &Ellipse::rotation)
-        .def_prop_rw("material",
-            [=](const Ellipse& e) { return mat_getter(e); },
-            [=](Ellipse& e, const Material& m) { mat_setter(e, m); })
-        .def_prop_rw("material_id",
-            [=](const Ellipse& e) { return mid_getter(e); },
-            [=](Ellipse& e, std::string id) { mid_setter(e, std::move(id)); });
+        .def_prop_rw("material_id", &shape_material_id<Ellipse>, &set_shape_material_id<Ellipse>);
 
     nb::class_<Path>(m, "Path")
-        .def("__init__", [=](Path* p, std::string id, std::vector<Vec2> points,
-                             nb::object material, std::string material_id, bool closed) {
-            new (p) Path{std::move(id), std::move(points),
-                         make_binding(material, std::move(material_id)), closed};
-        }, "id"_a = "", "points"_a = std::vector<Vec2>{},
-           "material"_a = nb::none(), "material_id"_a = "", "closed"_a = false)
+        .def("__init__", [](Path* p, std::string material_id, std::string id, std::vector<Vec2> points,
+                            bool closed) {
+            new (p) Path{std::move(id), std::move(points), require_non_empty_material_id(std::move(material_id)), closed};
+        }, "material_id"_a, "id"_a = "", "points"_a = std::vector<Vec2>{}, "closed"_a = false)
         .def_rw("id", &Path::id)
         .def_rw("points", &Path::points)
         .def_rw("closed", &Path::closed)
-        .def_prop_rw("material",
-            [=](const Path& p) { return mat_getter(p); },
-            [=](Path& p, const Material& m) { mat_setter(p, m); })
-        .def_prop_rw("material_id",
-            [=](const Path& p) { return mid_getter(p); },
-            [=](Path& p, std::string id) { mid_setter(p, std::move(id)); });
+        .def_prop_rw("material_id", &shape_material_id<Path>, &set_shape_material_id<Path>);
 
     // ── Light types ──────────────────────────────────────────────
     nb::class_<PointLight>(m, "PointLight")

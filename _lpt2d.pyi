@@ -134,11 +134,10 @@ def named_color_list() -> list: ...
 class Circle:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         center: Vec2Like = (0.0, 0.0),
         radius: float = 0.10000000149011612,
-        material: object | None = None,
-        material_id: str = "",
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -153,10 +152,6 @@ class Circle:
     @radius.setter
     def radius(self, arg: float, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -165,11 +160,10 @@ class Circle:
 class Segment:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         a: Vec2Like = (0.0, 0.0),
         b: Vec2Like = (0.0, 0.0),
-        material: object | None = None,
-        material_id: str = "",
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -184,10 +178,6 @@ class Segment:
     @b.setter
     def b(self, arg: Vec2Like, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -195,13 +185,12 @@ class Segment:
 class Arc:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         center: Vec2Like = (0.0, 0.0),
         radius: float = 0.10000000149011612,
         angle_start: float = 0.0,
         sweep: float = 6.2831854820251465,
-        material: object | None = None,
-        material_id: str = "",
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -224,10 +213,6 @@ class Arc:
     @sweep.setter
     def sweep(self, arg: float, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -235,12 +220,11 @@ class Arc:
 class Bezier:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         p0: Vec2Like = (0.0, 0.0),
         p1: Vec2Like = (0.5, 0.5),
         p2: Vec2Like = (1.0, 0.0),
-        material: object | None = None,
-        material_id: str = "",
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -259,10 +243,6 @@ class Bezier:
     @p2.setter
     def p2(self, arg: Vec2Like, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -270,10 +250,9 @@ class Bezier:
 class Polygon:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         vertices: Sequence[Vec2Like] = [],
-        material: object | None = None,
-        material_id: str = "",
         corner_radius: float = 0.0,
         corner_radii: Sequence[float] = [],
         smooth_angle: float = 0.0,
@@ -304,10 +283,6 @@ class Polygon:
     @smooth_angle.setter
     def smooth_angle(self, arg: float, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -315,13 +290,12 @@ class Polygon:
 class Ellipse:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         center: Vec2Like = (0.0, 0.0),
         semi_a: float = 0.20000000298023224,
         semi_b: float = 0.10000000149011612,
         rotation: float = 0.0,
-        material: object | None = None,
-        material_id: str = "",
     ) -> None: ...
     @property
     def id(self) -> str: ...
@@ -344,10 +318,6 @@ class Ellipse:
     @rotation.setter
     def rotation(self, arg: float, /) -> None: ...
     @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
-    @property
     def material_id(self) -> str: ...
     @material_id.setter
     def material_id(self, arg: str, /) -> None: ...
@@ -355,10 +325,9 @@ class Ellipse:
 class Path:
     def __init__(
         self,
+        material_id: str,
         id: str = "",
         points: Sequence[Vec2Like] = [],
-        material: object | None = None,
-        material_id: str = "",
         closed: bool = False,
     ) -> None: ...
     @property
@@ -373,10 +342,6 @@ class Path:
     def closed(self) -> bool: ...
     @closed.setter
     def closed(self, arg: bool, /) -> None: ...
-    @property
-    def material(self) -> Material: ...
-    @material.setter
-    def material(self, arg: Material, /) -> None: ...
     @property
     def material_id(self) -> str: ...
     @material_id.setter

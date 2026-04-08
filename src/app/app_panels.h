@@ -30,6 +30,9 @@ struct MaterialLibraryPanelState {
     std::array<char, 64> new_name{};
     bool editing = false;
     std::optional<SelectionRef> synced_target;
+    std::string delete_replacement_name;
+    bool delete_replacement_pending_new = false;
+    std::string delete_error;
 };
 
 // Aggregate of all panel-local state (lives in App::run, passed to draw_controls_panel).

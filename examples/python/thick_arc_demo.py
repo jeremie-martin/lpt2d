@@ -47,23 +47,19 @@ def make_settings(mode: str = "preview") -> Shot:
 
 
 def frame(_ctx: FrameContext) -> Frame:
-    arc_mat = mirror(1.0)
-    wall_mat = absorber()
+    materials = {"arc": mirror(1.0), "wall": absorber()}
 
     # thick_arc() preserves smooth_angle as a real threshold by leaving the
     # curved-chain joins in auto mode while forcing the flat caps sharp.
     arc = thick_arc((0, 0), radius=0.5, thickness=0.15,
                     angle_start=math.pi / 2, sweep=math.pi,
-                    material=arc_mat, smooth_angle=1.0,
+                    material_id="arc", smooth_angle=1.0,
                     end_cap_radii=(0.075, 0.0), id_prefix="arc")
-    arc[0].material_id = "arc"
 
-    walls = mirror_box(1.2, 0.675, wall_mat, id_prefix="wall")
-    for w in walls:
-        w.material_id = "wall"
+    walls = mirror_box(1.2, 0.675, "wall", id_prefix="wall")
 
     return Frame(scene=Scene(
-        materials={"arc": arc_mat, "wall": wall_mat},
+        materials=materials,
         shapes=[*walls, *arc],
         lights=[ProjectorLight(
             id="beam", position=[0.9, 0.0], direction=[-1.0, 0.0],

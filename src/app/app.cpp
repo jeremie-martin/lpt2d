@@ -199,7 +199,13 @@ int App::run(const AppConfig& config) {
     bool force_live_metrics_refresh = true;
     float frame_ms = 16.0f;
 
-    auto make_default_arc = [](Vec2 center, Vec2 target) {
+    auto add_scene_material = [](Scene& scene, const Material& material, std::string_view base = "Material") {
+        std::string material_id = next_scene_material_id(scene, base);
+        scene.materials[material_id] = material;
+        return material_id;
+    };
+
+    auto make_default_arc = [](Vec2 center, Vec2 target, std::string material_id = {}) {
         Vec2 delta = target - center;
         float angle = delta.length_sq() > 1e-10f
             ? normalize_angle(std::atan2(delta.y, delta.x))
@@ -209,7 +215,7 @@ int App::run(const AppConfig& config) {
         arc.radius = std::max(delta.length(), 0.02f);
         arc.angle_start = normalize_angle(angle - 0.5f * PI);
         arc.sweep = PI;
-        arc.binding = mat_glass(1.5f, 20000.0f, 0.3f);
+        arc.material_id = std::move(material_id);
         return arc;
     };
 
@@ -219,17 +225,45 @@ int App::run(const AppConfig& config) {
                      force_live_metrics_refresh, win_w, win_h, mark_dirty);
     };
 
-    auto sanitize_clipboard_material_bindings = [&]() {
+    auto materialize_clipboard_for_paste = [&]() {
+        Clipboard pasted = ed.session.clipboard;
+        std::map<std::string, std::string> rebound_ids;
         auto for_each = [&](auto&& fn) {
-            for (auto& shape : ed.session.clipboard.shapes) fn(shape);
-            for (auto& group : ed.session.clipboard.groups)
+            for (auto& shape : pasted.shapes) fn(shape);
+            for (auto& group : pasted.groups)
                 for (auto& shape : group.shapes) fn(shape);
         };
         for_each([&](Shape& shape) {
-            auto ref = material_ref_id(shape_binding(shape));
-            if (!ref.empty() && !ed.shot.scene.materials.contains(std::string(ref)))
-                shape_binding(shape) = Material{};
+            std::string& material_id = shape_material_id(shape);
+            if (material_id.empty()) {
+                material_id = add_scene_material(ed.shot.scene, Material{});
+                return;
+            }
+            if (auto rebound = rebound_ids.find(material_id); rebound != rebound_ids.end()) {
+                material_id = rebound->second;
+                return;
+            }
+            auto clipboard_material = ed.session.clipboard.materials.find(material_id);
+            if (clipboard_material == ed.session.clipboard.materials.end()) {
+                if (!ed.shot.scene.materials.contains(material_id)) {
+                    std::string fallback_id = add_scene_material(ed.shot.scene, Material{}, material_id);
+                    rebound_ids[material_id] = fallback_id;
+                    material_id = fallback_id;
+                }
+                return;
+            }
+            auto live_material = ed.shot.scene.materials.find(material_id);
+            if (live_material == ed.shot.scene.materials.end()) {
+                ed.shot.scene.materials[material_id] = clipboard_material->second;
+                return;
+            }
+            if (live_material->second == clipboard_material->second)
+                return;
+            std::string rebound_id = add_scene_material(ed.shot.scene, clipboard_material->second, material_id);
+            rebound_ids[material_id] = rebound_id;
+            material_id = rebound_id;
         });
+        return pasted;
     };
 
     auto fit_bounds_rect = [](const Bounds& bounds, float width, float height) -> std::array<float, 4> {
@@ -824,7 +858,7 @@ int App::run(const AppConfig& config) {
             }
             ed.session.undo.push(ed.shot.scene);
             Path path = fit_path_from_samples(ed.interaction.path_create_points,
-                                              mat_glass(1.5f, 20000.0f, 0.3f));
+                                              add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f)));
             path.id = next_scene_entity_id(ed.shot.scene, "path");
             ed.shot.scene.shapes.push_back(path);
             ed.select_only({SelectionRef::Shape, path.id, ""});
@@ -1013,7 +1047,7 @@ int App::run(const AppConfig& config) {
                     circle.id = next_scene_entity_id(ed.shot.scene, "circle");
                     circle.center = ed.interaction.create_start;
                     circle.radius = r;
-                    circle.binding = mat_glass(1.5f, 20000.0f, 0.3f);
+                    circle.material_id = add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f));
                     ed.shot.scene.shapes.push_back(circle);
                     ed.select_only({SelectionRef::Shape, circle.id, ""});
                     created = true;
@@ -1022,12 +1056,15 @@ int App::run(const AppConfig& config) {
                     segment.id = next_scene_entity_id(ed.shot.scene, "segment");
                     segment.a = ed.interaction.create_start;
                     segment.b = end;
-                    segment.binding = mat_mirror(0.95f);
+                    segment.material_id = add_scene_material(ed.shot.scene, mat_mirror(0.95f));
                     ed.shot.scene.shapes.push_back(segment);
                     ed.select_only({SelectionRef::Shape, segment.id, ""});
                     created = true;
                 } else if (ed.interaction.tool == EditTool::Arc) {
-                    Arc arc = make_default_arc(ed.interaction.create_start, end);
+                    Arc arc = make_default_arc(
+                        ed.interaction.create_start,
+                        end,
+                        add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f)));
                     arc.id = next_scene_entity_id(ed.shot.scene, "arc");
                     ed.shot.scene.shapes.push_back(arc);
                     ed.select_only({SelectionRef::Shape, arc.id, ""});
@@ -1039,7 +1076,7 @@ int App::run(const AppConfig& config) {
                     bezier.p0 = ed.interaction.create_start;
                     bezier.p1 = mid;
                     bezier.p2 = end;
-                    bezier.binding = mat_glass(1.5f, 20000.0f, 0.3f);
+                    bezier.material_id = add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f));
                     ed.shot.scene.shapes.push_back(bezier);
                     ed.select_only({SelectionRef::Shape, bezier.id, ""});
                     created = true;
@@ -1050,7 +1087,7 @@ int App::run(const AppConfig& config) {
                     p.vertices = {{a.x, a.y}, {b.x, a.y}, {b.x, b.y}, {a.x, b.y}};
                     if (!polygon_is_clockwise(p))
                         std::reverse(p.vertices.begin(), p.vertices.end());
-                    p.binding = mat_glass(1.5f, 20000.0f, 0.3f);
+                    p.material_id = add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f));
                     ed.shot.scene.shapes.push_back(p);
                     ed.select_only({SelectionRef::Shape, p.id, ""});
                     created = true;
@@ -1064,7 +1101,7 @@ int App::run(const AppConfig& config) {
                     ellipse.semi_a = sa;
                     ellipse.semi_b = sb;
                     ellipse.rotation = 0.0f;
-                    ellipse.binding = mat_glass(1.5f, 20000.0f, 0.3f);
+                    ellipse.material_id = add_scene_material(ed.shot.scene, mat_glass(1.5f, 20000.0f, 0.3f));
                     ed.shot.scene.shapes.push_back(ellipse);
                     ed.select_only({SelectionRef::Shape, ellipse.id, ""});
                     created = true;
@@ -1245,20 +1282,20 @@ int App::run(const AppConfig& config) {
 
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V) && !ed.session.clipboard.empty()) {
                     ed.session.undo.push(ed.shot.scene);
-                    Vec2 offset = mw - ed.session.clipboard.centroid;
-                    sanitize_clipboard_material_bindings();
+                    Clipboard pasted = materialize_clipboard_for_paste();
+                    Vec2 offset = mw - pasted.centroid;
                     ed.clear_selection();
-                    for (auto s : ed.session.clipboard.shapes) {
+                    for (auto s : pasted.shapes) {
                         translate_shape(s, offset);
                         ed.shot.scene.shapes.push_back(s);
                         ed.select({SelectionRef::Shape, shape_id(s), ""}, true);
                     }
-                    for (auto l : ed.session.clipboard.lights) {
+                    for (auto l : pasted.lights) {
                         translate_light(l, offset);
                         ed.shot.scene.lights.push_back(l);
                         ed.select({SelectionRef::Light, light_id(l), ""}, true);
                     }
-                    for (auto g : ed.session.clipboard.groups) {
+                    for (auto g : pasted.groups) {
                         translate_group(g, offset);
                         ed.shot.scene.groups.push_back(g);
                         ed.select({SelectionRef::Group, g.id, ""}, true);

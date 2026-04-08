@@ -39,6 +39,9 @@ PRISM_GLASS = glass(1.52, cauchy_b=28_000, color=(0.968, 0.968, 0.968), fill=0.1
 
 # Walls: bright metallic reflector — catches and scatters the dispersed light.
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
+WALL_ID = "wall"
+PRISM_GLASS_ID = "prism_glass"
+MATERIALS = {WALL_ID: WALL, PRISM_GLASS_ID: PRISM_GLASS}
 
 # Camera width auto-derives height from canvas aspect ratio.
 CAMERA = Camera2D(center=[0, 0], width=3.2)
@@ -102,12 +105,13 @@ def frame(ctx: FrameContext) -> Frame:
     rot = PRISM_ROTATION(ctx.time)
 
     scene = Scene(
+        materials=MATERIALS,
         shapes=[
-            *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+            *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
             prism(
                 center=(0.0, 0.0),
                 size=0.35,
-                material=PRISM_GLASS,
+                material_id=PRISM_GLASS_ID,
                 rotation=rot,
                 id_prefix="prism",
             ),

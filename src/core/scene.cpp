@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <set>
 #include <type_traits>
 #include <utility>
@@ -139,9 +140,12 @@ bool validate_scene(const Scene& scene, std::string* error) {
                 if (error) *error = "duplicate entity id: " + value.id;
                 return;
             }
-            auto ref = material_ref_id(value.binding);
-            if (!ref.empty() && !scene.materials.contains(std::string(ref)))
-                if (error) *error = "unknown material_id: " + std::string(ref);
+            if (value.material_id.empty()) {
+                if (error) *error = "shape material_id must be non-empty";
+                return;
+            }
+            if (!scene.materials.contains(value.material_id))
+                if (error) *error = "unknown material_id: " + value.material_id;
             if constexpr (std::is_same_v<ShapeT, Polygon>) {
                 PolygonFieldValidationResult polygon_validation = validate_polygon_fields(value);
                 if (polygon_validation.error != PolygonFieldValidationError::None) {
@@ -277,19 +281,15 @@ bool bind_material(Shape& shape, const Scene& scene, std::string_view material_i
         if (error) *error = "unknown material_id: " + std::string(material_id);
         return false;
     }
-    shape_binding(shape) = std::string(material_id);
+    shape_material_id(shape) = std::string(material_id);
     return true;
-}
-
-void detach_material(Shape& shape, const MaterialMap& materials) {
-    shape_binding(shape) = resolve_binding(shape_binding(shape), materials);
 }
 
 int material_usage_count(const Scene& scene, std::string_view material_id) {
     int count = 0;
     if (material_id.empty()) return count;
     for_each_shape(scene, [&](const Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == material_id)
+        if (shape_material_id(shape) == material_id)
             ++count;
     });
     return count;
@@ -317,8 +317,28 @@ bool rename_material(Scene& scene, std::string_view old_id, std::string_view new
     scene.materials[std::string(new_id)] = material;
 
     for_each_shape(scene, [&](Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == old_id)
-            shape_binding(shape) = std::string(new_id);
+        if (shape_material_id(shape) == old_id)
+            shape_material_id(shape) = std::string(new_id);
+    });
+    return true;
+}
+
+bool rebind_material(Scene& scene, std::string_view old_id, std::string_view new_id, std::string* error) {
+    auto fail = [&](std::string message) {
+        if (error) *error = std::move(message);
+        return false;
+    };
+
+    if (old_id.empty() || new_id.empty())
+        return fail("material ids must be non-empty");
+    if (!scene.materials.contains(std::string(old_id)))
+        return fail("unknown material_id: " + std::string(old_id));
+    if (!scene.materials.contains(std::string(new_id)))
+        return fail("unknown material_id: " + std::string(new_id));
+
+    for_each_shape(scene, [&](Shape& shape) {
+        if (shape_material_id(shape) == old_id)
+            shape_material_id(shape) = std::string(new_id);
     });
     return true;
 }
@@ -334,14 +354,24 @@ bool delete_material(Scene& scene, std::string_view material_id, std::string* er
     auto it = scene.materials.find(std::string(material_id));
     if (it == scene.materials.end())
         return fail("unknown material_id: " + std::string(material_id));
-
-    // Resolve bindings to inline before erasing from the map
-    for_each_shape(scene, [&](Shape& shape) {
-        if (material_ref_id(shape_binding(shape)) == material_id)
-            detach_material(shape, scene.materials);
-    });
+    if (material_usage_count(scene, material_id) > 0)
+        return fail("cannot delete material_id while shapes still reference it: " + std::string(material_id));
     scene.materials.erase(it);
     return true;
+}
+
+std::string next_scene_material_id(const Scene& scene, std::string_view base) {
+    std::string stem = base.empty() ? "Material" : std::string(base);
+    if (!scene.materials.contains(stem))
+        return stem;
+
+    char suffix[16];
+    for (int n = 1; ; ++n) {
+        std::snprintf(suffix, sizeof(suffix), ".%03d", n);
+        std::string candidate = stem + suffix;
+        if (!scene.materials.contains(candidate))
+            return candidate;
+    }
 }
 
 // ─── Authored source enumeration ──────────────────────────────────
@@ -403,12 +433,18 @@ std::vector<AuthoredSource> collect_authored_sources(const Scene& scene) {
 Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
     Scene isolated = scene;
 
-    // Zero all emission (only detach shapes that actually have emission)
+    auto clone_material_for_shape = [&](Shape& shape, Material material, std::string_view base) {
+        std::string material_id = next_scene_material_id(isolated, base);
+        isolated.materials[material_id] = material;
+        shape_material_id(shape) = std::move(material_id);
+    };
+
+    // Zero all emission by rebinding affected shapes to cloned non-emissive materials.
     auto zero_emission = [&](Shape& shape) {
         Material mat = resolve_shape_material(shape, isolated.materials);
         if (mat.emission > 0.0f) {
             mat.emission = 0.0f;
-            shape_binding(shape) = mat;
+            clone_material_for_shape(shape, mat, "Material");
         }
     };
     for (auto& shape : isolated.shapes)
@@ -447,7 +483,7 @@ Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
             if (s && orig) {
                 Material mat = resolve_shape_material(*s, isolated.materials);
                 mat.emission = resolve_shape_material(*orig, scene.materials).emission;
-                shape_binding(*s) = mat;
+                clone_material_for_shape(*s, mat, "Material");
             }
         } else {
             Group* g = find_group(isolated, source.group_id);
@@ -459,7 +495,7 @@ Scene scene_with_solo_source(const Scene& scene, const AuthoredSource& source) {
                             if (shape_id(orig_shape) == source.entity_id) {
                                 Material mat = resolve_shape_material(shape, isolated.materials);
                                 mat.emission = resolve_shape_material(orig_shape, scene.materials).emission;
-                                shape_binding(shape) = mat;
+                                clone_material_for_shape(shape, mat, "Material");
                                 break;
                             }
                         }
@@ -494,14 +530,14 @@ const std::string& light_id(const Light& l) {
 std::string& light_id(Light& l) {
     return std::visit([](auto& v) -> std::string& { return v.id; }, l);
 }
-const MaterialBinding& shape_binding(const Shape& s) {
-    return std::visit([](const auto& v) -> const MaterialBinding& { return v.binding; }, s);
+const std::string& shape_material_id(const Shape& s) {
+    return std::visit([](const auto& v) -> const std::string& { return v.material_id; }, s);
 }
-MaterialBinding& shape_binding(Shape& s) {
-    return std::visit([](auto& v) -> MaterialBinding& { return v.binding; }, s);
+std::string& shape_material_id(Shape& s) {
+    return std::visit([](auto& v) -> std::string& { return v.material_id; }, s);
 }
 const Material& resolve_shape_material(const Shape& s, const MaterialMap& materials) {
-    return resolve_binding(shape_binding(s), materials);
+    return resolve_material_id(shape_material_id(s), materials);
 }
 
 std::string shape_display_name(const Shape& s, int fallback_index) {
@@ -545,30 +581,30 @@ void world_to_pixel(std::span<LineSegment> segments, const Bounds& bounds, int w
     }
 }
 
-void add_box_walls(Scene& scene, float half_w, float half_h, const Material& mat) {
+void add_box_walls(Scene& scene, float half_w, float half_h, std::string_view material_id) {
     // CW winding so perp() normals point inward
     Segment bottom;
     bottom.a = {-half_w, -half_h};
     bottom.b = {half_w, -half_h};
-    bottom.binding = mat;
+    bottom.material_id = std::string(material_id);
     scene.shapes.push_back(bottom);
 
     Segment top;
     top.a = {half_w, half_h};
     top.b = {-half_w, half_h};
-    top.binding = mat;
+    top.material_id = std::string(material_id);
     scene.shapes.push_back(top);
 
     Segment left;
     left.a = {-half_w, half_h};
     left.b = {-half_w, -half_h};
-    left.binding = mat;
+    left.material_id = std::string(material_id);
     scene.shapes.push_back(left);
 
     Segment right;
     right.a = {half_w, -half_h};
     right.b = {half_w, half_h};
-    right.binding = mat;
+    right.material_id = std::string(material_id);
     scene.shapes.push_back(right);
 }
 

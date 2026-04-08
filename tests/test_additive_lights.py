@@ -30,27 +30,29 @@ _LIGHT_IDS = count()
 def make_scene(lights, name="test"):
     return {
         "name": name,
-        "materials": {},
+        "materials": {
+            "lens_glass": {
+                "ior": 1.5,
+                "roughness": 0.0,
+                "metallic": 0.0,
+                "transmission": 1.0,
+                "absorption": 0.0,
+                "cauchy_b": 0.004,
+                "albedo": 1.0,
+                "emission": 0.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            }
+        },
         "shapes": [
             {
                 "id": "lens",
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {
-                    "ior": 1.5,
-                    "roughness": 0.0,
-                    "metallic": 0.0,
-                    "transmission": 1.0,
-                    "absorption": 0.0,
-                    "cauchy_b": 0.004,
-                    "albedo": 1.0,
-                    "emission": 0.0,
-                    "spectral_c0": 0.0,
-                    "spectral_c1": 0.0,
-                    "spectral_c2": 0.0,
-                    "fill": 0.0,
-                },
+                "material_id": "lens_glass",
             }
         ],
         "lights": lights,
@@ -87,10 +89,7 @@ def _complete_material(mat):
 
 
 def _complete_scene_materials(scene_dict):
-    """Fill in missing material fields so strict v10 parsing succeeds."""
-    for shape in scene_dict.get("shapes", []):
-        if "material" in shape:
-            shape["material"] = _complete_material(shape["material"])
+    """Fill in missing library material fields so strict v10 parsing succeeds."""
     for name, mat in scene_dict.get("materials", {}).items():
         scene_dict["materials"][name] = _complete_material(mat)
     return scene_dict
@@ -99,7 +98,7 @@ def _complete_scene_materials(scene_dict):
 def render(scene_json, normalize="off", rays=RAYS):
     scene_dict = _complete_scene_materials(json.loads(scene_json))
     shot_dict = {
-        "version": 10,
+        "version": 11,
         "name": "test",
         "camera": {},
         "canvas": {"width": 200, "height": 200},

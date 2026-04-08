@@ -28,7 +28,10 @@ CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
 
 def _make_bound_scene() -> Scene:
     return Scene(
-        materials={"glass": Material(ior=1.5, transmission=1.0)},
+        materials={
+            "glass": Material(ior=1.5, transmission=1.0),
+            "absorber": Material(albedo=0.0),
+        },
         shapes=[
             Circle(id="lens_a", center=[-0.5, 0.0], radius=0.2, material_id="glass"),
             Circle(id="lens_b", center=[0.5, 0.0], radius=0.2, material_id="glass"),
@@ -51,7 +54,7 @@ def _make_bound_scene() -> Scene:
                         id="cluster_edge",
                         a=[-0.1, -0.2],
                         b=[0.1, -0.2],
-                        material=Material(albedo=0.0),
+                        material_id="absorber",
                     )
                 ],
             )
@@ -66,7 +69,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid authored shot JSON dict."""
     base = {
-        "version": 10,
+        "version": 11,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -113,12 +116,13 @@ def _make_seed_behavior_shot(seed_mode: str) -> Shot:
     return Shot(
         name=f"seed_{seed_mode}",
         scene=Scene(
+            materials={"glass": Material(ior=1.5, transmission=1.0)},
             shapes=[
                 Circle(
                     id="lens",
                     center=[0.0, 0.0],
                     radius=0.25,
-                    material=Material(ior=1.5, transmission=1.0),
+                    material_id="glass",
                 )
             ],
             lights=[
@@ -165,9 +169,10 @@ def test_authored_round_trip_preserves_ids_and_material_bindings(tmp_path):
 
 def test_authored_rejects_duplicate_entity_ids():
     scene = Scene(
+        materials={"glass": Material()},
         shapes=[
-            Circle(id="dup", radius=0.2),
-            Circle(id="dup", center=[1.0, 0.0], radius=0.3),
+            Circle(id="dup", radius=0.2, material_id="glass"),
+            Circle(id="dup", center=[1.0, 0.0], radius=0.3, material_id="glass"),
         ]
     )
 
@@ -190,9 +195,7 @@ def test_authored_rejects_shape_without_material_payload(tmp_path):
     )
     _write_json(path, data)
 
-    with pytest.raises(
-        RuntimeError, match="shape entries must declare exactly one of material and material_id"
-    ):
+    with pytest.raises(RuntimeError, match="requires key: material_id"):
         Shot.load(path)
 
 
@@ -220,19 +223,17 @@ def test_scene_id_lookup_helpers_cover_shapes_lights_and_groups():
 # ─── Material bindings via round-trip ──────────────────────────────────
 
 
-def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
-    """Shapes with material_id keep the binding; shapes with inline material keep the inline."""
+def test_material_binding_round_trip_preserves_shared_ids(tmp_path):
+    """Shapes keep their named material bindings through authored save/load."""
     path = tmp_path / "bindings.json"
     scene = Scene(
-        materials={"glass": Material(ior=1.5, transmission=1.0)},
+        materials={
+            "glass": Material(ior=1.5, transmission=1.0),
+            "dense_glass": Material(ior=1.8, transmission=1.0),
+        },
         shapes=[
             Circle(id="bound", center=[-0.5, 0.0], radius=0.2, material_id="glass"),
-            Circle(
-                id="inline",
-                center=[0.5, 0.0],
-                radius=0.2,
-                material=Material(ior=1.8, transmission=1.0),
-            ),
+            Circle(id="dense", center=[0.5, 0.0], radius=0.2, material_id="dense_glass"),
         ],
         lights=[ProjectorLight(id="beam", position=[-1, 0], direction=[1, 0], source_radius=0.0)],
     )
@@ -241,8 +242,7 @@ def test_material_binding_round_trip_preserves_shared_and_inline(tmp_path):
 
     loaded = Shot.load(path)
     assert loaded.scene.require_shape("bound").material_id == "glass"
-    assert loaded.scene.require_shape("inline").material_id == ""
-    assert loaded.scene.require_shape("inline").material.ior == pytest.approx(1.8)
+    assert loaded.scene.require_shape("dense").material_id == "dense_glass"
 
 
 # ─── Authored JSON format validation ──────────────────────────────────
@@ -260,7 +260,7 @@ def test_authored_rejects_older_shot_version(tmp_path):
 def test_authored_rejects_sparse_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 10,
+        "version": 11,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -355,14 +355,14 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 10)" in result.stderr
+    assert "Unsupported shot version (expected 11)" in result.stderr
     assert not output.exists()
 
 
 def test_cpp_cli_rejects_trailing_garbage_json(tmp_path):
     bad_path = tmp_path / "trailing_garbage.json"
     output = tmp_path / "trailing_garbage.png"
-    bad_path.write_text('{"version":10,"shapes":[],"lights":[],"groups":[]} trailing')
+    bad_path.write_text('{"version":11,"shapes":[],"lights":[],"groups":[]} trailing')
 
     result = subprocess.run(
         [str(CLI_BINARY), "--scene", str(bad_path), "--output", str(output)],
@@ -456,7 +456,7 @@ def test_cpp_save_shot_round_trip_preserves_ids_and_material_bindings(tmp_path):
     assert saved.scene.require_shape("lens_b").material_id == "glass"
     assert saved.scene.require_light("beam_main").id == "beam_main"
     assert saved.scene.require_group("cluster").id == "cluster"
-    assert saved.scene.require_shape("cluster_edge").material_id == ""
+    assert saved.scene.require_shape("cluster_edge").material_id == "absorber"
 
 
 def test_cpp_save_shot_round_trip_preserves_phase2_look_fields(tmp_path):
@@ -565,11 +565,12 @@ def test_validate_scene_accepts_valid_scene():
 
 def test_validate_scene_rejects_invalid_polygon_fields():
     scene = Scene(
+        materials={"mat": Material()},
         shapes=[
             Polygon(
                 id="poly",
                 vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
-                material=Material(),
+                material_id="mat",
                 corner_radii=[0.1, 0.2],
                 smooth_angle=-0.5,
             )
@@ -582,11 +583,12 @@ def test_validate_scene_rejects_invalid_polygon_fields():
 
 def test_validate_scene_rejects_bad_polygon_join_modes_length():
     scene = Scene(
+        materials={"mat": Material()},
         shapes=[
             Polygon(
                 id="poly",
                 vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
-                material=Material(),
+                material_id="mat",
                 join_modes=[PolygonJoinMode.auto, PolygonJoinMode.smooth],
             )
         ],
@@ -607,11 +609,12 @@ def test_polygon_round_trip_preserves_corner_radii_join_modes_and_smooth_angle(t
     shot = Shot(
         name="poly_round_trip",
         scene=Scene(
+            materials={"mat": Material(fill=1.0)},
             shapes=[
                 Polygon(
                     id="poly",
                     vertices=[[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]],
-                    material=Material(fill=1.0),
+                    material_id="mat",
                     corner_radius=0.25,
                     corner_radii=[0.0, 0.1, 0.2, 0.0],
                     join_modes=expected_join_modes,

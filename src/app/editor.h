@@ -123,6 +123,7 @@ struct Clipboard {
     std::vector<Shape> shapes;
     std::vector<Light> lights;
     std::vector<Group> groups;
+    MaterialMap materials;
     Vec2 centroid{};
     bool empty() const { return shapes.empty() && lights.empty() && groups.empty(); }
 };

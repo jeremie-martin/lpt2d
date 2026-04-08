@@ -48,6 +48,9 @@ DURATION = 8.0
 
 # High-dispersion glass for strong rainbow caustics
 LENS_GLASS = glass(1.52, cauchy_b=35_000, color=(0.95, 0.97, 1.0), fill=0.12)
+WALL_ID = "wall"
+LENS_GLASS_ID = "lens_glass"
+MATERIALS = {WALL_ID: WALL, LENS_GLASS_ID: LENS_GLASS}
 
 # ---------------------------------------------------------------------------
 # Parameter space
@@ -112,7 +115,7 @@ def build_animate(p: AnimParams):
     lens_shapes = ball_lens(
         center=(p.lens_x, p.lens_y),
         radius=p.lens_radius,
-        material=LENS_GLASS,
+        material_id=LENS_GLASS_ID,
         id_prefix="lens",
     )
 
@@ -121,8 +124,9 @@ def build_animate(p: AnimParams):
         cam_w = float(cam_trk(ctx.time))
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *lens_shapes,
             ],
             lights=[

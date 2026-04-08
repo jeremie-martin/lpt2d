@@ -39,11 +39,11 @@ std::vector<uint32_t> triangulate_simple_polygon(const std::vector<Vec2>& vertic
 // ─── Path decomposition ────────────────────────────────────────────
 
 struct PathParts {
-    std::vector<Bezier> curves; // decomposed Bezier segments (id/binding unused)
+    std::vector<Bezier> curves; // decomposed Bezier segments (id/material_id unused)
 };
 
 PathParts decompose_path(const Path& path);
-Path fit_path_from_samples(const std::vector<Vec2>& samples, const MaterialBinding& binding, bool closed = false);
+Path fit_path_from_samples(const std::vector<Vec2>& samples, std::string material_id, bool closed = false);
 
 // ─── Primitive bounds ─────────────────────────────────────────────
 

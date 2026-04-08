@@ -49,6 +49,9 @@ DURATION = 8.0
 
 # Lens glass: crown glass with moderate dispersion, slight fill for visibility
 LENS_GLASS = glass(1.52, cauchy_b=25_000, fill=0.10)
+WALL_ID = "wall"
+LENS_GLASS_ID = "lens_glass"
+MATERIALS = {WALL_ID: WALL, LENS_GLASS_ID: LENS_GLASS}
 
 # ---------------------------------------------------------------------------
 # Parameter space
@@ -118,14 +121,15 @@ def build_animate(p: AnimParams):
                     center_thickness=lens.center_thickness,
                     left_radius=lens.left_radius,
                     right_radius=lens.right_radius,
-                    material=LENS_GLASS,
+                    material_id=LENS_GLASS_ID,
                     id_prefix=f"lens_{i}",
                 )
             )
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *lens_shapes,
             ],
             lights=[

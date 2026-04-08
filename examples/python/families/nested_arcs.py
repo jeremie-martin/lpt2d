@@ -47,6 +47,9 @@ DURATION = 8.0
 
 # Arc glass: moderate Cauchy for clear dispersion, subtle fill for visibility
 ARC_GLASS = glass(1.55, cauchy_b=30_000, color=(0.95, 0.97, 1.0), fill=0.10)
+WALL_ID = "wall"
+ARC_GLASS_ID = "arc_glass"
+MATERIALS = {WALL_ID: WALL, ARC_GLASS_ID: ARC_GLASS}
 
 # ---------------------------------------------------------------------------
 # Parameter space
@@ -126,14 +129,15 @@ def build_animate(p: AnimParams):
                 thickness=layer.thickness,
                 angle_start=rot,
                 sweep=layer.sweep,
-                material=ARC_GLASS,
+                material_id=ARC_GLASS_ID,
                 id_prefix=f"arc_{i}",
             )
             arc_shapes.extend(arcs)
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *arc_shapes,
             ],
             lights=[

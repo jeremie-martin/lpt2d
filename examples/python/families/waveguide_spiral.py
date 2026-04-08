@@ -51,6 +51,9 @@ DURATION = 8.0
 
 # Spiral glass: moderate dispersion, slight green tint, subtle fill
 SPIRAL_GLASS = glass(1.50, cauchy_b=22_000, color=(0.9, 0.95, 0.9), fill=0.08)
+WALL_ID = "wall"
+SPIRAL_GLASS_ID = "spiral_glass"
+MATERIALS = {WALL_ID: WALL, SPIRAL_GLASS_ID: SPIRAL_GLASS}
 
 # ---------------------------------------------------------------------------
 # Spiral geometry
@@ -154,7 +157,7 @@ def build_animate(p: AnimParams):
             rotation=rot,
         )
 
-        wg_shapes = waveguide(spiral_pts, p.wg_width, SPIRAL_GLASS, id_prefix="spiral")
+        wg_shapes = waveguide(spiral_pts, p.wg_width, SPIRAL_GLASS_ID, id_prefix="spiral")
 
         # Beam source position: on the mirror-box edge, aimed inward
         bx = p.beam_distance * math.cos(p.beam_angle)
@@ -165,8 +168,9 @@ def build_animate(p: AnimParams):
         by += p.beam_offset * math.sin(perp_angle)
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *wg_shapes,
             ],
             lights=[

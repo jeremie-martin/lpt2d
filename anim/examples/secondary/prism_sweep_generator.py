@@ -63,6 +63,9 @@ PRISM_SIZE = 0.35
 PRISM_GLASS = glass(1.52, cauchy_b=28_000, color=(0.968, 0.968, 0.968), fill=0.15)
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
 CAMERA = Camera2D(center=[0, 0], width=3.2)
+WALL_ID = "wall"
+PRISM_GLASS_ID = "prism_glass"
+MATERIALS = {WALL_ID: WALL, PRISM_GLASS_ID: PRISM_GLASS}
 
 DURATION = 10.0
 BEAM_BASE_X = -1.4
@@ -105,11 +108,12 @@ class AnimParams:
 def _prism_only_scene(rotation: float) -> Scene:
     """Build a minimal scene with just the prism (no walls) for ray queries."""
     return Scene(
+        materials={PRISM_GLASS_ID: PRISM_GLASS},
         shapes=[
             prism(
                 center=PRISM_CENTER,
                 size=PRISM_SIZE,
-                material=PRISM_GLASS,
+                material_id=PRISM_GLASS_ID,
                 rotation=rotation,
                 id_prefix="prism",
             ),
@@ -253,12 +257,13 @@ def build_animate(p: AnimParams):
         angle = float(angle_trk(ctx.time))
         rot = float(rot_trk(ctx.time))
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 prism(
                     center=PRISM_CENTER,
                     size=PRISM_SIZE,
-                    material=PRISM_GLASS,
+                    material_id=PRISM_GLASS_ID,
                     rotation=rot,
                     id_prefix="prism",
                 ),

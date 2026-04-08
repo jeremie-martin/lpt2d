@@ -50,6 +50,9 @@ DURATION = 8.0
 
 # Prism glass: moderate-high dispersion, near-white, slight fill for visibility
 PRISM_GLASS = glass(1.52, cauchy_b=28_000, color=(0.968, 0.968, 0.968), fill=0.15)
+WALL_ID = "wall"
+PRISM_GLASS_ID = "prism_glass"
+MATERIALS = {WALL_ID: WALL, PRISM_GLASS_ID: PRISM_GLASS}
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +122,7 @@ def build_animate(p: AnimParams):
         prism(
             center=(pd.center_x, pd.center_y),
             size=pd.size,
-            material=PRISM_GLASS,
+            material_id=PRISM_GLASS_ID,
             rotation=pd.rotation,
             corner_radius=0.005,
             id_prefix=f"prism_{i}",
@@ -132,8 +135,9 @@ def build_animate(p: AnimParams):
         top_angle = float(top_angle_trk(ctx.time))
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *prism_shapes,
             ],
             lights=[

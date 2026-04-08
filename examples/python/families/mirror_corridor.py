@@ -45,6 +45,9 @@ WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, alb
 MIRROR = Material(metallic=1.0, roughness=0.02, transmission=0.0, cauchy_b=0.0, albedo=0.95)
 CAMERA = Camera2D(center=[0, 0], width=3.2)
 DURATION = 8.0
+WALL_ID = "wall"
+MIRROR_ID = "mirror"
+MATERIALS = {WALL_ID: WALL, MIRROR_ID: MIRROR}
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +118,7 @@ def build_mirror_shapes(mirrors: list[MirrorFragment]) -> list[Segment]:
                 id=f"mirror_{i}",
                 a=[m.cx - dx, m.cy - dy],
                 b=[m.cx + dx, m.cy + dy],
-                material=MIRROR,
+                material_id=MIRROR_ID,
             )
         )
     return shapes
@@ -130,8 +133,9 @@ def build_animate(p: AnimParams):
         angle = float(angle_trk(ctx.time))
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *mirror_shapes,
             ],
             lights=[

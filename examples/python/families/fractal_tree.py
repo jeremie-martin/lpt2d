@@ -50,6 +50,9 @@ DURATION = 8.0
 
 # Semi-transparent glass for branches: light passes through, some dispersion
 BRANCH_GLASS = glass(1.45, cauchy_b=18_000, color=(0.85, 0.92, 0.80), fill=0.08)
+WALL_ID = "wall"
+BRANCH_GLASS_ID = "branch_glass"
+MATERIALS = {WALL_ID: WALL, BRANCH_GLASS_ID: BRANCH_GLASS}
 
 # ---------------------------------------------------------------------------
 # L-system tree builder
@@ -64,7 +67,7 @@ def build_tree(
     spread_angle: float,
     depth: int,
     thickness: float,
-    material: Material,
+    material_id: str,
     seed: int = 42,
 ) -> list[Polygon]:
     """Build an asymmetric binary fractal tree from thick segments.
@@ -93,7 +96,7 @@ def build_tree(
             (x, y),
             (ex, ey),
             thick,
-            material,
+            material_id,
             corner_radius=thick * 0.3,
             id_prefix=f"branch_{idx[0]}",
         )
@@ -175,7 +178,7 @@ def build_animate(p: AnimParams):
         spread_angle=p.spread_angle,
         depth=p.depth,
         thickness=p.trunk_thickness,
-        material=BRANCH_GLASS,
+        material_id=BRANCH_GLASS_ID,
         seed=p.tree_seed,
     )
 
@@ -183,8 +186,9 @@ def build_animate(p: AnimParams):
         angle = float(angle_trk(ctx.time))
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 *tree_shapes,
             ],
             lights=[

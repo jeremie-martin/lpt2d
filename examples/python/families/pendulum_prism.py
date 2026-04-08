@@ -47,6 +47,9 @@ DURATION = 8.0
 
 # High-dispersion crown glass with subtle fill for visibility
 PRISM_GLASS = glass(1.52, cauchy_b=30_000, color=(0.968, 0.968, 0.968), fill=0.15)
+WALL_ID = "wall"
+PRISM_GLASS_ID = "prism_glass"
+MATERIALS = {WALL_ID: WALL, PRISM_GLASS_ID: PRISM_GLASS}
 
 # ---------------------------------------------------------------------------
 # Parameter space
@@ -90,14 +93,15 @@ def build_animate(p: AnimParams):
         crystal = prism(
             center=(x, y),
             size=p.prism_size,
-            material=PRISM_GLASS,
+            material_id=PRISM_GLASS_ID,
             rotation=rot,
             id_prefix="pendulum",
         )
 
         scene = Scene(
+            materials=MATERIALS,
             shapes=[
-                *mirror_box(1.6, 0.9, WALL, id_prefix="wall"),
+                *mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall"),
                 crystal,
             ],
             lights=[

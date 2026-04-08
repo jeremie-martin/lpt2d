@@ -37,26 +37,29 @@ _LIGHT_IDS = count()
 def make_scene(lights: list[dict], name: str = "test") -> dict:
     return {
         "name": name,
+        "materials": {
+            "lens_glass": {
+                "ior": 1.5,
+                "roughness": 0.0,
+                "metallic": 0.0,
+                "transmission": 1.0,
+                "absorption": 0.0,
+                "cauchy_b": 0.004,
+                "albedo": 1.0,
+                "emission": 0.0,
+                "spectral_c0": 0.0,
+                "spectral_c1": 0.0,
+                "spectral_c2": 0.0,
+                "fill": 0.0,
+            }
+        },
         "shapes": [
             {
                 "id": "lens",
                 "type": "circle",
                 "center": [0.0, 0.0],
                 "radius": 0.3,
-                "material": {
-                    "ior": 1.5,
-                    "roughness": 0.0,
-                    "metallic": 0.0,
-                    "transmission": 1.0,
-                    "absorption": 0.0,
-                    "cauchy_b": 0.004,
-                    "albedo": 1.0,
-                    "emission": 0.0,
-                    "spectral_c0": 0.0,
-                    "spectral_c1": 0.0,
-                    "spectral_c2": 0.0,
-                    "fill": 0.0,
-                },
+                "material_id": "lens_glass",
             }
         ],
         "lights": lights,
@@ -103,9 +106,9 @@ def _render(
     """Render one frame via RenderSession and return parsed metadata (+ optional pixels)."""
     scene_dict = json.loads(scene_json)
 
-    # If the input is already a full shot (version 10 with canvas/look/trace),
+    # If the input is already a full shot (version 11 with canvas/look/trace),
     # use it directly but override canvas, look, and trace with our test parameters.
-    if scene_dict.get("version") == 10 and "canvas" in scene_dict:
+    if scene_dict.get("version") == 11 and "canvas" in scene_dict:
         shot_dict = scene_dict
         shot_dict["canvas"] = {"width": width, "height": height}
         shot_dict["look"] = {
@@ -141,7 +144,7 @@ def _render(
     else:
         # Wrap a bare scene dict into a full shot.
         shot_dict = {
-            "version": 10,
+            "version": 11,
             "name": "test",
             "camera": scene_dict.get("camera", {}),
             "canvas": {"width": width, "height": height},
