@@ -5,7 +5,11 @@ purpose and identity, catalogs the friction points that slow down the core
 workflow, and proposes directions for improvement.
 
 It is a living reference, not a specification. Nothing here is committed to a
-timeline.
+timeline. Items are tagged with their status:
+
+- **(open)** — not yet addressed
+- **(partial)** — partially addressed, description of what was done
+- **(done)** — fully resolved
 
 ---
 
@@ -87,7 +91,7 @@ The application has strong foundations that serve the real-time iteration loop:
 The right side of the screen is a single scrollable column (280px, DPI-scaled)
 containing 10 collapsible sections, all open by default:
 
-1. **Scene** -- scene picker, new/save/load
+1. **Scene** -- scene picker, new/save/load/save-as
 2. **Edit** -- tool buttons, wireframe/grid toggles
 3. **Camera** -- camera bounds, canvas resolution
 4. **Objects** -- hierarchical list of shapes, lights, groups
@@ -98,31 +102,32 @@ containing 10 collapsible sections, all open by default:
 9. **Output** -- ray count, FPS, export
 10. **Stats** -- histogram, luminance metrics
 
-### Keyboard shortcuts
+### Keyboard shortcut coverage
 
-The shortcut coverage is uneven. Creation tools and transforms have good
-keyboard paths. Post-processing, materials, and many editing operations do not.
-
-| Well-covered               | Poorly covered                        |
-|----------------------------|---------------------------------------|
-| Tool switching (Q/C/L/...) | Corner radius adjustment              |
-| Transforms (G/R/S)         | Quick light intensity adjustment      |
-| Exposure (`[`/`]`)         | Post-processing (except exposure and  |
-| Undo/redo (Ctrl+Z)         |   look presets)                       |
-| A/B toggle (`` ` ``)       |                                       |
-| Pause (Space)              |                                       |
-| Visibility (H)             |                                       |
-| Panel toggle (Tab)         |                                       |
-| Wireframe (V)              |                                       |
-| Material cycle (N)         |                                       |
-| Join mode cycle (J)        |                                       |
-| Look presets (Shift+1-6)   |                                       |
+| Shortcut            | Action                        | Status     |
+|---------------------|-------------------------------|------------|
+| Q/C/L/A/B/E/D/...  | Tool switching                | works      |
+| G / R / S           | Grab / Rotate / Scale         | works      |
+| `[` / `]`           | Exposure nudge                | works      |
+| Ctrl+Z / Ctrl+Sh+Z | Undo / Redo                   | works      |
+| `` ` ``             | A/B snapshot toggle           | works      |
+| Space               | Pause / unpause               | works      |
+| H / Alt+H           | Hide selected / Show all      | works      |
+| F / Home            | Fit selection / Fit scene     | works      |
+| Tab                 | Toggle controls panel         | works      |
+| V                   | Wireframe toggle              | works      |
+| N / Shift+N         | Material cycle fwd/back       | works      |
+| J                   | Join mode cycle (polygon)     | works      |
+| Shift+1-6           | Look presets                  | works      |
+| Ctrl+Shift+S        | Save As                       | works      |
+| Shift+A             | Add menu at cursor            | works      |
+| ?                   | Shortcut reference overlay    | works      |
 
 ---
 
 ## 3. Friction Points
 
-### 3.1 The panel hierarchy problem
+### 3.1 The panel hierarchy problem — (open)
 
 All 10 sections are presented with equal visual weight. When tuning a material,
 the Scene, Camera, and Tracer panels are still open and consuming screen space.
@@ -134,52 +139,45 @@ to tweaking exposure, you scroll past Objects, Properties, and Material Library.
 In a fast iteration session where you alternate between these constantly, the
 scrolling becomes the dominant interaction.
 
-### 3.2 No fullscreen viewport — resolved
+### 3.2 No fullscreen viewport — (done)
 
 Tab toggles the controls panel, giving a fullscreen viewport for evaluation.
+`648a1f5`
 
-### 3.3 Corner radius editing is indirect
+### 3.3 Corner radius editing is indirect — (open)
 
-Editing per-vertex corner radii on a polygon requires:
+Editing per-vertex corner radii on a polygon requires finding the vertex index
+in a 180px scrollable table and mentally matching it to the viewport. There is
+no way to click a corner in the viewport and adjust it directly.
 
-1. Select the polygon.
-2. Scroll down to the Properties panel.
-3. Set the corner mode to "Per-vertex."
-4. Find the correct vertex index (V0, V1, ..., V19, ...) in a 180px scrollable
-   table.
-5. Match that index to the actual vertex in the viewport (mentally, there is no
-   highlight or correspondence).
-6. Drag the tiny float field.
+Planned: viewport-based vertex editing (Phase 3 in the implementation plan).
 
-For a 20-vertex polygon where you want to round 3 specific corners, this is
-painfully slow. There is no way to click a corner in the viewport and adjust it
-directly.
+### 3.4 Join mode editing is indirect — (partial)
 
-### 3.4 Join mode editing has the same problem — partially resolved
+J cycles all vertices through Auto/Sharp/Smooth. `648a1f5`
 
-J cycles all vertices through Auto/Sharp/Smooth. Per-vertex viewport editing
-(right-click to cycle individual vertices) is planned for Phase 3.
+Per-vertex viewport editing (right-click to cycle individual vertices) is
+planned for Phase 3.
 
-### 3.5 Too many clicks, not enough keystrokes — partially resolved
+### 3.5 Too many clicks, not enough keystrokes — (partial)
 
-Material cycling (N), wireframe toggle (V), look presets (Shift+1-6), and join
-mode cycling (J) now have shortcuts. Remaining gaps: light intensity adjustment,
-individual post-processing sliders.
+Addressed: material cycling (N), wireframe toggle (V), look presets
+(Shift+1-6), join mode cycling (J), Add menu at cursor (Shift+A),
+shortcut reference overlay (?). `648a1f5`
 
-### 3.6 Viewport zoom and navigation friction
+Remaining gaps: light intensity adjustment, individual post-processing sliders.
 
-Zooming to inspect a detail and then returning to the full view can feel
-clunky. The `F` (fit to selection) and `Home` (fit to scene) shortcuts exist
-but are not always discoverable. There is no way to quickly toggle between a
-detail view and the full scene, or to set the viewport to exactly match the
-authored camera.
+### 3.6 Viewport zoom and navigation friction — (open)
 
-### 3.7 Scene evaluation has no dedicated workflow
+The `F` (fit to selection) and `Home` (fit to scene) shortcuts exist but are
+not always discoverable. No way to toggle between a detail view and the full
+scene, or to match the authored camera exactly.
 
-Loading a generated JSON and assessing "is this good?" is a common task but has
-no streamlined path. The workflow is: File > Load > paste path > OK > scroll
-around > manually check exposure > manually check composition. There could be
-value in a more focused evaluation mode.
+### 3.7 Scene evaluation has no dedicated workflow — (partial)
+
+Addressed: drag-and-drop JSON loading, auto-fit on load, look presets via
+Shift+1-6, Save As via Ctrl+Shift+S, improved Load popup (auto-focus, Enter
+to confirm, pre-fill path). `648a1f5`
 
 ---
 
@@ -220,13 +218,7 @@ every parameter as an independent panel entry.
 
 ## 5. Directions for Improvement
 
-These are ideas and explorations, not commitments. They are organized from
-lower effort to higher effort.
-
-### 5.1 Panel management
-
-**Collapsible/hideable side panel.** A single key (Tab or F11) to toggle the
-entire controls panel, giving a fullscreen viewport for evaluation sessions.
+### 5.1 Panel management — (open)
 
 **Context-sensitive collapse.** When an object is selected, auto-expand
 Properties and collapse less relevant sections (Scene, Camera). When nothing is
@@ -238,22 +230,15 @@ tabs or allow pinning a few sections to stay visible while others collapse. For
 example, a "Look" tab (Display + Output + Stats) vs an "Edit" tab (Objects +
 Properties + Material Library) would match the natural workflow clusters.
 
-### 5.2 Keyboard shortcuts for frequent operations
+### 5.2 More keyboard shortcuts — (open)
 
-Some candidates for new shortcuts, based on the most frequent operations:
+Remaining candidates:
 
-- **Wireframe toggle** -- a single key, not a checkbox buried in the Edit panel
-- **Panel focus** -- keys to jump to or toggle specific panels (e.g., Shift+D
-  for Display, Shift+P for Properties)
-- **Quick smooth/sharp** -- with a polygon selected, a key to cycle join modes
-  on all vertices (all auto / all sharp / all smooth)
-- **Quick material cycle** -- with a shape selected, keys to step through the
-  material library
+- **Light intensity adjustment** via scroll or shortcut while a light is
+  selected or hovered
+- **Post-processing slider shortcuts** for common adjustments beyond exposure
 
-These would address the "too many clicks" problem for the highest-frequency
-operations.
-
-### 5.3 Viewport-based polygon editing
+### 5.3 Viewport-based polygon editing — (open)
 
 **Click-to-select vertex.** When a polygon is selected, clicking near a vertex
 in the viewport highlights it and shows a small floating widget (or activates
@@ -268,10 +253,7 @@ of six.
 radius handle that can be dragged to visually set the fillet size. This would
 make corner radius editing feel as direct as moving a circle's center.
 
-This is the highest-impact direction but also the most work. It would
-fundamentally change how polygon authoring feels.
-
-### 5.4 Hover-based quick adjustments
+### 5.4 Hover-based quick adjustments — (open)
 
 When hovering over a light in the viewport, scroll wheel could adjust intensity
 (or a modifier + scroll for wavelength). This avoids navigating to the
@@ -283,16 +265,7 @@ materials or adjust a primary property.
 This pattern turns the viewport into the primary editing surface rather than
 just a display.
 
-### 5.5 Streamlined scene evaluation
-
-For the "load a generated scene and assess it" workflow (and save, save as, etc. etc.):
-
-- **Drag-and-drop JSON loading** instead of the file path popup.
-- **Auto-fit on load** to immediately frame the full scene.
-- **Quick look presets** accessible via number keys (1-6 for the existing
-  presets) to rapidly try different post-processing treatments.
-
-### 5.6 Viewport navigation improvements
+### 5.5 Viewport navigation improvements — (open)
 
 - **Toggle between authored camera and free view** with a single key, so you
   can quickly check "how does this look at the final framing?"

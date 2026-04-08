@@ -1197,6 +1197,100 @@ int App::run(const AppConfig& config) {
                                 force_live_metrics_refresh, io, dpi_scale,
                                 frame_ms, win_w, win_h, fb_w, fb_h);
 
+        // ── Add popup at cursor (Shift+A) ─────────────────────────────
+
+        if (panel.open_add_popup) {
+            ImGui::OpenPopup("AddAtCursor##popup");
+            panel.open_add_popup = false;
+        }
+        if (ImGui::BeginPopup("AddAtCursor##popup")) {
+            auto add_item = [&](const char* name, EditTool tool, const char* shortcut) {
+                if (ImGui::MenuItem(name, shortcut)) {
+                    ed.interaction.creating = false;
+                    ed.interaction.path_create_points.clear();
+                    ed.interaction.tool = tool;
+                }
+            };
+            ImGui::TextDisabled("Shapes");
+            add_item("Circle", EditTool::Circle, "C");
+            add_item("Segment", EditTool::Segment, "L");
+            add_item("Arc", EditTool::Arc, "A");
+            add_item("Bezier", EditTool::Bezier, "B");
+            add_item("Polygon", EditTool::Polygon, nullptr);
+            add_item("Ellipse", EditTool::Ellipse, "E");
+            add_item("Path", EditTool::Path, "D");
+            ImGui::Separator();
+            ImGui::TextDisabled("Lights");
+            add_item("Point Light", EditTool::PointLight, "P");
+            add_item("Segment Light", EditTool::SegmentLight, "T");
+            add_item("Projector", EditTool::ProjectorLight, "W");
+            ImGui::EndPopup();
+        }
+
+        // ── Shortcut reference overlay (?) ──────────────────────────────
+
+        if (panel.show_shortcuts_help) {
+            ImGui::SetNextWindowPos(ImVec2((float)win_w * 0.5f, (float)win_h * 0.5f),
+                                    ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(420 * dpi_scale, 0), ImGuiCond_Appearing);
+            if (ImGui::Begin("Keyboard Shortcuts", &panel.show_shortcuts_help,
+                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
+                auto section = [](const char* title) {
+                    ImGui::Spacing();
+                    ImGui::TextDisabled("%s", title);
+                    ImGui::Separator();
+                };
+                auto row = [](const char* key, const char* desc) {
+                    ImGui::Text("%-18s %s", key, desc);
+                };
+                section("Navigation");
+                row("Middle / Alt+Drag", "Pan");
+                row("Scroll", "Zoom");
+                row("F", "Fit to selection");
+                row("Home", "Fit to scene");
+                row("Tab", "Toggle panel");
+
+                section("Selection & Edit");
+                row("Click", "Select");
+                row("Shift+Click", "Add/remove");
+                row("G / R / S", "Grab / Rotate / Scale");
+                row("X / Y", "Axis constraint (in G/R/S)");
+                row("Delete / Backspace", "Delete selected");
+                row("Ctrl+D", "Duplicate + Grab");
+                row("Ctrl+G / Ctrl+Sh+G", "Group / Ungroup");
+                row("H / Alt+H", "Hide / Show all");
+
+                section("Tools");
+                row("Q", "Select tool");
+                row("Shift+A", "Add menu at cursor");
+                row("C / L / A / B", "Circle / Segment / Arc / Bezier");
+                row("E / D", "Ellipse / Path");
+                row("P / T / W", "Point / Segment / Projector light");
+                row("M / X", "Measure / Erase");
+
+                section("Materials & Look");
+                row("N / Shift+N", "Cycle material fwd / back");
+                row("J", "Cycle join mode (polygon)");
+                row("V", "Toggle wireframe");
+                row("Shift+1-6", "Look presets");
+                row("[ / ]", "Exposure nudge");
+                row("Space", "Pause / unpause");
+
+                section("Comparison");
+                row("`  (backtick)", "Toggle A/B snapshot");
+
+                section("File");
+                row("Ctrl+S", "Save");
+                row("Ctrl+Shift+S", "Save As");
+                row("Ctrl+O", "Load");
+                row("Ctrl+Z / Ctrl+Sh+Z", "Undo / Redo");
+
+                ImGui::Spacing();
+                ImGui::TextDisabled("Press ? to close");
+            }
+            ImGui::End();
+        }
+
         // ── Keyboard shortcuts ──────────────────────────────────────────
 
         if (!io.WantCaptureKeyboard) {
@@ -1303,6 +1397,16 @@ int App::run(const AppConfig& config) {
                 }
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_O)) {
                     panel.open_load_popup = true;
+                }
+
+                // Add menu at cursor: Shift+A
+                if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+                    panel.open_add_popup = true;
+                }
+
+                // Shortcut reference: ?
+                if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Slash)) {
+                    panel.show_shortcuts_help = !panel.show_shortcuts_help;
                 }
 
                 // Select all
@@ -1421,7 +1525,7 @@ int App::run(const AppConfig& config) {
                     if (ImGui::IsKeyPressed(ImGuiKey_Q)) switch_tool(EditTool::Select);
                     if (ImGui::IsKeyPressed(ImGuiKey_C)) switch_tool(EditTool::Circle);
                     if (ImGui::IsKeyPressed(ImGuiKey_L)) switch_tool(EditTool::Segment);
-                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl) switch_tool(EditTool::Arc);
+                    if (ImGui::IsKeyPressed(ImGuiKey_A) && !io.KeyCtrl && !io.KeyShift) switch_tool(EditTool::Arc);
                     if (ImGui::IsKeyPressed(ImGuiKey_B)) switch_tool(EditTool::Bezier);
                     if (ImGui::IsKeyPressed(ImGuiKey_E)) switch_tool(EditTool::Ellipse);
                     if (ImGui::IsKeyPressed(ImGuiKey_D)) switch_tool(EditTool::Path);
