@@ -71,8 +71,15 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
 // Export a high-quality PNG render of the given shot at a specific runtime frame index.
 bool export_authored_png(const Shot& source_shot, int frame = 0);
 
-// Save the current shot to JSON.
+// Save the current shot to JSON (to a specific path, or the default path).
+bool do_save_to(EditorState& ed, const std::string& path, std::string* error = nullptr);
 void do_save(EditorState& ed);
+
+// Load a scene from a JSON file. Returns true on success.
+bool try_load_scene(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
+                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    int win_w, int win_h,
+                    const std::string& path, std::string* error = nullptr);
 
 // Copy selected objects to clipboard.
 void copy_to_clipboard(EditorState& ed);

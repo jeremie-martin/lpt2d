@@ -190,21 +190,47 @@ bool export_authored_png(const Shot& source_shot, int frame) {
     return export_png(filename, pixels.data(), output_shot.canvas.width, output_shot.canvas.height);
 }
 
-void do_save(EditorState& ed) {
-    std::string path = ed.session.save_path.empty() ? (ed.shot.name + ".json") : ed.session.save_path;
+bool try_load_scene(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
+                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    int win_w, int win_h,
+                    const std::string& path, std::string* error) {
+    std::string local_error;
+    auto loaded = try_load_shot_json(path, &local_error);
+    if (!loaded) {
+        if (error) *error = local_error.empty() ? "Failed to load scene" : local_error;
+        return false;
+    }
+    ed.shot = *loaded;
+    ed.shot.trace.batch = kGuiTraceBatch;
+    ed.session.save_path = path;
+    reset_editor(ed, renderer, compare_ab, light_analysis_valid,
+                 force_live_metrics_refresh, win_w, win_h);
+    return true;
+}
+
+bool do_save_to(EditorState& ed, const std::string& path, std::string* error) {
     Shot saved = ed.shot;
-    // GUI batch is session-only; restore authored default for saving
     saved.trace.batch = TraceDefaults{}.batch;
     std::string norm_error;
     if (!normalize_scene(saved.scene, &norm_error)) {
-        std::cerr << "Cannot save: " << norm_error << "\n";
-        return;
+        if (error) *error = "Cannot save: " + norm_error;
+        return false;
     }
-    if (save_shot_json(saved, path)) {
-        ed.session.save_path = path;
-        ed.session.dirty = false;
-        std::cerr << "Saved: " << path << "\n";
+    if (!save_shot_json(saved, path)) {
+        if (error) *error = "Failed to save to: " + path;
+        return false;
     }
+    ed.session.save_path = path;
+    ed.session.dirty = false;
+    std::cerr << "Saved: " << path << "\n";
+    return true;
+}
+
+void do_save(EditorState& ed) {
+    std::string path = ed.session.save_path.empty() ? (ed.shot.name + ".json") : ed.session.save_path;
+    std::string error;
+    if (!do_save_to(ed, path, &error))
+        std::cerr << error << "\n";
 }
 
 void copy_to_clipboard(EditorState& ed) {
