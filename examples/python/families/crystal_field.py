@@ -781,8 +781,10 @@ def build_light_path(
         return vertical_drift_path(lx, bounds[3] + spacing * 0.5, bounds[1] - spacing * 0.5)
     elif cfg.path_style == "random_walk":
         return random_walk_path(rng, cfg.n_waypoints * 3, spacing * 0.8, bounds)
-    else:
+    elif cfg.path_style == "waypoints":
         return waypoint_path(rng, cfg.n_waypoints, bounds)
+    else:
+        raise ValueError(f"Unknown path_style: {cfg.path_style!r}")
 
 
 def build(p: Params):
@@ -1084,7 +1086,9 @@ def _measure_circles_at_frame(
 
     return measure_light_circles(
         rr.pixels, PROBE_W, PROBE_H, positions,
-        camera_center=(0.0, 0.0), camera_width=3.2, labels=labels,
+        camera_center=(float(_PROBE_CAMERA.center[0]), float(_PROBE_CAMERA.center[1])),
+        camera_width=float(_PROBE_CAMERA.width),
+        labels=labels,
     )
 
 

@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .params import params_from_dict
-from .renderer import RenderSession, _resolve_frame_shot, _save_image, render
+from .renderer import RenderSession, _resolve_frame_shot, render, save_image
 from .stats import color_stats, frame_stats
 from .types import AnimateFn, Camera2D, Shot, Timeline
 
@@ -339,7 +339,7 @@ class Family:
             rr = session.render_shot(cpp_shot, mid_frame)
 
             img_path = out_dir / f"{generated:03d}.png"
-            _save_image(str(img_path), rr.pixels, w, h)
+            save_image(str(img_path), rr.pixels, w, h)
             all_params.append(asdict(params))
 
             desc = self._describe(params) if self._describe else ""

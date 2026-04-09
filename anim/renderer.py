@@ -112,7 +112,7 @@ class PpmOutput:
 
     def write_frame(self, rgb_data: bytes):
         path = str(self._dir / f"frame_{self._frame:06d}.ppm")
-        _save_image(path, rgb_data, self._width, self._height)
+        save_image(path, rgb_data, self._width, self._height)
         self._frame += 1
 
     def close(self):
@@ -136,9 +136,6 @@ def save_image(path: str, rgb: bytes, width: int, height: int) -> None:
 
         Image.frombytes("RGB", (width, height), rgb).save(path)
 
-
-# Backward compat alias (used by internal code that still references the old name).
-_save_image = save_image
 
 
 # ─── Formatting helpers ──────────────────────────────────────────
@@ -461,7 +458,7 @@ def render_contact_sheet(
             dst_off = ((row * h + y) * sheet_w + col * w) * 3
             sheet[dst_off : dst_off + w * 3] = rgb[src_off : src_off + w * 3]
 
-    _save_image(output, bytes(sheet), sheet_w, sheet_h)
+    save_image(output, bytes(sheet), sheet_w, sheet_h)
     sys.stderr.write(f"wrote {output} ({sheet_w}x{sheet_h}, {count} frames, {cols}x{rows} grid)\n")
 
 
