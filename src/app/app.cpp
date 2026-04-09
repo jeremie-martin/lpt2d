@@ -1605,14 +1605,18 @@ int App::run(const AppConfig& config) {
                     ed.interaction.transform.lock_x = false;
                 }
 
-                // Numeric input
+                // Numeric input (row keys + numpad)
                 for (int k = ImGuiKey_0; k <= ImGuiKey_9; ++k) {
                     if (ImGui::IsKeyPressed((ImGuiKey)k))
                         ed.interaction.transform.numeric_buf += ('0' + (k - ImGuiKey_0));
                 }
-                if (ImGui::IsKeyPressed(ImGuiKey_Period))
+                for (int k = ImGuiKey_Keypad0; k <= ImGuiKey_Keypad9; ++k) {
+                    if (ImGui::IsKeyPressed((ImGuiKey)k))
+                        ed.interaction.transform.numeric_buf += ('0' + (k - ImGuiKey_Keypad0));
+                }
+                if (ImGui::IsKeyPressed(ImGuiKey_Period) || ImGui::IsKeyPressed(ImGuiKey_KeypadDecimal))
                     ed.interaction.transform.numeric_buf += '.';
-                if (ImGui::IsKeyPressed(ImGuiKey_Minus))
+                if (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract))
                     ed.interaction.transform.numeric_buf += '-';
                 if (ImGui::IsKeyPressed(ImGuiKey_Backspace) && !ed.interaction.transform.numeric_buf.empty())
                     ed.interaction.transform.numeric_buf.pop_back();
@@ -1675,8 +1679,8 @@ int App::run(const AppConfig& config) {
 
                 // Panel tab switching: 1 / 2 (only when panel is visible)
                 if (panel.show_controls_panel && !io.KeyShift && !io.KeyCtrl && !io.KeyAlt) {
-                    if (ImGui::IsKeyPressed(ImGuiKey_1)) { panel.active_tab = 0; panel.tab_switch_requested = true; }
-                    if (ImGui::IsKeyPressed(ImGuiKey_2)) { panel.active_tab = 1; panel.tab_switch_requested = true; }
+                    if (ImGui::IsKeyPressed(ImGuiKey_1) || ImGui::IsKeyPressed(ImGuiKey_Keypad1)) { panel.active_tab = 0; panel.tab_switch_requested = true; }
+                    if (ImGui::IsKeyPressed(ImGuiKey_2) || ImGui::IsKeyPressed(ImGuiKey_Keypad2)) { panel.active_tab = 1; panel.tab_switch_requested = true; }
                 }
 
                 // Look presets: Shift+1 through Shift+6
@@ -1684,6 +1688,9 @@ int App::run(const AppConfig& config) {
                     for (int k = ImGuiKey_1; k <= ImGuiKey_6; ++k)
                         if (ImGui::IsKeyPressed((ImGuiKey)k))
                             apply_look_preset(ed.shot.look, k - ImGuiKey_1);
+                    for (int k = ImGuiKey_Keypad1; k <= ImGuiKey_Keypad6; ++k)
+                        if (ImGui::IsKeyPressed((ImGuiKey)k))
+                            apply_look_preset(ed.shot.look, k - ImGuiKey_Keypad1);
                 }
 
                 // A/B look toggle: ` (grave accent)
@@ -1861,7 +1868,7 @@ int App::run(const AppConfig& config) {
 
                 // Authored camera toggle: 0
                 if (!compare_ab.active && !io.KeyShift && !io.KeyCtrl && !io.KeyAlt
-                    && ImGui::IsKeyPressed(ImGuiKey_0) && !ed.shot.camera.empty()) {
+                    && (ImGui::IsKeyPressed(ImGuiKey_0) || ImGui::IsKeyPressed(ImGuiKey_Keypad0)) && !ed.shot.camera.empty()) {
                     if (ed.view.showing_authored_camera) {
                         // Restore free camera
                         if (ed.view.saved_free_camera)
