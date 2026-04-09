@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import random
-import sys
 from collections import Counter
 
 from .sampling import sample
