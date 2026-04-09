@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 
 from anim import (
-    Camera2D,
     Circle,
     Frame,
     FrameContext,
