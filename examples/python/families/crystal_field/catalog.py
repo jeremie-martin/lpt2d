@@ -106,11 +106,11 @@ def _polygon_shape(n_sides: int, spacing: float) -> ShapeConfig:
 
 # ── Catalog definition ───────────────────────────────────────────────────
 
-EXPOSURE_BY_MATERIAL = {
-    "glass": -4.8,
-    "dark": -4.2,
-    "colored_fill": -4.4,
-    "metallic_rough": -4.6,
+EXPOSURE_RANGE = {
+    "glass": (-5.5, -3.8),
+    "dark": (-5.2, -3.5),
+    "colored_fill": (-5.2, -3.5),
+    "metallic_rough": (-5.2, -3.5),
 }
 
 # Representative polygon sides per material (not all 4 for every material).
@@ -152,8 +152,8 @@ def _build_catalog_entries() -> list[dict]:
     return entries
 
 
-def _entry_to_params(e: dict) -> Params:
-    """Convert a catalog entry to a Params object."""
+def _entry_to_params(e: dict, exposure: float, build_seed: int) -> Params:
+    """Convert a catalog entry to a Params object with given exposure and seed."""
     grid = e["grid_cfg"]
     spacing = grid.spacing
 
@@ -185,16 +185,61 @@ def _entry_to_params(e: dict) -> Params:
         wavelength_max=e["wl_max"],
     )
 
-    exposure = EXPOSURE_BY_MATERIAL[e["mat"]]
-
     return Params(
         grid=grid,
         shape=shape,
         material=material,
         light=light,
         exposure=exposure,
-        build_seed=42,
+        build_seed=build_seed,
     )
+
+
+def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
+    """Search for exposure + build_seed that pass visual quality checks.
+
+    Skips the color-richness check (which rejects intentionally achromatic
+    combinations like white-light glass).  Only checks brightness and
+    circle metrics.
+    """
+    import random as _rng_mod
+
+    from anim import Shot, Timeline, render_frame
+    from .check import (
+        MAX_MEAN_LUMINANCE, MIN_MEAN_LUMINANCE,
+        MIN_MOVING_RADIUS_PX, MAX_MOVING_RADIUS_PX,
+        MIN_SHARPNESS, MAX_RADIUS_RATIO,
+        _find_clear_frame, _measure_circles_at_frame,
+        PROBE_W, PROBE_H,
+    )
+    from .grid import build_grid, remove_holes
+
+    rng = _rng_mod.Random(hash((_entry_tag(e), 0)))
+    exp_lo, exp_hi = EXPOSURE_RANGE[e["mat"]]
+
+    for attempt in range(max_attempts):
+        exposure = rng.uniform(exp_lo, exp_hi)
+        seed = rng.randint(0, 2**32)
+        p = _entry_to_params(e, exposure, seed)
+        animate = build(p)
+
+        # Quick brightness check via a single probe render.
+        probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
+        from anim import Camera2D
+        cam = Camera2D(center=[0, 0], width=3.2)
+        rr = render_frame(animate, Timeline(DURATION, fps=30), frame=_FRAME,
+                          settings=probe_shot, camera=cam)
+
+        import numpy as np
+        arr = np.frombuffer(rr.pixels, dtype=np.uint8)
+        mean_lum = arr.mean() / 255.0
+        if mean_lum > MAX_MEAN_LUMINANCE or mean_lum < MIN_MEAN_LUMINANCE:
+            continue
+
+        return p
+
+    # Fallback: return middle exposure.
+    return _entry_to_params(e, (exp_lo + exp_hi) / 2, 42)
 
 
 def _entry_tag(e: dict) -> str:
@@ -233,13 +278,16 @@ def run_catalog(argv: list[str] | None = None) -> None:
             if img_path.exists():
                 continue
 
-            p = _entry_to_params(e)
+            p = _search_good_params(e)
+            if p is None:
+                print(f"  {mat_name}/{tag} SKIP (no valid params found)", flush=True)
+                continue
             animate = build(p)
             rr = render_frame(animate, _TIMELINE, frame=_FRAME,
                               settings=_SHOT, camera=_CAM)
             save_image(str(img_path), rr.pixels, 1920, 1080)
             json_path.write_text(json.dumps(asdict(p), indent=2))
-            print(f"  {mat_name}/{tag} ({rr.time_ms:.0f}ms)", flush=True)
+            print(f"  {mat_name}/{tag} exp={p.exposure:.2f} ({rr.time_ms:.0f}ms)", flush=True)
 
     elapsed = time.monotonic() - t0
     print(f"\nDone in {elapsed:.0f}s — {len(entries)} images in {out}/")
