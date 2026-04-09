@@ -18,11 +18,11 @@ from .params import (
 
 
 def random_grid(rng: random.Random) -> GridConfig:
-    # 30% chance of a small grid (3-5 rows, 4-7 cols)
     if rng.random() < 0.30:
+        # Small sparse grid — fewer objects, more breathing room.
         rows = rng.randint(3, 5)
         cols = rng.randint(4, 7)
-        spacing = rng.uniform(0.22, 0.30)
+        spacing = rng.uniform(0.25, 0.35)
     else:
         spacing = rng.uniform(0.18, 0.30)
         cols = max(3, int(2.4 / spacing) + rng.randint(-1, 1))
@@ -34,9 +34,11 @@ def random_grid(rng: random.Random) -> GridConfig:
     )
 
 
-def random_shape(rng: random.Random, spacing: float) -> ShapeConfig:
+def random_shape(rng: random.Random, spacing: float, small_grid: bool = False) -> ShapeConfig:
     kind = rng.choices(["circle", "polygon"], weights=[2, 3])[0]
-    size = spacing * rng.uniform(0.22, 0.35)
+    # Bigger objects on smaller grids — they need visual weight.
+    lo, hi = (0.28, 0.42) if small_grid else (0.22, 0.35)
+    size = spacing * rng.uniform(lo, hi)
 
     if kind == "circle":
         return ShapeConfig(kind="circle", size=size, n_sides=0, corner_radius=0.0, rotation=None)
@@ -70,7 +72,8 @@ def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
     else:
         style = rng.choices(["glass", "glass", "diffuse"], weights=[5, 5, 1])[0]
 
-    ior = 1.3 + rng.betavariate(2.0, 1.5) * 0.9
+    # IOR 1.3–1.75, biased toward higher values (wider caustics).
+    ior = 1.3 + rng.betavariate(2.0, 1.5) * 0.45
     cauchy_b = rng.uniform(10_000, 30_000)
     absorption = rng.uniform(0.2, 2.5)
 
@@ -89,8 +92,12 @@ def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
     else:
         fill = 0.0
 
-    # Color groups
-    n_color_groups = rng.choice([0, 0, 1, 2, 3])
+    # Color groups.  Glass circles should NOT have mixed spectral colors —
+    # alternating colored glass looks messy.  Colors work on diffuse shapes.
+    if style == "glass":
+        n_color_groups = 0
+    else:
+        n_color_groups = rng.choice([0, 0, 1, 2, 3])
     color_names: list[str] = []
     if n_color_groups > 0:
         color_names = rng.sample(PALETTE, min(n_color_groups, len(PALETTE)))
@@ -108,7 +115,11 @@ def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
 
 
 def random_light(rng: random.Random, material_style: str, n_color_groups: int) -> LightConfig:
-    n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
+    # Fewer lights with glass — caustics from multiple lights overlap chaotically.
+    if material_style == "glass":
+        n_lights = rng.choices([1, 2, 3], weights=[7, 2, 1])[0]
+    else:
+        n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
     path_style = rng.choices(
         ["waypoints", "random_walk", "vertical_drift", "drift", "channel"],
         weights=[2, 1, 1, 2, 2],
@@ -126,7 +137,7 @@ def random_light(rng: random.Random, material_style: str, n_color_groups: int) -
     # Ambient lighting — most scenes benefit from some fixed illumination.
     # Ambient intensity is always less than the moving-light intensity (1.0)
     # to keep the moving circles visually dominant.
-    amb_style = rng.choices(["corners", "sides", "none"], weights=[7, 2, 1])[0]
+    amb_style = rng.choices(["corners", "sides", "none"], weights=[8, 2, 0.5])[0]
     amb_intensity = rng.uniform(0.1, 0.4) if amb_style != "none" else 0.0
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
@@ -156,7 +167,8 @@ def random_light(rng: random.Random, material_style: str, n_color_groups: int) -
 
 def sample(rng: random.Random) -> Params:
     grid = random_grid(rng)
-    shape = random_shape(rng, grid.spacing)
+    small_grid = grid.rows <= 5 and grid.cols <= 7
+    shape = random_shape(rng, grid.spacing, small_grid=small_grid)
     material = random_material(rng, shape.kind)
     light = random_light(rng, material.style, material.n_color_groups)
     exposure = rng.uniform(-5.5, -3.5)
