@@ -40,8 +40,15 @@ from .params import (
 
 def _random_grid(rng: random.Random) -> GridConfig:
     spacing = rng.uniform(0.20, 0.32)
-    rows = rng.randint(3, 7)
-    cols = rng.randint(4, 12)
+
+    # Rows: Gaussian-like centered on 5, min 3, max 8.
+    rows = max(3, min(8, round(rng.gauss(5.0, 1.2))))
+
+    # Cols: enough to fill the frame but leave ≥15% margin on each side.
+    # Mirror box is 3.2 wide; 15% margin each side = 70% usable = 2.24 units.
+    max_cols = max(3, int(2.24 / spacing))
+    cols = rng.randint(4, max_cols)
+
     offset_rows = rng.choice([True, False])
     hole_fraction = 0.0 if rng.random() < 0.75 else rng.uniform(0.05, 0.15)
     return GridConfig(rows=rows, cols=cols, spacing=spacing,
@@ -140,9 +147,9 @@ def _random_light(
 ) -> LightConfig:
     # Number of lights: glass prefers 1; shadow allows 1-2.
     if mode == "glass":
-        n_lights = rng.choices([1, 2], weights=[8, 2])[0]
+        n_lights = rng.choices([1, 2], weights=[7, 3])[0]
     else:
-        n_lights = rng.choices([1, 2, 3], weights=[6, 3, 1])[0]
+        n_lights = rng.choices([1, 2, 3], weights=[5, 4, 1])[0]
 
     # Path style.
     path_style = rng.choices(
@@ -162,8 +169,9 @@ def _random_light(
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
     # Light colour: warm tint when the scene has no object colour.
+    # Half of achromatic scenes get a coloured light to avoid too much gray.
     wl_min, wl_max = 380.0, 780.0
-    if not has_object_color and rng.random() < 0.40:
+    if not has_object_color and rng.random() < 0.50:
         wl_min, wl_max = rng.choice(_WARM_SPECTRA)
 
     return LightConfig(
