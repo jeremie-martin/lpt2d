@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "name": "solid_surface_gallery",
   "camera": {
     "bounds": [
@@ -104,6 +104,20 @@
       "spectral_c2": 0.0,
       "fill": 0.0
     },
+    "filled_spectral_ellipse": {
+      "ior": 1.5,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 1.9220000505447388,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": -20.846515655517578,
+      "spectral_c1": 120.86748504638672,
+      "spectral_c2": -157.97470092773438,
+      "fill": 1.0
+    },
     "pentagon_mirror": {
       "ior": 1.0,
       "roughness": 0.0,
@@ -132,6 +146,20 @@
       "spectral_c2": 0.0,
       "fill": 0.0
     },
+    "room_prism_transmissive_surface": {
+      "ior": 1.0,
+      "roughness": 0.699999988079071,
+      "metallic": 0.8999999761581421,
+      "transmission": 0.9959999918937683,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
     "segment_reflector": {
       "ior": 1.0,
       "roughness": 0.0,
@@ -140,6 +168,20 @@
       "absorption": 0.0,
       "cauchy_b": 0.0,
       "albedo": 0.949999988079071,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    },
+    "segment_reflector_full": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 1.0,
+      "transmission": 1.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
       "emission": 0.0,
       "spectral_c0": 0.0,
       "spectral_c1": 0.0,
@@ -390,20 +432,7 @@
         -0.5949397683143616,
         0.5628693103790283
       ],
-      "material": {
-        "ior": 1.0,
-        "roughness": 0.0,
-        "metallic": 1.0,
-        "transmission": 1.0,
-        "absorption": 0.0,
-        "cauchy_b": 0.0,
-        "albedo": 1.0,
-        "emission": 0.0,
-        "spectral_c0": 0.0,
-        "spectral_c1": 0.0,
-        "spectral_c2": 0.0,
-        "fill": 0.0
-      }
+      "material_id": "segment_reflector_full"
     },
     {
       "id": "ellipse_2",
@@ -415,20 +444,7 @@
       "semi_a": 0.0968085527420044,
       "semi_b": 0.16411752998828888,
       "rotation": -0.3888113498687744,
-      "material": {
-        "ior": 1.5,
-        "roughness": 0.0,
-        "metallic": 0.0,
-        "transmission": 0.0,
-        "absorption": 1.9220000505447388,
-        "cauchy_b": 20000.0,
-        "albedo": 1.0,
-        "emission": 0.0,
-        "spectral_c0": -20.846515655517578,
-        "spectral_c1": 120.86748504638672,
-        "spectral_c2": -157.97470092773438,
-        "fill": 1.0
-      }
+      "material_id": "filled_spectral_ellipse"
     }
   ],
   "lights": [
@@ -526,20 +542,7 @@
             ]
           ],
           "corner_radius": 0.009999999776482582,
-          "material": {
-            "ior": 1.0,
-            "roughness": 0.699999988079071,
-            "metallic": 0.8999999761581421,
-            "transmission": 0.9959999918937683,
-            "absorption": 0.0,
-            "cauchy_b": 0.0,
-            "albedo": 1.0,
-            "emission": 0.0,
-            "spectral_c0": 0.0,
-            "spectral_c1": 0.0,
-            "spectral_c2": 0.0,
-            "fill": 0.0
-          }
+          "material_id": "room_prism_transmissive_surface"
         }
       ],
       "lights": []
