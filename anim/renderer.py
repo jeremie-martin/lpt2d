@@ -400,10 +400,12 @@ def render_still(
 ) -> None:
     """Render a single frame to an image file."""
     timeline_r, shot = _resolve_args(timeline, settings)
+    t0 = time.monotonic()
     rr = render_frame(animate, timeline_r, frame=frame, settings=shot, camera=camera, fast=fast)
+    wall_ms = (time.monotonic() - t0) * 1000
     w, h = shot.canvas.width, shot.canvas.height
     save_image(output, rr.pixels, w, h)
-    frame_ms = rr.time_ms if rr.time_ms > 0 else 0
+    frame_ms = rr.time_ms if rr.time_ms > 0 else wall_ms
     sys.stderr.write(
         f"wrote {Path(output).name} ({w}x{h}, frame {frame}, {_fmt_time(frame_ms / 1000)})\n"
     )

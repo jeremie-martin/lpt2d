@@ -144,6 +144,7 @@ import random
 from dataclasses import dataclass, field
 
 from anim import (
+    Camera2D,
     Circle,
     Frame,
     FrameContext,
@@ -646,6 +647,8 @@ def drift_path(
         nx = max(x_lo + m, min(x_hi - m, nx))
         ny = max(y_lo + m, min(y_hi - m, ny))
         step = math.hypot(nx - x, ny - y)
+        if step < 1e-9:
+            break  # stuck at boundary — close enough
         accumulated += step
         pts.append((nx, ny))
         x, y = nx, ny
@@ -679,6 +682,8 @@ def channel_path(
             dest = (dest + 1) % len(graph.nodes)
 
         route = _shortest_path(graph, current, dest)
+        if len(route) < 2:
+            break  # graph is disconnected or degenerate
 
         for i in range(1, len(route)):
             px, py = graph.nodes[route[i]]
@@ -1055,14 +1060,20 @@ def _find_clear_frame(
     return best_idx
 
 
+_PROBE_CAMERA = Camera2D(center=[0, 0], width=3.2)
+
+
 def _measure_circles_at_frame(
     animate,
     frame_idx: int,
     duration: float,
 ) -> list[LightCircle]:
     """Render one probe-quality frame and measure all light circles."""
-    probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS)
-    rr = render_frame(animate, Timeline(duration, fps=4), frame=frame_idx, settings=probe_shot)
+    probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS, depth=10)
+    rr = render_frame(
+        animate, Timeline(duration, fps=4),
+        frame=frame_idx, settings=probe_shot, camera=_PROBE_CAMERA,
+    )
 
     # Extract light positions from the animate callback's scene (call again;
     # render_frame already called it internally, but the result isn't exposed).
@@ -1072,7 +1083,8 @@ def _measure_circles_at_frame(
     labels = [l.id for l in frame_result.scene.lights]
 
     return measure_light_circles(
-        rr.pixels, PROBE_W, PROBE_H, positions, labels=labels,
+        rr.pixels, PROBE_W, PROBE_H, positions,
+        camera_center=(0.0, 0.0), camera_width=3.2, labels=labels,
     )
 
 
