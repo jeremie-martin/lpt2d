@@ -224,8 +224,8 @@ def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
     for _ in range(max_attempts):
         exposure = rng.uniform(exp_lo, exp_hi)
         seed = rng.randint(0, 2**32)
-        amb_intensity = rng.uniform(0.10, 0.35)
-        mov_intensity = rng.uniform(0.5, 1.0)
+        amb_intensity = rng.uniform(0.05, 0.35)
+        mov_intensity = rng.uniform(0.15, 1.0)
         p = _entry_to_params(e, exposure, seed,
                              amb_intensity=amb_intensity, mov_intensity=mov_intensity)
         animate = build(p)
