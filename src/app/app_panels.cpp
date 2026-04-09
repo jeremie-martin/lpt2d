@@ -1776,20 +1776,29 @@ void draw_controls_panel(
 
         if (ImGui::BeginTabItem("Edit", nullptr, edit_flags)) {
             panel.active_tab = 0;
+            ImGui::BeginChild("##edit_tab_scroll");
             draw_section_objects(ctx);
             draw_section_properties(ctx);
             sync_material_panel_to_active_object(ed, panel);
             draw_section_materials(ctx);
             draw_section_camera(ctx);
             draw_section_tracer(ctx);
+            ImGui::EndChild();
             ImGui::EndTabItem();
+        } else {
+            // Edit tab not visible — clear undo batching flags so switching
+            // tabs mid-edit doesn't merge separate edits into one undo step.
+            ed.interaction.prop_editing = false;
+            panel.material_panel.editing = false;
         }
 
         if (ImGui::BeginTabItem("Look", nullptr, look_flags)) {
             panel.active_tab = 1;
+            ImGui::BeginChild("##look_tab_scroll");
             draw_section_display(ctx);
             draw_section_output(ctx);
             draw_section_stats(ctx);
+            ImGui::EndChild();
             ImGui::EndTabItem();
         }
 
