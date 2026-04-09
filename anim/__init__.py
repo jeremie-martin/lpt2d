@@ -32,6 +32,10 @@ from .easing import EASING_DERIVATIVES as EASING_DERIVATIVES
 from .easing import EASINGS as EASINGS
 from .easing import resolve_easing_derivative as resolve_easing_derivative
 from .easing import smoothstep as smoothstep
+from .family import Family as Family
+from .family import ProbeFrame as ProbeFrame
+from .family import Verdict as Verdict
+from .family import probe as probe
 from .light_analysis import light_contributions as light_contributions
 from .light_analysis import scene_light_report as scene_light_report
 from .light_analysis import structure_contribution as structure_contribution
@@ -192,4 +196,8 @@ __all__ = [
     "thick_segment",
     "waveguide",
     "params_from_dict",
+    "Family",
+    "Verdict",
+    "ProbeFrame",
+    "probe",
 ]
