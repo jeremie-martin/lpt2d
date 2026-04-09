@@ -86,31 +86,63 @@ Ideas explored but not yet implemented
   interstitial channels between objects, rather than moving freely.
   Would require a simple pathfinding or channel-following algorithm.
 
+Design history
+--------------
+First iteration used a flat AnimParams with 16+ fields.  This was
+restructured into layered configs (GridConfig, ShapeConfig, etc.) so
+that parameters gated by a feature live inside that feature's block.
+
+The first 32-still survey revealed several problems:
+
+- **Polygons + glass = chaos.**  Straight edges create harsh refraction
+  fans that splatter light everywhere instead of focusing it into clean
+  caustics the way circles do.  Solution: polygons are always opaque
+  (diffuse, metallic-rough, or dark absorbing).  Circles keep glass.
+  Exception: very small polygons with rounded corners can sometimes
+  pull off glass, but it's risky.
+
+- **Scenes too dark with one light.**  A single point light traveling
+  through the grid left most of the scene in deep shadow.  Solution:
+  fixed ambient point lights at corners (4) or sides (2) at full
+  intensity.  These lift the base brightness so the traveling lights
+  add variation on top of a readable scene rather than being the only
+  source of visibility.
+
+- **Fill=0 on glass objects.**  Without fill, glass circles are
+  invisible until light refracts through them.  Solution: fill always
+  0.08-0.18 for glass.
+
+- **Polygon material variety.**  All-black polygons looked surprisingly
+  good (clean silhouettes), but the lack of variety was limiting.
+  Solution: three diffuse sub-styles:
+  - *dark*: low albedo, no fill — black silhouettes.
+  - *colored_fill*: moderate albedo + fill color — visible colored shapes.
+  - *metallic_rough*: metallic=1, roughness=0.6 — brushed metal.
+
+- **Corner radius on polygons.**  Sharp-cornered polygons look harsher
+  and produce more problematic edge reflections.  Rounded corners
+  soften the look.  Now always applied.
+
 Architecture note
 -----------------
 The parameter space is organized as layered configs — each concern (grid,
 shape, material, light) is a small focused dataclass with its own random
 sampler and gating logic.  Parameters that only matter when a feature is
-enabled (e.g., rotation angles for polygons, diffuse fraction for mixed
+enabled (e.g., rotation angles for polygons, diffuse sub-style for opaque
 materials) live inside that feature's config block rather than in a flat
 bag.  This keeps the sampling code readable as new knobs are added.
 
-The params JSON includes a ``build_seed`` alongside the config so that
-any saved variant can be exactly reproduced.
+The ``build_seed`` field inside Params ensures that any saved variant can
+be exactly reproduced from its params JSON alone.
 """
 
 from __future__ import annotations
 
-import json
 import math
 import random
-import sys
-import time
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from dataclasses import dataclass, field
 
 from anim import (
-    Camera2D,
     Circle,
     Frame,
     FrameContext,
@@ -120,17 +152,13 @@ from anim import (
     PointLight,
     Polygon,
     Scene,
-    Shot,
-    Timeline,
     Track,
     Wrap,
-    color_stats,
     glass,
     mirror_box,
     regular_polygon,
-    render,
 )
-from anim.renderer import RenderSession, _resolve_frame_shot
+from anim.family import Family, Verdict, probe
 
 # ---------------------------------------------------------------------------
 # Scene constants
@@ -138,8 +166,6 @@ from anim.renderer import RenderSession, _resolve_frame_shot
 
 WALL = Material(metallic=1.0, roughness=0.1, transmission=0.0, cauchy_b=0.0, albedo=1.0)
 WALL_ID = "wall"
-
-CAMERA = Camera2D(center=[0, 0], width=3.2)
 DURATION = 10.0
 
 # ---------------------------------------------------------------------------
@@ -175,14 +201,22 @@ class ShapeConfig:
 
 @dataclass
 class MaterialConfig:
-    style: str  # "glass", "diffuse", "mixed"
-    ior: float
-    cauchy_b: float
-    absorption: float
-    fill: float
-    diffuse_fraction: float  # only used when style="mixed"
+    style: str  # "glass" or "diffuse"
+    ior: float  # only for glass
+    cauchy_b: float  # only for glass
+    absorption: float  # only for glass
+    fill: float  # interior fill visibility
     n_color_groups: int  # 0 = no color
+    diffuse_style: str = "dark"  # "dark", "colored_fill", "metallic_rough" — only for diffuse
     color_names: list[str] = field(default_factory=list)
+
+
+@dataclass
+class AmbientConfig:
+    """Fixed ambient lights that illuminate the scene globally."""
+
+    style: str  # "corners", "sides", "none"
+    intensity: float  # per-light intensity (typically 0.2-0.4)
 
 
 @dataclass
@@ -190,15 +224,17 @@ class LightConfig:
     n_lights: int
     path_style: str  # "waypoints", "random_walk", "vertical_drift"
     n_waypoints: int  # segment count for waypoints / steps for random walk
+    ambient: AmbientConfig  # fixed background illumination
 
 
 @dataclass
-class AnimParams:
+class Params:
     grid: GridConfig
     shape: ShapeConfig
     material: MaterialConfig
     light: LightConfig
     exposure: float
+    build_seed: int  # rng seed for build-time randomness (holes, material assignment, light paths)
 
 
 # ---------------------------------------------------------------------------
@@ -281,9 +317,11 @@ def build_object(
 
 
 def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
+    from anim import diffuse as diffuse_mat
+
     mats: dict[str, Material] = {WALL_ID: WALL}
 
-    if cfg.style in ("glass", "mixed"):
+    if cfg.style == "glass":
         mats["crystal"] = glass(
             cfg.ior, cauchy_b=cfg.cauchy_b, absorption=cfg.absorption, fill=cfg.fill
         )
@@ -296,10 +334,25 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
                 fill=cfg.fill,
             )
 
-    if cfg.style in ("diffuse", "mixed"):
-        mats["crystal_diffuse"] = Material(
-            roughness=0.8, metallic=0.3, albedo=0.9, transmission=0.0
-        )
+    elif cfg.style == "diffuse":
+        if cfg.diffuse_style == "dark":
+            # Low albedo, no fill — black silhouettes that absorb most light.
+            # Colors are irrelevant for dark style — all objects look the same.
+            mats["crystal"] = Material(albedo=0.15, transmission=0.0)
+        elif cfg.diffuse_style == "colored_fill":
+            # Visible colored interior via fill
+            mats["crystal"] = diffuse_mat(0.7, fill=cfg.fill)
+            for i, cname in enumerate(cfg.color_names):
+                mats[f"crystal_c{i}"] = diffuse_mat(0.7, color=cname, fill=max(cfg.fill, 0.10))
+        elif cfg.diffuse_style == "metallic_rough":
+            # Brushed metal look — reflects light softly
+            mats["crystal"] = Material(
+                metallic=1.0, roughness=0.6, albedo=0.8, transmission=0.0, fill=cfg.fill
+            )
+            for i, cname in enumerate(cfg.color_names):
+                from anim import mirror as mirror_mat
+
+                mats[f"crystal_c{i}"] = mirror_mat(0.8, roughness=0.6, color=cname, fill=cfg.fill)
 
     return mats
 
@@ -307,16 +360,11 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
 def assign_material_ids(
     n_objects: int,
     cfg: MaterialConfig,
-    rng: random.Random,
 ) -> list[str]:
     n_colors = len(cfg.color_names)
     ids: list[str] = []
     for i in range(n_objects):
-        if cfg.style == "diffuse":
-            ids.append("crystal_diffuse")
-        elif cfg.style == "mixed" and rng.random() < cfg.diffuse_fraction:
-            ids.append("crystal_diffuse")
-        elif n_colors > 0:
+        if n_colors > 0:
             ids.append(f"crystal_c{i % n_colors}")
         else:
             ids.append("crystal")
@@ -441,8 +489,9 @@ def build_light_path(
         return waypoint_path(rng, cfg.n_waypoints, bounds)
 
 
-def build_animate(p: AnimParams, rng: random.Random):
-    """Return an animate(ctx) -> Frame callable."""
+def build(p: Params):
+    """Build an animate(ctx) -> Frame callable from params."""
+    rng = random.Random(p.build_seed)
     materials = build_materials(p.material)
 
     # Grid
@@ -451,7 +500,7 @@ def build_animate(p: AnimParams, rng: random.Random):
         positions = remove_holes(positions, p.grid.hole_fraction, rng)
 
     # Materials per object
-    mat_ids = assign_material_ids(len(positions), p.material, rng)
+    mat_ids = assign_material_ids(len(positions), p.material)
 
     # Shapes
     shapes: list[Circle | Polygon] = []
@@ -470,8 +519,22 @@ def build_animate(p: AnimParams, rng: random.Random):
         light_x_tracks.append(xt)
         light_y_tracks.append(yt)
 
+    # Fixed ambient lights
+    ambient_lights: list[PointLight] = []
+    amb = p.light.ambient
+    if amb.style == "corners":
+        for i, (ax, ay) in enumerate([(-1.4, 0.75), (1.4, 0.75), (-1.4, -0.75), (1.4, -0.75)]):
+            ambient_lights.append(
+                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+            )
+    elif amb.style == "sides":
+        for i, (ax, ay) in enumerate([(-1.4, 0.0), (1.4, 0.0)]):
+            ambient_lights.append(
+                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+            )
+
     def animate(ctx: FrameContext) -> Frame:
-        lights = []
+        lights = list(ambient_lights)
         for li in range(p.light.n_lights):
             lx = light_x_tracks[li].s(ctx.time)
             ly = light_y_tracks[li].s(ctx.time)
@@ -526,7 +589,7 @@ def random_shape(rng: random.Random, spacing: float) -> ShapeConfig:
 
     # Polygon
     n_sides = rng.choice([3, 4, 5, 6])
-    corner_radius = rng.choice([0.0, 0.0, size * rng.uniform(0.05, 0.15)])
+    corner_radius = size * rng.uniform(0.05, 0.20)
 
     # Gate: do we add rotation?
     if rng.random() < 0.6:
@@ -545,23 +608,38 @@ def random_shape(rng: random.Random, spacing: float) -> ShapeConfig:
     )
 
 
-def random_material(rng: random.Random) -> MaterialConfig:
-    style = rng.choices(["glass", "glass", "diffuse", "mixed"], weights=[4, 4, 1, 2])[0]
+def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
+    # Polygons should be opaque — straight edges + glass = chaotic reflections.
+    # Circles are fine as glass.
+    if shape_kind == "polygon":
+        style = "diffuse"
+    else:
+        style = rng.choices(["glass", "glass", "diffuse"], weights=[5, 5, 1])[0]
 
     ior = rng.choice([1.3, 1.5, 1.8, 2.0])
     cauchy_b = rng.uniform(10_000, 30_000)
     absorption = rng.uniform(0.2, 2.5)
-    fill = rng.uniform(0.0, 0.15) if style != "diffuse" else 0.0
 
-    # Color groups — gate: only for glass or mixed
-    n_color_groups = 0
+    # Diffuse sub-style: dark silhouettes, colored fill, or brushed metal
+    diffuse_style = "dark"
+    if style == "diffuse":
+        diffuse_style = rng.choices(["dark", "colored_fill", "metallic_rough"], weights=[3, 4, 2])[
+            0
+        ]
+
+    # Fill: always nonzero for glass; for diffuse depends on sub-style
+    if style == "glass":
+        fill = rng.uniform(0.08, 0.18)
+    elif diffuse_style in ("colored_fill", "metallic_rough"):
+        fill = rng.uniform(0.06, 0.15)
+    else:
+        fill = 0.0
+
+    # Color groups
+    n_color_groups = rng.choice([0, 0, 1, 2, 3])
     color_names: list[str] = []
-    if style in ("glass", "mixed"):
-        n_color_groups = rng.choice([0, 0, 1, 2, 3])
-        if n_color_groups > 0:
-            color_names = rng.sample(PALETTE, min(n_color_groups, len(PALETTE)))
-
-    diffuse_fraction = rng.uniform(0.15, 0.45) if style == "mixed" else 0.0
+    if n_color_groups > 0:
+        color_names = rng.sample(PALETTE, min(n_color_groups, len(PALETTE)))
 
     return MaterialConfig(
         style=style,
@@ -569,8 +647,8 @@ def random_material(rng: random.Random) -> MaterialConfig:
         cauchy_b=cauchy_b,
         absorption=absorption,
         fill=fill,
-        diffuse_fraction=diffuse_fraction,
         n_color_groups=n_color_groups,
+        diffuse_style=diffuse_style,
         color_names=color_names,
     )
 
@@ -579,169 +657,89 @@ def random_light(rng: random.Random) -> LightConfig:
     n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
     path_style = rng.choice(["waypoints", "waypoints", "random_walk", "vertical_drift"])
     n_waypoints = rng.randint(5, 12)
-    return LightConfig(n_lights=n_lights, path_style=path_style, n_waypoints=n_waypoints)
+
+    # Ambient lighting — most scenes benefit from some fixed illumination.
+    # Point lights use intensity=1.0 (same as moving lights).
+    amb_style = rng.choices(["corners", "sides", "none"], weights=[4, 3, 1])[0]
+    amb_intensity = 1.0 if amb_style != "none" else 0.0
+    ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
+
+    return LightConfig(
+        n_lights=n_lights, path_style=path_style, n_waypoints=n_waypoints, ambient=ambient
+    )
 
 
-def random_params(rng: random.Random) -> AnimParams:
+def sample(rng: random.Random) -> Params:
     grid = random_grid(rng)
     shape = random_shape(rng, grid.spacing)
-    material = random_material(rng)
+    material = random_material(rng, shape.kind)
     light = random_light(rng)
     exposure = rng.uniform(-6.0, -4.0)
-    return AnimParams(grid=grid, shape=shape, material=material, light=light, exposure=exposure)
+    build_seed = rng.randint(0, 2**32)
+    return Params(
+        grid=grid,
+        shape=shape,
+        material=material,
+        light=light,
+        exposure=exposure,
+        build_seed=build_seed,
+    )
 
 
 # ---------------------------------------------------------------------------
-# Beauty check
+# Check
 # ---------------------------------------------------------------------------
 
-MAX_ATTEMPTS = 500
 RICHNESS_THRESHOLD = 0.15
 MIN_COLORFUL_SECONDS = 2.5
-PROBE_FPS = 4
-PROBE_W, PROBE_H = 640, 360
 
 
-def make_probe_shot() -> Shot:
-    shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
-    shot.camera = CAMERA
-    shot.look = shot.look.with_overrides(
-        exposure=-5.0,
-        gamma=2.0,
-        tonemap="reinhardx",
-        white_point=0.5,
-        normalize="rays",
-        temperature=0.1,
-    )
-    return shot
-
-
-def check_beauty(p: AnimParams, rng: random.Random) -> tuple[bool, int, float]:
-    """Render low-res frames and count colorful ones."""
-    animate = build_animate(p, rng)
-    shot = make_probe_shot()
-    timeline = Timeline(DURATION, fps=PROBE_FPS)
-    session = RenderSession(PROBE_W, PROBE_H, False)
-
-    n_frames = timeline.total_frames
-    colorful = 0
-    total_richness = 0.0
-
-    for fi in range(n_frames):
-        ctx = timeline.context_at(fi)
-        result = animate(ctx)
-        cpp_shot = _resolve_frame_shot(shot, result, None)
-        rr = session.render_shot(cpp_shot, fi)
-        cs = color_stats(rr.pixels, PROBE_W, PROBE_H)
-        total_richness += cs.color_richness
-        if cs.color_richness > RICHNESS_THRESHOLD:
-            colorful += 1
-
-    avg = total_richness / n_frames if n_frames > 0 else 0.0
-    return colorful >= int(MIN_COLORFUL_SECONDS * PROBE_FPS), colorful, avg
+def check(p: Params, animate) -> Verdict:
+    frames = probe(animate, DURATION)
+    colorful = sum(1 for f in frames if f.color_richness > RICHNESS_THRESHOLD)
+    colorful_s = colorful / 4  # probe runs at 4 fps
+    avg = sum(f.color_richness for f in frames) / len(frames)
+    ok = colorful_s >= MIN_COLORFUL_SECONDS
+    return Verdict(ok, f"colorful={colorful_s:.1f}s avg={avg:.3f}")
 
 
 # ---------------------------------------------------------------------------
-# HQ render
+# Describe
 # ---------------------------------------------------------------------------
 
 
-def make_hq_shot(width: int = 1920, height: int = 1080, rays: int = 5_000_000) -> Shot:
-    shot = Shot.preset("production", width=width, height=height, rays=rays, depth=12)
-    shot.camera = CAMERA
-    shot.look = shot.look.with_overrides(
-        exposure=-5.0,
-        gamma=2.0,
-        tonemap="reinhardx",
-        white_point=0.5,
-        normalize="rays",
-        temperature=0.1,
-    )
-    return shot
-
-
-def render_and_save(
-    p: AnimParams,
-    out_dir: Path,
-    build_seed: int,
-    width: int = 1920,
-    height: int = 1080,
-    rays: int = 5_000_000,
-) -> None:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "params.json").write_text(
-        json.dumps({"params": asdict(p), "build_seed": build_seed}, indent=2)
-    )
-
-    animate = build_animate(p, random.Random(build_seed))
-    settings = make_hq_shot(width, height, rays)
-    timeline = Timeline(DURATION, fps=60)
-    video_path = out_dir / "video.mp4"
-    render(animate, timeline, str(video_path), settings=settings, crf=16)
-    print(f"  video -> {video_path}")
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-
-def describe_params(p: AnimParams) -> str:
+def describe(p: Params) -> str:
     s = p.shape
     shape_desc = "circle" if s.kind == "circle" else f"{s.n_sides}-gon"
     if s.rotation:
-        shape_desc += f" rot={math.degrees(s.rotation.base_angle):.0f}°"
+        shape_desc += f" rot={math.degrees(s.rotation.base_angle):.0f}\u00b0"
         if s.rotation.jitter > 0:
-            shape_desc += f"±{math.degrees(s.rotation.jitter):.0f}°"
+            shape_desc += f"\u00b1{math.degrees(s.rotation.jitter):.0f}\u00b0"
+    mat_desc = p.material.style
+    if p.material.style == "diffuse":
+        mat_desc = f"diffuse/{p.material.diffuse_style}"
+    amb = p.light.ambient.style if p.light.ambient.style != "none" else ""
     return (
         f"grid={p.grid.rows}x{p.grid.cols} {shape_desc} "
-        f"mat={p.material.style} ior={p.material.ior:.1f} "
+        f"mat={mat_desc} "
         f"lights={p.light.n_lights}({p.light.path_style}) "
-        f"colors={p.material.n_color_groups}"
+        f"colors={p.material.n_color_groups}" + (f" amb={amb}" if amb else "")
     )
 
 
-def main() -> None:
-    seed = (
-        int(time.time())
-        if "--seed" not in sys.argv
-        else int(sys.argv[sys.argv.index("--seed") + 1])
-    )
-    target = int(sys.argv[sys.argv.index("-n") + 1]) if "-n" in sys.argv else 1
-    hq = "--hq" in sys.argv
-    width = 1920 if hq else 320
-    height = 1080 if hq else 180
-    rays = 5_000_000 if hq else 2_000_000
-    rng = random.Random(seed)
-    print(f"seed={seed} target={target} hq={hq}")
+# ---------------------------------------------------------------------------
+# Family definition
+# ---------------------------------------------------------------------------
 
-    base_dir = Path("renders/families/crystal_field")
-    found = 0
-
-    for attempt in range(1, MAX_ATTEMPTS + 1):
-        p = random_params(rng)
-        print(f"[{attempt}] {describe_params(p)} -- checking...", flush=True)
-
-        beauty_rng = random.Random(rng.randint(0, 2**32))
-        ok, n_colorful, avg_rich = check_beauty(p, beauty_rng)
-        print(f"  colorful={n_colorful / PROBE_FPS:.1f}s avg={avg_rich:.3f}", flush=True)
-
-        if not ok:
-            continue
-
-        found += 1
-        out_dir = base_dir / f"{found:03d}"
-        print(f"  FOUND #{found} -- rendering...")
-        build_seed = rng.randint(0, 2**32)
-        render_and_save(p, out_dir, build_seed, width, height, rays)
-        print("  done.\n")
-
-        if found >= target:
-            break
-
-    if found == 0:
-        print(f"No valid animation found in {MAX_ATTEMPTS} attempts.")
-
+FAMILY = Family(
+    "crystal_field",
+    DURATION,
+    Params,
+    sample,
+    build,
+    check=check,
+    describe=describe,
+)
 
 if __name__ == "__main__":
-    main()
+    FAMILY.main()
