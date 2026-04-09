@@ -29,7 +29,7 @@ from anim import (
     mirror_box,
 )
 from anim.family import _DEFAULT_CAMERA, _STANDARD_LOOK
-from anim.renderer import RenderSession, _resolve_frame_shot, _save_image
+from anim.renderer import RenderSession, _resolve_frame_shot, save_image
 from anim.types import Canvas, Shot, Timeline, TraceDefaults
 
 from .light_circle import LightCircle, measure_light_circles, pixels_to_world, summarize
@@ -76,7 +76,7 @@ def _annotate_and_save(
     title: str,
 ) -> None:
     """Save the image and a companion text file with measurements."""
-    _save_image(str(path), pixels, WIDTH, HEIGHT)
+    save_image(str(path), pixels, WIDTH, HEIGHT)
 
     txt = path.with_suffix(".txt")
     lines = [title, "=" * len(title), ""]

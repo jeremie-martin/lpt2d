@@ -82,14 +82,12 @@ def _radial_profile(
     xg, yg = np.meshgrid(xs, ys)
     dist = np.sqrt(xg * xg + yg * yg)
 
-    profile = np.zeros(max_radius + 1, dtype=np.float64)
-
-    # Quantize distance to integer bins.
-    ri = np.clip(np.round(dist).astype(np.int64), 0, max_radius)
-    for r in range(max_radius + 1):
-        mask = ri == r
-        if mask.any():
-            profile[r] = lum[mask].mean()
+    # Quantize distance to integer bins and average luminance per ring.
+    ri = np.clip(np.round(dist).astype(np.int64), 0, max_radius).ravel()
+    lum_flat = lum.ravel().astype(np.float64)
+    sums = np.bincount(ri, weights=lum_flat, minlength=max_radius + 1)
+    counts = np.bincount(ri, minlength=max_radius + 1)
+    profile = np.where(counts > 0, sums / counts, 0.0)
 
     return profile.astype(np.float32)
 
