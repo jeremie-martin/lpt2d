@@ -27,7 +27,7 @@ MAX_MEAN_LUMINANCE = 0.70  # reject if scene is too bright overall
 MIN_MEAN_LUMINANCE = 0.12  # reject if scene is too dark (objects blocking too much light)
 MIN_MOVING_RADIUS_PX = 3.0  # moving light must be a visible blob
 MAX_MOVING_RADIUS_PX = 80.0  # not a featureless wash
-MAX_RADIUS_RATIO = 2.33  # max moving / ambient circle size ratio
+MAX_RADIUS_RATIO = 2.66  # max moving / ambient circle size ratio
 MIN_SHARPNESS = 0.010  # minimum edge sharpness (lum drop per pixel)
 
 PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
