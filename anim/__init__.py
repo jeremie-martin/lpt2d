@@ -35,6 +35,7 @@ from .easing import smoothstep as smoothstep
 from .light_analysis import light_contributions as light_contributions
 from .light_analysis import scene_light_report as scene_light_report
 from .light_analysis import structure_contribution as structure_contribution
+from .params import params_from_dict as params_from_dict
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
@@ -190,4 +191,5 @@ __all__ = [
     "thick_arc",
     "thick_segment",
     "waveguide",
+    "params_from_dict",
 ]

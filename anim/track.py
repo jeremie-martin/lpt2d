@@ -190,6 +190,13 @@ class Track:
             return t_start + cycle, -1.0
         return t_start + cycle, 1.0
 
+    def s(self, t: float) -> float:
+        """Evaluate as scalar (type-narrowed to ``float``)."""
+        v = self.at(t)
+        if isinstance(v, tuple):
+            raise TypeError("expected scalar track, got tuple")
+        return float(v)
+
     def __repr__(self) -> str:
         return f"Track({len(self._times)} keys, dim={self._dim}, wrap={self._wrap.value})"
 
