@@ -178,6 +178,7 @@ def probe(
             )
         )
 
+    session.close()
     return frames
 
 
