@@ -319,37 +319,20 @@ float& polygon_bulk_corner_radius_state(const Polygon& polygon) {
 
 } // namespace
 
-// ─── Controls panel ──────────────────────────────────────────────────
+// ─── PanelContext ────────────────────────────────────────────────────
 
-void draw_controls_panel(
-    EditorState& ed,
-    Renderer& renderer,
-    CompareSnapshot& compare_ab,
-    PanelState& panel,
-    FrameMetrics& live_metrics,
-    bool& force_live_metrics_refresh,
-    const ImGuiIO& io,
-    float dpi_scale,
-    float frame_ms,
-    int win_w, int win_h, int fb_w, int fb_h
-) {
-    // Shorthand reload
-    auto reload = [&](bool mark_dirty = true) {
-        reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid, force_live_metrics_refresh,
-                     win_w, win_h, mark_dirty);
-    };
+void PanelContext::reload(bool mark_dirty) {
+    reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid, force_live_metrics_refresh,
+                 win_w, win_h, mark_dirty);
+}
 
+// ─── Section functions ──────────────────────────────────────────────
+
+static void draw_section_scene(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
     const auto& builtins = get_builtin_scenes();
-    bool showing_snapshot_a = compare_ab.active && compare_ab.showing_a;
-    sync_material_panel_to_active_object(ed, panel);
 
-    float panel_w = 280 * dpi_scale;
-    ImGui::SetNextWindowPos(ImVec2((float)win_w - panel_w - 8, 8), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(panel_w, (float)win_h - 16), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSizeConstraints(ImVec2(220 * dpi_scale, 200), ImVec2(500 * dpi_scale, 1e6f));
-    ImGui::Begin("Controls");
-
-    // -- Scene --
     if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Scene");
         const char* label = (panel.current_scene >= 0) ? builtins[panel.current_scene].name.c_str() : "Custom";
@@ -359,8 +342,8 @@ void draw_controls_panel(
                     panel.current_scene = i;
                     ed.shot = load_builtin_scene(builtins[i]);
                     ed.shot.trace.batch = kGuiTraceBatch;
-                    reset_editor(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                 force_live_metrics_refresh, win_w, win_h);
+                    reset_editor(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
+                                 ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
                 }
             }
             ImGui::EndCombo();
@@ -379,8 +362,8 @@ void draw_controls_panel(
             ed.shot.scene.lights.push_back(light);
             ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
                                            {kDefaultRoomHalfWidth, kDefaultRoomHalfHeight}};
-            reset_editor(ed, renderer, compare_ab, panel.light_analysis_valid,
-                         force_live_metrics_refresh, win_w, win_h);
+            reset_editor(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
+                         ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
         }
 
         // Save/Load/Save As
@@ -392,6 +375,11 @@ void draw_controls_panel(
         if (ImGui::Button("Load")) { panel.open_load_popup = true; }
         ImGui::PopID();
     }
+}
+
+static void draw_section_scene_popups(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
 
     // Popup handling lives outside the Scene header so Ctrl+O and
     // Ctrl+Shift+S work even when the Scene section is collapsed.
@@ -448,8 +436,8 @@ void draw_controls_panel(
             ImGui::TextWrapped("%s", panel.load_dialog.error.c_str());
         if ((ImGui::Button("OK") || enter_pressed) && panel.load_dialog.path[0]) {
             std::string error;
-            if (try_load_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
-                               force_live_metrics_refresh, win_w, win_h,
+            if (try_load_scene(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
+                               ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h,
                                panel.load_dialog.path.data(), &error)) {
                 panel.current_scene = -1;
                 panel.load_dialog.error.clear();
@@ -466,8 +454,12 @@ void draw_controls_panel(
         }
         ImGui::EndPopup();
     }
+}
 
-    // -- Edit --
+static void draw_section_edit(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
+
     if (ImGui::CollapsingHeader("Edit", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Edit");
         ImVec4 accent(0.31f, 0.53f, 0.86f, 1.0f);
@@ -553,13 +545,16 @@ void draw_controls_panel(
         }
         ImGui::PopID();
     }
+}
 
-    // -- Camera --
+static void draw_section_camera(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+
     if (ImGui::CollapsingHeader("Camera")) {
         ImGui::PushID("Camera");
 
         if (ImGui::Button("Set from View")) {
-            ed.shot.camera.bounds = current_display_view(ed, compare_ab, win_w, win_h);
+            ed.shot.camera.bounds = current_display_view(ed, ctx.compare_ab, ctx.win_w, ctx.win_h);
             ed.shot.camera.center.reset();
             ed.shot.camera.width.reset();
             ed.session.dirty = true;
@@ -605,11 +600,16 @@ void draw_controls_panel(
         ImGui::Text("Aspect: %.3f", ed.shot.canvas.aspect());
         ImGui::PopID();
     }
+}
 
-    // -- Objects --
+static void draw_section_objects(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
+    const auto& io = ctx.io;
+
     if (ImGui::CollapsingHeader("Objects", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Objects");
-        if (ImGui::SmallButton("Show All")) { ed.visibility.show_all(); reload(); }
+        if (ImGui::SmallButton("Show All")) { ed.visibility.show_all(); ctx.reload(); }
         if (!ed.visibility.solo_light_id.empty()) {
             ImGui::SameLine();
             if (!ed.visibility.solo_light_group_id.empty()) {
@@ -631,7 +631,7 @@ void draw_controls_panel(
         }
         int n_items = (int)(ed.shot.scene.shapes.size() + ed.shot.scene.lights.size() + ed.shot.scene.groups.size());
         float h = std::clamp(n_items * ImGui::GetTextLineHeightWithSpacing() + 8.0f,
-                             40.0f, 200.0f * dpi_scale);
+                             40.0f, 200.0f * ctx.dpi_scale);
         ImGui::BeginChild("##objlist", ImVec2(0, h), ImGuiChildFlags_Borders);
 
         for (int i = 0; i < (int)ed.shot.scene.shapes.size(); ++i) {
@@ -646,7 +646,7 @@ void draw_controls_panel(
             ImGui::PushID(i + 10000);
             bool svis = ed.visibility.is_shape_visible(sid);
             if (ImGui::SmallButton(svis ? "o" : "-")) {
-                ed.visibility.toggle_shape(sid); reload();
+                ed.visibility.toggle_shape(sid); ctx.reload();
             }
             ImGui::PopID();
             ImGui::SameLine();
@@ -672,7 +672,7 @@ void draw_controls_panel(
             ImGui::PushID(i + 20000);
             bool lvis = ed.visibility.is_light_visible(lid);
             if (ImGui::SmallButton(lvis ? "o" : "-")) {
-                ed.visibility.toggle_light(lid); reload();
+                ed.visibility.toggle_light(lid); ctx.reload();
             }
             ImGui::PopID();
             ImGui::SameLine();
@@ -685,7 +685,7 @@ void draw_controls_panel(
                     ed.visibility.solo_light_id = lid;
                     ed.visibility.solo_light_group_id.clear();
                 }
-                reload();
+                ctx.reload();
             }
             ImGui::PopID();
             ImGui::SameLine();
@@ -707,7 +707,7 @@ void draw_controls_panel(
             ImGui::PushID(i + 40000);
             bool gvis = ed.visibility.is_group_visible(group.id);
             if (ImGui::SmallButton(gvis ? "o" : "-")) {
-                ed.visibility.toggle_group(group.id); reload();
+                ed.visibility.toggle_group(group.id); ctx.reload();
             }
             ImGui::PopID();
             ImGui::SameLine();
@@ -742,7 +742,7 @@ void draw_controls_panel(
                             ed.visibility.solo_light_id = glid;
                             ed.visibility.solo_light_group_id = group.id;
                         }
-                        reload();
+                        ctx.reload();
                     }
                     ImGui::PopID();
                     ImGui::SameLine();
@@ -767,14 +767,14 @@ void draw_controls_panel(
                             active ? " (editing active object)" : "");
             }
             if (ImGui::Button("Delete Selected")) {
-                delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                force_live_metrics_refresh, win_w, win_h);
+                delete_selected(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
+                                ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
             }
         }
 
         // Visual diagnostics
         {
-            const Shot& diagnostic_shot = current_authored_shot(ed, compare_ab);
+            const Shot& diagnostic_shot = current_authored_shot(ed, ctx.compare_ab);
             Shot diagnostic_copy = diagnostic_shot;
             ensure_scene_entity_ids(diagnostic_copy.scene);
             auto scene_warnings = diagnose_scene(diagnostic_copy.scene);
@@ -793,18 +793,18 @@ void draw_controls_panel(
                     Bounds view = diagnostic_copy.camera.resolve(
                         diagnostic_copy.canvas.aspect(), scene_bounds);
                     TraceConfig tcfg =
-                        diagnostic_copy.trace.to_trace_config(current_runtime_frame(ed, compare_ab));
+                        diagnostic_copy.trace.to_trace_config(current_runtime_frame(ed, ctx.compare_ab));
                     tcfg.batch_size = std::min(tcfg.batch_size, 100000);
                     tcfg.depth = std::min(tcfg.depth, 12);
                     int analysis_dispatches =
                         std::max(1, (int)std::ceil(500000.0 / std::max(1, tcfg.batch_size)));
 
-                    renderer.upload_scene(diagnostic_copy.scene, view);
-                    renderer.upload_fills(diagnostic_copy.scene, view);
-                    renderer.clear();
-                    if (renderer.num_lights() > 0)
-                        renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
-                    float normalize_ref = std::max(renderer.compute_current_max(), 1.0f);
+                    ctx.renderer.upload_scene(diagnostic_copy.scene, view);
+                    ctx.renderer.upload_fills(diagnostic_copy.scene, view);
+                    ctx.renderer.clear();
+                    if (ctx.renderer.num_lights() > 0)
+                        ctx.renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
+                    float normalize_ref = std::max(ctx.renderer.compute_current_max(), 1.0f);
 
                     PostProcess contribution_look{};
                     contribution_look.exposure = 0.0f;
@@ -825,13 +825,13 @@ void draw_controls_panel(
                     float total_mean = 0.0f;
                     for (const auto& source : authored_sources) {
                         Scene solo = scene_with_solo_source(diagnostic_copy.scene, source);
-                        renderer.upload_scene(solo, view);
-                        renderer.upload_fills(solo, view);
-                        renderer.clear();
-                        if (renderer.num_lights() > 0)
-                            renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
-                        renderer.update_display(contribution_look, diagnostic_copy.canvas.aspect());
-                        auto metrics = renderer.compute_display_metrics();
+                        ctx.renderer.upload_scene(solo, view);
+                        ctx.renderer.upload_fills(solo, view);
+                        ctx.renderer.clear();
+                        if (ctx.renderer.num_lights() > 0)
+                            ctx.renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
+                        ctx.renderer.update_display(contribution_look, diagnostic_copy.canvas.aspect());
+                        auto metrics = ctx.renderer.compute_display_metrics();
                         panel.light_analysis.push_back({
                             source.label,
                             metrics.mean_lum,
@@ -847,7 +847,7 @@ void draw_controls_panel(
                         return a.share > b.share;
                     });
 
-                    reload(false);
+                    ctx.reload(false);
                     panel.light_analysis_valid = !panel.light_analysis.empty();
                 }
             }
@@ -864,8 +864,12 @@ void draw_controls_panel(
 
         ImGui::PopID();
     }
+}
 
-    // -- Properties --
+static void draw_section_properties(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
+
     // Auto-expand when selection appears (but let user collapse manually after).
     {
         static bool had_selection = false;
@@ -1280,17 +1284,19 @@ void draw_controls_panel(
                 ed.session.undo.push(ed.shot.scene);
                 ed.interaction.prop_editing = true;
             }
-            reload();
+            ctx.reload();
         }
         if (!ImGui::IsAnyItemActive() && ed.interaction.prop_editing) {
             ed.interaction.prop_editing = false;
         }
         ImGui::PopID();
     }
+}
 
-    sync_material_panel_to_active_object(ed, panel);
+static void draw_section_materials(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
 
-    // -- Material Library --
     if (ImGui::CollapsingHeader("Material Library")) {
         ImGui::PushID("Materials");
         auto& mats = ed.shot.scene.materials;
@@ -1337,7 +1343,7 @@ void draw_controls_panel(
                 ed.session.undo.push(ed.shot.scene);
                 rename_material_binding(ed, panel.material_panel.selected_name, panel.material_panel.rename_buffer);
                 panel.material_panel.selected_name = panel.material_panel.rename_buffer;
-                reload();
+                ctx.reload();
             }
 
             bool mat_changed = edit_material(mat);
@@ -1346,7 +1352,7 @@ void draw_controls_panel(
                     ed.session.undo.push(ed.shot.scene);
                     panel.material_panel.editing = true;
                 }
-                reload();
+                ctx.reload();
             }
 
             int bound_count = material_usage_count(ed.shot.scene, panel.material_panel.selected_name);
@@ -1356,7 +1362,7 @@ void draw_controls_panel(
                 Scene before = ed.shot.scene;
                 if (apply_material_to_selection(ed, panel.material_panel.selected_name)) {
                     ed.session.undo.push(ed.shot.scene);
-                    reload();
+                    ctx.reload();
                 } else {
                     ed.shot.scene = std::move(before);
                 }
@@ -1379,7 +1385,7 @@ void draw_controls_panel(
                     delete_material(ed.shot.scene, panel.material_panel.selected_name);
                     panel.material_panel.selected_name.clear();
                     panel.material_panel.rename_buffer.clear();
-                    reload();
+                    ctx.reload();
                 }
             }
 
@@ -1452,7 +1458,7 @@ void draw_controls_panel(
                             panel.material_panel.delete_replacement_pending_new = false;
                             panel.material_panel.delete_error.clear();
                             ImGui::CloseCurrentPopup();
-                            reload();
+                            ctx.reload();
                         } else {
                             panel.material_panel.delete_error = std::move(error);
                         }
@@ -1486,7 +1492,7 @@ void draw_controls_panel(
             panel.material_panel.selected_name = name;
             panel.material_panel.rename_buffer = name;
             panel.material_panel.new_name[0] = '\0';
-            reload();
+            ctx.reload();
         }
 
         auto preset_btn = [&](const char* label, Material mat) {
@@ -1502,7 +1508,7 @@ void draw_controls_panel(
                 create_and_bind(name);
                 panel.material_panel.selected_name = name;
                 panel.material_panel.rename_buffer = name;
-                reload();
+                ctx.reload();
             }
         };
         preset_btn("Glass", mat_glass(1.5f, 20000.0f));
@@ -1518,8 +1524,12 @@ void draw_controls_panel(
 
         ImGui::PopID();
     }
+}
 
-    // -- Tracer --
+static void draw_section_tracer(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+    auto& panel = ctx.panel;
+
     if (ImGui::CollapsingHeader("Tracer")) {
         ImGui::PushID("Tracer");
         ImGui::SliderInt("Batch", &ed.shot.trace.batch, 1000, 1000000, "%d",
@@ -1530,22 +1540,25 @@ void draw_controls_panel(
         int seed_mode = (int)ed.shot.trace.seed_mode;
         if (ImGui::Combo("Seed mode", &seed_mode, "Deterministic\0Decorrelated\0")) {
             ed.shot.trace.seed_mode = (SeedMode)seed_mode;
-            renderer.clear();
+            ctx.renderer.clear();
             panel.light_analysis_valid = false;
-            force_live_metrics_refresh = true;
+            ctx.force_live_metrics_refresh = true;
         }
         int frame = ed.session.frame;
         if (ImGui::InputInt("Frame", &frame)) {
             ed.session.frame = std::max(frame, 0);
-            renderer.clear();
+            ctx.renderer.clear();
             panel.light_analysis_valid = false;
-            force_live_metrics_refresh = true;
+            ctx.force_live_metrics_refresh = true;
         }
         ImGui::Checkbox("Paused", &panel.paused);
         ImGui::PopID();
     }
+}
 
-    // -- Display --
+static void draw_section_display(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+
     if (ImGui::CollapsingHeader("Display", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Display");
 
@@ -1558,45 +1571,45 @@ void draw_controls_panel(
         }
 
         // Full-shot A/B comparison
-        if (showing_snapshot_a)
+        if (ctx.showing_snapshot_a())
             ImGui::BeginDisabled();
         if (ImGui::Button("Snapshot A")) {
             std::vector<uint8_t> snapshot_rgba;
-            renderer.read_display_rgba(snapshot_rgba);
-            compare_ab.shot = ed.shot;
-            compare_ab.frame = ed.session.frame;
-            ensure_scene_entity_ids(compare_ab.shot.scene);
-            compare_ab.view_bounds = current_display_view(ed, compare_ab, win_w, win_h);
-            compare_ab.metrics = renderer.compute_frame_metrics();
-            compare_ab.metrics_valid = true;
-            upload_compare_snapshot(compare_ab, snapshot_rgba, fb_w, fb_h);
-            compare_ab.active = true;
-            compare_ab.showing_a = false;
-            force_live_metrics_refresh = true;
+            ctx.renderer.read_display_rgba(snapshot_rgba);
+            ctx.compare_ab.shot = ed.shot;
+            ctx.compare_ab.frame = ed.session.frame;
+            ensure_scene_entity_ids(ctx.compare_ab.shot.scene);
+            ctx.compare_ab.view_bounds = current_display_view(ed, ctx.compare_ab, ctx.win_w, ctx.win_h);
+            ctx.compare_ab.metrics = ctx.renderer.compute_frame_metrics();
+            ctx.compare_ab.metrics_valid = true;
+            upload_compare_snapshot(ctx.compare_ab, snapshot_rgba, ctx.fb_w, ctx.fb_h);
+            ctx.compare_ab.active = true;
+            ctx.compare_ab.showing_a = false;
+            ctx.force_live_metrics_refresh = true;
         }
-        if (showing_snapshot_a)
+        if (ctx.showing_snapshot_a())
             ImGui::EndDisabled();
-        if (compare_ab.active) {
+        if (ctx.compare_ab.active) {
             ImGui::SameLine();
-            if (ImGui::Button(compare_ab.showing_a ? "Show B (live)" : "Show A")) {
-                compare_ab.showing_a = !compare_ab.showing_a;
-                if (!compare_ab.showing_a)
-                    reload(false);
-                force_live_metrics_refresh = true;
+            if (ImGui::Button(ctx.compare_ab.showing_a ? "Show B (live)" : "Show A")) {
+                ctx.compare_ab.showing_a = !ctx.compare_ab.showing_a;
+                if (!ctx.compare_ab.showing_a)
+                    ctx.reload(false);
+                ctx.force_live_metrics_refresh = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear A/B")) {
-                bool was_showing_a = compare_ab.showing_a;
-                destroy_compare_snapshot(compare_ab);
-                compare_ab.active = false;
-                compare_ab.showing_a = false;
-                compare_ab.metrics_valid = false;
-                compare_ab.frame = 0;
+                bool was_showing_a = ctx.compare_ab.showing_a;
+                destroy_compare_snapshot(ctx.compare_ab);
+                ctx.compare_ab.active = false;
+                ctx.compare_ab.showing_a = false;
+                ctx.compare_ab.metrics_valid = false;
+                ctx.compare_ab.frame = 0;
                 if (was_showing_a)
-                    reload(false);
-                force_live_metrics_refresh = true;
+                    ctx.reload(false);
+                ctx.force_live_metrics_refresh = true;
             }
-            if (compare_ab.showing_a) {
+            if (ctx.compare_ab.showing_a) {
                 ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1),
                                    "Showing: A (frozen snapshot, snapshot framing)");
             } else {
@@ -1624,7 +1637,7 @@ void draw_controls_panel(
             ImGui::SliderFloat("Ref value", &ed.shot.look.normalize_ref, 1.0f, 1000000.0f,
                                "%.0f", ImGuiSliderFlags_Logarithmic);
             if (ImGui::Button("Capture Ref")) {
-                ed.shot.look.normalize_ref = renderer.compute_current_max();
+                ed.shot.look.normalize_ref = ctx.renderer.compute_current_max();
             }
         }
         ImGui::Separator();
@@ -1646,14 +1659,17 @@ void draw_controls_panel(
         ImGui::SliderFloat("Chromatic Aberr.", &ed.shot.look.chromatic_aberration, 0.0f, 0.02f, "%.4f");
         ImGui::PopID();
     }
+}
 
-    // -- Output --
+static void draw_section_output(PanelContext& ctx) {
+    auto& ed = ctx.ed;
+
     if (ImGui::CollapsingHeader("Output", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::PushID("Output");
         char ray_str[32];
-        int64_t tr = renderer.total_rays();
-        const Shot& output_shot = current_authored_shot(ed, compare_ab);
-        int output_frame = current_runtime_frame(ed, compare_ab);
+        int64_t tr = ctx.renderer.total_rays();
+        const Shot& output_shot = current_authored_shot(ed, ctx.compare_ab);
+        int output_frame = current_runtime_frame(ed, ctx.compare_ab);
         const Look& output_look = output_shot.look;
         if (tr >= 1'000'000)
             std::snprintf(ray_str, sizeof(ray_str), "%.1fM", tr / 1e6);
@@ -1662,15 +1678,15 @@ void draw_controls_panel(
         else
             std::snprintf(ray_str, sizeof(ray_str), "%lld", (long long)tr);
         ImGui::Text("Rays: %s", ray_str);
-        if (!showing_snapshot_a && output_look.normalize == NormalizeMode::Max)
-            ImGui::Text("Max HDR: %.2f", renderer.last_max());
+        if (!ctx.showing_snapshot_a() && output_look.normalize == NormalizeMode::Max)
+            ImGui::Text("Max HDR: %.2f", ctx.renderer.last_max());
         else
             ImGui::TextDisabled("Max HDR: \xe2\x80\x94");
-        ImGui::Text("%.1f FPS (%.1f ms)", 1000.0f / frame_ms, frame_ms);
-        ImGui::Text("Zoom: %.0f%%", ed.view.camera.zoom / std::min((float)win_w / std::max(ed.view.scene_bounds.max.x - ed.view.scene_bounds.min.x, 0.01f), (float)win_h / std::max(ed.view.scene_bounds.max.y - ed.view.scene_bounds.min.y, 0.01f)) * 100.0f);
+        ImGui::Text("%.1f FPS (%.1f ms)", 1000.0f / ctx.frame_ms, ctx.frame_ms);
+        ImGui::Text("Zoom: %.0f%%", ed.view.camera.zoom / std::min((float)ctx.win_w / std::max(ed.view.scene_bounds.max.x - ed.view.scene_bounds.min.x, 0.01f), (float)ctx.win_h / std::max(ed.view.scene_bounds.max.y - ed.view.scene_bounds.min.y, 0.01f)) * 100.0f);
 
         if (ImGui::Button("Clear")) {
-            renderer.clear();
+            ctx.renderer.clear();
         }
         ImGui::SameLine();
         if (ImGui::Button("Export PNG")) {
@@ -1680,8 +1696,11 @@ void draw_controls_panel(
         }
         ImGui::PopID();
     }
+}
 
-    // -- Stats --
+static void draw_section_stats(PanelContext& ctx) {
+    auto& live_metrics = ctx.live_metrics;
+
     if (ImGui::CollapsingHeader("Stats")) {
         ImGui::PushID("Stats");
 
@@ -1692,24 +1711,89 @@ void draw_controls_panel(
             if (hist_f[i] > hist_max) hist_max = hist_f[i];
         }
         ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
-                             ImVec2(-1, 60.0f * dpi_scale));
+                             ImVec2(-1, 60.0f * ctx.dpi_scale));
 
         ImGui::Text("Mean: %.1f  Median: %.0f  P95: %.0f",
                     live_metrics.mean_lum, live_metrics.p50, live_metrics.p95);
         ImGui::Text("Black: %.1f%%  Clipped: %.1f%%",
                     live_metrics.pct_black * 100, live_metrics.pct_clipped * 100);
-        if (compare_ab.metrics_valid) {
+        if (ctx.compare_ab.metrics_valid) {
             ImGui::Separator();
             ImGui::Text("Snapshot A: mean %.1f  black %.1f%%  clipped %.1f%%",
-                        compare_ab.metrics.mean_lum,
-                        compare_ab.metrics.pct_black * 100.0f,
-                        compare_ab.metrics.pct_clipped * 100.0f);
+                        ctx.compare_ab.metrics.mean_lum,
+                        ctx.compare_ab.metrics.pct_black * 100.0f,
+                        ctx.compare_ab.metrics.pct_clipped * 100.0f);
             ImGui::Text("Delta vs A: mean %+.1f  black %+.1f%%  clipped %+.1f%%",
-                        live_metrics.mean_lum - compare_ab.metrics.mean_lum,
-                        (live_metrics.pct_black - compare_ab.metrics.pct_black) * 100.0f,
-                        (live_metrics.pct_clipped - compare_ab.metrics.pct_clipped) * 100.0f);
+                        live_metrics.mean_lum - ctx.compare_ab.metrics.mean_lum,
+                        (live_metrics.pct_black - ctx.compare_ab.metrics.pct_black) * 100.0f,
+                        (live_metrics.pct_clipped - ctx.compare_ab.metrics.pct_clipped) * 100.0f);
         }
         ImGui::PopID();
+    }
+}
+
+// ─── Controls panel (orchestrator with tabs) ────────────────────────
+
+void draw_controls_panel(
+    EditorState& ed,
+    Renderer& renderer,
+    CompareSnapshot& compare_ab,
+    PanelState& panel,
+    FrameMetrics& live_metrics,
+    bool& force_live_metrics_refresh,
+    const ImGuiIO& io,
+    float dpi_scale,
+    float frame_ms,
+    int win_w, int win_h, int fb_w, int fb_h
+) {
+    PanelContext ctx{ed, renderer, compare_ab, panel, live_metrics, force_live_metrics_refresh,
+                     io, dpi_scale, frame_ms, win_w, win_h, fb_w, fb_h};
+
+    sync_material_panel_to_active_object(ed, panel);
+
+    float panel_w = 280 * dpi_scale;
+    ImGui::SetNextWindowPos(ImVec2((float)win_w - panel_w - 8, 8), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(panel_w, (float)win_h - 16), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(220 * dpi_scale, 200), ImVec2(500 * dpi_scale, 1e6f));
+    ImGui::Begin("Controls");
+
+    // Always-visible sections (above tab bar)
+    draw_section_scene(ctx);
+    draw_section_scene_popups(ctx);
+    draw_section_edit(ctx);
+
+    // Tab bar: Edit vs Look
+    // Note: sync_material_panel_to_active_object is called once above (frame-level
+    // sync for selection changes from viewport) and once inside the Edit tab between
+    // Properties and Materials (catches material binding changes from the Properties
+    // combo that affect the Material Library's selected entry).
+    if (ImGui::BeginTabBar("##panel_tabs")) {
+        ImGuiTabItemFlags edit_flags = 0, look_flags = 0;
+        if (panel.tab_switch_requested) {
+            (panel.active_tab == 0 ? edit_flags : look_flags) |= ImGuiTabItemFlags_SetSelected;
+            panel.tab_switch_requested = false;
+        }
+
+        if (ImGui::BeginTabItem("Edit", nullptr, edit_flags)) {
+            panel.active_tab = 0;
+            draw_section_objects(ctx);
+            draw_section_properties(ctx);
+            sync_material_panel_to_active_object(ed, panel);
+            draw_section_materials(ctx);
+            draw_section_camera(ctx);
+            draw_section_tracer(ctx);
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Look", nullptr, look_flags)) {
+            panel.active_tab = 1;
+            draw_section_display(ctx);
+            draw_section_output(ctx);
+            draw_section_stats(ctx);
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
     }
 
     ImGui::End(); // Controls
