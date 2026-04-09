@@ -107,10 +107,10 @@ def _polygon_shape(n_sides: int, spacing: float) -> ShapeConfig:
 # ── Catalog definition ───────────────────────────────────────────────────
 
 EXPOSURE_RANGE = {
-    "glass": (-5.5, -3.8),
-    "dark": (-5.2, -3.5),
-    "colored_fill": (-5.2, -3.5),
-    "metallic_rough": (-5.2, -3.5),
+    "glass": (-6.5, -3.5),
+    "dark": (-6.0, -3.0),
+    "colored_fill": (-6.0, -3.0),
+    "metallic_rough": (-6.5, -3.0),
 }
 
 # Representative polygon sides per material (not all 4 for every material).
@@ -238,8 +238,8 @@ def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
 
         return p
 
-    # Fallback: return middle exposure.
-    return _entry_to_params(e, (exp_lo + exp_hi) / 2, 42)
+    # No valid exposure found — this combination is inherently too bright or dark.
+    return None
 
 
 def _entry_tag(e: dict) -> str:
