@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import types
-from typing import Type, TypeVar, get_type_hints
+from typing import Type, TypeVar, get_args, get_origin, get_type_hints
 
 T = TypeVar("T")
 
@@ -47,12 +47,22 @@ def _coerce(hint: type, val: object) -> object:
 
     # Union types (e.g. RotationConfig | None)
     if isinstance(hint, types.UnionType):
-        args = hint.__args__
-        for arg in args:
+        union_args = hint.__args__
+        for arg in union_args:
             if arg is type(None):
                 continue
             if dataclasses.is_dataclass(arg) and isinstance(val, dict):
                 return params_from_dict(arg, val)
         return val
+
+    # list[Dataclass] fields (e.g. list[PrismDef])
+    origin = get_origin(hint)
+    if origin is list and isinstance(val, list):
+        list_args = get_args(hint)
+        if list_args and dataclasses.is_dataclass(list_args[0]):
+            elem_cls = list_args[0]
+            return [
+                params_from_dict(elem_cls, item) if isinstance(item, dict) else item for item in val
+            ]
 
     return val
