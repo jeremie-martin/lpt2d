@@ -164,4 +164,23 @@ if(LPT2D_BUILD_PYTHON)
     endif()
 endif()
 
+# ── Native tests ─────────────────────────────────────────────────
+option(LPT2D_BUILD_TESTS "Build native C++ tests" ON)
+if(LPT2D_BUILD_TESTS)
+    enable_testing()
+    add_executable(lpt2d-core-tests
+        tests/cpp/test_main.cpp
+        tests/cpp/test_geometry.cpp
+        tests/cpp/test_scene.cpp
+        tests/cpp/test_color.cpp
+    )
+    target_include_directories(lpt2d-core-tests PRIVATE
+        ${PROJECT_SOURCE_DIR}/tests/cpp
+    )
+    target_link_libraries(lpt2d-core-tests PRIVATE lpt2d-core)
+    lpt2d_enable_build_options(lpt2d-core-tests)
+    lpt2d_enable_warnings(lpt2d-core-tests)
+    add_test(NAME core-tests COMMAND lpt2d-core-tests)
+endif()
+
 lpt2d_add_static_analysis_targets()
