@@ -2,6 +2,8 @@
 #include "scene.h"
 #include "serialize.h"
 
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 
 // --- Scene validation ---
@@ -130,7 +132,7 @@ static constexpr const char* MINIMAL_SHOT_JSON = R"({
 TEST(json_parse_minimal_shot) {
     std::string error;
     auto shot = try_load_shot_json_string(MINIMAL_SHOT_JSON, &error);
-    ASSERT_TRUE(shot.has_value());
+    REQUIRE_TRUE(shot.has_value());
     ASSERT_EQ(shot->name, std::string("test"));
     ASSERT_EQ(shot->canvas.width, 100);
     ASSERT_EQ(shot->canvas.height, 100);
@@ -139,7 +141,7 @@ TEST(json_parse_minimal_shot) {
 TEST(json_parse_minimal_shot_look_fields) {
     std::string error;
     auto shot = try_load_shot_json_string(MINIMAL_SHOT_JSON, &error);
-    ASSERT_TRUE(shot.has_value());
+    REQUIRE_TRUE(shot.has_value());
     ASSERT_NEAR(shot->look.exposure, -5.0f, 1e-6f);
     ASSERT_EQ(shot->look.tonemap, ToneMap::ReinhardExtended);
     ASSERT_EQ(shot->look.normalize, NormalizeMode::Rays);
@@ -149,7 +151,7 @@ TEST(json_parse_minimal_shot_look_fields) {
 TEST(json_parse_minimal_shot_trace_fields) {
     std::string error;
     auto shot = try_load_shot_json_string(MINIMAL_SHOT_JSON, &error);
-    ASSERT_TRUE(shot.has_value());
+    REQUIRE_TRUE(shot.has_value());
     ASSERT_EQ(shot->trace.rays, 1000000LL);
     ASSERT_EQ(shot->trace.batch, 100000);
     ASSERT_EQ(shot->trace.depth, 12);
@@ -228,12 +230,11 @@ TEST(json_parse_shot_with_circle) {
     })";
     std::string error;
     auto shot = try_load_shot_json_string(json, &error);
-    ASSERT_TRUE(shot.has_value());
+    REQUIRE_TRUE(shot.has_value());
     ASSERT_EQ(shot->name, std::string("with_circle"));
     ASSERT_EQ(shot->scene.shapes.size(), size_t(1));
-    // Verify the parsed circle fields
     auto* circle = std::get_if<Circle>(&shot->scene.shapes[0]);
-    ASSERT_TRUE(circle != nullptr);
+    REQUIRE_TRUE(circle != nullptr);
     ASSERT_NEAR(circle->center.x, 0.5f, 1e-6f);
     ASSERT_NEAR(circle->center.y, -0.3f, 1e-6f);
     ASSERT_NEAR(circle->radius, 0.25f, 1e-6f);
@@ -241,16 +242,18 @@ TEST(json_parse_shot_with_circle) {
 }
 
 TEST(json_roundtrip_default_shot) {
-    // Build a default shot, save to JSON string, reload, verify fields match
     Shot original;
     original.name = "roundtrip_test";
     original.canvas = {320, 240};
-    // Save to file, reload
-    const std::string path = "/tmp/lpt2d_test_roundtrip.json";
-    ASSERT_TRUE(save_shot_json(original, path));
+
+    auto path = std::filesystem::temp_directory_path() / "lpt2d_test_roundtrip_XXXXXX.json";
+    std::string path_str = path.string();
+    REQUIRE_TRUE(save_shot_json(original, path_str));
+
     std::string error;
-    auto reloaded = try_load_shot_json(path, &error);
-    ASSERT_TRUE(reloaded.has_value());
+    auto reloaded = try_load_shot_json(path_str, &error);
+    std::filesystem::remove(path_str);
+    REQUIRE_TRUE(reloaded.has_value());
     ASSERT_EQ(reloaded->name, std::string("roundtrip_test"));
     ASSERT_EQ(reloaded->canvas.width, 320);
     ASSERT_EQ(reloaded->canvas.height, 240);

@@ -45,10 +45,21 @@ inline void check(bool cond, const char* expr,
 
 inline void check_near(float a, float b, float tol, const char* expr,
                        std::source_location loc = std::source_location::current()) {
-    if (std::abs(a - b) > tol) {
+    if (!std::isfinite(a) || !std::isfinite(b) || std::abs(a - b) > tol) {
         std::fprintf(stderr, "  FAIL: %s  (%.8f vs %.8f, tol=%.8f)\n    at %s:%u\n",
                      expr, a, b, tol, loc.file_name(), loc.line());
         ++fail_count();
+    }
+}
+
+// Exception thrown by REQUIRE_* to abort the current test without killing the process.
+struct TestAbort {};
+
+inline void require(bool cond, const char* expr,
+                    std::source_location loc = std::source_location::current()) {
+    if (!cond) {
+        fail(expr, loc);
+        throw TestAbort{};
     }
 }
 
@@ -56,7 +67,7 @@ inline int run_all() {
     int passed = 0, failed = 0;
     for (auto& tc : registry()) {
         int before = fail_count();
-        tc.fn();
+        try { tc.fn(); } catch (const TestAbort&) {}
         if (fail_count() == before) {
             ++passed;
             std::printf("  PASS: %s\n", tc.name.c_str());
@@ -80,3 +91,6 @@ inline int run_all() {
 #define ASSERT_FALSE(expr)      test::check(!(expr), "!(" #expr ")")
 #define ASSERT_NEAR(a, b, tol)  test::check_near((a), (b), (tol), #a " ~= " #b)
 #define ASSERT_EQ(a, b)         test::check((a) == (b), #a " == " #b)
+
+// REQUIRE_TRUE aborts the current test on failure (use as a guard before dereferencing).
+#define REQUIRE_TRUE(expr)      test::require((expr), #expr)
