@@ -1,4 +1,22 @@
-"""Random parameter samplers — one per config layer."""
+"""Parameter generation for crystal_field.
+
+The sampler picks a visual mode first, then derives everything else from it.
+Each decision is transparent and follows logically from the previous one.
+
+Visual modes
+------------
+- **glass**: transparent circles refracting light into caustic webs.
+  Single slow light preferred.  No mixed object colours (caustics provide
+  the visual interest).  Optionally a warm-coloured light.
+
+- **shadow**: opaque polygons casting shadow fans.  Rounded corners always.
+  One or two lights.  Colour comes from fill (colored_fill) or from a
+  warm moving light (dark style).  Metallic-rough is a third option that
+  gives soft reflections.
+
+Grid, exposure, ambient, and speed are straightforward and independent of
+the mode — just pick reasonable values.
+"""
 
 from __future__ import annotations
 
@@ -17,142 +35,136 @@ from .params import (
 )
 
 
-def random_grid(rng: random.Random) -> GridConfig:
-    if rng.random() < 0.30:
-        # Small sparse grid — fewer objects, more breathing room.
-        rows = rng.randint(3, 5)
-        cols = rng.randint(4, 7)
-        spacing = rng.uniform(0.25, 0.35)
-    else:
-        spacing = rng.uniform(0.18, 0.30)
-        cols = max(3, int(2.4 / spacing) + rng.randint(-1, 1))
-        rows = max(3, int(1.4 / spacing) + rng.randint(-1, 1))
+# ── Grid ─────────────────────────────────────────────────────────────────
+
+
+def _random_grid(rng: random.Random) -> GridConfig:
+    spacing = rng.uniform(0.20, 0.32)
+    rows = rng.randint(3, 7)
+    cols = rng.randint(4, 12)
     offset_rows = rng.choice([True, False])
-    hole_fraction = rng.choice([0.0, 0.0, 0.0, rng.uniform(0.05, 0.20)])
-    return GridConfig(
-        rows=rows, cols=cols, spacing=spacing, offset_rows=offset_rows, hole_fraction=hole_fraction
-    )
+    hole_fraction = 0.0 if rng.random() < 0.75 else rng.uniform(0.05, 0.15)
+    return GridConfig(rows=rows, cols=cols, spacing=spacing,
+                      offset_rows=offset_rows, hole_fraction=hole_fraction)
 
 
-def random_shape(rng: random.Random, spacing: float, small_grid: bool = False) -> ShapeConfig:
-    kind = rng.choices(["circle", "polygon"], weights=[2, 3])[0]
-    # Bigger objects on smaller grids — they need visual weight.
-    lo, hi = (0.28, 0.42) if small_grid else (0.22, 0.35)
-    size = spacing * rng.uniform(lo, hi)
+# ── Shape ────────────────────────────────────────────────────────────────
 
-    if kind == "circle":
-        return ShapeConfig(kind="circle", size=size, n_sides=0, corner_radius=0.0, rotation=None)
 
-    # Polygon
+def _glass_shape(rng: random.Random, spacing: float) -> ShapeConfig:
+    """Glass mode: always circles."""
+    size = spacing * rng.uniform(0.25, 0.38)
+    return ShapeConfig(kind="circle", size=size, n_sides=0,
+                       corner_radius=0.0, rotation=None)
+
+
+def _shadow_shape(rng: random.Random, spacing: float) -> ShapeConfig:
+    """Shadow mode: always polygons with rounded corners."""
     n_sides = rng.choice([3, 4, 5, 6])
-    corner_radius = size * rng.uniform(0.10, 0.35)
+    size = spacing * rng.uniform(0.25, 0.40)
+    corner_radius = size * rng.uniform(0.12, 0.35)
 
-    # Gate: do we add rotation?
-    if rng.random() < 0.6:
+    rotation: RotationConfig | None = None
+    if rng.random() < 0.65:
         base_angle = rng.uniform(0, 2 * math.pi / n_sides)
-        # Gate: uniform rotation or per-object jitter?
-        if rng.random() < 0.4:
-            jitter = rng.uniform(0.05, math.pi / n_sides)
-        else:
-            jitter = 0.0
+        jitter = rng.uniform(0.05, math.pi / n_sides) if rng.random() < 0.35 else 0.0
         rotation = RotationConfig(base_angle=base_angle, jitter=jitter)
-    else:
-        rotation = None
 
-    return ShapeConfig(
-        kind="polygon", size=size, n_sides=n_sides, corner_radius=corner_radius, rotation=rotation
-    )
+    return ShapeConfig(kind="polygon", size=size, n_sides=n_sides,
+                       corner_radius=corner_radius, rotation=rotation)
 
 
-def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
-    # Polygons should be opaque — straight edges + glass = chaotic reflections.
-    # Circles are fine as glass.
-    if shape_kind == "polygon":
-        style = "diffuse"
-    else:
-        style = rng.choices(["glass", "glass", "diffuse"], weights=[5, 5, 1])[0]
+# ── Material ─────────────────────────────────────────────────────────────
 
-    # IOR 1.3–1.75, biased toward higher values (wider caustics).
-    ior = 1.3 + rng.betavariate(2.0, 1.5) * 0.45
-    cauchy_b = rng.uniform(10_000, 30_000)
-    absorption = rng.uniform(0.2, 2.5)
 
-    # Diffuse sub-style: dark silhouettes, colored fill, or brushed metal
-    diffuse_style = "dark"
-    if style == "diffuse":
-        diffuse_style = rng.choices(["dark", "colored_fill", "metallic_rough"], weights=[3, 4, 2])[
-            0
-        ]
-
-    # Fill: always nonzero for glass; for diffuse depends on sub-style
-    if style == "glass":
-        fill = rng.uniform(0.08, 0.18)
-    elif diffuse_style in ("colored_fill", "metallic_rough"):
-        fill = rng.uniform(0.06, 0.15)
-    else:
-        fill = 0.0
-
-    # Color groups.  Glass circles should NOT have mixed spectral colors —
-    # alternating colored glass looks messy.  Colors work on diffuse shapes.
-    if style == "glass":
-        n_color_groups = 0
-    else:
-        n_color_groups = rng.choice([0, 0, 1, 2, 3])
-    color_names: list[str] = []
-    if n_color_groups > 0:
-        color_names = rng.sample(PALETTE, min(n_color_groups, len(PALETTE)))
-
+def _glass_material(rng: random.Random) -> MaterialConfig:
+    """Glass: moderate IOR, no object colours (caustics are the colour)."""
     return MaterialConfig(
-        style=style,
-        ior=ior,
-        cauchy_b=cauchy_b,
-        absorption=absorption,
-        fill=fill,
-        n_color_groups=n_color_groups,
-        diffuse_style=diffuse_style,
-        color_names=color_names,
+        style="glass",
+        ior=rng.uniform(1.35, 1.70),
+        cauchy_b=rng.uniform(12_000, 28_000),
+        absorption=rng.uniform(0.3, 2.0),
+        fill=rng.uniform(0.08, 0.16),
+        n_color_groups=0,
+        diffuse_style="dark",
+        color_names=[],
     )
 
 
-def random_light(rng: random.Random, material_style: str, n_color_groups: int) -> LightConfig:
-    # Fewer lights with glass — caustics from multiple lights overlap chaotically.
-    if material_style == "glass":
-        n_lights = rng.choices([1, 2, 3], weights=[7, 2, 1])[0]
+def _shadow_material(rng: random.Random) -> MaterialConfig:
+    """Shadow: one of three sub-styles, each with its own colour logic."""
+    sub = rng.choices(["dark", "colored_fill", "metallic_rough"], weights=[3, 5, 2])[0]
+
+    if sub == "dark":
+        # Black silhouettes — colour comes from the light, not the objects.
+        return MaterialConfig(
+            style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
+            fill=0.0, n_color_groups=0, diffuse_style="dark", color_names=[],
+        )
+
+    if sub == "colored_fill":
+        # Coloured interiors — 1-3 colours from the palette.
+        n_colors = rng.randint(1, 3)
+        colors = rng.sample(PALETTE, n_colors)
+        return MaterialConfig(
+            style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
+            fill=rng.uniform(0.08, 0.18), n_color_groups=n_colors,
+            diffuse_style="colored_fill", color_names=colors,
+        )
+
+    # metallic_rough
+    n_colors = rng.choice([0, 1, 2])
+    colors = rng.sample(PALETTE, n_colors) if n_colors > 0 else []
+    return MaterialConfig(
+        style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
+        fill=rng.uniform(0.04, 0.12), n_color_groups=n_colors,
+        diffuse_style="metallic_rough", color_names=colors,
+    )
+
+
+# ── Light ────────────────────────────────────────────────────────────────
+
+# Warm spectral ranges for coloured moving lights.
+_WARM_SPECTRA = [
+    (550.0, 700.0),   # orange
+    (515.0, 700.0),   # yellow-orange
+    (570.0, 700.0),   # deep orange
+    (500.0, 620.0),   # warm green-yellow
+]
+
+
+def _random_light(
+    rng: random.Random,
+    mode: str,
+    has_object_color: bool,
+) -> LightConfig:
+    # Number of lights: glass prefers 1; shadow allows 1-2.
+    if mode == "glass":
+        n_lights = rng.choices([1, 2], weights=[8, 2])[0]
     else:
-        n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
+        n_lights = rng.choices([1, 2, 3], weights=[6, 3, 1])[0]
+
+    # Path style.
     path_style = rng.choices(
         ["waypoints", "random_walk", "vertical_drift", "drift", "channel"],
-        weights=[2, 1, 1, 2, 2],
+        weights=[2, 1, 1, 3, 3],
     )[0]
-    n_waypoints = rng.randint(5, 12)
 
-    # Speed: slower with more lights, slower with glass (caustics are complex).
-    speed_max = 0.25
-    if n_lights >= 2:
-        speed_max *= 0.7
-    if material_style == "glass":
-        speed_max *= 0.8
+    n_waypoints = rng.randint(5, 10)
+
+    # Speed: base 0.08–0.20, slower with more lights.
+    speed_max = 0.20 if n_lights == 1 else 0.14
     speed = rng.uniform(0.08, speed_max)
 
-    # Ambient lighting — most scenes benefit from some fixed illumination.
-    # Ambient intensity is always less than the moving-light intensity (1.0)
-    # to keep the moving circles visually dominant.
-    amb_style = rng.choices(["corners", "sides", "none"], weights=[8, 2, 0.5])[0]
-    amb_intensity = rng.uniform(0.1, 0.4) if amb_style != "none" else 0.0
+    # Ambient: 4 corners almost always.
+    amb_style = rng.choices(["corners", "sides"], weights=[8, 2])[0]
+    amb_intensity = rng.uniform(0.15, 0.35)
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
-    # Colored moving lights: when objects have no spectral color, the moving
-    # light itself can be warm-colored for visual interest.  Ambient stays
-    # white to attenuate the color dominance.
-    wl_min, wl_max = 380.0, 780.0  # full spectrum (white)
-    if n_color_groups == 0 and rng.random() < 0.35:
-        # Warm spectral ranges — intentional, not random.
-        wl_min, wl_max = rng.choice([
-            (550.0, 700.0),  # orange
-            (515.0, 700.0),  # yellow-orange
-            (570.0, 700.0),  # deep orange
-            (500.0, 620.0),  # warm green-yellow
-        ])
+    # Light colour: warm tint when the scene has no object colour.
+    wl_min, wl_max = 380.0, 780.0
+    if not has_object_color and rng.random() < 0.40:
+        wl_min, wl_max = rng.choice(_WARM_SPECTRA)
 
     return LightConfig(
         n_lights=n_lights,
@@ -165,14 +177,46 @@ def random_light(rng: random.Random, material_style: str, n_color_groups: int) -
     )
 
 
+# ── Top-level sampler ────────────────────────────────────────────────────
+
+
 def sample(rng: random.Random) -> Params:
-    grid = random_grid(rng)
-    small_grid = grid.rows <= 5 and grid.cols <= 7
-    shape = random_shape(rng, grid.spacing, small_grid=small_grid)
-    material = random_material(rng, shape.kind)
-    light = random_light(rng, material.style, material.n_color_groups)
-    exposure = rng.uniform(-5.5, -3.5)
+    """Generate one random crystal_field variant.
+
+    Picks a visual mode (glass or shadow), then derives grid, shape,
+    material, and light from it.  Every scene gets ambient lights.
+    """
+    # 1. Visual mode — equal chance.
+    mode = rng.choice(["glass", "shadow"])
+
+    # 2. Grid — same for both modes.
+    grid = _random_grid(rng)
+
+    # 3. Shape — mode-specific.
+    if mode == "glass":
+        shape = _glass_shape(rng, grid.spacing)
+    else:
+        shape = _shadow_shape(rng, grid.spacing)
+
+    # 4. Material — mode-specific.
+    if mode == "glass":
+        material = _glass_material(rng)
+    else:
+        material = _shadow_material(rng)
+
+    # 5. Light — aware of mode and whether objects have colour.
+    has_object_color = material.n_color_groups > 0
+    light = _random_light(rng, mode, has_object_color)
+
+    # 6. Exposure — glass scenes need less (caustics are bright);
+    #    shadow scenes need a bit more.
+    if mode == "glass":
+        exposure = rng.uniform(-5.5, -4.0)
+    else:
+        exposure = rng.uniform(-5.0, -3.5)
+
     build_seed = rng.randint(0, 2**32)
+
     return Params(
         grid=grid,
         shape=shape,
