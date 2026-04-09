@@ -1547,6 +1547,7 @@ int App::run(const AppConfig& config) {
                 row("Home", "Fit to scene");
                 row("0", "Toggle authored camera");
                 row("Tab", "Toggle panel");
+                row("1 / 2", "Edit / Look tab");
 
                 section("Selection & Edit");
                 row("Click", "Select");
@@ -1671,6 +1672,12 @@ int App::run(const AppConfig& config) {
                 // Panel toggle: Tab
                 if (ImGui::IsKeyPressed(ImGuiKey_Tab))
                     panel.show_controls_panel = !panel.show_controls_panel;
+
+                // Panel tab switching: 1 / 2 (only when panel is visible)
+                if (panel.show_controls_panel && !io.KeyShift && !io.KeyCtrl && !io.KeyAlt) {
+                    if (ImGui::IsKeyPressed(ImGuiKey_1)) { panel.active_tab = 0; panel.tab_switch_requested = true; }
+                    if (ImGui::IsKeyPressed(ImGuiKey_2)) { panel.active_tab = 1; panel.tab_switch_requested = true; }
+                }
 
                 // Look presets: Shift+1 through Shift+6
                 if (io.KeyShift && !io.KeyCtrl && !io.KeyAlt) {

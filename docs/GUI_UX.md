@@ -117,6 +117,7 @@ containing 10 collapsible sections, all open by default:
 | F / Home            | Fit selection / Fit scene     | works      |
 | 0                   | Toggle authored camera        | works      |
 | Tab                 | Toggle controls panel         | works      |
+| 1 / 2               | Edit / Look tab               | works      |
 | V                   | Wireframe toggle              | works      |
 | N / Shift+N         | Material cycle fwd/back       | works      |
 | J                   | Join mode cycle (polygon)     | works      |
@@ -131,13 +132,14 @@ containing 10 collapsible sections, all open by default:
 
 ## 3. Friction Points
 
-### 3.1 The panel hierarchy problem — (partial)
+### 3.1 The panel hierarchy problem — (done)
 
-Camera and Tracer panels now start collapsed by default (set-once panels).
-Properties auto-expands when an object is selected. This reduces the default
-scroll depth significantly.
-
-Remaining: context-sensitive collapse of other panels, tabs or pinning.
+The panel is now organized into two tabs (Edit and Look) below the
+always-visible Scene and Edit toolbar sections. The Edit tab contains
+Objects, Properties, Material Library, Camera, and Tracer. The Look tab
+contains Display, Output, and Stats. Keyboard shortcuts `1` / `2` switch
+tabs. Camera and Tracer start collapsed. Properties auto-expands on
+selection.
 
 ### 3.2 No fullscreen viewport — (done)
 
@@ -242,12 +244,12 @@ think about what actions are meaningful at each point, rather than accumulating
 features ad hoc. The context menu should be one of the most well-defined and
 well-maintained parts of the GUI.
 
-### 5.2 Panel management — (open)
+### 5.2 Panel management — (done)
 
-**Panel pinning or tabs.** Instead of one long scroll, organize panels into
-tabs or allow pinning a few sections to stay visible while others collapse. For
-example, a "Look" tab (Display + Output + Stats) vs an "Edit" tab (Objects +
-Properties + Material Library) would match the natural workflow clusters.
+Two-tab layout: Scene and Edit toolbar are always visible above a tab bar.
+The **Edit** tab (Objects, Properties, Material Library, Camera, Tracer) and
+**Look** tab (Display, Output, Stats) match the natural workflow clusters.
+`1` / `2` switch tabs from the keyboard.
 
 ### 5.3 More keyboard shortcuts — (partial)
 

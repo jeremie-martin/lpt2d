@@ -62,6 +62,25 @@ struct PanelState {
     bool show_controls_panel = true;
     bool show_shortcuts_help = false;
     ContextMenuTarget context_menu;
+    int active_tab = 0;               // 0 = Edit, 1 = Look
+    bool tab_switch_requested = false; // set by keyboard shortcut, consumed by draw
+};
+
+// Shared context passed to each panel section function.
+struct PanelContext {
+    EditorState& ed;
+    Renderer& renderer;
+    CompareSnapshot& compare_ab;
+    PanelState& panel;
+    FrameMetrics& live_metrics;
+    bool& force_live_metrics_refresh;
+    const ImGuiIO& io;
+    float dpi_scale;
+    float frame_ms;
+    int win_w, win_h, fb_w, fb_h;
+
+    void reload(bool mark_dirty = true);
+    bool showing_snapshot_a() const { return compare_ab.active && compare_ab.showing_a; }
 };
 
 // ─── Controls panel ─────────────────────────────────────────────────
