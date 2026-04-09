@@ -5,7 +5,6 @@ from __future__ import annotations
 import _lpt2d
 
 from . import analysis as analysis_mod
-from . import renderer as renderer_mod
 from .stats import (
     FrameStats,
     LightContribution,
@@ -235,16 +234,10 @@ def light_contributions(
             look=analysis_shot.look,
             trace=analysis_shot.trace,
         )
-        stats_list = renderer_mod.render_stats(
-            animate_solo,
-            1.0,
-            frames=[0],
-            settings=solo_shot,
-            camera=analysis_shot.camera,
-            fast=True,
+        s = analysis_mod._measure_single_frame(
+            animate_solo, solo_shot, analysis_shot.camera
         )
-        if stats_list:
-            s = stats_list[0][2]
+        if s is not None:
             results.append((label, idx, s.mean, 1.0 - s.pct_black))
             total_mean += s.mean
         else:
@@ -312,27 +305,17 @@ def structure_contribution(
         trace=analysis_shot.trace,
     )
 
-    stats_with = renderer_mod.render_stats(
+    _empty = FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
+    s_with = analysis_mod._measure_single_frame(
         lambda _ctx, _s=scene: Frame(scene=_s),
-        1.0,
-        frames=[0],
-        settings=shot_with,
-        camera=analysis_shot.camera,
-        fast=True,
-    )
-    stats_without = renderer_mod.render_stats(
+        shot_with,
+        analysis_shot.camera,
+    ) or _empty
+    s_without = analysis_mod._measure_single_frame(
         lambda _ctx, _s=scene_without: Frame(scene=_s),
-        1.0,
-        frames=[0],
-        settings=shot_without,
-        camera=analysis_shot.camera,
-        fast=True,
-    )
-
-    s_with = stats_with[0][2] if stats_with else FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
-    s_without = (
-        stats_without[0][2] if stats_without else FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
-    )
+        shot_without,
+        analysis_shot.camera,
+    ) or _empty
 
     diff = StatsDiff(
         mean=s_without.mean - s_with.mean,

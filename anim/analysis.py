@@ -162,6 +162,57 @@ def _resolve_static_scene_subject(
     return scene, shot
 
 
+def _measure_single_frame(
+    animate: AnimateFn,
+    shot: Shot,
+    camera: Camera2D | None = None,
+) -> FrameStats | None:
+    """Render frame 0 and return its FrameStats, or None on failure."""
+    stats_list = renderer_mod.render_stats(
+        animate,
+        1.0,
+        frames=[0],
+        settings=shot,
+        camera=camera or shot.camera,
+        fast=True,
+    )
+    if stats_list:
+        return stats_list[0][2]
+    return None
+
+
+def _summarize_brightness(stats_list: list[FrameStats]) -> float:
+    """Return representative brightness (0..1) from a list of FrameStats.
+
+    When inter-frame variance is high (std > 0.05), uses the 25th percentile
+    instead of the mean to bias toward darker frames.
+    """
+    brightnesses = [s.mean / 255.0 for s in stats_list]
+    measured_mean = sum(brightnesses) / len(brightnesses)
+    if len(brightnesses) > 1:
+        std_b = (sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)) ** 0.5
+        if std_b > 0.05:
+            sorted_b = sorted(brightnesses)
+            measured_mean = sorted_b[len(sorted_b) // 4]
+    return measured_mean
+
+
+def _choose_initial_exposure(
+    measured_brightness: float,
+    target_mean: float,
+    baseline_exposure: float = -5.0,
+) -> float:
+    """Compute initial exposure from measured brightness at a known baseline.
+
+    Returns clamped exposure in [-15.0, 10.0].
+    """
+    if measured_brightness > 0.001:
+        exposure = baseline_exposure + math.log2(target_mean / measured_brightness)
+    else:
+        exposure = -1.0
+    return max(-15.0, min(exposure, 10.0))
+
+
 def auto_look(
     scene_or_animate: Scene | Shot | AnimateFn,
     timeline_or_none: Timeline | float | None = None,
@@ -220,23 +271,8 @@ def auto_look(
     if not per_frame:
         return result_base
 
-    brightnesses = [s.mean / 255.0 for _, _, s in per_frame]
-    measured_mean = sum(brightnesses) / len(brightnesses)
-
-    if len(brightnesses) > 1:
-        std_b = (
-            sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)
-        ) ** 0.5
-        if std_b > 0.05:
-            sorted_b = sorted(brightnesses)
-            measured_mean = sorted_b[len(sorted_b) // 4]
-
-    if measured_mean > 0.001:
-        exposure = -5.0 + math.log2(target_mean / measured_mean)
-    else:
-        exposure = -1.0
-
-    exposure = max(-15.0, min(exposure, 10.0))
+    measured_brightness = _summarize_brightness([s for _, _, s in per_frame])
+    exposure = _choose_initial_exposure(measured_brightness, target_mean, baseline_exposure=-5.0)
     best_exposure = exposure
 
     candidate_stats = measure_per_frame(_apply_look_override(result_base, {"exposure": exposure}))
