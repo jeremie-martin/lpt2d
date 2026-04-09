@@ -138,6 +138,7 @@ be exactly reproduced from its params JSON alone.
 
 from __future__ import annotations
 
+import heapq
 import math
 import random
 from dataclasses import dataclass, field
@@ -158,7 +159,11 @@ from anim import (
     mirror_box,
     regular_polygon,
 )
-from anim.family import Family, Verdict, probe
+from anim.family import Family, Verdict, _make_probe_shot, probe
+from anim.renderer import RenderSession, _resolve_frame_shot
+from anim.types import Timeline
+
+from .light_circle import LightCircle, measure_light_circles
 
 # ---------------------------------------------------------------------------
 # Scene constants
@@ -222,9 +227,10 @@ class AmbientConfig:
 @dataclass
 class LightConfig:
     n_lights: int
-    path_style: str  # "waypoints", "random_walk", "vertical_drift"
+    path_style: str  # "waypoints", "random_walk", "vertical_drift", "drift", "channel"
     n_waypoints: int  # segment count for waypoints / steps for random walk
     ambient: AmbientConfig  # fixed background illumination
+    speed: float  # world units per second (drift and channel styles)
 
 
 @dataclass
@@ -372,6 +378,182 @@ def assign_material_ids(
 
 
 # ---------------------------------------------------------------------------
+# Channel graph — corridor network between grid objects
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ChannelGraph:
+    """Navigable corridor network between grid objects.
+
+    Nodes sit at the centres of interstitial cells (the spaces between
+    objects).  Edges connect adjacent cells through the gaps.
+    """
+
+    nodes: list[tuple[float, float]]
+    adj: list[list[int]]  # adj[i] = indices of neighbours of node i
+
+
+def _build_channel_graph_regular(
+    rows: int,
+    cols: int,
+    spacing: float,
+    x0: float,
+    y0: float,
+) -> ChannelGraph:
+    """Dual grid for a non-offset rectangular lattice.
+
+    Each rectangular cell formed by four neighbouring objects becomes a
+    node at its centre.  Adjacent cells (sharing a side) are connected.
+    """
+    nodes: list[tuple[float, float]] = []
+    idx: dict[tuple[int, int], int] = {}
+
+    for r in range(rows - 1):
+        for c in range(cols - 1):
+            idx[(r, c)] = len(nodes)
+            nodes.append((x0 + (c + 0.5) * spacing, y0 + (r + 0.5) * spacing))
+
+    adj: list[list[int]] = [[] for _ in range(len(nodes))]
+    for (r, c), i in idx.items():
+        for dr, dc in [(0, 1), (1, 0)]:
+            nb = (r + dr, c + dc)
+            if nb in idx:
+                j = idx[nb]
+                adj[i].append(j)
+                adj[j].append(i)
+
+    return ChannelGraph(nodes, adj)
+
+
+def _build_channel_graph_offset(
+    rows: int,
+    cols: int,
+    spacing: float,
+    x0: float,
+    y0: float,
+) -> ChannelGraph:
+    """Dual graph for a brick-stagger (offset rows) lattice.
+
+    Between each pair of consecutive rows the stagger creates triangular
+    cells.  Each triangle becomes a node at its centroid; triangles sharing
+    an edge of the triangulation are adjacent in the channel graph.
+    """
+    s = spacing
+    nodes: list[tuple[float, float]] = []
+
+    # Map each edge of the object triangulation (pair of object ids) to
+    # the triangle indices that border it.  Two triangles sharing an edge
+    # are adjacent corridor junctions.
+    edge_to_tris: dict[frozenset[int], list[int]] = {}
+
+    def obj_id(r: int, c: int) -> int:
+        return r * cols + c
+
+    def add_triangle(verts: list[tuple[int, int]], centroid: tuple[float, float]) -> None:
+        tri_idx = len(nodes)
+        nodes.append(centroid)
+        ids = [obj_id(r, c) for r, c in verts]
+        for a in range(len(ids)):
+            for b in range(a + 1, len(ids)):
+                edge = frozenset((ids[a], ids[b]))
+                edge_to_tris.setdefault(edge, []).append(tri_idx)
+
+    for r in range(rows - 1):
+        yr = y0 + r * s
+        if r % 2 == 0:
+            # Even → odd transition.
+            # "Up" triangles: (r,c), (r,c+1), (r+1,c)
+            for c in range(cols - 1):
+                add_triangle(
+                    [(r, c), (r, c + 1), (r + 1, c)],
+                    (x0 + c * s + s / 2, yr + s / 3),
+                )
+            # "Down" triangles: (r,c), (r+1,c-1), (r+1,c)
+            for c in range(1, cols):
+                add_triangle(
+                    [(r, c), (r + 1, c - 1), (r + 1, c)],
+                    (x0 + c * s, yr + 2 * s / 3),
+                )
+        else:
+            # Odd → even transition.
+            # Type A: (r,c), (r+1,c), (r+1,c+1)
+            for c in range(cols - 1):
+                add_triangle(
+                    [(r, c), (r + 1, c), (r + 1, c + 1)],
+                    (x0 + c * s + s / 2, yr + 2 * s / 3),
+                )
+            # Type B: (r,c), (r,c+1), (r+1,c+1)
+            for c in range(cols - 1):
+                add_triangle(
+                    [(r, c), (r, c + 1), (r + 1, c + 1)],
+                    (x0 + (c + 1) * s, yr + s / 3),
+                )
+
+    adj: list[list[int]] = [[] for _ in range(len(nodes))]
+    for tris in edge_to_tris.values():
+        for a in range(len(tris)):
+            for b in range(a + 1, len(tris)):
+                adj[tris[a]].append(tris[b])
+                adj[tris[b]].append(tris[a])
+
+    return ChannelGraph(nodes, adj)
+
+
+def build_channel_graph(cfg: GridConfig) -> ChannelGraph:
+    """Build the corridor junction graph for a grid configuration.
+
+    The graph represents the navigable interstitial space between grid
+    objects.  Lights using the ``"channel"`` path style walk this graph.
+
+    NOTE: the graph is built from the full grid before hole removal.
+    Holes could open shortcuts through the corridor network — this is
+    a consideration for future experimentation.
+    """
+    if cfg.rows < 2 or cfg.cols < 2:
+        return ChannelGraph([], [])
+    grid_w = (cfg.cols - 1) * cfg.spacing
+    grid_h = (cfg.rows - 1) * cfg.spacing
+    x0 = -grid_w / 2
+    y0 = -grid_h / 2
+    if cfg.offset_rows:
+        return _build_channel_graph_offset(cfg.rows, cfg.cols, cfg.spacing, x0, y0)
+    return _build_channel_graph_regular(cfg.rows, cfg.cols, cfg.spacing, x0, y0)
+
+
+def _shortest_path(graph: ChannelGraph, start: int, end: int) -> list[int]:
+    """Dijkstra shortest path on the channel graph.  Returns node indices."""
+    n = len(graph.nodes)
+    dist = [float("inf")] * n
+    prev = [-1] * n
+    dist[start] = 0.0
+    heap: list[tuple[float, int]] = [(0.0, start)]
+
+    while heap:
+        d, u = heapq.heappop(heap)
+        if d > dist[u]:
+            continue
+        if u == end:
+            break
+        for v in graph.adj[u]:
+            dx = graph.nodes[v][0] - graph.nodes[u][0]
+            dy = graph.nodes[v][1] - graph.nodes[u][1]
+            nd = d + math.hypot(dx, dy)
+            if nd < dist[v]:
+                dist[v] = nd
+                prev[v] = u
+                heapq.heappush(heap, (nd, v))
+
+    path: list[int] = []
+    u = end
+    while u != -1:
+        path.append(u)
+        u = prev[u]
+    path.reverse()
+    return path if path and path[0] == start else [start]
+
+
+# ---------------------------------------------------------------------------
 # Light path generators
 # ---------------------------------------------------------------------------
 
@@ -426,6 +608,101 @@ def vertical_drift_path(
     return [(x, y_top), (x, y_bottom)]
 
 
+def drift_path(
+    total_distance: float,
+    bounds: tuple[float, float, float, float],
+    rng: random.Random,
+) -> list[tuple[float, float]]:
+    """Free-movement constant-speed path with random direction changes.
+
+    The light moves in straight segments, turning by a random angle at each
+    segment boundary.  Reflects off the grid bounds.  Total path length
+    equals *total_distance* for constant-speed playback.
+    """
+    x_lo, y_lo, x_hi, y_hi = bounds
+    m = 0.05
+    x = rng.uniform(x_lo + m, x_hi - m)
+    y = rng.uniform(y_lo + m, y_hi - m)
+    angle = rng.uniform(0, 2 * math.pi)
+
+    span = max(x_hi - x_lo, y_hi - y_lo)
+    seg_base = span * 0.3
+
+    pts: list[tuple[float, float]] = [(x, y)]
+    accumulated = 0.0
+
+    while accumulated < total_distance:
+        seg = min(seg_base * rng.uniform(0.5, 1.5), total_distance - accumulated)
+        nx = x + seg * math.cos(angle)
+        ny = y + seg * math.sin(angle)
+        # Boundary reflection
+        if nx < x_lo + m or nx > x_hi - m:
+            angle = math.pi - angle
+            nx = x + seg * math.cos(angle)
+        if ny < y_lo + m or ny > y_hi - m:
+            angle = -angle
+            ny = y + seg * math.sin(angle)
+        nx = max(x_lo + m, min(x_hi - m, nx))
+        ny = max(y_lo + m, min(y_hi - m, ny))
+        step = math.hypot(nx - x, ny - y)
+        accumulated += step
+        pts.append((nx, ny))
+        x, y = nx, ny
+        angle += rng.gauss(0, 0.8)
+
+    return pts if len(pts) >= 2 else [pts[0], pts[0]]
+
+
+def channel_path(
+    graph: ChannelGraph,
+    total_distance: float,
+    rng: random.Random,
+) -> list[tuple[float, float]]:
+    """Path through the corridor network by chaining shortest routes.
+
+    Picks a random start node, then repeatedly selects random destination
+    nodes and follows the shortest corridor path to each one.  Continues
+    until the cumulative path length reaches *total_distance*.
+    """
+    if len(graph.nodes) < 2:
+        return [(0.0, 0.0), (0.0, 0.0)]
+
+    current = rng.randrange(len(graph.nodes))
+    waypoints: list[tuple[float, float]] = [graph.nodes[current]]
+    accumulated = 0.0
+
+    while accumulated < total_distance:
+        # Pick a random destination different from the current node.
+        dest = rng.randrange(len(graph.nodes))
+        if dest == current:
+            dest = (dest + 1) % len(graph.nodes)
+
+        route = _shortest_path(graph, current, dest)
+
+        for i in range(1, len(route)):
+            px, py = graph.nodes[route[i]]
+            seg = math.hypot(px - waypoints[-1][0], py - waypoints[-1][1])
+
+            if accumulated + seg >= total_distance:
+                # Partial segment to hit the exact target distance.
+                frac = (total_distance - accumulated) / seg if seg > 0 else 0
+                waypoints.append(
+                    (
+                        waypoints[-1][0] + (px - waypoints[-1][0]) * frac,
+                        waypoints[-1][1] + (py - waypoints[-1][1]) * frac,
+                    )
+                )
+                accumulated = total_distance
+                break
+
+            waypoints.append((px, py))
+            accumulated += seg
+
+        current = route[-1]
+
+    return waypoints if len(waypoints) >= 2 else [waypoints[0], waypoints[0]]
+
+
 # ---------------------------------------------------------------------------
 # Light path -> Track conversion
 # ---------------------------------------------------------------------------
@@ -476,7 +753,20 @@ def build_light_path(
     bounds: tuple[float, float, float, float],
     spacing: float,
     rng: random.Random,
+    graph: ChannelGraph | None = None,
 ) -> list[tuple[float, float]]:
+    total_dist = cfg.speed * DURATION
+
+    if cfg.path_style == "drift":
+        return drift_path(total_dist, bounds, rng)
+
+    if cfg.path_style == "channel":
+        if graph is not None and len(graph.nodes) >= 2:
+            return channel_path(graph, total_dist, rng)
+        # Fallback: free drift if the grid is too small for a channel graph.
+        return drift_path(total_dist, bounds, rng)
+
+    # Legacy styles (speed field is ignored; timing comes from path length).
     if cfg.path_style == "vertical_drift":
         if cfg.n_lights == 1:
             lx = (bounds[0] + bounds[2]) / 2
@@ -509,12 +799,17 @@ def build(p: Params):
 
     wall_shapes = mirror_box(1.6, 0.9, WALL_ID, id_prefix="wall")
 
+    # Channel graph (built once, shared by all channel-mode lights)
+    ch_graph = build_channel_graph(p.grid) if p.light.path_style == "channel" else None
+
     # Light tracks
-    gb = grid_bounds(positions, p.grid.spacing) if positions else (-1.0, -0.6, 1.0, 0.6)
+    # Tight margin keeps moving lights inside the grid rather than
+    # wandering to the mirror-box edges where they overlap with ambient.
+    gb = grid_bounds(positions, p.grid.spacing * 0.3) if positions else (-0.8, -0.5, 0.8, 0.5)
     light_x_tracks: list[Track] = []
     light_y_tracks: list[Track] = []
     for li in range(p.light.n_lights):
-        wps = build_light_path(p.light, li, gb, p.grid.spacing, rng)
+        wps = build_light_path(p.light, li, gb, p.grid.spacing, rng, ch_graph)
         xt, yt = path_to_tracks(wps, DURATION)
         light_x_tracks.append(xt)
         light_y_tracks.append(yt)
@@ -655,17 +950,26 @@ def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
 
 def random_light(rng: random.Random) -> LightConfig:
     n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
-    path_style = rng.choice(["waypoints", "waypoints", "random_walk", "vertical_drift"])
+    path_style = rng.choices(
+        ["waypoints", "random_walk", "vertical_drift", "drift", "channel"],
+        weights=[2, 1, 1, 2, 2],
+    )[0]
     n_waypoints = rng.randint(5, 12)
+    speed = rng.uniform(0.15, 0.45)  # world units per second
 
     # Ambient lighting — most scenes benefit from some fixed illumination.
-    # Point lights use intensity=1.0 (same as moving lights).
+    # Ambient intensity is always less than the moving-light intensity (1.0)
+    # to keep the moving circles visually dominant.
     amb_style = rng.choices(["corners", "sides", "none"], weights=[4, 3, 1])[0]
-    amb_intensity = 1.0 if amb_style != "none" else 0.0
+    amb_intensity = rng.uniform(0.1, 0.4) if amb_style != "none" else 0.0
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
     return LightConfig(
-        n_lights=n_lights, path_style=path_style, n_waypoints=n_waypoints, ambient=ambient
+        n_lights=n_lights,
+        path_style=path_style,
+        n_waypoints=n_waypoints,
+        ambient=ambient,
+        speed=speed,
     )
 
 
@@ -674,7 +978,7 @@ def sample(rng: random.Random) -> Params:
     shape = random_shape(rng, grid.spacing)
     material = random_material(rng, shape.kind)
     light = random_light(rng)
-    exposure = rng.uniform(-6.0, -4.0)
+    exposure = rng.uniform(-5.5, -3.5)
     build_seed = rng.randint(0, 2**32)
     return Params(
         grid=grid,
@@ -687,20 +991,152 @@ def sample(rng: random.Random) -> Params:
 
 
 # ---------------------------------------------------------------------------
-# Check
+# Check — colour richness + light circle quality
 # ---------------------------------------------------------------------------
 
 RICHNESS_THRESHOLD = 0.15
 MIN_COLORFUL_SECONDS = 2.5
 
+# Light circle thresholds (at probe resolution 640×360).
+MAX_BACKGROUND = 0.92  # reject if scene is washed out
+MIN_MOVING_RADIUS_PX = 5.0  # moving light must be a visible blob
+MAX_MOVING_RADIUS_PX = 60.0  # not a featureless wash
+MAX_RADIUS_RATIO = 5.0  # max moving / ambient circle size ratio
+MIN_SHARPNESS = 0.008  # minimum edge definition
+
+PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
+
+
+def _min_object_distance(
+    light_pos: tuple[float, float],
+    object_positions: list[tuple[float, float]],
+) -> float:
+    """Minimum Euclidean distance from a light to any object centre."""
+    if not object_positions:
+        return float("inf")
+    return min(
+        math.hypot(light_pos[0] - ox, light_pos[1] - oy)
+        for ox, oy in object_positions
+    )
+
+
+def _find_clear_frame(
+    animate,
+    duration: float,
+    object_positions: list[tuple[float, float]],
+    fps: int = 4,
+) -> int:
+    """Frame index where moving lights are furthest from objects.
+
+    Calls ``animate()`` without rendering to inspect light positions.
+    Returns the single best frame index for circle measurement.
+    """
+    timeline = Timeline(duration, fps=fps)
+    best_idx = 0
+    best_clearance = -1.0
+
+    for fi in range(timeline.total_frames):
+        ctx = timeline.context_at(fi)
+        frame = animate(ctx)
+        moving = [
+            (l.position[0], l.position[1])
+            for l in frame.scene.lights
+            if l.id.startswith("light_")
+        ]
+        if not moving:
+            continue
+        # Worst-case clearance across all moving lights in this frame.
+        clearance = min(_min_object_distance(lp, object_positions) for lp in moving)
+        if clearance > best_clearance:
+            best_clearance = clearance
+            best_idx = fi
+
+    return best_idx
+
+
+def _measure_circles_at_frame(
+    animate,
+    frame_idx: int,
+    duration: float,
+) -> list[LightCircle]:
+    """Render one probe-quality frame and measure all light circles."""
+    shot = _make_probe_shot(width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS)
+    timeline = Timeline(duration, fps=4)
+    session = RenderSession(PROBE_W, PROBE_H, False)
+
+    ctx = timeline.context_at(frame_idx)
+    result = animate(ctx)
+    cpp_shot = _resolve_frame_shot(shot, result, None)
+    rr = session.render_shot(cpp_shot, frame_idx)
+
+    positions = [(l.position[0], l.position[1]) for l in result.scene.lights]
+    labels = [l.id for l in result.scene.lights]
+
+    return measure_light_circles(
+        rr.pixels, PROBE_W, PROBE_H, positions, labels=labels,
+    )
+
 
 def check(p: Params, animate) -> Verdict:
+    # --- colour richness (existing) ---
     frames = probe(animate, DURATION)
     colorful = sum(1 for f in frames if f.color_richness > RICHNESS_THRESHOLD)
     colorful_s = colorful / 4  # probe runs at 4 fps
     avg = sum(f.color_richness for f in frames) / len(frames)
-    ok = colorful_s >= MIN_COLORFUL_SECONDS
-    return Verdict(ok, f"colorful={colorful_s:.1f}s avg={avg:.3f}")
+    if colorful_s < MIN_COLORFUL_SECONDS:
+        return Verdict(False, f"color={colorful_s:.1f}s avg={avg:.3f}")
+
+    # --- light circle quality ---
+    # Reconstruct object positions (same RNG sequence as build()).
+    rng = random.Random(p.build_seed)
+    positions = build_grid(p.grid)
+    if p.grid.hole_fraction > 0:
+        positions = remove_holes(positions, p.grid.hole_fraction, rng)
+
+    best_fi = _find_clear_frame(animate, DURATION, positions)
+    circles = _measure_circles_at_frame(animate, best_fi, DURATION)
+
+    moving = [c for c in circles if c.label.startswith("light_")]
+    ambient = [c for c in circles if c.label.startswith("amb_")]
+
+    # All moving lights must be distinguishable.
+    if not moving:
+        return Verdict(False, f"color={colorful_s:.1f}s -- no moving lights")
+
+    # Background saturation check.
+    avg_bg = sum(c.background for c in circles) / len(circles) if circles else 0
+    if avg_bg > MAX_BACKGROUND:
+        return Verdict(False, f"color={colorful_s:.1f}s bg={avg_bg:.2f} (washed)")
+
+    # Moving light radius bounds.
+    med_moving_r = sorted(c.radius_px for c in moving)[len(moving) // 2]
+    if med_moving_r < MIN_MOVING_RADIUS_PX:
+        return Verdict(False, f"color={colorful_s:.1f}s moving_r={med_moving_r:.1f}px (too small)")
+    if med_moving_r > MAX_MOVING_RADIUS_PX:
+        return Verdict(False, f"color={colorful_s:.1f}s moving_r={med_moving_r:.1f}px (too large)")
+
+    # Sharpness floor.
+    min_sharp = min(c.sharpness for c in moving)
+    if min_sharp < MIN_SHARPNESS:
+        return Verdict(False, f"color={colorful_s:.1f}s sharp={min_sharp:.4f} (too soft)")
+
+    # Ambient/moving ratio (only when ambient lights exist).
+    ratio_msg = ""
+    if ambient:
+        med_amb_r = sorted(c.radius_px for c in ambient)[len(ambient) // 2]
+        if med_amb_r > 0:
+            ratio = med_moving_r / med_amb_r
+            if ratio > MAX_RADIUS_RATIO:
+                return Verdict(
+                    False,
+                    f"color={colorful_s:.1f}s ratio={ratio:.1f} (moving {med_moving_r:.0f}px / amb {med_amb_r:.0f}px)",
+                )
+            ratio_msg = f" ratio={ratio:.1f}"
+
+    return Verdict(
+        True,
+        f"color={colorful_s:.1f}s moving_r={med_moving_r:.0f}px sharp={min_sharp:.3f}{ratio_msg}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -719,10 +1155,13 @@ def describe(p: Params) -> str:
     if p.material.style == "diffuse":
         mat_desc = f"diffuse/{p.material.diffuse_style}"
     amb = p.light.ambient.style if p.light.ambient.style != "none" else ""
+    light_desc = f"lights={p.light.n_lights}({p.light.path_style})"
+    if p.light.path_style in ("drift", "channel"):
+        light_desc += f" v={p.light.speed:.2f}"
     return (
         f"grid={p.grid.rows}x{p.grid.cols} {shape_desc} "
         f"mat={mat_desc} "
-        f"lights={p.light.n_lights}({p.light.path_style}) "
+        f"{light_desc} "
         f"colors={p.material.n_color_groups}" + (f" amb={amb}" if amb else "")
     )
 
