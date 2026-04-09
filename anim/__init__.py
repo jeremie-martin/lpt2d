@@ -43,8 +43,10 @@ from .params import params_from_dict as params_from_dict
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
+from .renderer import render_frame as render_frame
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
+from .renderer import save_image as save_image
 from .stats import ColorStats as ColorStats
 from .stats import FrameStats as FrameStats
 from .stats import LightContribution as LightContribution
@@ -181,8 +183,10 @@ __all__ = [
     "ray_intersect",
     "render",
     "render_contact_sheet",
+    "render_frame",
     "render_stats",
     "render_still",
+    "save_image",
     "resolve_color",
     "resolve_easing_derivative",
     "smoothstep",
