@@ -1,7 +1,7 @@
 # Family API Improvements
 
-Observations from building the `crystal_field` family and reviewing all
-13 existing family scripts.
+Observations from building the `crystal_field` family and reviewing
+existing family scripts.
 
 ---
 
@@ -19,84 +19,93 @@ Observations from building the `crystal_field` family and reviewing all
 
 ## The central pattern: rejection sampling
 
-Every family script is a **rejection sampler**.  The structure is identical
-across all 13 scripts:
+Every family script is a **rejection sampler**: draw random params, check
+whether they're worth rendering, keep or discard.  This is not optimization
+— there is no gradient, no fitness to maximize.  It is pure filtering.
 
-1. Draw random params from the family's parameter space
-2. Optionally run cheap analytical pre-checks (only mirror_corridor does this)
-3. Probe-render ~32 frames at 640x360, 200K rays, 4 FPS
-4. Compute per-frame statistics (color_stats or frame_stats)
-5. Count how many frames pass a threshold
-6. Accept if enough frames are good; otherwise discard and draw again
-7. HQ render only the accepted variants
+### What filtering could look like
 
-This is not optimization.  There is no gradient, no fitness to maximize,
-no parameter tuning.  It is pure **filtering** — draw, check, keep or
-discard.  The parameter space is sampled uniformly (or with weighted
-`rng.choices`), and the filter is the creative judgment that separates
-interesting scenes from boring or broken ones.
+The existing 13 scripts all happen to use multi-frame probe renders for
+their checks, but this is an artifact of copy-paste, not a design insight.
+The scripts were generated from a single template and the pattern was
+never questioned.  In practice, filtering could take many forms:
 
-### What varies across families
+- **Arithmetic on params alone**: does the grid fit in the camera?  Is
+  the light starting inside an object?  Are the objects too dense to
+  leave interstitial space?  These checks are instantaneous and could
+  reject many bad configs before touching the renderer.
 
-Only three things differ:
+- **Geometric analysis**: does the beam intersect the target shape?  Do
+  any shapes overlap?  What's the minimum clearance between objects?
+  The existing `ray_intersect()` utility already supports this.
 
-| Concern | Examples |
-|---------|----------|
-| **Which metric** | color_richness, frame std (contrast), luminance mean, or combinations |
-| **Threshold** | 0.15 to 0.30 for richness; 15 to 30 for contrast std |
-| **Duration requirement** | 2.0 to 3.0 seconds of "good" frames out of the total |
+- **Single-frame probe**: render one frame at the "interesting" moment
+  (e.g., mid-animation) and check luminance/richness.  Faster than
+  multi-frame by 30x.  May be sufficient for many families where the
+  animation character is roughly uniform.
 
-Everything else — the probe loop, the session management, the
-`_resolve_frame_shot` call, the progress printing, the CLI, the params
-serialization — is copy-pasted verbatim.
+- **Multi-frame probe**: render several frames across the timeline and
+  check that enough of them pass.  The current approach — useful when
+  the animation evolves and you care about sustained quality, not just
+  one good moment.
+
+- **Structural / semantic checks**: count how many distinct caustic
+  regions exist, check symmetry properties, verify that light reaches
+  certain parts of the scene.
+
+- **No check at all**: generate everything, render stills, let the human
+  browse.  The survey workflow we used for crystal_field.
+
+- **Combinations**: cheapest checks first, expensive probes only if the
+  cheap checks pass.  A pipeline of increasingly expensive filters.
+
+A well-designed framework should make all of these equally easy without
+privileging any one pattern.
 
 ### What the framework should own
 
-The **probe render loop** is the most duplicated code (~15 identical lines
-in every script).  The framework should provide it as a utility:
+**Plumbing, not judgment.**
 
-```python
-def probe_render(
-    animate: AnimateFn,
-    shot: Shot,
-    duration: float,
-    fps: float = 4.0,
-) -> list[ProbeFrame]:
-    """Render low-res probe frames, return pixels + stats for each."""
-```
+The framework should provide reusable building blocks:
 
-This is not a filter — it's plumbing.  The filter is what you do with the
-results.  The framework provides the frames; the script decides accept or
-reject.
+- `probe_render(animate, shot, duration, fps)` — run probe frames,
+  return pixels + stats.  This is the most common expensive check and
+  the most duplicated code.  But it's a tool the filter uses, not the
+  filter itself.
+
+- `Verdict(accept, summary)` — the return type of a filter.  The
+  framework reads `accept` and prints `summary`.  That's it.
+
+- `FamilyRunner` — the search loop, CLI, params JSON serialization,
+  progress output.  Takes a filter callable from the script.
+
+The filter callable is **fully opaque** to the framework.  The framework
+calls it, reads the verdict, moves on.  It doesn't know or care whether
+the filter did arithmetic, geometry, rendering, or nothing.
 
 ### What the framework should NOT own
 
-- Threshold values
-- Which metric to check
-- How many frames must pass
-- Built-in filter types ("color filter", "contrast filter", etc.)
+- Threshold values or metrics
+- Built-in filter types ("color filter", "contrast filter")
 - Any notion of "score" or "fitness"
+- Decisions about which checks to run or in what order
 
-The filter is a **callable provided by the script**: it receives params,
-does whatever checks it wants (analytical, probe-based, or both), and
-returns a verdict.
-
-### Design sketch: Verdict and FamilyRunner
+### Design sketch
 
 ```python
 @dataclass
 class Verdict:
     """Result of filtering one parameter set."""
     accept: bool
-    summary: str  # one-line description for progress output
+    summary: str  # one-line for progress output
 
-# The script provides these four callables:
+# A family script provides these callables:
 random_params:  (Random) -> P
 build_animate:  (P, Random) -> AnimateFn
-check:          (P, Random) -> Verdict
+check:          (P, Random) -> Verdict   # opaque — does whatever it wants
 describe:       (P) -> str
 
-# The framework runs the search loop:
+# The framework runs the loop:
 runner = FamilyRunner(
     name="crystal_field",
     duration=10.0,
@@ -105,28 +114,25 @@ runner = FamilyRunner(
     check=check,
     describe=describe_params,
 )
-runner.main()  # handles CLI, search loop, params JSON, rendering
+runner.main()
 ```
 
-The `check` callable is fully opaque to the framework.  It might:
-- Do a pure geometry check and return immediately
-- Call `probe_render()` and analyze color richness
-- Do both (cheap check first, probe only if the cheap check passes)
-- Do something we haven't thought of yet
+The `check` callable might:
+- Return `Verdict(True, "grid fits")` after a microsecond of arithmetic
+- Call `probe_render()`, compute richness, return after 2 seconds
+- Chain three checks with early exit on the first failure
+- Always accept (for survey-style exploration)
 
-The framework doesn't care.  It calls `check()`, reads `verdict.accept`,
-prints `verdict.summary`, and moves on.
-
-### Built-in modes the runner would support
+### Built-in runner modes
 
 ```bash
-# Search and render accepted variants as video
+# Search with filtering and render accepted variants
 python families/crystal_field.py search -n 5 --hq
 
-# Survey: render mid-frame stills for N random params (no filtering)
+# Survey: no filtering, render mid-frame still for each
 python families/crystal_field.py survey -n 32 --rays 10M
 
-# Render a specific params.json as video
+# Re-render a saved params.json
 python families/crystal_field.py render params.json --hq
 
 # Collage: render N accepted variants side-by-side
@@ -135,31 +141,19 @@ python families/crystal_field.py collage -n 4 --grid 2x2
 
 ---
 
-## Other improvements (smaller scope)
+## Other improvements
 
 ### Video collage rendering
 
-`render_contact_sheet` exists for still grids.  The video equivalent — tile
-N animations into a single video — required shelling out to ffmpeg.
-
-This could live in `anim/renderer.py`:
-
-```python
-def render_collage(
-    animates: list[AnimateFn],
-    timeline: Timeline,
-    output: str,
-    *,
-    grid: tuple[int, int] = (2, 2),
-    settings: Shot | None = None,
-) -> None:
-```
+`render_contact_sheet` exists for still grids.  The video equivalent
+requires ffmpeg.  A `render_collage()` in `anim/renderer.py` would
+composite cells in-memory and pipe to ffmpeg as one stream.
 
 ### Material color variant helper
 
-All objects share the same optical properties but have different spectral
-colors.  Currently requires creating N separate Material instances.
-A convenience like `glass(...).with_color("red")` would reduce this.
+Common need: same optical properties, different spectral colors.
+A convenience like `glass(...).with_color("red")` would reduce the
+boilerplate of creating N separate Material instances.
 
 ---
 
@@ -167,14 +161,12 @@ A convenience like `glass(...).with_color("red")` would reduce this.
 
 - **ScalarTrack / VectorTrack types**: `Track.s(t)` handles the need.
 
-- **Generic "Family" base class with abstract methods**: The runner
-  takes callables, not base classes.  No inheritance.
+- **Family base class with abstract methods**: The runner takes
+  callables.  No inheritance.
 
-- **Built-in filter types**: Each family's acceptance criterion is
-  fundamentally different.  The framework should provide probe_render
-  as plumbing, not pre-built filters.
+- **Built-in filter types**: The filter is the script's creative
+  judgment.  The framework provides probe_render as a tool, not
+  pre-built filters.
 
-- **Optimization / fitness maximization**: The current approach is
-  rejection sampling, not optimization.  There's no gradient to follow.
-  If we ever need optimization, it would be a separate tool, not a
-  complication of the family runner.
+- **Optimization / fitness**: Rejection sampling is the right model
+  for now.  If optimization is ever needed, it's a separate tool.
