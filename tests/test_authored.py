@@ -24,6 +24,9 @@ from anim.types import (
 )
 
 CLI_BINARY = Path(__file__).resolve().parents[1] / "build" / "lpt2d-cli"
+EVALUATION_SCENE_MANIFEST = (
+    Path(__file__).resolve().parents[1] / "evaluation" / "scenes" / "manifest.json"
+)
 
 
 def _make_bound_scene() -> Scene:
@@ -307,6 +310,20 @@ def test_authored_json_is_fully_explicit_for_defaults(tmp_path):
     assert set(data["trace"]) == {"rays", "batch", "depth", "intensity", "seed_mode"}
     assert data["materials"] == {}
     assert data["groups"] == []
+
+
+def test_evaluation_manifest_scenes_load_as_v11_authored_shots():
+    manifest = json.loads(EVALUATION_SCENE_MANIFEST.read_text())
+    scene_dir = EVALUATION_SCENE_MANIFEST.parent
+
+    for entry in manifest["scenes"]:
+        path = scene_dir / entry["file"]
+        data = json.loads(path.read_text())
+        assert data["version"] == 11, f"{path} must declare version 11"
+
+        shot = Shot.load(path)
+
+        assert shot.name == entry["name"]
 
 
 def test_authored_round_trip_preserves_seed_mode(tmp_path):
