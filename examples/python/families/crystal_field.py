@@ -383,8 +383,8 @@ def build_animate(p: AnimParams, rng: random.Random):
     def animate(ctx: FrameContext) -> Frame:
         lights = []
         for li in range(p.light.n_lights):
-            lx = float(light_x_tracks[li](ctx.time))
-            ly = float(light_y_tracks[li](ctx.time))
+            lx = light_x_tracks[li].s(ctx.time)
+            ly = light_y_tracks[li].s(ctx.time)
             lights.append(PointLight(id=f"light_{li}", position=[lx, ly], intensity=1.0))
 
         scene = Scene(
@@ -573,15 +573,17 @@ def make_hq_shot(width: int = 1920, height: int = 1080, rays: int = 5_000_000) -
 def render_and_save(
     p: AnimParams,
     out_dir: Path,
-    rng: random.Random,
+    build_seed: int,
     width: int = 1920,
     height: int = 1080,
     rays: int = 5_000_000,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "params.json").write_text(json.dumps(asdict(p), indent=2))
+    (out_dir / "params.json").write_text(
+        json.dumps({"params": asdict(p), "build_seed": build_seed}, indent=2)
+    )
 
-    animate = build_animate(p, rng)
+    animate = build_animate(p, random.Random(build_seed))
     settings = make_hq_shot(width, height, rays)
     timeline = Timeline(DURATION, fps=60)
     video_path = out_dir / "video.mp4"
@@ -640,8 +642,8 @@ def main() -> None:
         found += 1
         out_dir = base_dir / f"{found:03d}"
         print(f"  FOUND #{found} -- rendering...")
-        render_rng = random.Random(rng.randint(0, 2**32))
-        render_and_save(p, out_dir, render_rng, width, height, rays)
+        build_seed = rng.randint(0, 2**32)
+        render_and_save(p, out_dir, build_seed, width, height, rays)
         print("  done.\n")
 
         if found >= target:
