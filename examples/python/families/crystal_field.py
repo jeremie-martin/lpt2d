@@ -1,12 +1,102 @@
-"""Crystal Field — point lights drifting through a grid of small glass objects.
+"""Crystal Field — point lights drifting through a grid of small objects.
 
-A regular grid of small objects (circles, polygons, prisms) fills a mirror box.
-One or more point lights travel through the interstitial spaces, refracting
-through the field and painting evolving caustic webs across the walls.
+A regular grid of small objects fills a mirror box.  One or more point lights
+travel slowly through the interstitial spaces, refracting through the field
+and painting evolving caustic webs across the walls.  The original discovery
+was a hand-placed grid of glass spheres with a single point light drifting
+downward through the center — the effect was striking enough to warrant a
+full family of variations.
 
-The parameter space is organized as layered configs — each concern (grid, shape,
-material, light) is a small focused block with its own gating logic.  Parameters
-that only make sense when a feature is enabled live inside that feature's config.
+The visual concept
+------------------
+The beauty comes from the *density* of interactions: each object refracts
+the point light into tiny caustic fans, and because the objects are packed
+in a grid, these fans overlap and interfere.  As the light moves, the
+entire pattern shifts continuously.  The mirror walls bounce escaped light
+back into the field, adding a second layer of structure.
+
+What varies
+-----------
+- **Grid layout**: rows, cols, spacing.  Offset (brick-like) rows shift
+  odd rows by half a cell, creating a denser packing.  Random holes punch
+  gaps in the grid — sometimes a few missing objects make the pattern more
+  interesting than a perfect lattice.
+
+- **Object shape**: circles (the original discovery) or regular polygons
+  (triangles through hexagons).  Polygons refract differently — triangles
+  act like tiny prisms, squares create cross-shaped caustics, hexagons
+  tile tightly.  Corner radius softens polygon edges.
+
+- **Rotation**: only meaningful for polygons.  A uniform base rotation
+  orients the entire grid (e.g., pointy-top vs flat-top hexagons).
+  Per-object jitter adds randomness — each object gets its own small
+  angular offset, breaking the grid regularity.  Some scenes look better
+  with all objects aligned; others benefit from the chaos.
+
+- **Material**: glass is the primary mode — IOR, dispersion (cauchy_b),
+  and absorption control how much each object bends and colors the light.
+  Higher IOR (1.8-2.0) produces stronger refraction and more dramatic
+  caustics.  Diffuse objects (rough metallic) create shadow patterns
+  instead of caustics.  "Mixed" scenes combine both — glass objects
+  refract while diffuse ones block and scatter.
+
+- **Color**: named spectral colors (red, gold, violet, etc.) applied in
+  groups.  All objects share the same optical properties (IOR, dispersion)
+  but can have different spectral tinting.  Scenes with 1-3 color groups
+  tend to score highest on color richness.  Zero-color scenes rely purely
+  on white-light dispersion for their rainbow effects.
+
+- **Light paths**: point lights (not projectors — omni-directional) that
+  travel through the field.  Three path styles:
+  - *Waypoints*: random points within the grid bounds, connected by
+    straight segments at constant velocity (no easing — the light just
+    travels, like light does).
+  - *Random walk*: correlated angular perturbation at each step, with
+    reflection at the grid bounds.  Produces organic, wandering paths.
+  - *Vertical drift*: simple top-to-bottom at a fixed x.  The original
+    effect that looked so good — the light slowly descending through
+    the field like a sunrise.
+  Multiple lights (1-3) are supported; each follows its own independent
+  path.
+
+- **Exposure**: varied per variant to compensate for different object
+  counts and light configurations.
+
+Ideas explored but not yet implemented
+--------------------------------------
+- **Levy flights**: heavy-tailed random walks where the light occasionally
+  makes long jumps.  Would create dramatic shifts in the caustic pattern.
+
+- **Non-circle shapes as objects**: the grid positions could hold any
+  authored shape — a flower outline, a wheel, a sword silhouette.  The
+  concept is "crystal field", not "sphere grid".  The shape just needs
+  to be small enough relative to the spacing to leave interstitial room
+  for the light.
+
+- **Animated rotation**: objects slowly rotating during the animation,
+  so the caustic pattern evolves even with a stationary light.
+
+- **Size variation**: objects of varying radius within the same grid.
+  Larger objects refract more dramatically; smaller ones add texture.
+
+- **Grid patterns beyond rectangular**: hexagonal packing, radial grids,
+  Penrose tilings, or even grids that curve or warp.
+
+- **Path constraints**: light paths that specifically thread through the
+  interstitial channels between objects, rather than moving freely.
+  Would require a simple pathfinding or channel-following algorithm.
+
+Architecture note
+-----------------
+The parameter space is organized as layered configs — each concern (grid,
+shape, material, light) is a small focused dataclass with its own random
+sampler and gating logic.  Parameters that only matter when a feature is
+enabled (e.g., rotation angles for polygons, diffuse fraction for mixed
+materials) live inside that feature's config block rather than in a flat
+bag.  This keeps the sampling code readable as new knobs are added.
+
+The params JSON includes a ``build_seed`` alongside the config so that
+any saved variant can be exactly reproduced.
 """
 
 from __future__ import annotations
