@@ -72,6 +72,7 @@ class LightConfig:
     n_waypoints: int  # segment count for waypoints / steps for random walk
     ambient: AmbientConfig  # fixed background illumination
     speed: float  # world units per second (drift and channel styles)
+    moving_intensity: float = 1.0  # base intensity for moving lights
     wavelength_min: float = 380.0  # moving-light spectral range (nm)
     wavelength_max: float = 780.0  # 380-780 = white (full spectrum)
 

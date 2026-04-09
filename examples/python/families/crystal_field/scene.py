@@ -81,9 +81,10 @@ def build(p: Params):
                 PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
             )
 
-    # Spectral intensity boost for narrow-band moving lights
+    # Moving light intensity: base from params, boosted for narrow-band spectra.
     spectrum_width = p.light.wavelength_max - p.light.wavelength_min
-    intensity = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
+    spectral_boost = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
+    intensity = p.light.moving_intensity * spectral_boost
 
     def animate(ctx: FrameContext) -> Frame:
         lights = list(ambient_lights)

@@ -152,7 +152,8 @@ def _build_catalog_entries() -> list[dict]:
 
 
 def _entry_to_params(
-    e: dict, exposure: float, build_seed: int, amb_intensity: float = 0.25,
+    e: dict, exposure: float, build_seed: int,
+    amb_intensity: float = 0.25, mov_intensity: float = 1.0,
 ) -> Params:
     """Convert a catalog entry to a Params object."""
     grid = e["grid_cfg"]
@@ -183,6 +184,7 @@ def _entry_to_params(
         n_waypoints=8,
         ambient=ambient,
         speed=0.12,
+        moving_intensity=mov_intensity,
         wavelength_min=e["wl_min"],
         wavelength_max=e["wl_max"],
     )
@@ -223,7 +225,9 @@ def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
         exposure = rng.uniform(exp_lo, exp_hi)
         seed = rng.randint(0, 2**32)
         amb_intensity = rng.uniform(0.10, 0.35)
-        p = _entry_to_params(e, exposure, seed, amb_intensity=amb_intensity)
+        mov_intensity = rng.uniform(0.5, 1.0)
+        p = _entry_to_params(e, exposure, seed,
+                             amb_intensity=amb_intensity, mov_intensity=mov_intensity)
         animate = build(p)
 
         rr = render_frame(animate, probe_timeline, frame=_FRAME,
