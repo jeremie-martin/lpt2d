@@ -153,15 +153,16 @@ from anim import (
     PointLight,
     Polygon,
     Scene,
+    Shot,
+    Timeline,
     Track,
     Wrap,
     glass,
     mirror_box,
     regular_polygon,
+    render_frame,
 )
-from anim.family import Family, Verdict, _make_probe_shot, probe
-from anim.renderer import RenderSession, _resolve_frame_shot
-from anim.types import Timeline
+from anim.family import Family, Verdict, probe
 
 from .light_circle import LightCircle, measure_light_circles
 
@@ -1060,17 +1061,15 @@ def _measure_circles_at_frame(
     duration: float,
 ) -> list[LightCircle]:
     """Render one probe-quality frame and measure all light circles."""
-    shot = _make_probe_shot(width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS)
-    timeline = Timeline(duration, fps=4)
-    session = RenderSession(PROBE_W, PROBE_H, False)
+    probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS)
+    rr = render_frame(animate, Timeline(duration, fps=4), frame=frame_idx, settings=probe_shot)
 
-    ctx = timeline.context_at(frame_idx)
-    result = animate(ctx)
-    cpp_shot = _resolve_frame_shot(shot, result, None)
-    rr = session.render_shot(cpp_shot, frame_idx)
-
-    positions = [(l.position[0], l.position[1]) for l in result.scene.lights]
-    labels = [l.id for l in result.scene.lights]
+    # Extract light positions from the animate callback's scene (call again;
+    # render_frame already called it internally, but the result isn't exposed).
+    ctx = Timeline(duration, fps=4).context_at(frame_idx)
+    frame_result = animate(ctx)
+    positions = [(l.position[0], l.position[1]) for l in frame_result.scene.lights]
+    labels = [l.id for l in frame_result.scene.lights]
 
     return measure_light_circles(
         rr.pixels, PROBE_W, PROBE_H, positions, labels=labels,

@@ -125,7 +125,8 @@ class PpmOutput:
         self.close()
 
 
-def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
+def save_image(path: str, rgb: bytes, width: int, height: int) -> None:
+    """Write raw RGB8 pixels to an image file (PNG, PPM, or any PIL-supported format)."""
     if path.lower().endswith(".ppm"):
         with open(path, "wb") as f:
             f.write(f"P6\n{width} {height}\n255\n".encode())
@@ -134,6 +135,10 @@ def _save_image(path: str, rgb: bytes, width: int, height: int) -> None:
         from PIL import Image
 
         Image.frombytes("RGB", (width, height), rgb).save(path)
+
+
+# Backward compat alias (used by internal code that still references the old name).
+_save_image = save_image
 
 
 # ─── Formatting helpers ──────────────────────────────────────────
@@ -334,6 +339,55 @@ def render(
         out.close()
 
 
+def render_frame(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    *,
+    frame: int = 0,
+    settings: Shot | Quality | str | None = None,
+    camera: Camera2D | None = None,
+    fast: bool = False,
+) -> _lpt2d.RenderResult:
+    """Render a single frame and return the result.
+
+    This is the primary building block for custom analysis pipelines.
+    The returned :class:`RenderResult` gives direct access to pixel data,
+    timing, and per-frame metrics without writing anything to disk.
+
+    Parameters
+    ----------
+    animate : AnimateFn
+        Animation callback ``(FrameContext) -> Frame``.
+    timeline : Timeline or float
+        Animation timeline, or duration in seconds.
+    frame : int
+        Frame index to render (default 0).
+    settings : Shot, Quality, str, or None
+        Render settings.  Accepts a :class:`Shot`, a quality preset name
+        (``"draft"``, ``"preview"``, ``"production"``), or ``None`` for
+        defaults.  Use ``Shot.preset("draft", width=W, height=H, rays=N)``
+        for full control over resolution and ray count.
+    camera : Camera2D or None
+        Override camera (takes precedence over shot camera but not per-frame
+        camera from the animate callback).
+    fast : bool
+        Use half-float precision for faster rendering (default False).
+
+    Returns
+    -------
+    RenderResult
+        Object with ``.pixels`` (bytes, RGB8), ``.time_ms`` (float),
+        ``.total_rays`` (int), and ``.metrics`` (FrameMetrics with
+        histogram, luminance stats, etc.).
+    """
+    timeline, shot = _resolve_args(timeline, settings)
+    session = RenderSession(shot.canvas.width, shot.canvas.height, fast)
+    ctx = timeline.context_at(frame)
+    result = animate(ctx)
+    cpp_shot = _resolve_frame_shot(shot, result, camera)
+    return session.render_shot(cpp_shot, frame)
+
+
 def render_still(
     animate: AnimateFn,
     timeline: Timeline | float,
@@ -345,18 +399,11 @@ def render_still(
     fast: bool = False,
 ) -> None:
     """Render a single frame to an image file."""
-    timeline, shot = _resolve_args(timeline, settings)
-    session = RenderSession(shot.canvas.width, shot.canvas.height, fast)
-
-    ctx = timeline.context_at(frame)
-    result = animate(ctx)
-    cpp_shot = _resolve_frame_shot(shot, result, camera)
-    t0 = time.monotonic()
-    render_result = session.render_shot(cpp_shot, frame)
-    wall_ms = (time.monotonic() - t0) * 1000
-    frame_ms = render_result.time_ms if render_result.time_ms > 0 else wall_ms
+    timeline_r, shot = _resolve_args(timeline, settings)
+    rr = render_frame(animate, timeline_r, frame=frame, settings=shot, camera=camera, fast=fast)
     w, h = shot.canvas.width, shot.canvas.height
-    _save_image(output, render_result.pixels, w, h)
+    save_image(output, rr.pixels, w, h)
+    frame_ms = rr.time_ms if rr.time_ms > 0 else 0
     sys.stderr.write(
         f"wrote {Path(output).name} ({w}x{h}, frame {frame}, {_fmt_time(frame_ms / 1000)})\n"
     )
