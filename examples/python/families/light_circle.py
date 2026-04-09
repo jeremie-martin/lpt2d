@@ -87,7 +87,8 @@ def _radial_profile(
     lum_flat = lum.ravel().astype(np.float64)
     sums = np.bincount(ri, weights=lum_flat, minlength=max_radius + 1)
     counts = np.bincount(ri, minlength=max_radius + 1)
-    profile = np.where(counts > 0, sums / counts, 0.0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        profile = np.where(counts > 0, sums / counts, 0.0)
 
     return profile.astype(np.float32)
 

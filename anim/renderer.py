@@ -333,6 +333,7 @@ def render(
         if gate_warnings:
             sys.stderr.write(f"Quality gate: {len(gate_warnings)} warning(s)\n")
     finally:
+        session.close()
         out.close()
 
 
@@ -382,7 +383,9 @@ def render_frame(
     ctx = timeline.context_at(frame)
     result = animate(ctx)
     cpp_shot = _resolve_frame_shot(shot, result, camera)
-    return session.render_shot(cpp_shot, frame)
+    rr = session.render_shot(cpp_shot, frame)
+    session.close()
+    return rr
 
 
 def render_still(
@@ -448,6 +451,7 @@ def render_contact_sheet(
         )
         sys.stderr.flush()
     sys.stderr.write("\n")
+    session.close()
 
     sheet = bytearray(sheet_w * sheet_h * 3)
     for idx, rgb in enumerate(frames_rgb):
@@ -499,4 +503,5 @@ def render_stats(
             raise RuntimeError("No stats report from renderer")
         results.append((fi, ctx.time, stats))
 
+    session.close()
     return results
