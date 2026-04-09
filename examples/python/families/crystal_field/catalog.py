@@ -107,10 +107,10 @@ def _polygon_shape(n_sides: int, spacing: float) -> ShapeConfig:
 # ── Catalog definition ───────────────────────────────────────────────────
 
 EXPOSURE_RANGE = {
-    "glass": (-6.5, -3.5),
-    "dark": (-6.0, -3.0),
-    "colored_fill": (-6.0, -3.0),
-    "metallic_rough": (-6.5, -3.0),
+    "glass": (-7.0, -3.0),
+    "dark": (-7.0, -2.5),
+    "colored_fill": (-7.0, -2.5),
+    "metallic_rough": (-7.0, -2.5),
 }
 
 # Representative polygon sides per material (not all 4 for every material).
@@ -196,50 +196,50 @@ def _entry_to_params(e: dict, exposure: float, build_seed: int) -> Params:
 
 
 def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
-    """Search for exposure + build_seed that pass visual quality checks.
+    """Search for exposure + build_seed that produce acceptable brightness.
 
-    Skips the color-richness check (which rejects intentionally achromatic
-    combinations like white-light glass).  Only checks brightness and
-    circle metrics.
+    Tries random exposures from a wide range until the mean luminance
+    lands within [0.12, 0.70].  The range is wide enough (-7.0 to -2.5)
+    that every material/light combination should have valid exposures.
     """
     import random as _rng_mod
 
-    from anim import Shot, Timeline, render_frame
-    from .check import (
-        MAX_MEAN_LUMINANCE, MIN_MEAN_LUMINANCE,
-        MIN_MOVING_RADIUS_PX, MAX_MOVING_RADIUS_PX,
-        MIN_SHARPNESS, MAX_RADIUS_RATIO,
-        _find_clear_frame, _measure_circles_at_frame,
-        PROBE_W, PROBE_H,
-    )
-    from .grid import build_grid, remove_holes
+    import numpy as np
+    from anim import Camera2D, Shot, Timeline, render_frame
+    from .check import MAX_MEAN_LUMINANCE, MIN_MEAN_LUMINANCE, PROBE_W, PROBE_H
 
     rng = _rng_mod.Random(hash((_entry_tag(e), 0)))
     exp_lo, exp_hi = EXPOSURE_RANGE[e["mat"]]
+    cam = Camera2D(center=[0, 0], width=3.2)
+    probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
+    probe_timeline = Timeline(DURATION, fps=30)
 
-    for attempt in range(max_attempts):
+    best_p = None
+    best_dist = float("inf")
+
+    for _ in range(max_attempts):
         exposure = rng.uniform(exp_lo, exp_hi)
         seed = rng.randint(0, 2**32)
         p = _entry_to_params(e, exposure, seed)
         animate = build(p)
 
-        # Quick brightness check via a single probe render.
-        probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=200_000, depth=10)
-        from anim import Camera2D
-        cam = Camera2D(center=[0, 0], width=3.2)
-        rr = render_frame(animate, Timeline(DURATION, fps=30), frame=_FRAME,
+        rr = render_frame(animate, probe_timeline, frame=_FRAME,
                           settings=probe_shot, camera=cam)
-
-        import numpy as np
         arr = np.frombuffer(rr.pixels, dtype=np.uint8)
         mean_lum = arr.mean() / 255.0
-        if mean_lum > MAX_MEAN_LUMINANCE or mean_lum < MIN_MEAN_LUMINANCE:
-            continue
 
-        return p
+        if MIN_MEAN_LUMINANCE <= mean_lum <= MAX_MEAN_LUMINANCE:
+            return p
 
-    # No valid exposure found — this combination is inherently too bright or dark.
-    return None
+        # Track the closest-to-valid attempt as fallback.
+        target = (MIN_MEAN_LUMINANCE + MAX_MEAN_LUMINANCE) / 2
+        dist = abs(mean_lum - target)
+        if dist < best_dist:
+            best_dist = dist
+            best_p = p
+
+    # Return the best attempt even if it didn't pass — better than nothing.
+    return best_p  # type: ignore[return-value]
 
 
 def _entry_tag(e: dict) -> str:
