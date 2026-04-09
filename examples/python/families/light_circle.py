@@ -1,9 +1,9 @@
 """Measure the apparent size and sharpness of point-light circles.
 
-Each point light produces a bright blob on screen whose radius and edge
-sharpness depend on exposure, tonemapping, object proximity, and how many
-other lights contribute.  This module extracts per-light metrics from a
-rendered image so that scene generators can enforce quality bounds.
+Each point light produces a bright blob on screen.  This module measures
+the radius and edge sharpness of each blob using a threshold method with
+Voronoi masking — each pixel is attributed to its nearest light source,
+preventing overlapping light fields from contaminating each other.
 
 Typical usage::
 
@@ -17,7 +17,7 @@ Typical usage::
         camera_width=3.2,
     )
     for c in circles:
-        print(f"{c.label}: radius={c.radius_px:.1f}px  sharpness={c.sharpness:.2f}")
+        print(f"{c.label}: radius={c.radius_px:.1f}px  sharpness={c.sharpness:.3f}")
 """
 
 from __future__ import annotations
@@ -25,6 +25,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
+
+# Luminance threshold for "bright blob" detection.  Pixels above this
+# are considered part of a light's visible circle.
+BRIGHT_THRESHOLD = 0.92
 
 
 @dataclass(frozen=True)
@@ -35,23 +39,20 @@ class LightCircle:
     world_pos: tuple[float, float]
     pixel_pos: tuple[float, float]
 
-    # Peak luminance at the light centre (0-1 scale).
-    peak: float
-
-    # Background luminance floor (median of the outer half of the profile).
-    background: float
-
-    # Radius (in pixels) at which the above-background luminance drops
-    # to 50% of the above-background peak.  Larger = bigger apparent blob.
+    # Radius (in pixels) of the bright blob: the 90th percentile distance
+    # of pixels above BRIGHT_THRESHOLD that are closest to this light.
     radius_px: float
 
-    # Sharpness of the circle edge.  Defined as 1 / (radius_20 - radius_80),
-    # where fractions are relative to above-background amplitude.
-    # Higher = sharper edge transition.
+    # Edge sharpness: luminance drop per pixel across the circle edge.
+    # Higher = crisper edge.  Measured over the [0.5r, 1.5r] band of the
+    # Voronoi-masked radial profile.
     sharpness: float
 
-    # Radial profile: average luminance at each integer pixel radius.
-    # profile[r] is the mean luminance at distance r from the centre.
+    # Mean image luminance (same for all lights in the same image).
+    mean_luminance: float
+
+    # Voronoi-masked radial profile (luminance vs distance, only counting
+    # pixels attributed to this light).
     profile: np.ndarray
 
 
@@ -64,54 +65,16 @@ def _luminance(rgb: np.ndarray) -> np.ndarray:
     ) / 255.0
 
 
-def _radial_profile(
-    lum: np.ndarray,
-    cx: float,
-    cy: float,
-    max_radius: int,
-) -> np.ndarray:
-    """Average luminance in concentric rings around (cx, cy).
-
-    Returns an array of length *max_radius* + 1 where entry *r* is the
-    mean luminance of all pixels whose distance from the centre rounds
-    to *r*.
-    """
-    h, w = lum.shape
-    ys = np.arange(h, dtype=np.float32) - cy
-    xs = np.arange(w, dtype=np.float32) - cx
-    xg, yg = np.meshgrid(xs, ys)
-    dist = np.sqrt(xg * xg + yg * yg)
-
-    # Quantize distance to integer bins and average luminance per ring.
-    ri = np.clip(np.round(dist).astype(np.int64), 0, max_radius).ravel()
-    lum_flat = lum.ravel().astype(np.float64)
-    sums = np.bincount(ri, weights=lum_flat, minlength=max_radius + 1)
-    counts = np.bincount(ri, minlength=max_radius + 1)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        profile = np.where(counts > 0, sums / counts, 0.0)
-
-    return profile.astype(np.float32)
-
-
-def _find_radius_at_fraction(
-    profile: np.ndarray, peak: float, background: float, fraction: float,
-) -> float:
-    """Radius where the above-background luminance drops to *fraction* of (peak - background).
-
-    Uses linear interpolation between the two bracketing integer radii.
-    Returns the last radius if the profile never drops that low.
-    """
-    amplitude = peak - background
-    threshold = background + amplitude * fraction
-    for r in range(1, len(profile)):
-        if profile[r] <= threshold:
-            prev = float(profile[r - 1])
-            curr = float(profile[r])
-            if abs(prev - curr) < 1e-9:
-                return float(r)
-            frac = (prev - threshold) / (prev - curr)
-            return (r - 1) + frac
-    return float(len(profile) - 1)
+def _world_to_pixel(
+    wx: float, wy: float,
+    width: int, height: int,
+    camera_center: tuple[float, float],
+    camera_width: float,
+) -> tuple[float, float]:
+    cam_height = camera_width * height / width
+    px = (wx - (camera_center[0] - camera_width / 2)) / camera_width * width
+    py = ((camera_center[1] + cam_height / 2) - wy) / cam_height * height
+    return px, py
 
 
 def measure_light_circles(
@@ -123,80 +86,101 @@ def measure_light_circles(
     camera_width: float = 3.2,
     max_radius_px: int = 200,
     labels: list[str] | None = None,
+    threshold: float = BRIGHT_THRESHOLD,
 ) -> list[LightCircle]:
     """Measure the apparent circle of each point light.
+
+    Uses Voronoi masking: each pixel is attributed to its nearest light,
+    so overlapping light fields don't contaminate each other's measurements.
+    The bright blob radius is the 90th percentile distance of pixels above
+    *threshold* within each light's Voronoi cell.
 
     Parameters
     ----------
     pixels : bytes
-        Raw RGB8 pixel data (width * height * 3 bytes), as returned by
-        ``RenderResult.pixels``.
+        Raw RGB8 pixel data (width * height * 3 bytes).
     width, height : int
         Canvas dimensions.
     light_positions : list of (x, y)
-        World-space positions of the lights to measure.
-    camera_center : (float, float)
-        Camera centre in world space.
-    camera_width : float
-        Camera horizontal extent in world units.
+        World-space positions of all lights in the scene.
+    camera_center, camera_width : float
+        Camera parameters for world-to-pixel mapping.
     max_radius_px : int
-        Maximum analysis radius in pixels.
+        Ignore bright pixels beyond this distance from a light.
     labels : list of str or None
-        Optional per-light labels.  Defaults to ``"light_0"``, ``"light_1"``, etc.
-
-    Returns
-    -------
-    list of LightCircle
-        One entry per light, in the same order as *light_positions*.
+        Per-light names.  Defaults to ``"light_0"``, etc.
+    threshold : float
+        Luminance threshold for bright-blob detection (default 0.92).
     """
     arr = np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3)
     lum = _luminance(arr)
+    mean_lum = float(lum.mean())
 
-    cam_height = camera_width * height / width
-    cx_world, cy_world = camera_center
-    x_min = cx_world - camera_width / 2
-    y_max = cy_world + cam_height / 2
+    # Pre-compute pixel positions for all lights.
+    pixel_positions = [
+        _world_to_pixel(wx, wy, width, height, camera_center, camera_width)
+        for wx, wy in light_positions
+    ]
+
+    # Pre-compute distance grids from each light.
+    ys = np.arange(height, dtype=np.float32)
+    xs = np.arange(width, dtype=np.float32)
+    xg, yg = np.meshgrid(xs, ys)
+
+    dist_grids = []
+    for px, py in pixel_positions:
+        dist_grids.append(np.sqrt((xg - px) ** 2 + (yg - py) ** 2))
+
+    # Voronoi assignment: each pixel belongs to its nearest light.
+    if len(dist_grids) > 1:
+        stacked = np.stack(dist_grids, axis=0)
+        nearest = np.argmin(stacked, axis=0)
+    else:
+        nearest = np.zeros((height, width), dtype=np.intp)
+
+    bright = lum >= threshold
 
     results: list[LightCircle] = []
 
     for i, (wx, wy) in enumerate(light_positions):
-        # World -> pixel.
-        px = (wx - x_min) / camera_width * width
-        py = (y_max - wy) / cam_height * height
+        px, py = pixel_positions[i]
         label = labels[i] if labels else f"light_{i}"
+        dist = dist_grids[i]
+        mask = nearest == i  # Voronoi cell for this light
 
-        # Clamp to canvas — lights may be partially off-screen.
-        px_c = max(0.0, min(float(width - 1), px))
-        py_c = max(0.0, min(float(height - 1), py))
+        # --- Radius: 90th percentile of bright-pixel distances in this cell ---
+        bright_in_cell = bright & mask & (dist < max_radius_px)
+        cell_dists = dist[bright_in_cell]
+        radius = float(np.percentile(cell_dists, 90)) if len(cell_dists) > 5 else 0.0
 
-        profile = _radial_profile(lum, px_c, py_c, max_radius_px)
+        # --- Radial profile (Voronoi-masked) ---
+        ri = np.clip(np.round(dist).astype(np.int64), 0, max_radius_px)
+        # Exclude pixels outside this light's Voronoi cell.
+        ri_flat = ri.ravel().copy()
+        mask_flat = mask.ravel()
+        ri_flat[~mask_flat] = max_radius_px + 1  # sentinel: excluded from bincount
+        valid = ri_flat <= max_radius_px
+        lum_flat = lum.ravel().astype(np.float64)
 
-        # Peak: average of the innermost few pixels (radius 0–2) to
-        # smooth out single-pixel noise.
-        peak = float(profile[:3].max())
+        with np.errstate(invalid="ignore", divide="ignore"):
+            sums = np.bincount(ri_flat[valid], weights=lum_flat[valid], minlength=max_radius_px + 1)
+            counts = np.bincount(ri_flat[valid], minlength=max_radius_px + 1)
+            profile = np.where(counts > 0, sums / counts, 0.0).astype(np.float32)
 
-        # Background: median of the outer quarter of the profile, where
-        # we expect only reflected / ambient light with no direct contribution.
-        outer_start = max(1, int(max_radius_px * 0.75))
-        bg = float(np.median(profile[outer_start:]))
-
-        amplitude = peak - bg
-        if amplitude < 0.01:
-            # Light is essentially invisible above background.
-            results.append(
-                LightCircle(label, (wx, wy), (px, py), peak, bg, 0.0, 0.0, profile)
-            )
-            continue
-
-        r50 = _find_radius_at_fraction(profile, peak, bg, 0.50)
-        r80 = _find_radius_at_fraction(profile, peak, bg, 0.80)
-        r20 = _find_radius_at_fraction(profile, peak, bg, 0.20)
-
-        edge_width = r20 - r80
-        sharpness = 1.0 / edge_width if edge_width > 0.5 else 2.0  # cap at 2.0
+        # --- Sharpness: luminance drop per pixel across the edge band ---
+        r_lo = max(1, int(radius * 0.5))
+        r_hi = min(max_radius_px - 1, int(radius * 1.5) + 1)
+        if r_hi > r_lo and radius > 2:
+            edge = profile[r_lo : r_hi + 1]
+            if len(edge) >= 2:
+                sharpness = float(edge[0] - edge[-1]) / (r_hi - r_lo)
+            else:
+                sharpness = 0.0
+        else:
+            sharpness = 0.0
 
         results.append(
-            LightCircle(label, (wx, wy), (px, py), peak, bg, r50, sharpness, profile)
+            LightCircle(label, (wx, wy), (px, py), radius, sharpness, mean_lum, profile)
         )
 
     return results
@@ -213,8 +197,7 @@ def summarize(circles: list[LightCircle], camera_width: float = 3.2, canvas_widt
     for c in circles:
         r_world = pixels_to_world(c.radius_px, camera_width, canvas_width)
         lines.append(
-            f"{c.label:>12s}  peak={c.peak:.3f}  bg={c.background:.3f}  "
-            f"r={c.radius_px:5.1f}px ({r_world:.3f}u)  "
-            f"sharp={c.sharpness:.2f}"
+            f"{c.label:>12s}  r={c.radius_px:5.1f}px ({r_world:.3f}u)  "
+            f"sharp={c.sharpness:.4f}  mean={c.mean_luminance:.3f}"
         )
     return "\n".join(lines)

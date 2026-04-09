@@ -20,11 +20,14 @@ RICHNESS_THRESHOLD = 0.15
 MIN_COLORFUL_SECONDS = 2.5
 
 # Light circle thresholds (at probe resolution 640x360).
-MAX_BACKGROUND = 0.92  # reject if scene is washed out
-MIN_MOVING_RADIUS_PX = 5.0  # moving light must be a visible blob
-MAX_MOVING_RADIUS_PX = 60.0  # not a featureless wash
+# These use the threshold/Voronoi method: radius is the 90th-percentile
+# distance of pixels above 0.92 luminance; sharpness is the luminance
+# drop per pixel across the edge band.
+MAX_MEAN_LUMINANCE = 0.75  # reject if scene is too bright overall
+MIN_MOVING_RADIUS_PX = 3.0  # moving light must be a visible blob
+MAX_MOVING_RADIUS_PX = 50.0  # not a featureless wash
 MAX_RADIUS_RATIO = 3.0  # max moving / ambient circle size ratio
-MIN_SHARPNESS = 0.015  # minimum edge definition
+MIN_SHARPNESS = 0.010  # minimum edge sharpness (lum drop per pixel)
 
 PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
 
@@ -141,10 +144,10 @@ def check(p: Params, animate) -> Verdict:
     if not moving:
         return Verdict(False, f"color={colorful_s:.1f}s -- no moving lights")
 
-    # Background saturation check.
-    avg_bg = sum(c.background for c in circles) / len(circles) if circles else 0
-    if avg_bg > MAX_BACKGROUND:
-        return Verdict(False, f"color={colorful_s:.1f}s bg={avg_bg:.2f} (washed)")
+    # Overall brightness check.
+    mean_lum = circles[0].mean_luminance if circles else 0
+    if mean_lum > MAX_MEAN_LUMINANCE:
+        return Verdict(False, f"color={colorful_s:.1f}s mean_lum={mean_lum:.2f} (too bright)")
 
     # Moving light radius bounds.
     med_moving_r = sorted(c.radius_px for c in moving)[len(moving) // 2]
