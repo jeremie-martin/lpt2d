@@ -233,6 +233,8 @@ class LightConfig:
     n_waypoints: int  # segment count for waypoints / steps for random walk
     ambient: AmbientConfig  # fixed background illumination
     speed: float  # world units per second (drift and channel styles)
+    wavelength_min: float = 380.0  # moving-light spectral range (nm)
+    wavelength_max: float = 780.0  # 380-780 = white (full spectrum)
 
 
 @dataclass
@@ -841,7 +843,11 @@ def build(p: Params):
         for li in range(p.light.n_lights):
             lx = light_x_tracks[li].s(ctx.time)
             ly = light_y_tracks[li].s(ctx.time)
-            lights.append(PointLight(id=f"light_{li}", position=[lx, ly], intensity=1.0))
+            lights.append(PointLight(
+                id=f"light_{li}", position=[lx, ly], intensity=1.0,
+                wavelength_min=p.light.wavelength_min,
+                wavelength_max=p.light.wavelength_max,
+            ))
 
         scene = Scene(
             materials=materials,
@@ -956,14 +962,21 @@ def random_material(rng: random.Random, shape_kind: str) -> MaterialConfig:
     )
 
 
-def random_light(rng: random.Random) -> LightConfig:
+def random_light(rng: random.Random, material_style: str, n_color_groups: int) -> LightConfig:
     n_lights = rng.choices([1, 2, 3], weights=[5, 3, 1])[0]
     path_style = rng.choices(
         ["waypoints", "random_walk", "vertical_drift", "drift", "channel"],
         weights=[2, 1, 1, 2, 2],
     )[0]
     n_waypoints = rng.randint(5, 12)
-    speed = rng.uniform(0.15, 0.45)  # world units per second
+
+    # Speed: slower with more lights, slower with glass (caustics are complex).
+    speed_max = 0.25
+    if n_lights >= 2:
+        speed_max *= 0.7
+    if material_style == "glass":
+        speed_max *= 0.8
+    speed = rng.uniform(0.08, speed_max)
 
     # Ambient lighting — most scenes benefit from some fixed illumination.
     # Ambient intensity is always less than the moving-light intensity (1.0)
@@ -972,12 +985,27 @@ def random_light(rng: random.Random) -> LightConfig:
     amb_intensity = rng.uniform(0.1, 0.4) if amb_style != "none" else 0.0
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
+    # Colored moving lights: when objects have no spectral color, the moving
+    # light itself can be warm-colored for visual interest.  Ambient stays
+    # white to attenuate the color dominance.
+    wl_min, wl_max = 380.0, 780.0  # full spectrum (white)
+    if n_color_groups == 0 and rng.random() < 0.35:
+        # Warm spectral ranges — intentional, not random.
+        wl_min, wl_max = rng.choice([
+            (550.0, 700.0),  # orange
+            (515.0, 700.0),  # yellow-orange
+            (570.0, 700.0),  # deep orange
+            (500.0, 620.0),  # warm green-yellow
+        ])
+
     return LightConfig(
         n_lights=n_lights,
         path_style=path_style,
         n_waypoints=n_waypoints,
         ambient=ambient,
         speed=speed,
+        wavelength_min=wl_min,
+        wavelength_max=wl_max,
     )
 
 
@@ -985,7 +1013,7 @@ def sample(rng: random.Random) -> Params:
     grid = random_grid(rng)
     shape = random_shape(rng, grid.spacing)
     material = random_material(rng, shape.kind)
-    light = random_light(rng)
+    light = random_light(rng, material.style, material.n_color_groups)
     exposure = rng.uniform(-5.5, -3.5)
     build_seed = rng.randint(0, 2**32)
     return Params(
@@ -1009,7 +1037,7 @@ MIN_COLORFUL_SECONDS = 2.5
 MAX_BACKGROUND = 0.92  # reject if scene is washed out
 MIN_MOVING_RADIUS_PX = 5.0  # moving light must be a visible blob
 MAX_MOVING_RADIUS_PX = 60.0  # not a featureless wash
-MAX_RADIUS_RATIO = 5.0  # max moving / ambient circle size ratio
+MAX_RADIUS_RATIO = 2.0  # max moving / ambient circle size ratio
 MIN_SHARPNESS = 0.008  # minimum edge definition
 
 PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
@@ -1173,6 +1201,8 @@ def describe(p: Params) -> str:
     light_desc = f"lights={p.light.n_lights}({p.light.path_style})"
     if p.light.path_style in ("drift", "channel"):
         light_desc += f" v={p.light.speed:.2f}"
+    if p.light.wavelength_max - p.light.wavelength_min < 300:
+        light_desc += f" wl={p.light.wavelength_min:.0f}-{p.light.wavelength_max:.0f}"
     return (
         f"grid={p.grid.rows}x{p.grid.cols} {shape_desc} "
         f"mat={mat_desc} "
