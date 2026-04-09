@@ -23,10 +23,10 @@ MIN_COLORFUL_SECONDS = 2.5
 # These use the threshold/Voronoi method: radius is the 90th-percentile
 # distance of pixels above 0.92 luminance; sharpness is the luminance
 # drop per pixel across the edge band.
-MAX_MEAN_LUMINANCE = 0.75  # reject if scene is too bright overall
+MAX_MEAN_LUMINANCE = 0.70  # reject if scene is too bright overall
 MIN_MOVING_RADIUS_PX = 3.0  # moving light must be a visible blob
-MAX_MOVING_RADIUS_PX = 50.0  # not a featureless wash
-MAX_RADIUS_RATIO = 3.0  # max moving / ambient circle size ratio
+MAX_MOVING_RADIUS_PX = 80.0  # not a featureless wash
+MAX_RADIUS_RATIO = 5.0  # max moving / ambient circle size ratio
 MIN_SHARPNESS = 0.010  # minimum edge sharpness (lum drop per pixel)
 
 PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
