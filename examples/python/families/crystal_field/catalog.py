@@ -33,7 +33,6 @@ from .scene import build
 
 # ── Fixed defaults ───────────────────────────────────────────────────────
 
-_AMBIENT = AmbientConfig(style="corners", intensity=0.25)
 _CAM = Camera2D(center=[0, 0], width=3.2)
 _SHOT = Shot.preset("production", width=1920, height=1080, rays=10_000_000, depth=12)
 _TIMELINE = Timeline(DURATION, fps=30)
@@ -152,8 +151,10 @@ def _build_catalog_entries() -> list[dict]:
     return entries
 
 
-def _entry_to_params(e: dict, exposure: float, build_seed: int) -> Params:
-    """Convert a catalog entry to a Params object with given exposure and seed."""
+def _entry_to_params(
+    e: dict, exposure: float, build_seed: int, amb_intensity: float = 0.25,
+) -> Params:
+    """Convert a catalog entry to a Params object."""
     grid = e["grid_cfg"]
     spacing = grid.spacing
 
@@ -175,11 +176,12 @@ def _entry_to_params(e: dict, exposure: float, build_seed: int) -> Params:
         material = _metallic_rough_mat(colors)
 
     # Light
+    ambient = AmbientConfig(style="corners", intensity=amb_intensity)
     light = LightConfig(
         n_lights=e["n_lights"],
         path_style="channel",
         n_waypoints=8,
-        ambient=_AMBIENT,
+        ambient=ambient,
         speed=0.12,
         wavelength_min=e["wl_min"],
         wavelength_max=e["wl_max"],
@@ -220,7 +222,8 @@ def _search_good_params(e: dict, max_attempts: int = 500) -> Params:
     for _ in range(max_attempts):
         exposure = rng.uniform(exp_lo, exp_hi)
         seed = rng.randint(0, 2**32)
-        p = _entry_to_params(e, exposure, seed)
+        amb_intensity = rng.uniform(0.10, 0.35)
+        p = _entry_to_params(e, exposure, seed, amb_intensity=amb_intensity)
         animate = build(p)
 
         rr = render_frame(animate, probe_timeline, frame=_FRAME,
