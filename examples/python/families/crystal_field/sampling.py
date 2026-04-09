@@ -169,9 +169,9 @@ def _random_light(
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
 
     # Light colour: warm tint when the scene has no object colour.
-    # Half of achromatic scenes get a coloured light to avoid too much gray.
+    # 70% of achromatic scenes get coloured light to avoid too much gray.
     wl_min, wl_max = 380.0, 780.0
-    if not has_object_color and rng.random() < 0.50:
+    if not has_object_color and rng.random() < 0.70:
         wl_min, wl_max = rng.choice(_WARM_SPECTRA)
 
     return LightConfig(
