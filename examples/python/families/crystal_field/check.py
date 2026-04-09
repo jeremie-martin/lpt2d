@@ -24,9 +24,10 @@ MIN_COLORFUL_SECONDS = 2.5
 # distance of pixels above 0.92 luminance; sharpness is the luminance
 # drop per pixel across the edge band.
 MAX_MEAN_LUMINANCE = 0.70  # reject if scene is too bright overall
+MIN_MEAN_LUMINANCE = 0.12  # reject if scene is too dark (objects blocking too much light)
 MIN_MOVING_RADIUS_PX = 3.0  # moving light must be a visible blob
 MAX_MOVING_RADIUS_PX = 80.0  # not a featureless wash
-MAX_RADIUS_RATIO = 5.0  # max moving / ambient circle size ratio
+MAX_RADIUS_RATIO = 2.33  # max moving / ambient circle size ratio
 MIN_SHARPNESS = 0.010  # minimum edge sharpness (lum drop per pixel)
 
 PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
@@ -144,10 +145,12 @@ def check(p: Params, animate) -> Verdict:
     if not moving:
         return Verdict(False, f"color={colorful_s:.1f}s -- no moving lights")
 
-    # Overall brightness check.
+    # Overall brightness check — reject both washed-out and too-dark scenes.
     mean_lum = circles[0].mean_luminance if circles else 0
     if mean_lum > MAX_MEAN_LUMINANCE:
         return Verdict(False, f"color={colorful_s:.1f}s mean_lum={mean_lum:.2f} (too bright)")
+    if mean_lum < MIN_MEAN_LUMINANCE:
+        return Verdict(False, f"color={colorful_s:.1f}s mean_lum={mean_lum:.2f} (too dark)")
 
     # Moving light radius bounds.
     med_moving_r = sorted(c.radius_px for c in moving)[len(moving) // 2]
