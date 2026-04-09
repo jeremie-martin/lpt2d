@@ -83,7 +83,6 @@ def _radial_profile(
     dist = np.sqrt(xg * xg + yg * yg)
 
     profile = np.zeros(max_radius + 1, dtype=np.float64)
-    counts = np.zeros(max_radius + 1, dtype=np.int64)
 
     # Quantize distance to integer bins.
     ri = np.clip(np.round(dist).astype(np.int64), 0, max_radius)
@@ -91,7 +90,6 @@ def _radial_profile(
         mask = ri == r
         if mask.any():
             profile[r] = lum[mask].mean()
-            counts[r] = mask.sum()
 
     return profile.astype(np.float32)
 
