@@ -187,7 +187,7 @@ def _summarize_brightness(stats_list: list[FrameMetrics]) -> float:
     When inter-frame variance is high (std > 0.05), uses the 25th percentile
     instead of the mean to bias toward darker frames.
     """
-    brightnesses = [s.mean_lum / 255.0 for s in stats_list]
+    brightnesses = [s.mean / 255.0 for s in stats_list]
     measured_mean = sum(brightnesses) / len(brightnesses)
     if len(brightnesses) > 1:
         std_b = (sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)) ** 0.5
@@ -221,7 +221,7 @@ def auto_look(
     camera: Camera2D | None = None,
     canvas: Canvas | None = None,
     target_mean: float = 0.35,
-    max_clipping: float = 0.02,
+    max_clipped_channel_fraction: float = 0.02,
     tonemap: str | None = None,
     normalize: str | None = None,
     frame: int | None = None,
@@ -277,8 +277,8 @@ def auto_look(
 
     candidate_stats = measure_per_frame(_apply_look_override(result_base, {"exposure": exposure}))
     if candidate_stats:
-        candidate_clipping = max(s.pct_clipped for _, _, s in candidate_stats)
-        if candidate_clipping > max_clipping:
+        candidate_clipping = max(s.clipped_channel_fraction for _, _, s in candidate_stats)
+        if candidate_clipping > max_clipped_channel_fraction:
             low = -15.0
             high = exposure
             best_exposure = low
@@ -288,8 +288,8 @@ def auto_look(
                 if not mid_stats:
                     high = mid
                     continue
-                mid_clipping = max(s.pct_clipped for _, _, s in mid_stats)
-                if mid_clipping <= max_clipping:
+                mid_clipping = max(s.clipped_channel_fraction for _, _, s in mid_stats)
+                if mid_clipping <= max_clipped_channel_fraction:
                     best_exposure = mid
                     low = mid
                 else:
@@ -386,8 +386,8 @@ def look_report(
     frames: list[int] | None = None,
     dark_threshold: float = 0.15,
     bright_threshold: float = 0.70,
-    clip_threshold: float = 0.05,
-    contrast_threshold: float = 30.0,
+    clipped_channel_threshold: float = 0.05,
+    contrast_spread_threshold: float = 30.0,
 ) -> LookReport:
     """Diagnose how a Look performs across an animation's timeline."""
     if look is None:
@@ -424,8 +424,8 @@ def look_report(
         profile,
         dark_threshold=dark_threshold,
         bright_threshold=bright_threshold,
-        clip_threshold=clip_threshold,
-        contrast_threshold=contrast_threshold,
+        clipped_channel_threshold=clipped_channel_threshold,
+        contrast_spread_threshold=contrast_spread_threshold,
     )
 
 

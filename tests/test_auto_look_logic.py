@@ -16,13 +16,13 @@ from _metrics_fixtures import fake_metrics
 from anim.analysis import _choose_initial_exposure, _summarize_brightness
 
 
-def _fs(mean: float, pct_clipped: float = 0.0) -> Any:
+def _fs(mean: float, clipped_channel_fraction: float = 0.0) -> Any:
     return fake_metrics(
-        mean_lum=mean,
-        p50=mean,
-        p95=mean,
-        lum_max=int(mean),
-        pct_clipped=pct_clipped,
+        mean=mean,
+        median=mean,
+        highlight_ceiling=mean,
+        highlight_peak=float(int(mean)),
+        clipped_channel_fraction=clipped_channel_fraction,
     )
 
 

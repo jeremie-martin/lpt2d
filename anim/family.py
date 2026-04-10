@@ -61,23 +61,27 @@ class ProbeFrame:
     # luminance fields use the 0..255 scale, same as the C++ histogram.
     @property
     def mean(self) -> float:
-        return self.analysis.lum.mean_lum
+        return self.analysis.luminance.mean
 
     @property
     def std(self) -> float:
-        return self.analysis.lum.std_dev
+        return self.analysis.luminance.contrast_std
 
     @property
-    def pct_black(self) -> float:
-        return self.analysis.lum.pct_black
+    def near_black_fraction(self) -> float:
+        return self.analysis.luminance.near_black_fraction
 
     @property
-    def pct_clipped(self) -> float:
-        return self.analysis.lum.pct_clipped
+    def clipped_channel_fraction(self) -> float:
+        return self.analysis.luminance.clipped_channel_fraction
 
     @property
-    def color_richness(self) -> float:
-        return self.analysis.color.color_richness
+    def richness(self) -> float:
+        return self.analysis.color.richness
+
+    @property
+    def colored_fraction(self) -> float:
+        return self.analysis.color.colored_fraction
 
     @property
     def mean_saturation(self) -> float:
@@ -86,10 +90,6 @@ class ProbeFrame:
     @property
     def hue_entropy(self) -> float:
         return self.analysis.color.hue_entropy
-
-    @property
-    def chromatic_fraction(self) -> float:
-        return self.analysis.color.chromatic_fraction
 
 
 # ---------------------------------------------------------------------------

@@ -125,9 +125,16 @@ def test_look_with_overrides():
 # These mock render_stats at the function level (not the old Renderer class).
 
 _SAMPLE_DEFAULTS = dict(
-    mean_lum=64.0, pct_black=0.2, pct_clipped=0.0,
-    p05=1.0, p50=40.0, p95=120.0, p99=200.0,
-    std_dev=10.0, lum_min=0, lum_max=200,
+    mean=64.0,
+    median=40.0,
+    shadow_floor=1.0,
+    highlight_ceiling=120.0,
+    highlight_peak=200.0,
+    contrast_std=10.0,
+    contrast_spread=119.0,
+    near_black_fraction=0.2,
+    near_white_fraction=0.0,
+    clipped_channel_fraction=0.0,
 )
 
 

@@ -237,8 +237,8 @@ def light_contributions(
             animate_solo, solo_shot, analysis_shot.camera
         )
         if s is not None:
-            results.append((label, idx, s.mean_lum, 1.0 - s.pct_black))
-            total_mean += s.mean_lum
+            results.append((label, idx, s.mean, 1.0 - s.near_black_fraction))
+            total_mean += s.mean
         else:
             results.append((label, idx, 0.0, 0.0))
 
@@ -319,11 +319,13 @@ def structure_contribution(
     ) or _empty
 
     diff = StatsDiff(
-        mean=s_without.mean_lum - s_with.mean_lum,
-        pct_black=s_without.pct_black - s_with.pct_black,
-        pct_clipped=s_without.pct_clipped - s_with.pct_clipped,
-        p50=s_without.p50 - s_with.p50,
-        p95=s_without.p95 - s_with.p95,
+        mean=s_without.mean - s_with.mean,
+        near_black_fraction=s_without.near_black_fraction - s_with.near_black_fraction,
+        clipped_channel_fraction=(
+            s_without.clipped_channel_fraction - s_with.clipped_channel_fraction
+        ),
+        median=s_without.median - s_with.median,
+        highlight_ceiling=s_without.highlight_ceiling - s_with.highlight_ceiling,
     )
 
     if diff.mean > 5.0:

@@ -5,6 +5,7 @@
 #include "renderer.h"  // for FrameMetrics (type alias for LuminanceStats)
 
 #include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -62,8 +63,8 @@ struct PanelState {
     bool show_controls_panel = true;
     bool show_shortcuts_help = false;
     bool show_stats_panel = true;     // floating Stats window, togglable via 'S' hotkey
-    bool live_analysis = true;        // when show_stats_panel is up, run the GPU analyser every frame
-    bool show_circle_overlay = false; // draw measured light circles on top of viewport
+    bool live_analysis = true;        // when show_stats_panel is up, update authored-camera analysis
+    bool show_light_overlay = false; // draw measured point-light appearance rings on top of viewport
     ContextMenuTarget context_menu;
     int active_tab = 0;               // 0 = Edit, 1 = Look
     bool tab_switch_requested = false; // set by keyboard shortcut, consumed by draw
@@ -76,6 +77,8 @@ struct PanelContext {
     CompareSnapshot& compare_ab;
     PanelState& panel;
     FrameAnalysis& live_metrics;
+    std::function<bool(FrameAnalysis&)> compute_authored_analysis;
+    std::function<void()> invalidate_authored_analysis;
     const ImGuiIO& io;
     float dpi_scale;
     float frame_ms;
@@ -98,6 +101,8 @@ void draw_controls_panel(
     CompareSnapshot& compare_ab,
     PanelState& panel,
     FrameAnalysis& live_metrics,
+    std::function<bool(FrameAnalysis&)> compute_authored_analysis,
+    std::function<void()> invalidate_authored_analysis,
     const ImGuiIO& io,
     float dpi_scale,
     float frame_ms,
@@ -105,7 +110,7 @@ void draw_controls_panel(
 );
 
 // Draws the floating Stats window (histogram + luminance/colour rows +
-// light-circle table + overlay toggle). No-op when
+// point-light appearance table + overlay toggle). No-op when
 // panel.show_stats_panel is false. The top-level window has its own
 // saved position/size in imgui.ini.
 void draw_stats_window(

@@ -672,12 +672,16 @@ def _run_evaluate(
                     }
                     if fidelity.metrics:
                         sample_entry["metrics"] = {
-                            "mean_lum_delta": fidelity.metrics.mean_lum_delta,
+                            "mean_delta": fidelity.metrics.mean_delta,
                             "histogram_overlap": fidelity.metrics.histogram_overlap,
-                            "p50_delta": fidelity.metrics.p50_delta,
-                            "p95_delta": fidelity.metrics.p95_delta,
-                            "pct_black_delta": fidelity.metrics.pct_black_delta,
-                            "pct_clipped_delta": fidelity.metrics.pct_clipped_delta,
+                            "median_delta": fidelity.metrics.median_delta,
+                            "highlight_ceiling_delta": fidelity.metrics.highlight_ceiling_delta,
+                            "near_black_fraction_delta": (
+                                fidelity.metrics.near_black_fraction_delta
+                            ),
+                            "clipped_channel_fraction_delta": (
+                                fidelity.metrics.clipped_channel_fraction_delta
+                            ),
                             "warnings": fidelity.metrics.warnings,
                         }
                     case_samples[sample.frame].append(sample_entry)

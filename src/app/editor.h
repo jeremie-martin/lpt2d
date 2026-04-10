@@ -5,6 +5,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <optional>
 #include <set>
@@ -185,6 +186,7 @@ struct EditorState {
         UndoHistory undo;
         Clipboard clipboard;
         bool dirty = false;
+        std::uint64_t analysis_revision = 0;
         std::string save_path;
         int frame = 0;
     } session;

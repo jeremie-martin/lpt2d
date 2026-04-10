@@ -138,7 +138,7 @@ def _analyzed_look(mode: str, corner_radius: float):
         frame=0,
         sample_count=1,
         target_mean=0.26,
-        max_clipping=0.01,
+        max_clipped_channel_fraction=0.01,
     )
 
 

@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-BASELINE_SET_SCHEMA_VERSION = 3
+BASELINE_SET_SCHEMA_VERSION = 4
 
 
 def _result_metadata(result) -> dict:
@@ -21,11 +21,11 @@ def _result_metadata(result) -> dict:
         "max_hdr": result.max_hdr,
         "time_ms": result.time_ms,
         "metrics": {
-            "mean_lum": m.mean_lum,
-            "pct_black": m.pct_black,
-            "pct_clipped": m.pct_clipped,
-            "p50": m.p50,
-            "p95": m.p95,
+            "mean": m.mean,
+            "median": m.median,
+            "highlight_ceiling": m.highlight_ceiling,
+            "near_black_fraction": m.near_black_fraction,
+            "clipped_channel_fraction": m.clipped_channel_fraction,
             "histogram": list(m.histogram),
         },
     }

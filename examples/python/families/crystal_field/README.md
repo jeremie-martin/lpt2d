@@ -19,7 +19,7 @@ walls bounce escaped light back into the field.
 | `paths.py` | 5 light path generators + arc-length track conversion |
 | `scene.py` | Scene assembly — the `build()` function |
 | `sampling.py` | Parameter generation — the `sample()` function |
-| `check.py` | Quality gates (color richness + light circle metrics) |
+| `check.py` | Quality gates (color richness + point-light appearance metrics) |
 | `describe.py` | One-line variant summary |
 | `stats.py` | Parameter distribution analysis (no rendering) |
 
@@ -69,10 +69,11 @@ python -m examples.python.families.crystal_field stats -n 50000 --seed 99
 Variants must pass two gates:
 
 1. **Color richness** — at least 2.5 seconds of the 10s animation must
-   have color_richness > 0.15 (measured via probe rendering at 4 fps).
-2. **Light circles** — the apparent size and sharpness of each point
-   light's visible circle is measured at probe resolution:
-   - Moving radius: 5–60 px
-   - Sharpness: ≥ 0.015
-   - Background: < 0.92 (not washed out)
-   - Moving/ambient size ratio: ≤ 2:1
+   have richness > 0.15 (measured via probe rendering at 4 fps).
+2. **Point-light appearance** — the apparent size and edge quality of each
+   moving light is measured on the final image in normalized camera units:
+   - Moving radius: 0.8%–22.2% of the short image side
+   - Edge width: ≤ 3.3% of the short image side
+   - Peak contrast: ≥ 0.08
+   - Confidence: ≥ 0.35
+   - Moving/ambient size ratio: ≤ 2.66:1

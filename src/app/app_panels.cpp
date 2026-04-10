@@ -323,6 +323,8 @@ float& polygon_bulk_corner_radius_state(const Polygon& polygon) {
 
 void PanelContext::reload(bool mark_dirty) {
     reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid, win_w, win_h, mark_dirty);
+    if (invalidate_authored_analysis)
+        invalidate_authored_analysis();
 }
 
 // ─── Section functions ──────────────────────────────────────────────
@@ -557,11 +559,15 @@ static void draw_section_camera(PanelContext& ctx) {
             ed.shot.camera.center.reset();
             ed.shot.camera.width.reset();
             ed.session.dirty = true;
+            if (ctx.invalidate_authored_analysis)
+                ctx.invalidate_authored_analysis();
         }
         ImGui::SameLine();
         if (ImGui::Button("Clear") && !ed.shot.camera.empty()) {
             ed.shot.camera = Camera2D{};
             ed.session.dirty = true;
+            if (ctx.invalidate_authored_analysis)
+                ctx.invalidate_authored_analysis();
         }
 
         ImGui::Checkbox("Show frame", &ed.view.show_camera_frame);
@@ -580,6 +586,8 @@ static void draw_section_camera(PanelContext& ctx) {
                 ed.shot.camera.center.reset();
                 ed.shot.camera.width.reset();
                 ed.session.dirty = true;
+                if (ctx.invalidate_authored_analysis)
+                    ctx.invalidate_authored_analysis();
             }
         } else {
             ImGui::TextDisabled("Camera: auto (from scene bounds)");
@@ -595,6 +603,8 @@ static void draw_section_camera(PanelContext& ctx) {
             ed.shot.canvas.width = std::clamp(cw, 64, 7680);
             ed.shot.canvas.height = std::clamp(ch, 64, 4320);
             ed.session.dirty = true;
+            if (ctx.invalidate_authored_analysis)
+                ctx.invalidate_authored_analysis();
         }
         ImGui::Text("Aspect: %.3f", ed.shot.canvas.aspect());
         ImGui::PopID();
@@ -832,15 +842,15 @@ static void draw_section_objects(PanelContext& ctx) {
                         ctx.renderer.update_display(contribution_look, diagnostic_copy.canvas.aspect());
                         FrameAnalysisParams lum_only;
                         lum_only.analyze_color = false;
-                        lum_only.analyze_circles = false;
-                        auto metrics = ctx.renderer.run_frame_analysis(lum_only).lum;
+                        lum_only.analyze_lights = false;
+                        auto metrics = ctx.renderer.run_frame_analysis(lum_only).luminance;
                         panel.light_analysis.push_back({
                             source.label,
-                            metrics.mean_lum,
-                            1.0f - metrics.pct_black,
+                            metrics.mean,
+                            1.0f - metrics.near_black_fraction,
                             0.0f,
                         });
-                        total_mean += metrics.mean_lum;
+                        total_mean += metrics.mean;
                     }
 
                     for (auto& entry : panel.light_analysis)
@@ -1534,22 +1544,27 @@ static void draw_section_tracer(PanelContext& ctx) {
 
     if (ImGui::CollapsingHeader("Tracer")) {
         ImGui::PushID("Tracer");
-        ImGui::SliderInt("Batch", &ed.shot.trace.batch, 1000, 1000000, "%d",
-                         ImGuiSliderFlags_Logarithmic);
-        ImGui::SliderInt("Depth", &ed.shot.trace.depth, 1, 30);
-        ImGui::SliderFloat("Intensity", &ed.shot.trace.intensity, 0.001f, 10.0f, "%.3f",
-                           ImGuiSliderFlags_Logarithmic);
+        bool trace_changed = false;
+        trace_changed |= ImGui::SliderInt("Batch", &ed.shot.trace.batch, 1000, 1000000, "%d",
+                                          ImGuiSliderFlags_Logarithmic);
+        trace_changed |= ImGui::SliderInt("Depth", &ed.shot.trace.depth, 1, 30);
+        trace_changed |= ImGui::SliderFloat("Intensity", &ed.shot.trace.intensity, 0.001f, 10.0f, "%.3f",
+                                            ImGuiSliderFlags_Logarithmic);
         int seed_mode = (int)ed.shot.trace.seed_mode;
         if (ImGui::Combo("Seed mode", &seed_mode, "Deterministic\0Decorrelated\0")) {
             ed.shot.trace.seed_mode = (SeedMode)seed_mode;
-            ctx.renderer.clear();
-            panel.light_analysis_valid = false;
+            trace_changed = true;
         }
         int frame = ed.session.frame;
         if (ImGui::InputInt("Frame", &frame)) {
             ed.session.frame = std::max(frame, 0);
+            trace_changed = true;
+        }
+        if (trace_changed) {
             ctx.renderer.clear();
             panel.light_analysis_valid = false;
+            if (ctx.invalidate_authored_analysis)
+                ctx.invalidate_authored_analysis();
         }
         ImGui::Checkbox("Paused", &panel.paused);
         ImGui::PopID();
@@ -1580,8 +1595,10 @@ static void draw_section_display(PanelContext& ctx) {
             ctx.compare_ab.frame = ed.session.frame;
             ensure_scene_entity_ids(ctx.compare_ab.shot.scene);
             ctx.compare_ab.view_bounds = current_display_view(ed, ctx.compare_ab, ctx.win_w, ctx.win_h);
-            ctx.compare_ab.analysis = ctx.renderer.run_frame_analysis();
-            ctx.compare_ab.metrics_valid = true;
+            FrameAnalysis authored_analysis{};
+            ctx.compare_ab.metrics_valid =
+                ctx.compute_authored_analysis && ctx.compute_authored_analysis(authored_analysis);
+            ctx.compare_ab.analysis = ctx.compare_ab.metrics_valid ? authored_analysis : FrameAnalysis{};
             upload_compare_snapshot(ctx.compare_ab, snapshot_rgba, ctx.fb_w, ctx.fb_h);
             ctx.compare_ab.active = true;
             ctx.compare_ab.showing_a = false;
@@ -1730,22 +1747,29 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         return;
     }
 
-    const LuminanceStats& lum = live_metrics.lum;
+    const LuminanceStats& lum = live_metrics.luminance;
     const ColorStats& color = live_metrics.color;
 
-    // Top-of-window toggles. "Live" gates the GPU analysis dispatch
-    // every frame; turning it off freezes the numbers and saves ~1-2 ms
-    // of work per frame while the user is doing something unrelated.
+    // Top-of-window toggles. "Live" gates the authored-camera analysis
+    // update; turning it off freezes the numbers while the user is doing
+    // something unrelated.
     ImGui::Checkbox("Live", &panel.live_analysis);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-        ImGui::SetTooltip("Dispatch the GPU frame analyser every frame.\n"
+        ImGui::SetTooltip("Update authored-camera frame analysis every frame.\n"
                           "Uncheck to freeze the numbers without closing the window.");
     ImGui::SameLine();
-    ImGui::Checkbox("Circle overlay", &panel.show_circle_overlay);
+    ImGui::Checkbox("Light overlay", &panel.show_light_overlay);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-        ImGui::SetTooltip("Draw measured light-circle rings on top of the viewport.");
+        ImGui::SetTooltip("Draw measured point-light appearance rings on top of the viewport.");
 
     ImGui::Separator();
+
+    int hist_min = 0;
+    while (hist_min < 256 && lum.histogram[hist_min] == 0)
+        ++hist_min;
+    int hist_max_bin = 255;
+    while (hist_max_bin >= 0 && lum.histogram[hist_max_bin] == 0)
+        --hist_max_bin;
 
     // Histogram across the full window width.
     float hist_f[256];
@@ -1762,31 +1786,34 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
         ImGui::SetTooltip("BT.709 luminance on a 0-255 scale, measured on the post-tonemap display buffer.");
     stats_labelled_text("Brightness:", "Mean luminance (0-255, BT.709).",
-                        " %.1f", lum.mean_lum);
+                        " %.1f", lum.mean);
     stats_labelled_text("Median:",
-                        "P50 — luminance at the 50th percentile of the histogram.",
-                        " %.0f", lum.p50);
+                        "50th percentile luminance.",
+                        " %.0f", lum.median);
     stats_labelled_text("Contrast:",
                         "Standard deviation of luminance (0-255 scale).",
-                        " %.1f", lum.std_dev);
+                        " %.1f", lum.contrast_std);
     stats_labelled_text("Shadows:",
-                        "P05 — the dark 5% threshold. Anything below this is in the bottom 5% of luminance.",
-                        " %.0f", lum.p05);
+                        "5th percentile luminance.",
+                        " %.0f", lum.shadow_floor);
     stats_labelled_text("Highlights:",
-                        "P95 — the bright 5% threshold. Anything above this is in the top 5%.",
-                        " %.0f", lum.p95);
+                        "95th percentile luminance.",
+                        " %.0f", lum.highlight_ceiling);
     stats_labelled_text("Peak:",
-                        "P99 — the top 1% threshold. Useful for spotting small bright features.",
-                        " %.0f", lum.p99);
+                        "99th percentile luminance. Useful for small bright features.",
+                        " %.0f", lum.highlight_peak);
     stats_labelled_text("Range:",
-                        "Darkest and brightest populated histogram bins (min / max luminance).",
-                        " %d - %d", lum.lum_min, lum.lum_max);
-    stats_labelled_text("Crushed blacks:",
-                        "Fraction of pixels sitting at luminance 0 (full shadow clip).",
-                        " %.1f%%", lum.pct_black * 100.0f);
-    stats_labelled_text("Clipped whites:",
+                        "First and last populated histogram bins (min / max luminance).",
+                        " %d - %d", hist_min < 256 ? hist_min : 0, hist_max_bin >= 0 ? hist_max_bin : 0);
+    stats_labelled_text("Near-black:",
+                        "Fraction of pixels at luminance <= 5.",
+                        " %.1f%%", lum.near_black_fraction * 100.0f);
+    stats_labelled_text("Near-white:",
+                        "Fraction of pixels at luminance >= 250.",
+                        " %.1f%%", lum.near_white_fraction * 100.0f);
+    stats_labelled_text("Clipped channels:",
                         "Fraction of pixels with any channel at 255 (highlight clip).",
-                        " %.1f%%", lum.pct_clipped * 100.0f);
+                        " %.1f%%", lum.clipped_channel_fraction * 100.0f);
 
     // ── Colour row ───────────────────────────────────────────────────
     ImGui::Separator();
@@ -1801,48 +1828,56 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                         "0 = single colour, ~2.6 = six evenly-spaced hues, ~5 = rainbow.",
                         " %.2f", color.hue_entropy);
     stats_labelled_text("Colourfulness:",
-                        "Composite score: colour_variety * saturation * chromatic fraction.",
-                        " %.3f", color.color_richness);
+                        "Composite score: colour_variety * saturation * colored fraction.",
+                        " %.3f", color.richness);
     stats_labelled_text("Colored pixels:",
                         "Percentage of pixels with HSV saturation above the 0.05 chroma threshold.",
-                        " %.1f%%", color.chromatic_fraction * 100.0f);
+                        " %.1f%%", color.colored_fraction * 100.0f);
 
-    // ── Light circles ────────────────────────────────────────────────
-    if (!live_metrics.circles.empty()) {
+    // ── Light appearance ─────────────────────────────────────────────
+    if (!live_metrics.lights.empty()) {
         ImGui::Separator();
-        ImGui::TextUnformatted("Light circles");
+        ImGui::TextUnformatted("Light appearance");
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-            ImGui::SetTooltip("Per-light apparent circle measured in pixel space.\n"
+            ImGui::SetTooltip("Per-light apparent bright structure measured in normalized camera-space units.\n"
                               "Each row is one PointLight in the scene.");
-        if (ImGui::BeginTable("##circles", 5,
+        if (ImGui::BeginTable("##lights", 6,
                               ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Light");
-            ImGui::TableSetupColumn("Size (px)");
-            ImGui::TableSetupColumn("Core (px)");
-            ImGui::TableSetupColumn("Edge");
-            ImGui::TableSetupColumn("Hot px");
+            ImGui::TableSetupColumn("Radius %");
+            ImGui::TableSetupColumn("Sat %");
+            ImGui::TableSetupColumn("Edge %");
+            ImGui::TableSetupColumn("Contrast");
+            ImGui::TableSetupColumn("Conf.");
             ImGui::TableHeadersRow();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::SetTooltip(
-                    "Size: 90th-percentile radius of bright pixels in the Voronoi cell.\n"
-                    "Core: FWHM — radius at which luminance falls to half the peak.\n"
-                    "Edge: luminance drop per pixel across [0.5r, 1.5r] (sharpness).\n"
-                    "Hot px: count of pixels above the bright threshold.");
+                    "Radius: equivalent connected-component radius as %% of the short image side.\n"
+                    "Sat: legacy bright-threshold radius as %% of the short image side.\n"
+                    "Edge: transition width as %% of the short image side.\n"
+                    "Contrast: peak minus background luminance.\n"
+                    "Conf.: confidence score in [0, 1].");
             }
-            for (const auto& c : live_metrics.circles) {
+            for (const auto& c : live_metrics.lights) {
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(c.id.c_str());
+                if (c.touches_frame_edge) {
+                    ImGui::Text("%s*", c.id.c_str());
+                } else {
+                    ImGui::TextUnformatted(c.id.c_str());
+                }
                 ImGui::TableSetColumnIndex(1);
-                ImGui::Text("%.1f", c.radius_px);
+                ImGui::Text("%.2f", c.radius_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%.1f", c.radius_half_max_px);
+                ImGui::Text("%.2f", c.saturated_radius_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%.3f", c.sharpness);
+                ImGui::Text("%.2f", c.transition_width_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%d", c.n_bright_pixels);
+                ImGui::Text("%.3f", c.peak_contrast);
+                ImGui::TableSetColumnIndex(5);
+                ImGui::Text("%.2f", c.confidence);
             }
             ImGui::EndTable();
         }
@@ -1851,15 +1886,15 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     // ── Snapshot A comparison ────────────────────────────────────────
     if (compare_ab.metrics_valid) {
         ImGui::Separator();
-        const LuminanceStats& alum = compare_ab.analysis.lum;
-        ImGui::Text("Snapshot A: brightness %.1f  crushed %.1f%%  clipped %.1f%%",
-                    alum.mean_lum,
-                    alum.pct_black * 100.0f,
-                    alum.pct_clipped * 100.0f);
-        ImGui::Text("Delta vs A:  brightness %+.1f  crushed %+.1f%%  clipped %+.1f%%",
-                    lum.mean_lum - alum.mean_lum,
-                    (lum.pct_black - alum.pct_black) * 100.0f,
-                    (lum.pct_clipped - alum.pct_clipped) * 100.0f);
+        const LuminanceStats& alum = compare_ab.analysis.luminance;
+        ImGui::Text("Snapshot A: brightness %.1f  near-black %.1f%%  clipped %.1f%%",
+                    alum.mean,
+                    alum.near_black_fraction * 100.0f,
+                    alum.clipped_channel_fraction * 100.0f);
+        ImGui::Text("Delta vs A:  brightness %+.1f  near-black %+.1f%%  clipped %+.1f%%",
+                    lum.mean - alum.mean,
+                    (lum.near_black_fraction - alum.near_black_fraction) * 100.0f,
+                    (lum.clipped_channel_fraction - alum.clipped_channel_fraction) * 100.0f);
     }
 
     ImGui::End();
@@ -1873,12 +1908,18 @@ void draw_controls_panel(
     CompareSnapshot& compare_ab,
     PanelState& panel,
     FrameAnalysis& live_metrics,
+    std::function<bool(FrameAnalysis&)> compute_authored_analysis,
+    std::function<void()> invalidate_authored_analysis,
     const ImGuiIO& io,
     float dpi_scale,
     float frame_ms,
     int win_w, int win_h, int fb_w, int fb_h
 ) {
-    PanelContext ctx{ed, renderer, compare_ab, panel, live_metrics, io, dpi_scale, frame_ms, win_w, win_h, fb_w, fb_h};
+    PanelContext ctx{
+        ed, renderer, compare_ab, panel, live_metrics,
+        std::move(compute_authored_analysis), std::move(invalidate_authored_analysis),
+        io, dpi_scale, frame_ms, win_w, win_h, fb_w, fb_h
+    };
 
     sync_material_panel_to_active_object(ed, panel);
 

@@ -15,7 +15,7 @@ namespace {
 // CPU-side). No padding uints; the old layout had two that nothing
 // read or wrote.
 constexpr std::size_t kLumBytes   = (256 + 2) * sizeof(uint32_t);
-// ColorResult std430: uint hue_hist[36] + sat_sum_q8 + n_chromatic.
+// ColorResult std430: uint hue_hist[36] + sat_sum_q8 + n_colored.
 constexpr std::size_t kColorBytes = (36 + 2) * sizeof(uint32_t);
 
 // Initial capacity for the dynamic SSBOs — enough for typical scenes
@@ -130,15 +130,18 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         return out;
     }
 
-    // `n_lights` is the number of circles the caller will receive — one
-    // per input LightRef, no cap. The shader sees `n_lights_gpu`, which
-    // is zero when `analyze_circles` is disabled so the per-pixel
-    // Voronoi loop short-circuits and the expensive O(W*H*L) work is
+    // `n_lights` is the number of point-light appearance records the caller
+    // will receive — one per input LightRef, no cap. The shader sees
+    // `n_lights_gpu`, which is zero when light analysis is disabled so the
+    // per-pixel Voronoi loop short-circuits and the expensive O(W*H*L) work is
     // actually skipped (not just skipped on the CPU side of readback).
     const int n_lights = static_cast<int>(lights.size());
-    const bool want_circles = params.analyze_circles && n_lights > 0;
+    const bool want_circles = params.analyze_lights && n_lights > 0;
     const int n_lights_gpu = want_circles ? n_lights : 0;
-    const int max_bins = std::min(params.circles.max_radius_px + 1, kMaxBins);
+    const int search_radius = std::max(
+        2, static_cast<int>(std::ceil(params.lights.search_radius_ratio *
+                                      static_cast<float>(std::min(width, height)))));
+    const int max_bins = std::min(search_radius + 1, kMaxBins);
 
     // Precompute pixel-space light centres in the TOP-LEFT convention
     // used by viewport_xform. The shader flips gid.y internally so
@@ -197,7 +200,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
     if (u_resolution_ >= 0) glUniform2i(u_resolution_, width, height);
     if (u_nlights_ >= 0)    glUniform1i(u_nlights_, n_lights_gpu);
-    if (u_bright_ >= 0)     glUniform1f(u_bright_, params.circles.bright_threshold);
+    if (u_bright_ >= 0)     glUniform1f(u_bright_, params.lights.legacy_bright_threshold);
     if (u_max_bins_ >= 0)   glUniform1i(u_max_bins_, max_bins);
     if (u_sat_ >= 0)        glUniform1f(u_sat_, params.saturation_threshold);
 
@@ -247,7 +250,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             hist_int[i] = static_cast<int>(lum_raw[i]);
         }
         const int clipped = static_cast<int>(lum_raw[256]);
-        out.lum = finalize_luminance(hist_int, clipped, width, height);
+        out.luminance = finalize_luminance(hist_int, clipped, width, height,
+                                           params.near_black_bin_max,
+                                           params.near_white_bin_min);
     }
 
     // ── Color finalize (inline) ────────────────────────────────────────
@@ -256,22 +261,22 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         for (int i = 0; i < 36; ++i) {
             cs.hue_histogram[i] = static_cast<int>(color_raw[i]);
         }
-        const uint32_t sat_sum_q8   = color_raw[36];
-        const uint32_t n_chromatic  = color_raw[37];
+        const uint32_t sat_sum_q8 = color_raw[36];
+        const uint32_t n_colored = color_raw[37];
         const std::size_t n_pixels  =
             static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
 
-        cs.n_chromatic = static_cast<int>(n_chromatic);
-        cs.chromatic_fraction = n_pixels > 0
-            ? static_cast<float>(n_chromatic) / static_cast<float>(n_pixels)
+        cs.n_colored = static_cast<int>(n_colored);
+        cs.colored_fraction = n_pixels > 0
+            ? static_cast<float>(n_colored) / static_cast<float>(n_pixels)
             : 0.0f;
-        cs.mean_saturation = n_chromatic > 0
-            ? (static_cast<float>(sat_sum_q8) / 255.0f) / static_cast<float>(n_chromatic)
+        cs.mean_saturation = n_colored > 0
+            ? (static_cast<float>(sat_sum_q8) / 255.0f) / static_cast<float>(n_colored)
             : 0.0f;
 
         // Shannon entropy on the hue histogram (bits).
-        if (n_chromatic > 0) {
-            const double inv = 1.0 / static_cast<double>(n_chromatic);
+        if (n_colored > 0) {
+            const double inv = 1.0 / static_cast<double>(n_colored);
             double entropy = 0.0;
             for (int k = 0; k < 36; ++k) {
                 if (cs.hue_histogram[k] > 0) {
@@ -281,40 +286,31 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             }
             cs.hue_entropy = static_cast<float>(entropy);
         }
-        cs.color_richness = cs.hue_entropy * cs.mean_saturation * cs.chromatic_fraction;
+        cs.richness = cs.hue_entropy * cs.mean_saturation * cs.colored_fraction;
         out.color = cs;
     }
 
     // ── Circles finalize (per-light) ───────────────────────────────────
     //
-    // One LightCircle per INPUT light (not per GPU-measured light).
-    // When circles are disabled on the GPU side (want_circles == false)
-    // we still emit the LightCircle list with per-input ids/world
-    // coords but zeroed metric fields, so downstream code never has to
-    // guess whether a light was silently dropped.
+    // One PointLightAppearance per input light. When light binning is
+    // disabled on the GPU side (want_circles == false) we still emit the
+    // per-input ids/world coords with zeroed metric fields, so downstream
+    // code never has to guess whether a light was silently dropped.
     if (n_lights > 0) {
-        out.circles.reserve(static_cast<std::size_t>(n_lights));
+        out.lights.reserve(static_cast<std::size_t>(n_lights));
 
-        // Global mean luminance — same value on every returned circle
-        // (matches the CPU path's semantics).
-        const float mean_lum01 = out.lum.mean_lum / 255.0f;
+        const float short_side = static_cast<float>(std::min(width, height));
 
         for (int i = 0; i < n_lights; ++i) {
-            LightCircle c;
+            PointLightAppearance c;
             c.id = lights[i].id;
             c.world_x = lights[i].world_x;
             c.world_y = lights[i].world_y;
-            c.pixel_x = lights_px_scratch_[2 * i + 0];
-            c.pixel_y = lights_px_scratch_[2 * i + 1];
-            c.mean_luminance = mean_lum01;
+            c.image_x = lights_px_scratch_[2 * i + 0];
+            c.image_y = lights_px_scratch_[2 * i + 1];
 
             if (!want_circles) {
-                // Analysis was opted out for circles. Return the light
-                // with id + world/pixel coordinates populated so the
-                // caller can still iterate, but leave measurement
-                // fields at their default (zero) values.
-                c.profile.clear();
-                out.circles.push_back(std::move(c));
+                out.lights.push_back(std::move(c));
                 continue;
             }
 
@@ -329,7 +325,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             // code built it in 0..255 first and only rescaled after
             // computing sharpness, producing a ~255x overshoot that
             // broke every sharpness threshold downstream.
-            c.profile.assign(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> profile(static_cast<std::size_t>(max_bins), 0.0f);
             uint32_t total_bright = 0;
             for (int r = 0; r < max_bins; ++r) {
                 const uint32_t psum = base[r * 3 + 0];
@@ -337,86 +333,69 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                 const uint32_t pbr  = base[r * 3 + 2];
                 total_bright += pbr;
                 if (pcnt > 0) {
-                    c.profile[r] = (static_cast<float>(psum) /
-                                    static_cast<float>(pcnt)) / 255.0f;
+                    profile[r] = (static_cast<float>(psum) /
+                                  static_cast<float>(pcnt)) / 255.0f;
                 }
             }
-            c.n_bright_pixels = static_cast<int>(total_bright);
+            const int bright_pixels = static_cast<int>(total_bright);
+            c.visible = bright_pixels > 0;
+            c.coverage_fraction = static_cast<float>(bright_pixels) /
+                                  static_cast<float>(width * height);
 
-            // Primary radius: percentile of bright-pixel distances via
-            // the cumulative histogram of per-bin bright counts. Same
-            // math the CPU std::nth_element path produced, quantised
-            // to whole-pixel bins (±1 px agreement is expected).
-            c.radius_px = 0.0f;
-            if (c.n_bright_pixels >= params.circles.min_bright_pixels &&
+            float legacy_radius_px = 0.0f;
+            if (bright_pixels >= params.lights.legacy_min_bright_pixels &&
                 total_bright > 0) {
                 const float pct = std::clamp(
-                    params.circles.radius_percentile / 100.0f, 0.0f, 1.0f);
+                    params.lights.legacy_radius_percentile / 100.0f, 0.0f, 1.0f);
                 const uint32_t target = static_cast<uint32_t>(
                     std::floor(static_cast<float>(total_bright) * pct));
-                // Track "did we set radius_px" explicitly — using
-                // `c.radius_px == 0.0f` as the sentinel would clobber a
-                // legitimate bin-0 measurement (pinpoint light where
-                // the percentile target falls inside the first bin)
-                // with the largest populated bin, inflating the
-                // reported radius by up to max_radius_px.
                 bool radius_set = false;
                 uint32_t cumul = 0;
                 for (int r = 0; r < max_bins; ++r) {
                     cumul += base[r * 3 + 2];
                     if (cumul > target) {
-                        c.radius_px = static_cast<float>(r);
+                        legacy_radius_px = static_cast<float>(r);
                         radius_set = true;
                         break;
                     }
                 }
                 if (!radius_set) {
-                    // Fallback: the cumulative never strictly exceeded
-                    // target (possible when target == total_bright - 1
-                    // and only the last bin has hits). Report the
-                    // last populated bin.
                     for (int r = max_bins - 1; r >= 0; --r) {
                         if (base[r * 3 + 2] > 0) {
-                            c.radius_px = static_cast<float>(r);
+                            legacy_radius_px = static_cast<float>(r);
                             break;
                         }
                     }
                 }
             }
+            c.saturated_radius_ratio = legacy_radius_px / short_side;
 
-            // Secondary radius: first bin where profile drops below
-            // `half_max_fraction * peak` (classic FWHM when 0.5).
             float peak = 0.0f;
             for (int r = 0; r < max_bins; ++r) {
-                peak = std::max(peak, c.profile[r]);
+                peak = std::max(peak, profile[r]);
             }
-            const float half_target = peak * params.circles.half_max_fraction;
-            c.radius_half_max_px = 0.0f;
-            if (peak > 0.0f) {
-                for (int r = 0; r < max_bins; ++r) {
-                    if (c.profile[r] < half_target) {
-                        c.radius_half_max_px = static_cast<float>(r);
-                        break;
-                    }
-                }
-            }
-
-            // Sharpness: profile slope across [0.5r, 1.5r]. Profile is
-            // now in 0..1 luminance, so `sharpness` is directly
-            // comparable to the historical CPU numbers and the
-            // thresholds in crystal_field/check.py.
-            c.sharpness = 0.0f;
-            if (c.radius_px > 2.0f) {
-                const int r_lo = std::max(1, static_cast<int>(c.radius_px * 0.5f));
+            c.peak_luminance = peak;
+            c.background_luminance = max_bins > 0 ? profile[max_bins - 1] : 0.0f;
+            c.peak_contrast = std::max(0.0f, c.peak_luminance - c.background_luminance);
+            c.radius_ratio = c.saturated_radius_ratio;
+            c.transition_width_ratio = 0.0f;
+            if (legacy_radius_px > 2.0f) {
+                const int r_lo = std::max(1, static_cast<int>(legacy_radius_px * 0.5f));
                 const int r_hi = std::min(max_bins - 2,
-                                           static_cast<int>(c.radius_px * 1.5f) + 1);
+                                           static_cast<int>(legacy_radius_px * 1.5f) + 1);
                 if (r_hi > r_lo) {
-                    c.sharpness = (c.profile[r_lo] - c.profile[r_hi]) /
-                                  static_cast<float>(r_hi - r_lo);
+                    const float sharpness = (profile[r_lo] - profile[r_hi]) /
+                                            static_cast<float>(r_hi - r_lo);
+                    c.transition_width_ratio = sharpness > 0.0f
+                        ? (1.0f / sharpness) / short_side
+                        : 0.0f;
                 }
             }
+            c.confidence = c.visible
+                ? std::clamp(c.peak_contrast / 0.15f, 0.0f, 1.0f)
+                : 0.0f;
 
-            out.circles.push_back(std::move(c));
+            out.lights.push_back(std::move(c));
         }
     }
 

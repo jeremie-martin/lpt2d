@@ -19,27 +19,34 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Display order and format spec for each metric.  Only keys listed here are
 # rendered; extras in the metrics dict are silently dropped.
-_METRIC_ORDER: tuple[tuple[str, str], ...] = (
-    ("mean", "%.2f"),
-    ("spread", "%.2f"),
-    ("p99", "%.2f"),
-    ("clip%", "%.1f%%"),
-    ("sat", "%.2f"),
-    ("color", "%.1fs"),
-    ("moving_r", "%.0fpx"),
-    ("ambient_r", "%.0fpx"),
-    ("ratio", "%.2f"),
-    ("sharp", "%.3f"),
-    ("exp", "%.2f"),
-    ("gam", "%.2f"),
-    ("wp", "%.2f"),
+_METRIC_ORDER: tuple[tuple[str, str, str], ...] = (
+    ("mean", "mean", "%.2f"),
+    ("contrast_spread", "spread", "%.2f"),
+    ("highlight_peak", "peak", "%.2f"),
+    ("clipped_channel_fraction", "clipped", "%.1f%%"),
+    ("mean_saturation", "sat", "%.2f"),
+    ("colorful_seconds", "color", "%.1fs"),
+    ("moving_radius_ratio", "moving_r", "%.1f%%"),
+    ("ambient_radius_ratio", "ambient_r", "%.1f%%"),
+    ("radius_ratio", "ratio", "%.2f"),
+    ("transition_width_ratio", "edge", "%.1f%%"),
+    ("peak_contrast", "contrast", "%.3f"),
+    ("confidence", "conf", "%.2f"),
+    ("exposure", "exp", "%.2f"),
+    ("gamma", "gam", "%.2f"),
+    ("white_point", "wp", "%.2f"),
 )
 
 
-def _format_metric(key: str, value: float, fmt: str) -> str:
-    # clip% is stored as a fraction but displayed as a percentage.
-    scaled = value * 100.0 if key == "clip%" else value
-    return f"{key}: {fmt % scaled}"
+def _format_metric(label: str, key: str, value: float, fmt: str) -> str:
+    percent_keys = {
+        "clipped_channel_fraction",
+        "moving_radius_ratio",
+        "ambient_radius_ratio",
+        "transition_width_ratio",
+    }
+    scaled = value * 100.0 if key in percent_keys else value
+    return f"{label}: {fmt % scaled}"
 
 
 @lru_cache(maxsize=8)
@@ -86,9 +93,9 @@ def draw_metrics_overlay(
     image = Image.open(path).convert("RGBA")
 
     lines: list[str] = []
-    for key, fmt in _METRIC_ORDER:
+    for key, label, fmt in _METRIC_ORDER:
         if key in metrics:
-            lines.append(_format_metric(key, metrics[key], fmt))
+            lines.append(_format_metric(label, key, metrics[key], fmt))
 
     if not lines:
         return

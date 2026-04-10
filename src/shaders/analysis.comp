@@ -6,32 +6,32 @@
 // attachment) and produces:
 //   - a 256-bin BT.709 luminance histogram + clipped-pixel count
 //   - a 36-bin HSV hue histogram + mean saturation (over chromatic pixels)
-//   - a per-(light, radial-bin) Voronoi breakdown used to derive each
-//     PointLight's apparent radius, FWHM, sharpness, and bright-pixel count
+//   - a per-(light, radial-bin) Voronoi breakdown retained for renderer
+//     diagnostics; public point-light appearance comes from the CPU analyzer
 //
 // The math mirrors the CPU implementation in src/core/image_analysis.cpp
 // bit-for-bit where possible (same BT.709 integer weights, same HSV
 // formulas, same Voronoi rule). The CPU path on the other side of the
 // readback calls `finalize_luminance` and a short per-light loop to turn
-// these SSBOs into a public FrameAnalysis struct.
+// these SSBOs into a FrameAnalysis struct.
 //
 // Workgroup: 16x16 = 256 threads. The luminance and hue histograms are
 // tile-reduced in shared memory and committed to global with one atomicAdd
 // per (bin, tile). The circles buffer is written directly to global from
 // the per-pixel loop — Voronoi spatial locality means almost every pixel
 // in a 16x16 tile belongs to the same light, so contention on the global
-// atomics is similar to the lum histogram (and the shared-memory layout
-// for circles would blow the 32 KB guaranteed budget anyway).
+// atomics is similar to the luminance histogram (and the shared-memory layout
+// for radial bins would blow the 32 KB guaranteed budget anyway).
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
-const int MAX_BINS = 201;  // max_radius_px + 1 (matches LightCircleParams default)
+const int MAX_BINS = 201;  // retained radial profile bin budget
 
 // ── Inputs ─────────────────────────────────────────────────────────────
 
 uniform sampler2D uSrc;              // display_texture_ (RGB8 post-tonemap)
 uniform ivec2 uResolution;
-uniform int   uNLights;              // runtime light count; 0 disables the circle pass
+uniform int   uNLights;              // runtime light count; 0 disables light binning
 uniform float uBrightThreshold;      // 0..1, on the 0..1 normalised luminance
 uniform int   uMaxRadiusBins;        // effective MAX_BINS for this call
 uniform float uSatThreshold;         // default 0.05, matches CPU path
@@ -65,13 +65,13 @@ layout(std430, binding = 1) buffer ColorResult {
     // sum under 2^32 all the way up to ~16 Mpx (q16 would overflow
     // around 65k pixels).
     uint color_sat_sum_q8;
-    uint color_n_chromatic;
+    uint color_n_colored;
 };
 
-layout(std430, binding = 2) buffer CirclesResult {
+layout(std430, binding = 2) buffer LightBinsResult {
     // Runtime-sized: length = uNLights * MAX_BINS * 3, interleaved as
     // [sum, cnt, bright] per (light, radius-bin). Flat layout lets the
-    // whole circles SSBO be a single unsized std430 array (the GLSL
+    // whole light-bin SSBO be a single unsized std430 array (the GLSL
     // spec only allows one unsized member per buffer, and it must be
     // last). The CPU side glMapBufferRanges this as one contiguous
     // uint32 blob.
@@ -84,7 +84,7 @@ shared uint tile_lum_hist[256];
 shared uint tile_hue_hist[36];
 shared uint tile_lum_clipped;
 shared uint tile_sat_sum_q8;
-shared uint tile_n_chromatic;
+shared uint tile_n_colored;
 
 void main() {
     uint lid = gl_LocalInvocationIndex;
@@ -96,7 +96,7 @@ void main() {
     if (lid == 0u) {
         tile_lum_clipped = 0u;
         tile_sat_sum_q8 = 0u;
-        tile_n_chromatic = 0u;
+        tile_n_colored = 0u;
     }
     barrier();
 
@@ -126,7 +126,7 @@ void main() {
         if (cmax > 0u && delta > 0u) {
             float sat = float(delta) / float(cmax);
             if (sat > uSatThreshold) {
-                atomicAdd(tile_n_chromatic, 1u);
+                atomicAdd(tile_n_colored, 1u);
                 atomicAdd(tile_sat_sum_q8, uint(sat * 255.0 + 0.5));
                 float h_raw;
                 if (r == cmax) {
@@ -202,6 +202,6 @@ void main() {
     if (lid == 0u) {
         atomicAdd(lum_clipped,       tile_lum_clipped);
         atomicAdd(color_sat_sum_q8,  tile_sat_sum_q8);
-        atomicAdd(color_n_chromatic, tile_n_chromatic);
+        atomicAdd(color_n_colored, tile_n_colored);
     }
 }

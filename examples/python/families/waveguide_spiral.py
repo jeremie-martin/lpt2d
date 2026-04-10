@@ -293,9 +293,9 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float, float]:
 
         fs = render_result.metrics
         cs = render_result.analysis.color
-        total_std += fs.std_dev
-        total_richness += cs.color_richness
-        if fs.std_dev > MIN_CONTRAST_STD and cs.color_richness > RICHNESS_THRESHOLD:
+        total_std += fs.contrast_std
+        total_richness += cs.richness
+        if fs.contrast_std > MIN_CONTRAST_STD and cs.richness > RICHNESS_THRESHOLD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0

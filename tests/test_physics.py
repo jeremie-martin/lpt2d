@@ -88,11 +88,11 @@ def render_pixels(
     meta = {
         "max_hdr": result.max_hdr,
         "total_rays": result.total_rays,
-        "mean": result.metrics.mean_lum,
-        "pct_black": result.metrics.pct_black,
-        "pct_clipped": result.metrics.pct_clipped,
-        "p50": result.metrics.p50,
-        "p95": result.metrics.p95,
+        "mean": result.metrics.mean,
+        "near_black_fraction": result.metrics.near_black_fraction,
+        "clipped_channel_fraction": result.metrics.clipped_channel_fraction,
+        "median": result.metrics.median,
+        "highlight_ceiling": result.metrics.highlight_ceiling,
     }
     return pixels, meta
 

@@ -14,16 +14,16 @@ from typing import Any, cast
 
 @dataclass
 class FakeMetrics:
-    mean_lum: float = 0.0
-    pct_black: float = 0.0
-    pct_clipped: float = 0.0
-    p05: float = 0.0
-    p50: float = 0.0
-    p95: float = 0.0
-    p99: float = 0.0
-    std_dev: float = 0.0
-    lum_min: int = 0
-    lum_max: int = 0
+    mean: float = 0.0
+    median: float = 0.0
+    shadow_floor: float = 0.0
+    highlight_ceiling: float = 0.0
+    highlight_peak: float = 0.0
+    contrast_std: float = 0.0
+    contrast_spread: float = 0.0
+    near_black_fraction: float = 0.0
+    near_white_fraction: float = 0.0
+    clipped_channel_fraction: float = 0.0
     width: int = 100
     height: int = 100
 

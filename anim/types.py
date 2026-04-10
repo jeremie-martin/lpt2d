@@ -48,7 +48,8 @@ FrameMetrics: TypeAlias = _lpt2d.FrameMetrics
 LuminanceStats: TypeAlias = _lpt2d.LuminanceStats
 ColorStats: TypeAlias = _lpt2d.ColorStats
 LightRef: TypeAlias = _lpt2d.LightRef
-LightCircle: TypeAlias = _lpt2d.LightCircle
+PointLightAppearance: TypeAlias = _lpt2d.PointLightAppearance
+PointLightAppearanceParams: TypeAlias = _lpt2d.PointLightAppearanceParams
 FrameAnalysis: TypeAlias = _lpt2d.FrameAnalysis
 TraceConfig: TypeAlias = _lpt2d.TraceConfig
 PostProcess: TypeAlias = _lpt2d.PostProcess
@@ -517,10 +518,15 @@ class FrameReport:
     total_rays: int
     time_ms_exact: float | None = None
     mean: float | None = None
-    pct_black: float | None = None
-    pct_clipped: float | None = None
-    p50: float | None = None
-    p95: float | None = None
+    median: float | None = None
+    shadow_floor: float | None = None
+    highlight_ceiling: float | None = None
+    highlight_peak: float | None = None
+    contrast_std: float | None = None
+    contrast_spread: float | None = None
+    near_black_fraction: float | None = None
+    near_white_fraction: float | None = None
+    clipped_channel_fraction: float | None = None
     stats_ms: float | None = None
     histogram: list[int] | None = None
 
@@ -537,10 +543,15 @@ def _report_from_result(result: RenderResult, frame_idx: int, time_ms: float) ->
         max_hdr=result.max_hdr,
         total_rays=result.total_rays,
         time_ms_exact=actual_ms,
-        mean=m.mean_lum,
-        pct_black=m.pct_black,
-        pct_clipped=m.pct_clipped,
-        p50=m.p50,
-        p95=m.p95,
+        mean=m.mean,
+        median=m.median,
+        shadow_floor=m.shadow_floor,
+        highlight_ceiling=m.highlight_ceiling,
+        highlight_peak=m.highlight_peak,
+        contrast_std=m.contrast_std,
+        contrast_spread=m.contrast_spread,
+        near_black_fraction=m.near_black_fraction,
+        near_white_fraction=m.near_white_fraction,
+        clipped_channel_fraction=m.clipped_channel_fraction,
         histogram=m.histogram,
     )

@@ -40,6 +40,130 @@ struct InitialShot {
     std::string save_path;
 };
 
+bool bounds_close(const Bounds& a, const Bounds& b, float tol = 1e-4f) {
+    return std::fabs(a.min.x - b.min.x) <= tol &&
+           std::fabs(a.min.y - b.min.y) <= tol &&
+           std::fabs(a.max.x - b.max.x) <= tol &&
+           std::fabs(a.max.y - b.max.y) <= tol;
+}
+
+bool trace_config_equal(const TraceConfig& a, const TraceConfig& b) {
+    return a.batch_size == b.batch_size &&
+           a.depth == b.depth &&
+           std::fabs(a.intensity - b.intensity) <= 1e-6f &&
+           a.seed_mode == b.seed_mode &&
+           a.frame == b.frame;
+}
+
+struct AuthoredAnalysisTarget {
+    Renderer renderer;
+    bool initialized = false;
+    bool scene_dirty = true;
+    int width = 0;
+    int height = 0;
+    bool have_trace_config = false;
+    TraceConfig trace_config{};
+    Bounds camera_bounds{};
+    uint64_t analysis_revision = 0;
+    std::vector<uint8_t> rgb_scratch;
+
+    void mark_dirty() {
+        scene_dirty = true;
+    }
+
+    void shutdown() {
+        if (initialized) {
+            renderer.shutdown();
+            initialized = false;
+        }
+        scene_dirty = true;
+        have_trace_config = false;
+        rgb_scratch.clear();
+    }
+
+    bool ensure_uploaded(EditorState& ed) {
+        const int target_w = ed.shot.canvas.width;
+        const int target_h = ed.shot.canvas.height;
+        if (target_w <= 0 || target_h <= 0)
+            return false;
+
+        const Bounds scene_bounds = scene_default_bounds(ed.shot.scene);
+        const Bounds current_camera_bounds =
+            ed.shot.camera.resolve(ed.shot.canvas.aspect(), scene_bounds);
+        const TraceConfig current_trace_config =
+            ed.shot.trace.to_trace_config(ed.session.frame);
+
+        if (!initialized) {
+            if (!renderer.init(target_w, target_h))
+                return false;
+            initialized = true;
+            width = target_w;
+            height = target_h;
+            scene_dirty = true;
+        } else if (target_w != width || target_h != height) {
+            renderer.resize(target_w, target_h);
+            width = target_w;
+            height = target_h;
+            scene_dirty = true;
+        }
+
+        if (ed.session.analysis_revision != analysis_revision) {
+            scene_dirty = true;
+        }
+        if (!bounds_close(current_camera_bounds, camera_bounds)) {
+            scene_dirty = true;
+        }
+
+        const bool trace_changed =
+            have_trace_config && !trace_config_equal(current_trace_config, trace_config);
+        if (trace_changed && !scene_dirty) {
+            renderer.clear();
+        }
+
+        if (scene_dirty) {
+            Scene render_scene = build_render_scene_for(ed.shot, capture_render_filters(ed));
+            renderer.upload_scene(render_scene, current_camera_bounds);
+            renderer.upload_fills(render_scene, current_camera_bounds);
+            renderer.clear();
+            camera_bounds = current_camera_bounds;
+            analysis_revision = ed.session.analysis_revision;
+            scene_dirty = false;
+        }
+
+        trace_config = current_trace_config;
+        have_trace_config = true;
+        return true;
+    }
+
+    bool compute(EditorState& ed, const Renderer& display_renderer, FrameAnalysis& out) {
+        if (!ensure_uploaded(ed))
+            return false;
+
+        if (display_renderer.total_rays() == 0 && renderer.total_rays() > 0)
+            renderer.clear();
+
+        if (renderer.num_lights() > 0 && renderer.total_rays() < display_renderer.total_rays()) {
+            const int64_t batch_size = std::max<int64_t>(trace_config.batch_size, 1);
+            while (renderer.total_rays() < display_renderer.total_rays()) {
+                const int64_t remaining_rays = display_renderer.total_rays() - renderer.total_rays();
+                const int64_t remaining_batches =
+                    std::max<int64_t>(1, (remaining_rays + batch_size - 1) / batch_size);
+                const int dispatches = static_cast<int>(std::min<int64_t>(remaining_batches, 16));
+                renderer.trace_and_draw_multi(trace_config, dispatches);
+            }
+        }
+
+        renderer.read_pixels(
+            rgb_scratch,
+            ed.shot.look.to_post_process(),
+            ed.shot.canvas.aspect(),
+            nullptr,
+            nullptr,
+            &out);
+        return true;
+    }
+};
+
 struct AlignmentGuide {
     float axis = 0.0f;
     float span_min = 0.0f;
@@ -217,10 +341,19 @@ int App::run(const AppConfig& config) {
         return arc;
     };
 
+    AuthoredAnalysisTarget authored_analysis;
+    auto compute_authored_analysis = [&](FrameAnalysis& out) {
+        return authored_analysis.compute(ed, renderer, out);
+    };
+    auto invalidate_authored_analysis = [&]() {
+        authored_analysis.mark_dirty();
+    };
+
     // Shorthand reload via extracted function
     auto reload = [&](bool mark_dirty = true) {
         reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
                      win_w, win_h, mark_dirty);
+        authored_analysis.mark_dirty();
     };
 
     auto materialize_clipboard_for_paste = [&]() {
@@ -373,11 +506,15 @@ int App::run(const AppConfig& config) {
         if (showing_snapshot_a && compare_ab.metrics_valid) {
             live_metrics = compare_ab.analysis;
         } else if (panel.show_stats_panel && panel.live_analysis) {
-            // Opt-in by panel visibility. Closing the Stats window (or
-            // unchecking "Live" inside it) stops dispatching the GPU
-            // analyser entirely — zero cost while the user is doing
-            // something else.
-            live_metrics = renderer.run_frame_analysis();
+            // Stats are authored-camera measurements, not viewport measurements.
+            // The analysis renderer is separate so editor pan/zoom and window
+            // size never change these numbers.
+            FrameAnalysis authored_metrics{};
+            if (compute_authored_analysis(authored_metrics)) {
+                live_metrics = authored_metrics;
+            } else {
+                live_metrics = {};
+            }
         }
         // else: leave `live_metrics` at the last computed value. This
         // is the "freeze" behaviour the Stats window's Live checkbox
@@ -716,52 +853,70 @@ int App::run(const AppConfig& config) {
             }
         }
 
-        // ── Light circle overlay ─────────────────────────────────────────
-        // Draws each measured LightCircle (from the C++ GPU analyser,
-        // via run_frame_analysis) on top of the viewport. Uses a thin
-        // green/red outline for pass/fail against a subset of the
-        // crystal_field check.py thresholds so the user can iterate on
-        // whether the measurement is catching what they see.
-        if (panel.show_circle_overlay && !live_metrics.circles.empty()) {
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            const float rw = (float)renderer.width();
-            const float rh = (float)renderer.height();
-            const float sx_scale = (rw > 0) ? (float)win_w / rw : 1.0f;
-            const float sy_scale = (rh > 0) ? (float)win_h / rh : 1.0f;
-            const float r_scale = 0.5f * (sx_scale + sy_scale);
-            // Thresholds mirrored from examples/python/families/crystal_field/check.py
-            // (they are the GUI's own hard-coded preview — the Python filter
-            // is the source of truth).
-            constexpr float kMinMovingRadiusPx = 3.0f;
-            constexpr float kMaxMovingRadiusPx = 80.0f;
-            constexpr float kMinSharpness = 0.010f;
-            constexpr int   kMinBrightPixels = 20;
+        // ── Light appearance overlay ────────────────────────────────────
+        // Draw the measured per-light bright structure on top of the
+        // viewport. The overlay is hidden when the visible viewport does
+        // not match the authored camera because the measurements are
+        // intended to describe authored-camera content, not an arbitrary
+        // editor pan/zoom crop.
+        const Shot& overlay_shot = showing_snapshot_a ? compare_ab.shot : ed.shot;
+        const Bounds overlay_scene_bounds = scene_default_bounds(overlay_shot.scene);
+        const Bounds overlay_camera_bounds =
+            overlay_shot.camera.resolve(overlay_shot.canvas.aspect(), overlay_scene_bounds);
+        const Bounds overlay_display_bounds =
+            showing_snapshot_a ? compare_ab.view_bounds
+                               : current_display_view(ed, compare_ab, win_w, win_h);
+        const bool overlay_matches_authored_camera =
+            bounds_close(overlay_display_bounds, overlay_camera_bounds);
 
-            for (const auto& c : live_metrics.circles) {
-                if (c.radius_px <= 0.0f) continue;
-                const float sx = c.pixel_x * sx_scale;
-                const float sy = c.pixel_y * sy_scale;
+        if (panel.show_light_overlay &&
+            overlay_matches_authored_camera &&
+            !live_metrics.lights.empty()) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float analysis_w = live_metrics.luminance.width > 0
+                ? static_cast<float>(live_metrics.luminance.width)
+                : static_cast<float>(overlay_shot.canvas.width);
+            const float analysis_h = live_metrics.luminance.height > 0
+                ? static_cast<float>(live_metrics.luminance.height)
+                : static_cast<float>(overlay_shot.canvas.height);
+            const float sx_scale = (analysis_w > 0.0f) ? (float)win_w / analysis_w : 1.0f;
+            const float sy_scale = (analysis_h > 0.0f) ? (float)win_h / analysis_h : 1.0f;
+            const float r_scale = 0.5f * (sx_scale + sy_scale);
+            const float short_side = std::max(1.0f, std::min(analysis_w, analysis_h));
+            constexpr float kMinMovingRadiusRatio = 3.0f / 360.0f;
+            constexpr float kMaxMovingRadiusRatio = 80.0f / 360.0f;
+            constexpr float kMinCoverageFraction = 20.0f / (640.0f * 360.0f);
+            constexpr float kMaxTransitionWidthRatio = 12.0f / 360.0f;
+            constexpr float kMinPeakContrast = 0.08f;
+            constexpr float kMinConfidence = 0.35f;
+
+            for (const auto& c : live_metrics.lights) {
+                if (!c.visible || c.radius_ratio <= 0.0f) continue;
+                const float sx = c.image_x * sx_scale;
+                const float sy = c.image_y * sy_scale;
                 const ImVec2 center(sx, sy);
-                const float r_screen = c.radius_px * r_scale;
-                const float fwhm_screen = c.radius_half_max_px * r_scale;
+                const float r_screen = c.radius_ratio * short_side * r_scale;
+                const float sat_screen = c.saturated_radius_ratio * short_side * r_scale;
 
                 const bool is_moving = c.id.rfind("light_", 0) == 0;
                 const bool ok = (!is_moving) ||
-                    (c.radius_px >= kMinMovingRadiusPx &&
-                     c.radius_px <= kMaxMovingRadiusPx &&
-                     c.sharpness >= kMinSharpness &&
-                     c.n_bright_pixels >= kMinBrightPixels);
+                    (c.radius_ratio >= kMinMovingRadiusRatio &&
+                     c.radius_ratio <= kMaxMovingRadiusRatio &&
+                     c.coverage_fraction >= kMinCoverageFraction &&
+                     c.transition_width_ratio <= kMaxTransitionWidthRatio &&
+                     c.peak_contrast >= kMinPeakContrast &&
+                     c.confidence >= kMinConfidence);
                 const ImU32 col = ok ? IM_COL32(60, 220, 100, 220)
                                      : IM_COL32(230, 80, 80, 220);
-                const ImU32 col_fwhm = ok ? IM_COL32(60, 220, 100, 110)
-                                          : IM_COL32(230, 80, 80, 110);
+                const ImU32 col_sat = ok ? IM_COL32(60, 220, 100, 110)
+                                         : IM_COL32(230, 80, 80, 110);
                 dl->AddCircle(center, r_screen, col, 0, 1.5f * dpi_scale);
-                if (fwhm_screen > 0.0f)
-                    dl->AddCircle(center, fwhm_screen, col_fwhm, 0, 1.0f * dpi_scale);
+                if (sat_screen > 0.0f)
+                    dl->AddCircle(center, sat_screen, col_sat, 0, 1.0f * dpi_scale);
                 dl->AddCircleFilled(center, 2.0f * dpi_scale, col);
                 char label[64];
-                std::snprintf(label, sizeof(label), "%s r%.0f",
-                              c.id.c_str(), c.radius_px);
+                std::snprintf(label, sizeof(label), "%s r%.1f%%",
+                              c.id.c_str(), c.radius_ratio * 100.0f);
                 dl->AddText(ImVec2(sx + r_screen + 4 * dpi_scale, sy - 7 * dpi_scale),
                             col, label);
             }
@@ -1340,6 +1495,8 @@ int App::run(const AppConfig& config) {
 
         if (panel.show_controls_panel)
             draw_controls_panel(ed, renderer, compare_ab, panel, live_metrics,
+                                compute_authored_analysis,
+                                invalidate_authored_analysis,
                                 io, dpi_scale,
                                 frame_ms, win_w, win_h, fb_w, fb_h);
 
@@ -2051,6 +2208,7 @@ int App::run(const AppConfig& config) {
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
     destroy_compare_snapshot(compare_ab);
+    authored_analysis.shutdown();
     renderer.shutdown();
     glfwDestroyWindow(window);
     glfwTerminate();

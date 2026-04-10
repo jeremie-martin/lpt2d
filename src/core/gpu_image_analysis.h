@@ -4,9 +4,9 @@
 //
 // Runs `src/shaders/analysis.comp` on an RGB8 texture (typically
 // `Renderer::display_texture_`) and produces a complete FrameAnalysis via
-// SSBO readback. At ~50 KB of state returned to the CPU (versus the ~6 MB
-// pixel readback the old CPU path paid), this is the only path used by the
-// GUI live stats panel and by `RenderSession::render_shot(analyze=true)`.
+// SSBO readback. This path is retained for low-level renderer diagnostics;
+// the public analysis contract is implemented by the CPU RGB8 analyzer in
+// `src/core/image_analysis.cpp`.
 //
 // Lifetime is tied to the owning Renderer / RenderSession: one instance per
 // GL context, created during `init()` after a current context is ready,
@@ -25,11 +25,11 @@ struct Bounds;
 
 class GpuImageAnalyzer {
 public:
-    // Radial-bin count for light circles. Must match MAX_BINS in
+    // Radial-bin count for retained light-bin diagnostics. Must match MAX_BINS in
     // src/shaders/analysis.comp. The light count is NOT capped — the
     // Lights and CirclesResult SSBOs are dynamically resized on each
     // analyze() call so scenes with arbitrary numbers of point lights
-    // all get one LightCircle per input entry.
+    // all get one PointLightAppearance per input entry.
     static constexpr int kMaxBins = 201;
 
     // Compile analysis.comp and allocate the 4 SSBOs. The caller MUST have
@@ -50,7 +50,7 @@ public:
     // Run the analysis. `source_texture` must be an RGB8 texture the size
     // of the framebuffer being analysed; typically `display_texture_`.
     // `world_bounds` is needed to map PointLight world coordinates back
-    // into pixel space for the circle measurement. `lights` may be empty.
+    // into pixel space for the point-light measurement. `lights` may be empty.
     //
     // Before calling this, the renderer should issue
     //   glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT |

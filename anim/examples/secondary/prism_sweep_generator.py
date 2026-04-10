@@ -315,7 +315,7 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi, True)
         cs = render_result.analysis.color
-        if cs.color_richness > RICHNESS_THRESHOLD:
+        if cs.richness > RICHNESS_THRESHOLD:
             colorful += 1
 
     min_colorful_frames = int(MIN_COLORFUL_SECONDS * PROBE_FPS)
