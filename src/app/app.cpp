@@ -22,6 +22,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <filesystem>
 #include <iostream>
@@ -55,6 +56,26 @@ bool trace_config_equal(const TraceConfig& a, const TraceConfig& b) {
            a.frame == b.frame;
 }
 
+std::pair<int, int> gui_analysis_size(const Canvas& canvas) {
+    // Live GUI stats are normalized ratios/fractions. Keep the authored
+    // camera framing, but avoid tying every interactive frame to export
+    // resolution when the shot targets 1080p/4K stills.
+    constexpr int64_t kMaxPixels = 960ll * 540ll;
+    const int source_w = std::max(canvas.width, 1);
+    const int source_h = std::max(canvas.height, 1);
+    const int64_t source_pixels = static_cast<int64_t>(source_w) *
+                                  static_cast<int64_t>(source_h);
+    if (source_pixels <= kMaxPixels) {
+        return {source_w, source_h};
+    }
+
+    const double scale = std::sqrt(static_cast<double>(kMaxPixels) /
+                                   static_cast<double>(source_pixels));
+    const int target_w = std::max(64, static_cast<int>(std::lround(source_w * scale)));
+    const int target_h = std::max(64, static_cast<int>(std::lround(source_h * scale)));
+    return {target_w, target_h};
+}
+
 struct AuthoredAnalysisTarget {
     Renderer renderer;
     bool initialized = false;
@@ -65,6 +86,8 @@ struct AuthoredAnalysisTarget {
     TraceConfig trace_config{};
     Bounds camera_bounds{};
     uint64_t analysis_revision = 0;
+    uint64_t mirrored_trace_generation = 0;
+    bool last_used_display_fast_path = false;
     std::vector<uint8_t> rgb_scratch;
 
     void mark_dirty() {
@@ -78,12 +101,12 @@ struct AuthoredAnalysisTarget {
         }
         scene_dirty = true;
         have_trace_config = false;
+        mirrored_trace_generation = 0;
         rgb_scratch.clear();
     }
 
     bool ensure_uploaded(EditorState& ed) {
-        const int target_w = ed.shot.canvas.width;
-        const int target_h = ed.shot.canvas.height;
+        const auto [target_w, target_h] = gui_analysis_size(ed.shot.canvas);
         if (target_w <= 0 || target_h <= 0)
             return false;
 
@@ -118,6 +141,7 @@ struct AuthoredAnalysisTarget {
             have_trace_config && !trace_config_equal(current_trace_config, trace_config);
         if (trace_changed && !scene_dirty) {
             renderer.clear();
+            mirrored_trace_generation = 0;
         }
 
         if (scene_dirty) {
@@ -125,6 +149,7 @@ struct AuthoredAnalysisTarget {
             renderer.upload_scene(render_scene, current_camera_bounds);
             renderer.upload_fills(render_scene, current_camera_bounds);
             renderer.clear();
+            mirrored_trace_generation = 0;
             camera_bounds = current_camera_bounds;
             analysis_revision = ed.session.analysis_revision;
             scene_dirty = false;
@@ -135,21 +160,49 @@ struct AuthoredAnalysisTarget {
         return true;
     }
 
-    bool compute(EditorState& ed, const Renderer& display_renderer, FrameAnalysis& out) {
+    void trace_to(int64_t target_rays) {
+        if (renderer.num_lights() <= 0)
+            return;
+        const int64_t batch_size = std::max<int64_t>(trace_config.batch_size, 1);
+        while (renderer.total_rays() < target_rays) {
+            const int64_t remaining_rays = target_rays - renderer.total_rays();
+            const int64_t full_batches = remaining_rays / batch_size;
+            if (full_batches > 0) {
+                const int dispatches = static_cast<int>(std::min<int64_t>(full_batches, 16));
+                renderer.trace_and_draw_multi(trace_config, dispatches);
+            } else {
+                TraceConfig tail = trace_config;
+                tail.batch_size = static_cast<int>(remaining_rays);
+                renderer.trace_and_draw(tail);
+            }
+        }
+    }
+
+    bool compute(EditorState& ed, Renderer& display_renderer,
+                 const Bounds& display_bounds, FrameAnalysis& out) {
+        last_used_display_fast_path = false;
+        const Bounds scene_bounds = scene_default_bounds(ed.shot.scene);
+        const Bounds current_camera_bounds =
+            ed.shot.camera.resolve(ed.shot.canvas.aspect(), scene_bounds);
+        if (bounds_close(display_bounds, current_camera_bounds)) {
+            last_used_display_fast_path = true;
+            out = display_renderer.run_frame_analysis();
+            return true;
+        }
+
         if (!ensure_uploaded(ed))
             return false;
 
-        if (display_renderer.total_rays() == 0 && renderer.total_rays() > 0)
-            renderer.clear();
-
-        if (renderer.num_lights() > 0 && renderer.total_rays() < display_renderer.total_rays()) {
-            const int64_t batch_size = std::max<int64_t>(trace_config.batch_size, 1);
-            while (renderer.total_rays() < display_renderer.total_rays()) {
-                const int64_t remaining_rays = display_renderer.total_rays() - renderer.total_rays();
-                const int64_t remaining_batches =
-                    std::max<int64_t>(1, (remaining_rays + batch_size - 1) / batch_size);
-                const int dispatches = static_cast<int>(std::min<int64_t>(remaining_batches, 16));
-                renderer.trace_and_draw_multi(trace_config, dispatches);
+        if (renderer.num_lights() > 0) {
+            const int64_t display_total_rays = display_renderer.total_rays();
+            const int64_t latest_display_rays = display_renderer.last_trace_rays();
+            if (renderer.total_rays() == 0 && display_total_rays > latest_display_rays) {
+                trace_to(display_total_rays - latest_display_rays);
+            }
+            if (latest_display_rays > 0 &&
+                display_renderer.trace_generation() != mirrored_trace_generation) {
+                renderer.draw_trace_output_from(display_renderer);
+                mirrored_trace_generation = display_renderer.trace_generation();
             }
         }
 
@@ -320,6 +373,14 @@ int App::run(const AppConfig& config) {
     CompareSnapshot compare_ab;
     FrameAnalysis live_metrics{};
     float frame_ms = 16.0f;
+    const bool perf_log = std::getenv("LPT2D_PERF_LOG") != nullptr;
+    auto perf_window_start = std::chrono::steady_clock::now();
+    int perf_frames = 0;
+    double perf_frame_ms = 0.0;
+    double perf_trace_ms = 0.0;
+    double perf_display_ms = 0.0;
+    double perf_analysis_ms = 0.0;
+    int perf_fast_analysis_frames = 0;
 
     auto add_scene_material = [](Scene& scene, const Material& material, std::string_view base = "Material") {
         std::string material_id = next_scene_material_id(scene, base);
@@ -343,7 +404,8 @@ int App::run(const AppConfig& config) {
 
     AuthoredAnalysisTarget authored_analysis;
     auto compute_authored_analysis = [&](FrameAnalysis& out) {
-        return authored_analysis.compute(ed, renderer, out);
+        const Bounds display_bounds = current_display_view(ed, compare_ab, win_w, win_h);
+        return authored_analysis.compute(ed, renderer, display_bounds, out);
     };
     auto invalidate_authored_analysis = [&]() {
         authored_analysis.mark_dirty();
@@ -490,6 +552,7 @@ int App::run(const AppConfig& config) {
             renderer.trace_and_draw(trace_cfg);
             glFinish();
         }
+        auto t_after_trace = std::chrono::steady_clock::now();
         if (!showing_snapshot_a) {
             PostProcess pp = ed.shot.look.to_post_process();
             if (pp.vignette > 0.0f && !ed.shot.camera.empty()) {
@@ -502,6 +565,7 @@ int App::run(const AppConfig& config) {
                 renderer.update_display(pp, ed.shot.canvas.aspect());
             }
         }
+        auto t_after_display = std::chrono::steady_clock::now();
 
         if (showing_snapshot_a && compare_ab.metrics_valid) {
             live_metrics = compare_ab.analysis;
@@ -516,6 +580,7 @@ int App::run(const AppConfig& config) {
                 live_metrics = {};
             }
         }
+        auto t_after_analysis = std::chrono::steady_clock::now();
         // else: leave `live_metrics` at the last computed value. This
         // is the "freeze" behaviour the Stats window's Live checkbox
         // promises — the user can pause analysis to inspect a
@@ -2202,6 +2267,34 @@ int App::run(const AppConfig& config) {
 
         auto t1 = std::chrono::steady_clock::now();
         frame_ms = std::chrono::duration<float, std::milli>(t1 - t0).count();
+        if (perf_log) {
+            ++perf_frames;
+            perf_trace_ms += std::chrono::duration<double, std::milli>(t_after_trace - t0).count();
+            perf_display_ms += std::chrono::duration<double, std::milli>(t_after_display - t_after_trace).count();
+            perf_analysis_ms += std::chrono::duration<double, std::milli>(t_after_analysis - t_after_display).count();
+            perf_frame_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
+            if (authored_analysis.last_used_display_fast_path)
+                ++perf_fast_analysis_frames;
+            const double window_s =
+                std::chrono::duration<double>(t1 - perf_window_start).count();
+            if (window_s >= 1.0 && perf_frames > 0) {
+                const double inv = 1.0 / static_cast<double>(perf_frames);
+                std::cerr << "perf fps=" << (static_cast<double>(perf_frames) / window_s)
+                          << " frame_ms=" << (perf_frame_ms * inv)
+                          << " trace_ms=" << (perf_trace_ms * inv)
+                          << " display_ms=" << (perf_display_ms * inv)
+                          << " analysis_ms=" << (perf_analysis_ms * inv)
+                          << " fast_analysis=" << perf_fast_analysis_frames << "/" << perf_frames
+                          << "\n";
+                perf_window_start = t1;
+                perf_frames = 0;
+                perf_frame_ms = 0.0;
+                perf_trace_ms = 0.0;
+                perf_display_ms = 0.0;
+                perf_analysis_ms = 0.0;
+                perf_fast_analysis_frames = 0;
+            }
+        }
     }
 
     ImGui_ImplOpenGL3_Shutdown();
