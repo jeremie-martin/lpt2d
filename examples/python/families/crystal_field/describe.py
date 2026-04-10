@@ -21,11 +21,12 @@ def describe(p: Params) -> str:
         light_desc += f" v={p.light.speed:.2f}"
     if p.light.wavelength_max - p.light.wavelength_min < 300:
         light_desc += f" wl={p.light.wavelength_min:.0f}-{p.light.wavelength_max:.0f}"
-    # color_names can contain None ("uncolored slot, brushed-metal mixed case").
-    n_color_groups = len(p.material.color_names)
+    # Count only non-None entries: brushed-metal's "mixed" sub-case has
+    # color_names=[name, None] and semantically carries one color, not two.
+    n_colors = sum(1 for c in p.material.color_names if c is not None)
     return (
         f"grid={p.grid.rows}x{p.grid.cols} {shape_desc} "
         f"mat={mat_desc} "
         f"{light_desc} "
-        f"colors={n_color_groups}" + (f" amb={amb}" if amb else "")
+        f"colors={n_colors}" + (f" amb={amb}" if amb else "")
     )

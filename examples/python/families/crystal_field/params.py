@@ -3,8 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from anim import Material
+
+# ---------------------------------------------------------------------------
+# Outcome alias — one of the five peer material outcomes. Declared as a
+# Literal so construction sites catch typos at type-check time instead of
+# failing silently in the dispatch dict.
+# ---------------------------------------------------------------------------
+
+MaterialOutcome = Literal[
+    "glass",
+    "black_diffuse",
+    "gray_diffuse",
+    "colored_diffuse",
+    "brushed_metal",
+]
 
 # ---------------------------------------------------------------------------
 # Scene constants
@@ -74,7 +89,7 @@ class MaterialConfig:
     including across color groups in brushed-metal.
     """
 
-    outcome: str  # "glass" | "black_diffuse" | "gray_diffuse" | "colored_diffuse" | "brushed_metal"
+    outcome: MaterialOutcome
     albedo: float  # always ∈ [0.7, 1.0] — defined inline per branch (not hoisted)
     fill: float
     ior: float = 0.0  # glass only
