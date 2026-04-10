@@ -61,6 +61,8 @@ struct PanelState {
     bool paused = false;
     bool show_controls_panel = true;
     bool show_shortcuts_help = false;
+    bool show_stats_panel = true;     // floating Stats window, togglable via 'S' hotkey
+    bool live_analysis = true;        // when show_stats_panel is up, run the GPU analyser every frame
     bool show_circle_overlay = false; // draw measured light circles on top of viewport
     ContextMenuTarget context_menu;
     int active_tab = 0;               // 0 = Edit, 1 = Look
@@ -74,7 +76,6 @@ struct PanelContext {
     CompareSnapshot& compare_ab;
     PanelState& panel;
     FrameAnalysis& live_metrics;
-    bool& force_live_metrics_refresh;
     const ImGuiIO& io;
     float dpi_scale;
     float frame_ms;
@@ -88,7 +89,7 @@ struct PanelContext {
 
 // Draws the full right-side controls panel including:
 //   Scene selector, Edit, Camera, Objects, Properties, Materials,
-//   Tracer, Display, Output, Stats.
+//   Tracer, Display, Output.
 //
 // The function may call reload_scene / reset_editor / delete_selected etc. as needed.
 void draw_controls_panel(
@@ -97,11 +98,21 @@ void draw_controls_panel(
     CompareSnapshot& compare_ab,
     PanelState& panel,
     FrameAnalysis& live_metrics,
-    bool& force_live_metrics_refresh,
     const ImGuiIO& io,
     float dpi_scale,
     float frame_ms,
     int win_w, int win_h, int fb_w, int fb_h
+);
+
+// Draws the floating Stats window (histogram + luminance/colour rows +
+// light-circle table + overlay toggle). No-op when
+// panel.show_stats_panel is false. The top-level window has its own
+// saved position/size in imgui.ini.
+void draw_stats_window(
+    PanelState& panel,
+    FrameAnalysis& live_metrics,
+    const CompareSnapshot& compare_ab,
+    float dpi_scale
 );
 
 // Apply a numbered look preset (0-based index) to the given Look.

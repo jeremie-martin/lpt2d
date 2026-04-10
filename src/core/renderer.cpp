@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include "geometry.h"
+#include "gl_shader_utils.h"
 #include "scene.h"
 #include "shaders.h"
 #include "spectrum.h"
@@ -12,62 +13,17 @@
 #include <iterator>
 #include <variant>
 
-// ─── Shader compilation helpers ──────────────────────────────────────
+// Thin wrappers over gl_shader_utils.{h,cpp} so existing call sites
+// inside renderer.cpp don't have to pass a label each time.
 
 static GLuint compile_shader(GLenum type, const char* src) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &src, nullptr);
-    glCompileShader(shader);
-
-    GLint ok;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char log[1024];
-        glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
-        std::cerr << "Shader compile error: " << log << "\n";
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
+    return compile_gl_shader(type, src, "Shader");
 }
-
 static GLuint link_program(GLuint vert, GLuint frag) {
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vert);
-    glAttachShader(prog, frag);
-    glLinkProgram(prog);
-
-    GLint ok;
-    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        char log[1024];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        std::cerr << "Shader link error: " << log << "\n";
-        glDeleteProgram(prog);
-        return 0;
-    }
-
-    glDeleteShader(vert);
-    glDeleteShader(frag);
-    return prog;
+    return link_gl_program(vert, frag, "Shader");
 }
-
 static GLuint link_compute(GLuint cs) {
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, cs);
-    glLinkProgram(prog);
-
-    GLint ok;
-    glGetProgramiv(prog, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        char log[1024];
-        glGetProgramInfoLog(prog, sizeof(log), nullptr, log);
-        std::cerr << "Compute link error: " << log << "\n";
-        glDeleteProgram(prog);
-        return 0;
-    }
-    glDeleteShader(cs);
-    return prog;
+    return link_gl_compute(cs, "Compute shader");
 }
 
 static uint32_t mix_seed_component(uint32_t value) {
@@ -236,6 +192,14 @@ bool Renderer::init(int width, int height, bool half_float) {
 
     rgba_buffer_.resize(width * height * 4);
 
+    // GPU frame analyser — compile analysis.comp + allocate its SSBOs
+    // now that the GL context is current. Non-fatal if it fails: the
+    // GUI paths that call run_frame_analysis() will short-circuit, but
+    // rendering continues.
+    if (!analyzer_.init()) {
+        std::cerr << "Renderer: GpuImageAnalyzer init failed (analysis disabled)\n";
+    }
+
     return true;
 }
 
@@ -251,6 +215,7 @@ void Renderer::resize(int width, int height) {
 }
 
 void Renderer::shutdown() {
+    analyzer_.shutdown();
     delete_framebuffers();
 
     auto del_prog = [](GLuint& p) {
@@ -1164,6 +1129,26 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
                            FrameAnalysis* out_analysis) {
     update_display(pp, display_aspect, vignette_frame);
 
+    // Run the GPU analyser BEFORE the glFinish + glReadPixels so the
+    // compute shader sees display_texture_ in its post-update_display
+    // state without the readback stall in between. Only dispatched when
+    // a caller actually asked for metrics or the full analysis.
+    FrameAnalysis analysis_scratch{};
+    const bool want_analysis = (out_analysis != nullptr) || (out_metrics != nullptr);
+    if (want_analysis) {
+        FrameAnalysis& slot = (out_analysis != nullptr) ? *out_analysis : analysis_scratch;
+        FrameAnalysisParams params;
+        if (out_analysis == nullptr) {
+            // Caller only wants metrics — skip the expensive circle pass.
+            params.analyze_circles = false;
+            params.analyze_color = false;
+        }
+        slot = run_frame_analysis(params);
+        if (out_metrics != nullptr) {
+            *out_metrics = slot.lum;
+        }
+    }
+
     out_rgb.resize(width_ * height_ * 3);
     glFinish();
     glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
@@ -1172,19 +1157,6 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     flip_rgb8_rows(out_rgb.data(), width_, height_, rgb_row_buffer_);
-
-    if (out_analysis != nullptr) {
-        FrameAnalysisParams params;
-        *out_analysis = analyze_frame(
-            out_rgb.data(), width_, height_, last_upload_bounds_,
-            std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
-            nullptr, params);
-        if (out_metrics != nullptr) {
-            *out_metrics = out_analysis->lum;
-        }
-    } else if (out_metrics != nullptr) {
-        *out_metrics = compute_luminance_stats(out_rgb.data(), width_, height_);
-    }
 }
 
 void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
@@ -1198,38 +1170,16 @@ void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
     out_rgba = rgba_buffer_;
 }
 
-FrameMetrics Renderer::compute_display_metrics() {
-    read_display_rgba(rgba_buffer_);
-    return compute_frame_metrics();
-}
+FrameAnalysis Renderer::run_frame_analysis(const FrameAnalysisParams& params) {
+    // Flush so the compute shader's texelFetch sees the most recent
+    // writes to display_texture_. NVIDIA EGL has a documented quirk
+    // where post-FBO-draw reads through a sampler can return stale
+    // data unless this barrier fires — see compute_max_gpu's history
+    // for how long that one bit me last time.
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
-FrameMetrics Renderer::compute_frame_metrics() const {
-    // rgba_buffer_ is populated by read_display_rgba(). Delegate to the pure
-    // analyser so there is exactly one BT.709 histogram implementation in the
-    // tree (shared with the RGB8 read_pixels path, the HDR path, and unit
-    // tests).
-    return compute_luminance_stats_rgba(rgba_buffer_.data(), width_, height_);
-}
-
-FrameAnalysis Renderer::compute_display_analysis() {
-    // Read RGB8 directly from the display FBO and flip in place — the
-    // previous RGBA→RGB strip is redundant now that we only need the
-    // three colour channels for analysis. The same orientation convention
-    // as read_pixels().
-    const std::size_t n_pixels = static_cast<std::size_t>(width_)
-                               * static_cast<std::size_t>(height_);
-    display_rgb_scratch_.resize(n_pixels * 3);
-    glFinish();
-    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE,
-                 display_rgb_scratch_.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    flip_rgb8_rows(display_rgb_scratch_.data(), width_, height_, rgb_row_buffer_);
-
-    FrameAnalysisParams params;
-    return analyze_frame(
-        display_rgb_scratch_.data(), width_, height_, last_upload_bounds_,
+    return analyzer_.analyze(
+        display_texture_, width_, height_, last_upload_bounds_,
         std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
-        nullptr, params);
+        params);
 }

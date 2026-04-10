@@ -304,9 +304,9 @@ def structure_contribution(
         trace=analysis_shot.trace,
     )
 
-    # Empty FrameMetrics sentinel for the "render failed" fallback. The C++
-    # analyzer returns a zeroed LuminanceStats for an empty input buffer.
-    _empty = _lpt2d.compute_luminance_stats(b"", 0, 0)
+    # Empty FrameMetrics sentinel for the "render failed" fallback. The
+    # C++ LuminanceStats default constructor zeros every field.
+    _empty = _lpt2d.LuminanceStats()
     s_with = analysis_mod._measure_single_frame(
         lambda _ctx, _s=scene: Frame(scene=_s),
         shot_with,

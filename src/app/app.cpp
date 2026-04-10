@@ -195,8 +195,6 @@ int App::run(const AppConfig& config) {
 
     CompareSnapshot compare_ab;
     FrameAnalysis live_metrics{};
-    int stats_counter = 30; // trigger immediate compute on first frame
-    bool force_live_metrics_refresh = true;
     float frame_ms = 16.0f;
 
     auto add_scene_material = [](Scene& scene, const Material& material, std::string_view base = "Material") {
@@ -222,7 +220,7 @@ int App::run(const AppConfig& config) {
     // Shorthand reload via extracted function
     auto reload = [&](bool mark_dirty = true) {
         reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
-                     force_live_metrics_refresh, win_w, win_h, mark_dirty);
+                     win_w, win_h, mark_dirty);
     };
 
     auto materialize_clipboard_for_paste = [&]() {
@@ -321,7 +319,7 @@ int App::run(const AppConfig& config) {
         if (!drop_state.pending_path.empty()) {
             std::string error;
             if (try_load_scene(ed, renderer, compare_ab, panel.light_analysis_valid,
-                               force_live_metrics_refresh, win_w, win_h,
+                               win_w, win_h,
                                drop_state.pending_path, &error)) {
                 panel.current_scene = -1;
             } else {
@@ -374,11 +372,18 @@ int App::run(const AppConfig& config) {
 
         if (showing_snapshot_a && compare_ab.metrics_valid) {
             live_metrics = compare_ab.analysis;
-        } else if (force_live_metrics_refresh || ++stats_counter >= 30) {
-            stats_counter = 0;
-            force_live_metrics_refresh = false;
-            live_metrics = renderer.compute_display_analysis();
+        } else if (panel.show_stats_panel && panel.live_analysis) {
+            // Opt-in by panel visibility. Closing the Stats window (or
+            // unchecking "Live" inside it) stops dispatching the GPU
+            // analyser entirely — zero cost while the user is doing
+            // something else.
+            live_metrics = renderer.run_frame_analysis();
         }
+        // else: leave `live_metrics` at the last computed value. This
+        // is the "freeze" behaviour the Stats window's Live checkbox
+        // promises — the user can pause analysis to inspect a
+        // particular frame without the histogram / overlay / deltas
+        // resetting to zero.
 
         // ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -712,10 +717,10 @@ int App::run(const AppConfig& config) {
         }
 
         // ── Light circle overlay ─────────────────────────────────────────
-        // Draws each measured LightCircle (from the C++ image_analysis
-        // module, via compute_display_analysis) on top of the viewport.
-        // Uses a thin green/red outline for pass/fail against a subset of
-        // the crystal_field check.py thresholds so the user can iterate on
+        // Draws each measured LightCircle (from the C++ GPU analyser,
+        // via run_frame_analysis) on top of the viewport. Uses a thin
+        // green/red outline for pass/fail against a subset of the
+        // crystal_field check.py thresholds so the user can iterate on
         // whether the measurement is catching what they see.
         if (panel.show_circle_overlay && !live_metrics.circles.empty()) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -1061,7 +1066,7 @@ int App::run(const AppConfig& config) {
                     if (!hit.id.empty()) {
                         ed.select_only(hit);
                         delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                        force_live_metrics_refresh, win_w, win_h);
+                                        win_w, win_h);
                     }
                 } else if (ed.interaction.tool == EditTool::PointLight) {
                     ed.session.undo.push(ed.shot.scene);
@@ -1335,8 +1340,13 @@ int App::run(const AppConfig& config) {
 
         if (panel.show_controls_panel)
             draw_controls_panel(ed, renderer, compare_ab, panel, live_metrics,
-                                force_live_metrics_refresh, io, dpi_scale,
+                                io, dpi_scale,
                                 frame_ms, win_w, win_h, fb_w, fb_h);
+
+        // Floating Stats window — top-level, independent of the
+        // Controls tab bar so it stays visible while editing. Position
+        // and size are remembered across runs via imgui.ini.
+        draw_stats_window(panel, live_metrics, compare_ab, dpi_scale);
 
         // Shared add-menu items (used by A-key popup and right-click context menu)
         auto draw_add_menu_items = [&]() {
@@ -1424,15 +1434,15 @@ int App::run(const AppConfig& config) {
                 }
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
                     duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                       force_live_metrics_refresh, win_w, win_h);
+                                       win_w, win_h);
                 }
                 if (ImGui::MenuItem("Delete", "Del")) {
                     delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                    force_live_metrics_refresh, win_w, win_h);
+                                    win_w, win_h);
                 }
                 if (ImGui::MenuItem("Group", "Ctrl+G")) {
                     group_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                   force_live_metrics_refresh, win_w, win_h);
+                                   win_w, win_h);
                 }
                 if (ImGui::MenuItem("Hide", "H")) {
                     for (auto& sid : ed.interaction.selection) {
@@ -1519,11 +1529,11 @@ int App::run(const AppConfig& config) {
             case ContextMenuTarget::Light: {
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
                     duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                       force_live_metrics_refresh, win_w, win_h);
+                                       win_w, win_h);
                 }
                 if (ImGui::MenuItem("Delete", "Del")) {
                     delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                    force_live_metrics_refresh, win_w, win_h);
+                                    win_w, win_h);
                 }
                 if (ImGui::MenuItem("Solo")) {
                     if (ed.visibility.solo_light_id == ctx.ref.id
@@ -1550,15 +1560,15 @@ int App::run(const AppConfig& config) {
                 }
                 if (ImGui::MenuItem("Ungroup", "Ctrl+Shift+G")) {
                     ungroup_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                     force_live_metrics_refresh, win_w, win_h);
+                                     win_w, win_h);
                 }
                 if (ImGui::MenuItem("Duplicate", "Ctrl+D")) {
                     duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                       force_live_metrics_refresh, win_w, win_h);
+                                       win_w, win_h);
                 }
                 if (ImGui::MenuItem("Delete", "Del")) {
                     delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                    force_live_metrics_refresh, win_w, win_h);
+                                    win_w, win_h);
                 }
                 if (ImGui::MenuItem("Hide", "H")) {
                     ed.visibility.toggle_group(ctx.ref.id);
@@ -1749,7 +1759,6 @@ int App::run(const AppConfig& config) {
                     compare_ab.showing_a = !compare_ab.showing_a;
                     if (!compare_ab.showing_a)
                         reload(false);
-                    force_live_metrics_refresh = true;
                 }
 
                 // Save/Load
@@ -1768,10 +1777,15 @@ int App::run(const AppConfig& config) {
                 }
 
                 // Shortcut reference: ? (character-based for layout independence)
+                // Stats window toggle: ! (since plain 'S' is taken by the
+                // Scale transform tool during selection). Reopen the Stats
+                // floating panel after it's been closed with its X button.
                 for (int ci = 0; ci < io.InputQueueCharacters.Size; ++ci) {
-                    if (io.InputQueueCharacters[ci] == '?') {
+                    const auto ch = io.InputQueueCharacters[ci];
+                    if (ch == '?') {
                         panel.show_shortcuts_help = !panel.show_shortcuts_help;
-                        break;
+                    } else if (ch == '!') {
+                        panel.show_stats_panel = !panel.show_stats_panel;
                     }
                 }
 
@@ -1783,10 +1797,10 @@ int App::run(const AppConfig& config) {
                 // Group / Ungroup
                 if (io.KeyCtrl && io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_G)) {
                     ungroup_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                     force_live_metrics_refresh, win_w, win_h);
+                                     win_w, win_h);
                 } else if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_G)) {
                     group_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                   force_live_metrics_refresh, win_w, win_h);
+                                   win_w, win_h);
                 }
 
                 // Copy/Paste/Cut/Duplicate
@@ -1801,12 +1815,12 @@ int App::run(const AppConfig& config) {
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X)) {
                     copy_to_clipboard(ed);
                     delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                    force_live_metrics_refresh, win_w, win_h);
+                                    win_w, win_h);
                 }
 
                 if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D) && !ed.interaction.selection.empty()) {
                     duplicate_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                       force_live_metrics_refresh, win_w, win_h);
+                                       win_w, win_h);
                     ed.interaction.transform.type = TransformMode::Grab;
                     ed.interaction.transform.pivot = ed.selection_centroid();
                     ed.interaction.transform.mouse_start = mw;
@@ -2007,7 +2021,7 @@ int App::run(const AppConfig& config) {
                 // Delete
                 if (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                     delete_selected(ed, renderer, compare_ab, panel.light_analysis_valid,
-                                    force_live_metrics_refresh, win_w, win_h);
+                                    win_w, win_h);
                 }
             }
         }

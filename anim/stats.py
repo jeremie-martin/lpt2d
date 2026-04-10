@@ -1,11 +1,10 @@
 """Frame statistics for automated analysis and agent workflows.
 
-This module used to contain numpy implementations of `frame_stats` and
-`color_stats` that operated on RGB8 byte buffers. Those have been moved to
-the C++ core — see `src/core/image_analysis.cpp`. Callers should read
-`rr.metrics` / `rr.analysis.lum` / `rr.analysis.color` directly, or use
-the free functions `_lpt2d.compute_luminance_stats` and
-`_lpt2d.compute_color_stats` when they only have raw bytes.
+The actual luminance + colour + light-circle math lives in the C++ core
+(see `src/core/gpu_image_analysis.cpp` and its shader in
+`src/shaders/analysis.comp`). Callers should read
+`rr.metrics` / `rr.analysis.lum` / `rr.analysis.color` directly after
+rendering a frame with ``analyze=True``.
 
 What remains in this module:
 
@@ -14,8 +13,7 @@ What remains in this module:
 - `LookProfile` / `LookComparison` / `LookReport` — Look-quality analytics.
 - `LightContribution` / `StructureReport` and the shape-clutter diagnostics.
 
-All of these operate on `FrameMetrics` (the C++ LuminanceStats type) rather
-than the historical `FrameStats` Python dataclass.
+All of these operate on `FrameMetrics` (the C++ LuminanceStats type).
 """
 
 from __future__ import annotations

@@ -322,8 +322,7 @@ float& polygon_bulk_corner_radius_state(const Polygon& polygon) {
 // ─── PanelContext ────────────────────────────────────────────────────
 
 void PanelContext::reload(bool mark_dirty) {
-    reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid, force_live_metrics_refresh,
-                 win_w, win_h, mark_dirty);
+    reload_scene(ed, renderer, compare_ab, panel.light_analysis_valid, win_w, win_h, mark_dirty);
 }
 
 // ─── Section functions ──────────────────────────────────────────────
@@ -343,7 +342,7 @@ static void draw_section_scene(PanelContext& ctx) {
                     ed.shot = load_builtin_scene(builtins[i]);
                     ed.shot.trace.batch = kGuiTraceBatch;
                     reset_editor(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
-                                 ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
+                                 ctx.win_w, ctx.win_h);
                 }
             }
             ImGui::EndCombo();
@@ -363,7 +362,7 @@ static void draw_section_scene(PanelContext& ctx) {
             ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
                                            {kDefaultRoomHalfWidth, kDefaultRoomHalfHeight}};
             reset_editor(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
-                         ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
+                         ctx.win_w, ctx.win_h);
         }
 
         // Save/Load/Save As
@@ -437,7 +436,7 @@ static void draw_section_scene_popups(PanelContext& ctx) {
         if ((ImGui::Button("OK") || enter_pressed) && panel.load_dialog.path[0]) {
             std::string error;
             if (try_load_scene(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
-                               ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h,
+                               ctx.win_w, ctx.win_h,
                                panel.load_dialog.path.data(), &error)) {
                 panel.current_scene = -1;
                 panel.load_dialog.error.clear();
@@ -768,7 +767,7 @@ static void draw_section_objects(PanelContext& ctx) {
             }
             if (ImGui::Button("Delete Selected")) {
                 delete_selected(ed, ctx.renderer, ctx.compare_ab, panel.light_analysis_valid,
-                                ctx.force_live_metrics_refresh, ctx.win_w, ctx.win_h);
+                                ctx.win_w, ctx.win_h);
             }
         }
 
@@ -831,7 +830,10 @@ static void draw_section_objects(PanelContext& ctx) {
                         if (ctx.renderer.num_lights() > 0)
                             ctx.renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
                         ctx.renderer.update_display(contribution_look, diagnostic_copy.canvas.aspect());
-                        auto metrics = ctx.renderer.compute_display_metrics();
+                        FrameAnalysisParams lum_only;
+                        lum_only.analyze_color = false;
+                        lum_only.analyze_circles = false;
+                        auto metrics = ctx.renderer.run_frame_analysis(lum_only).lum;
                         panel.light_analysis.push_back({
                             source.label,
                             metrics.mean_lum,
@@ -1542,14 +1544,12 @@ static void draw_section_tracer(PanelContext& ctx) {
             ed.shot.trace.seed_mode = (SeedMode)seed_mode;
             ctx.renderer.clear();
             panel.light_analysis_valid = false;
-            ctx.force_live_metrics_refresh = true;
         }
         int frame = ed.session.frame;
         if (ImGui::InputInt("Frame", &frame)) {
             ed.session.frame = std::max(frame, 0);
             ctx.renderer.clear();
             panel.light_analysis_valid = false;
-            ctx.force_live_metrics_refresh = true;
         }
         ImGui::Checkbox("Paused", &panel.paused);
         ImGui::PopID();
@@ -1580,12 +1580,11 @@ static void draw_section_display(PanelContext& ctx) {
             ctx.compare_ab.frame = ed.session.frame;
             ensure_scene_entity_ids(ctx.compare_ab.shot.scene);
             ctx.compare_ab.view_bounds = current_display_view(ed, ctx.compare_ab, ctx.win_w, ctx.win_h);
-            ctx.compare_ab.analysis = ctx.renderer.compute_display_analysis();
+            ctx.compare_ab.analysis = ctx.renderer.run_frame_analysis();
             ctx.compare_ab.metrics_valid = true;
             upload_compare_snapshot(ctx.compare_ab, snapshot_rgba, ctx.fb_w, ctx.fb_h);
             ctx.compare_ab.active = true;
             ctx.compare_ab.showing_a = false;
-            ctx.force_live_metrics_refresh = true;
         }
         if (ctx.showing_snapshot_a())
             ImGui::EndDisabled();
@@ -1595,7 +1594,6 @@ static void draw_section_display(PanelContext& ctx) {
                 ctx.compare_ab.showing_a = !ctx.compare_ab.showing_a;
                 if (!ctx.compare_ab.showing_a)
                     ctx.reload(false);
-                ctx.force_live_metrics_refresh = true;
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear A/B")) {
@@ -1607,7 +1605,6 @@ static void draw_section_display(PanelContext& ctx) {
                 ctx.compare_ab.frame = 0;
                 if (was_showing_a)
                     ctx.reload(false);
-                ctx.force_live_metrics_refresh = true;
             }
             if (ctx.compare_ab.showing_a) {
                 ImGui::TextColored(ImVec4(1, 0.7f, 0.3f, 1),
@@ -1698,80 +1695,174 @@ static void draw_section_output(PanelContext& ctx) {
     }
 }
 
-static void draw_section_stats(PanelContext& ctx) {
-    auto& analysis = ctx.live_metrics;
-    const LuminanceStats& lum = analysis.lum;
-    const ColorStats& color = analysis.color;
-
-    if (ImGui::CollapsingHeader("Stats")) {
-        ImGui::PushID("Stats");
-
-        float hist_f[256];
-        float hist_max = 0;
-        for (int i = 0; i < 256; ++i) {
-            hist_f[i] = (float)lum.histogram[i];
-            if (hist_f[i] > hist_max) hist_max = hist_f[i];
-        }
-        ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
-                             ImVec2(-1, 60.0f * ctx.dpi_scale));
-
-        ImGui::Text("Mean: %.1f  Median: %.0f  P95: %.0f",
-                    lum.mean_lum, lum.p50, lum.p95);
-        ImGui::Text("P05: %.0f  P99: %.0f  Std: %.1f  Min: %d  Max: %d",
-                    lum.p05, lum.p99, lum.std_dev, lum.lum_min, lum.lum_max);
-        ImGui::Text("Black: %.1f%%  Clipped: %.1f%%",
-                    lum.pct_black * 100, lum.pct_clipped * 100);
-
-        // Color row — populated only when the frame has chromatic content.
-        ImGui::Separator();
-        ImGui::Text("Sat: %.3f  Hue entropy: %.2f",
-                    color.mean_saturation, color.hue_entropy);
-        ImGui::Text("Richness: %.3f  Chromatic: %.1f%%",
-                    color.color_richness, color.chromatic_fraction * 100.0f);
-
-        // Per-light circles — one row per measured PointLight.
-        if (!analysis.circles.empty()) {
-            ImGui::Separator();
-            ImGui::Checkbox("Show light circle overlay", &ctx.panel.show_circle_overlay);
-            if (ImGui::BeginTable("##circles", 5,
-                                  ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Borders)) {
-                ImGui::TableSetupColumn("id");
-                ImGui::TableSetupColumn("radius");
-                ImGui::TableSetupColumn("fwhm");
-                ImGui::TableSetupColumn("sharp");
-                ImGui::TableSetupColumn("bright");
-                ImGui::TableHeadersRow();
-                for (const auto& c : analysis.circles) {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(c.id.c_str());
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("%.1f", c.radius_px);
-                    ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%.1f", c.radius_half_max_px);
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%.3f", c.sharpness);
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%d", c.n_bright_pixels);
-                }
-                ImGui::EndTable();
-            }
-        }
-
-        if (ctx.compare_ab.metrics_valid) {
-            const LuminanceStats& alum = ctx.compare_ab.analysis.lum;
-            ImGui::Separator();
-            ImGui::Text("Snapshot A: mean %.1f  black %.1f%%  clipped %.1f%%",
-                        alum.mean_lum,
-                        alum.pct_black * 100.0f,
-                        alum.pct_clipped * 100.0f);
-            ImGui::Text("Delta vs A: mean %+.1f  black %+.1f%%  clipped %+.1f%%",
-                        lum.mean_lum - alum.mean_lum,
-                        (lum.pct_black - alum.pct_black) * 100.0f,
-                        (lum.pct_clipped - alum.pct_clipped) * 100.0f);
-        }
-        ImGui::PopID();
+// Pair a text label with a tooltip explaining its technical meaning.
+// The old Stats section inside the Look tab used jargon headers (P05,
+// Hue entropy, Richness, FWHM) that were opaque to anyone not already
+// familiar with the analyser's internals. The floating Stats window
+// shows human-readable terms and parks the jargon in tooltips for
+// readers who want the exact definition.
+static void stats_labelled_text(const char* label, const char* tooltip,
+                                const char* fmt, ...) {
+    ImGui::TextUnformatted(label);
+    if (tooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::SetTooltip("%s", tooltip);
     }
+    ImGui::SameLine();
+    va_list args;
+    va_start(args, fmt);
+    ImGui::TextV(fmt, args);
+    va_end(args);
+}
+
+void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
+                       const CompareSnapshot& compare_ab, float dpi_scale) {
+    if (!panel.show_stats_panel) return;
+
+    ImGui::SetNextWindowPos(ImVec2(16.0f, 16.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(320.0f * dpi_scale, 520.0f * dpi_scale),
+                             ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(240.0f * dpi_scale, 200.0f * dpi_scale),
+        ImVec2(600.0f * dpi_scale, 1.0e6f));
+
+    if (!ImGui::Begin("Stats", &panel.show_stats_panel)) {
+        ImGui::End();
+        return;
+    }
+
+    const LuminanceStats& lum = live_metrics.lum;
+    const ColorStats& color = live_metrics.color;
+
+    // Top-of-window toggles. "Live" gates the GPU analysis dispatch
+    // every frame; turning it off freezes the numbers and saves ~1-2 ms
+    // of work per frame while the user is doing something unrelated.
+    ImGui::Checkbox("Live", &panel.live_analysis);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Dispatch the GPU frame analyser every frame.\n"
+                          "Uncheck to freeze the numbers without closing the window.");
+    ImGui::SameLine();
+    ImGui::Checkbox("Circle overlay", &panel.show_circle_overlay);
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("Draw measured light-circle rings on top of the viewport.");
+
+    ImGui::Separator();
+
+    // Histogram across the full window width.
+    float hist_f[256];
+    float hist_max = 0;
+    for (int i = 0; i < 256; ++i) {
+        hist_f[i] = static_cast<float>(lum.histogram[i]);
+        if (hist_f[i] > hist_max) hist_max = hist_f[i];
+    }
+    ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
+                         ImVec2(-1, 70.0f * dpi_scale));
+
+    // ── Luminance row ────────────────────────────────────────────────
+    ImGui::TextUnformatted("Luminance");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("BT.709 luminance on a 0-255 scale, measured on the post-tonemap display buffer.");
+    stats_labelled_text("Brightness:", "Mean luminance (0-255, BT.709).",
+                        " %.1f", lum.mean_lum);
+    stats_labelled_text("Median:",
+                        "P50 — luminance at the 50th percentile of the histogram.",
+                        " %.0f", lum.p50);
+    stats_labelled_text("Contrast:",
+                        "Standard deviation of luminance (0-255 scale).",
+                        " %.1f", lum.std_dev);
+    stats_labelled_text("Shadows:",
+                        "P05 — the dark 5% threshold. Anything below this is in the bottom 5% of luminance.",
+                        " %.0f", lum.p05);
+    stats_labelled_text("Highlights:",
+                        "P95 — the bright 5% threshold. Anything above this is in the top 5%.",
+                        " %.0f", lum.p95);
+    stats_labelled_text("Peak:",
+                        "P99 — the top 1% threshold. Useful for spotting small bright features.",
+                        " %.0f", lum.p99);
+    stats_labelled_text("Range:",
+                        "Darkest and brightest populated histogram bins (min / max luminance).",
+                        " %d - %d", lum.lum_min, lum.lum_max);
+    stats_labelled_text("Crushed blacks:",
+                        "Fraction of pixels sitting at luminance 0 (full shadow clip).",
+                        " %.1f%%", lum.pct_black * 100.0f);
+    stats_labelled_text("Clipped whites:",
+                        "Fraction of pixels with any channel at 255 (highlight clip).",
+                        " %.1f%%", lum.pct_clipped * 100.0f);
+
+    // ── Colour row ───────────────────────────────────────────────────
+    ImGui::Separator();
+    ImGui::TextUnformatted("Colour");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+        ImGui::SetTooltip("HSV colour statistics over chromatic pixels (sat > 0.05).");
+    stats_labelled_text("Saturation:",
+                        "Average HSV saturation of pixels above the 0.05 chroma threshold.",
+                        " %.3f", color.mean_saturation);
+    stats_labelled_text("Colour variety:",
+                        "Shannon entropy of the 36-bin hue histogram, in bits.\n"
+                        "0 = single colour, ~2.6 = six evenly-spaced hues, ~5 = rainbow.",
+                        " %.2f", color.hue_entropy);
+    stats_labelled_text("Colourfulness:",
+                        "Composite score: colour_variety * saturation * chromatic fraction.",
+                        " %.3f", color.color_richness);
+    stats_labelled_text("Colored pixels:",
+                        "Percentage of pixels with HSV saturation above the 0.05 chroma threshold.",
+                        " %.1f%%", color.chromatic_fraction * 100.0f);
+
+    // ── Light circles ────────────────────────────────────────────────
+    if (!live_metrics.circles.empty()) {
+        ImGui::Separator();
+        ImGui::TextUnformatted("Light circles");
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+            ImGui::SetTooltip("Per-light apparent circle measured in pixel space.\n"
+                              "Each row is one PointLight in the scene.");
+        if (ImGui::BeginTable("##circles", 5,
+                              ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Light");
+            ImGui::TableSetupColumn("Size (px)");
+            ImGui::TableSetupColumn("Core (px)");
+            ImGui::TableSetupColumn("Edge");
+            ImGui::TableSetupColumn("Hot px");
+            ImGui::TableHeadersRow();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                ImGui::SetTooltip(
+                    "Size: 90th-percentile radius of bright pixels in the Voronoi cell.\n"
+                    "Core: FWHM — radius at which luminance falls to half the peak.\n"
+                    "Edge: luminance drop per pixel across [0.5r, 1.5r] (sharpness).\n"
+                    "Hot px: count of pixels above the bright threshold.");
+            }
+            for (const auto& c : live_metrics.circles) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(c.id.c_str());
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%.1f", c.radius_px);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("%.1f", c.radius_half_max_px);
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%.3f", c.sharpness);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::Text("%d", c.n_bright_pixels);
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    // ── Snapshot A comparison ────────────────────────────────────────
+    if (compare_ab.metrics_valid) {
+        ImGui::Separator();
+        const LuminanceStats& alum = compare_ab.analysis.lum;
+        ImGui::Text("Snapshot A: brightness %.1f  crushed %.1f%%  clipped %.1f%%",
+                    alum.mean_lum,
+                    alum.pct_black * 100.0f,
+                    alum.pct_clipped * 100.0f);
+        ImGui::Text("Delta vs A:  brightness %+.1f  crushed %+.1f%%  clipped %+.1f%%",
+                    lum.mean_lum - alum.mean_lum,
+                    (lum.pct_black - alum.pct_black) * 100.0f,
+                    (lum.pct_clipped - alum.pct_clipped) * 100.0f);
+    }
+
+    ImGui::End();
 }
 
 // ─── Controls panel (orchestrator with tabs) ────────────────────────
@@ -1782,14 +1873,12 @@ void draw_controls_panel(
     CompareSnapshot& compare_ab,
     PanelState& panel,
     FrameAnalysis& live_metrics,
-    bool& force_live_metrics_refresh,
     const ImGuiIO& io,
     float dpi_scale,
     float frame_ms,
     int win_w, int win_h, int fb_w, int fb_h
 ) {
-    PanelContext ctx{ed, renderer, compare_ab, panel, live_metrics, force_live_metrics_refresh,
-                     io, dpi_scale, frame_ms, win_w, win_h, fb_w, fb_h};
+    PanelContext ctx{ed, renderer, compare_ab, panel, live_metrics, io, dpi_scale, frame_ms, win_w, win_h, fb_w, fb_h};
 
     sync_material_panel_to_active_object(ed, panel);
 
@@ -1839,7 +1928,9 @@ void draw_controls_panel(
             ImGui::BeginChild("##look_tab_scroll");
             draw_section_display(ctx);
             draw_section_output(ctx);
-            draw_section_stats(ctx);
+            // Stats are no longer part of the Look tab — they live in
+            // their own floating window drawn by app.cpp so they stay
+            // visible while editing objects/materials in the Edit tab.
             ImGui::EndChild();
             ImGui::EndTabItem();
         }

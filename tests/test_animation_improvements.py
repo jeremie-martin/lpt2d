@@ -1,4 +1,4 @@
-"""Tests for animation library improvements: track derivatives, color stats,
+"""Tests for animation library improvements: track derivatives,
 ray-cast / projector target, and Camera2D aspect ratio."""
 
 from __future__ import annotations
@@ -6,8 +6,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
-import _lpt2d
 
 from anim.easing import (
     EASING_DERIVATIVES,
@@ -18,10 +16,6 @@ from anim.easing import (
 )
 from anim.track import Key, Track, Wrap
 
-
-# color_stats moved from anim.stats (numpy) to the C++ image_analysis module.
-# Tests here use the free-function binding directly.
-color_stats = _lpt2d.compute_color_stats
 
 # ─── Track derivatives ──────────────────────────────────────────
 
@@ -188,66 +182,10 @@ class TestTrackVelocity:
 # ─── Color statistics ───────────────────────────────────────────
 
 
-def _make_rgb(pixels: list[tuple[int, int, int]], width: int, height: int) -> bytes:
-    """Create RGB bytes from a list of (R, G, B) pixel values."""
-    if len(pixels) != width * height:
-        raise ValueError(f"Expected {width * height} pixels, got {len(pixels)}")
-    return bytes(c for pixel in pixels for c in pixel)
-
-
-class TestColorStats:
-    def test_pure_grey_low_richness(self):
-        # All grey pixels — no chromatic content
-        pixels = [(128, 128, 128)] * 100
-        stats = color_stats(_make_rgb(pixels, 10, 10), 10, 10)
-        assert stats.n_chromatic == 0
-        assert stats.color_richness == 0.0
-        assert stats.mean_saturation == 0.0
-        assert stats.hue_entropy == 0.0
-
-    def test_all_black_returns_zeros(self):
-        pixels = [(0, 0, 0)] * 100
-        stats = color_stats(_make_rgb(pixels, 10, 10), 10, 10)
-        assert stats.n_chromatic == 0
-        assert stats.color_richness == 0.0
-
-    def test_single_saturated_hue(self):
-        # All bright red — high saturation, low hue entropy
-        pixels = [(255, 0, 0)] * 100
-        stats = color_stats(_make_rgb(pixels, 10, 10), 10, 10)
-        assert stats.n_chromatic == 100
-        assert stats.mean_saturation == pytest.approx(1.0)
-        assert stats.hue_entropy == pytest.approx(0.0)  # single bin
-        assert stats.color_richness == pytest.approx(0.0)
-
-    def test_rainbow_high_richness(self):
-        # 6 distinct hues spread across the spectrum
-        hues = [
-            (255, 0, 0),  # red
-            (255, 255, 0),  # yellow
-            (0, 255, 0),  # green
-            (0, 255, 255),  # cyan
-            (0, 0, 255),  # blue
-            (255, 0, 255),  # magenta
-        ]
-        # Fill a 6x1 image
-        stats = color_stats(_make_rgb(hues, 6, 1), 6, 1)
-        assert stats.n_chromatic == 6
-        assert stats.mean_saturation == pytest.approx(1.0)
-        assert stats.hue_entropy > 2.0  # 6 evenly-spaced bins → ~2.58 bits
-        assert stats.color_richness > 2.0
-
-    def test_empty_frame_is_safe(self):
-        # The C++ analyzer returns a zeroed ColorStats for an empty buffer
-        # instead of raising.
-        stats = color_stats(b"", 0, 0)
-        assert stats.n_chromatic == 0
-        assert stats.color_richness == 0.0
-
-    def test_wrong_byte_count_raises(self):
-        with pytest.raises(ValueError, match="shorter than"):
-            color_stats(b"\x00" * 10, 2, 2)  # expect 12 bytes
-
+# Color-stats unit tests (solid grey, pure hue, rainbow, empty) now live
+# in the native GPU test suite `tests/cpp/test_gpu_image_analysis.cpp`
+# since the byte-loop bindings they relied on have been deleted. The
+# shader-side math is the single source of truth for frame analysis.
 
 # ─── Ray-cast / projector target ────────────────────────────────
 

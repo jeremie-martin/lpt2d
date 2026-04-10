@@ -1,0 +1,207 @@
+#version 430 core
+//
+// Frame analysis compute shader.
+//
+// Reads a single RGB8 source texture (the display FBO post-tonemap colour
+// attachment) and produces:
+//   - a 256-bin BT.709 luminance histogram + clipped-pixel count
+//   - a 36-bin HSV hue histogram + mean saturation (over chromatic pixels)
+//   - a per-(light, radial-bin) Voronoi breakdown used to derive each
+//     PointLight's apparent radius, FWHM, sharpness, and bright-pixel count
+//
+// The math mirrors the CPU implementation in src/core/image_analysis.cpp
+// bit-for-bit where possible (same BT.709 integer weights, same HSV
+// formulas, same Voronoi rule). The CPU path on the other side of the
+// readback calls `finalize_luminance` and a short per-light loop to turn
+// these SSBOs into a public FrameAnalysis struct.
+//
+// Workgroup: 16x16 = 256 threads. The luminance and hue histograms are
+// tile-reduced in shared memory and committed to global with one atomicAdd
+// per (bin, tile). The circles buffer is written directly to global from
+// the per-pixel loop — Voronoi spatial locality means almost every pixel
+// in a 16x16 tile belongs to the same light, so contention on the global
+// atomics is similar to the lum histogram (and the shared-memory layout
+// for circles would blow the 32 KB guaranteed budget anyway).
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+const int MAX_BINS = 201;  // max_radius_px + 1 (matches LightCircleParams default)
+
+// ── Inputs ─────────────────────────────────────────────────────────────
+
+uniform sampler2D uSrc;              // display_texture_ (RGB8 post-tonemap)
+uniform ivec2 uResolution;
+uniform int   uNLights;              // runtime light count; 0 disables the circle pass
+uniform float uBrightThreshold;      // 0..1, on the 0..1 normalised luminance
+uniform int   uMaxRadiusBins;        // effective MAX_BINS for this call
+uniform float uSatThreshold;         // default 0.05, matches CPU path
+
+layout(std430, binding = 3) readonly buffer Lights {
+    // Runtime-sized: one vec2 per PointLight in pixel-space (top-left
+    // origin, matches viewport_xform's convention on the CPU side).
+    // The caller resizes this SSBO via glBufferData, so there's no
+    // compile-time ceiling on scene light count.
+    vec2 positions_px[];
+};
+
+// ── Outputs ────────────────────────────────────────────────────────────
+//
+// All counters are uint32. Luminance sum / std / percentiles are derived
+// on the CPU after readback from `lum_hist[]` — no Σlum or Σlum² here to
+// avoid uint32 overflow at 1080p+.
+
+layout(std430, binding = 0) buffer LumResult {
+    uint lum_hist[256];
+    uint lum_clipped;
+    // Convenience slot: lum_npixels = W*H. Not written by the shader,
+    // filled in on the CPU side from `uResolution` after readback.
+    uint lum_npixels;
+};
+
+layout(std430, binding = 1) buffer ColorResult {
+    uint hue_hist[36];
+    // Σ(sat * 255) quantised to uint. q8 (max 255/pixel) is enough for
+    // the Stats panel and the per-pixel max of 255 keeps the global
+    // sum under 2^32 all the way up to ~16 Mpx (q16 would overflow
+    // around 65k pixels).
+    uint color_sat_sum_q8;
+    uint color_n_chromatic;
+};
+
+layout(std430, binding = 2) buffer CirclesResult {
+    // Runtime-sized: length = uNLights * MAX_BINS * 3, interleaved as
+    // [sum, cnt, bright] per (light, radius-bin). Flat layout lets the
+    // whole circles SSBO be a single unsized std430 array (the GLSL
+    // spec only allows one unsized member per buffer, and it must be
+    // last). The CPU side glMapBufferRanges this as one contiguous
+    // uint32 blob.
+    uint circle_bins[];
+};
+
+// ── Tile-local shared accumulators ─────────────────────────────────────
+
+shared uint tile_lum_hist[256];
+shared uint tile_hue_hist[36];
+shared uint tile_lum_clipped;
+shared uint tile_sat_sum_q8;
+shared uint tile_n_chromatic;
+
+void main() {
+    uint lid = gl_LocalInvocationIndex;
+    ivec2 gid = ivec2(gl_GlobalInvocationID.xy);
+
+    // ── Phase 1: zero shared state ─────────────────────────────────────
+    tile_lum_hist[lid] = 0u;
+    if (lid < 36u) tile_hue_hist[lid] = 0u;
+    if (lid == 0u) {
+        tile_lum_clipped = 0u;
+        tile_sat_sum_q8 = 0u;
+        tile_n_chromatic = 0u;
+    }
+    barrier();
+
+    // ── Phase 2: per-pixel work ────────────────────────────────────────
+    bool in_bounds = (gid.x < uResolution.x && gid.y < uResolution.y);
+    if (in_bounds) {
+        // texelFetch on an RGB8 sampler returns 0..1 floats. Quantise back
+        // to 0..255 uints so the BT.709 math matches the CPU histogram
+        // bit-for-bit. (CPU path does `(218R+732G+74B)>>10` on raw bytes.)
+        vec3 rgb = texelFetch(uSrc, gid, 0).rgb;
+        uint r = uint(clamp(rgb.r, 0.0, 1.0) * 255.0 + 0.5);
+        uint g = uint(clamp(rgb.g, 0.0, 1.0) * 255.0 + 0.5);
+        uint b = uint(clamp(rgb.b, 0.0, 1.0) * 255.0 + 0.5);
+
+        uint lum = (218u * r + 732u * g + 74u * b) >> 10;
+        if (lum > 255u) lum = 255u;
+
+        // Luminance histogram (tile-local).
+        atomicAdd(tile_lum_hist[lum], 1u);
+        if (r == 255u || g == 255u || b == 255u)
+            atomicAdd(tile_lum_clipped, 1u);
+
+        // ── HSV hue + saturation ────────────────────────────────────
+        uint cmax = max(r, max(g, b));
+        uint cmin = min(r, min(g, b));
+        uint delta = cmax - cmin;
+        if (cmax > 0u && delta > 0u) {
+            float sat = float(delta) / float(cmax);
+            if (sat > uSatThreshold) {
+                atomicAdd(tile_n_chromatic, 1u);
+                atomicAdd(tile_sat_sum_q8, uint(sat * 255.0 + 0.5));
+                float h_raw;
+                if (r == cmax) {
+                    h_raw = float(int(g) - int(b)) / float(delta);
+                } else if (g == cmax) {
+                    h_raw = 2.0 + float(int(b) - int(r)) / float(delta);
+                } else {
+                    h_raw = 4.0 + float(int(r) - int(g)) / float(delta);
+                }
+                float h = fract(h_raw / 6.0);
+                uint hbin = min(uint(floor(h * 36.0)), 35u);
+                atomicAdd(tile_hue_hist[hbin], 1u);
+            }
+        }
+
+        // ── Circles: Voronoi nearest-light + radial bin ─────────────
+        // Direct to global (not tile-reduced). Contention is fine because
+        // Voronoi locality keeps most of a tile in one light's bins.
+        //
+        // Coordinate flip: `gid` iterates GL texel space where (0,0) is
+        // the BOTTOM-LEFT of the texture (the OpenGL convention — the
+        // display FBO was rendered into with the same convention, so
+        // gid.y=0 corresponds to the bottom row of the display). On the
+        // CPU side, `positions_px[]` is computed in TOP-LEFT pixel
+        // coordinates via viewport_xform (`(bounds.max.y - world_y)*s`),
+        // so we flip gid.y here before comparing to the light centres.
+        // Without this flip, distances are mirrored in Y — invisible on
+        // vertically symmetric scenes (where lights sit near y=H/2) but
+        // it gives the wrong Voronoi cells and wrong `radius_px` as
+        // soon as a light is near the top or bottom of the frame.
+        if (uNLights > 0) {
+            vec2 pix_pos = vec2(float(gid.x),
+                                float(uResolution.y - 1 - gid.y));
+            float best_d2 = 1.0e30;
+            int   best_i  = 0;
+            for (int i = 0; i < uNLights; ++i) {
+                vec2 d = pix_pos - positions_px[i];
+                float d2 = dot(d, d);
+                if (d2 < best_d2) {
+                    best_d2 = d2;
+                    best_i  = i;
+                }
+            }
+            float d = sqrt(best_d2);
+            int di = int(round(d));
+            if (di >= uMaxRadiusBins) di = uMaxRadiusBins - 1;
+            if (di < 0) di = 0;
+            // Flat interleaved layout: [sum, cnt, bright] per bin,
+            // MAX_BINS bins per light, all lights back-to-back.
+            int base = (best_i * MAX_BINS + di) * 3;
+            atomicAdd(circle_bins[base + 0], lum);
+            atomicAdd(circle_bins[base + 1], 1u);
+            // Bright threshold in 0..1 space, compared to the 0..255 lum
+            // we just binned. Round to nearest (rather than truncate) to
+            // match the historical CPU convention — e.g. 0.92 threshold
+            // should land on lum >= 235, not 234.
+            uint bright_lum = uint(uBrightThreshold * 255.0 + 0.5);
+            if (lum >= bright_lum && d < float(uMaxRadiusBins - 1))
+                atomicAdd(circle_bins[base + 2], 1u);
+        }
+    }
+
+    // ── Phase 3: commit tile → global ──────────────────────────────────
+    barrier();
+    // One atomic per bin per workgroup (instead of per pixel) — ~256x
+    // fewer atomics for a 16x16 tile on the dominant histograms.
+    uint local_count = tile_lum_hist[lid];
+    if (local_count != 0u) atomicAdd(lum_hist[lid], local_count);
+    if (lid < 36u) {
+        uint local_hue = tile_hue_hist[lid];
+        if (local_hue != 0u) atomicAdd(hue_hist[lid], local_hue);
+    }
+    if (lid == 0u) {
+        atomicAdd(lum_clipped,       tile_lum_clipped);
+        atomicAdd(color_sat_sum_q8,  tile_sat_sum_q8);
+        atomicAdd(color_n_chromatic, tile_n_chromatic);
+    }
+}

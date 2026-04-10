@@ -65,7 +65,7 @@ EditorCamera current_display_camera(const EditorState& ed, const CompareSnapshot
 
 // Re-upload scene to GPU, clear accumulation, update bounds.
 void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                  bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                  bool& light_analysis_valid,
                   int win_w, int win_h, bool mark_dirty = true);
 
 // Export a high-quality PNG render of the given shot at a specific runtime frame index.
@@ -77,7 +77,7 @@ void do_save(EditorState& ed);
 
 // Load a scene from a JSON file. Returns true on success.
 bool try_load_scene(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
-                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    bool& light_analysis_valid,
                     int win_w, int win_h,
                     const std::string& path, std::string* error = nullptr);
 
@@ -86,28 +86,28 @@ void copy_to_clipboard(EditorState& ed);
 
 // Delete all selected objects from the scene.
 bool delete_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                     bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                     bool& light_analysis_valid,
                      int win_w, int win_h);
 
 // Reset editor state for a new/loaded scene. Fits camera, clears undo.
 void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
-                  bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                  bool& light_analysis_valid,
                   int win_w, int win_h);
 
 // Duplicate all selected objects with a small offset, replacing the selection
 // with the new copies. Does NOT enter grab mode — caller may do that.
 void duplicate_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                        bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                        bool& light_analysis_valid,
                         int win_w, int win_h);
 
 // Group selected ungrouped shapes/lights into a new group.
 // Returns true if a group was created.
 bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    bool& light_analysis_valid,
                     int win_w, int win_h);
 
 // Ungroup selected groups (bake transforms, promote members to top-level).
 // Returns true if any group was ungrouped.
 bool ungroup_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                      bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                      bool& light_analysis_valid,
                       int win_w, int win_h);
