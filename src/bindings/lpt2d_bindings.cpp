@@ -8,12 +8,16 @@
 
 #include "color.h"
 #include "geometry.h"
+#include "image_analysis.h"
 #include "scene.h"
 #include "serialize.h"
 #include "session.h"
 #include "spectrum.h"
 
+#include <cstdint>
+#include <span>
 #include <sstream>
+#include <vector>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -645,17 +649,161 @@ NB_MODULE(_lpt2d, m) {
         );
     }, "scene"_a, "origin"_a, "direction"_a);
 
-    // ── FrameMetrics ─────────────────────────────────────────────
-    nb::class_<FrameMetrics>(m, "FrameMetrics")
-        .def_ro("mean_lum", &FrameMetrics::mean_lum)
-        .def_ro("pct_black", &FrameMetrics::pct_black)
-        .def_ro("pct_clipped", &FrameMetrics::pct_clipped)
-        .def_ro("p50", &FrameMetrics::p50)
-        .def_ro("p95", &FrameMetrics::p95)
-        .def_prop_ro("histogram", [](const FrameMetrics& fm) {
-            std::vector<int> h(fm.histogram.begin(), fm.histogram.end());
+    // ── FrameMetrics / LuminanceStats ────────────────────────────
+    // `FrameMetrics` is a type alias for `LuminanceStats`, so we only bind
+    // the underlying type once (under the LuminanceStats name) and then
+    // expose it as `FrameMetrics` too for source compatibility with Python
+    // code that still reads `rr.metrics.mean_lum` etc.
+    auto lum_stats_cls = nb::class_<LuminanceStats>(m, "LuminanceStats")
+        .def_ro("mean_lum", &LuminanceStats::mean_lum)
+        .def_ro("pct_black", &LuminanceStats::pct_black)
+        .def_ro("pct_clipped", &LuminanceStats::pct_clipped)
+        .def_ro("p05", &LuminanceStats::p05)
+        .def_ro("p50", &LuminanceStats::p50)
+        .def_ro("p95", &LuminanceStats::p95)
+        .def_ro("p99", &LuminanceStats::p99)
+        .def_ro("std_dev", &LuminanceStats::std_dev)
+        .def_ro("lum_min", &LuminanceStats::lum_min)
+        .def_ro("lum_max", &LuminanceStats::lum_max)
+        .def_ro("width", &LuminanceStats::width)
+        .def_ro("height", &LuminanceStats::height)
+        .def_prop_ro("histogram", [](const LuminanceStats& s) {
+            std::vector<int> h(s.histogram.begin(), s.histogram.end());
             return h;
         });
+    m.attr("FrameMetrics") = lum_stats_cls;
+
+    // ── ColorStats ───────────────────────────────────────────────
+    nb::class_<ColorStats>(m, "ColorStats")
+        .def_ro("mean_saturation", &ColorStats::mean_saturation)
+        .def_ro("hue_entropy", &ColorStats::hue_entropy)
+        .def_ro("chromatic_fraction", &ColorStats::chromatic_fraction)
+        .def_ro("color_richness", &ColorStats::color_richness)
+        .def_ro("n_chromatic", &ColorStats::n_chromatic)
+        .def_prop_ro("hue_histogram", [](const ColorStats& s) {
+            std::vector<int> h(s.hue_histogram.begin(), s.hue_histogram.end());
+            return h;
+        });
+
+    // ── LightRef ─────────────────────────────────────────────────
+    nb::class_<LightRef>(m, "LightRef")
+        .def("__init__", [](LightRef* self, std::string id, float x, float y) {
+            new (self) LightRef{std::move(id), x, y};
+        }, "id"_a, "world_x"_a, "world_y"_a)
+        .def_rw("id", &LightRef::id)
+        .def_rw("world_x", &LightRef::world_x)
+        .def_rw("world_y", &LightRef::world_y);
+
+    // ── LightCircle ──────────────────────────────────────────────
+    nb::class_<LightCircle>(m, "LightCircle")
+        .def_ro("id", &LightCircle::id)
+        .def_prop_ro("world_pos", [](const LightCircle& c) {
+            return nb::make_tuple(c.world_x, c.world_y);
+        })
+        .def_prop_ro("pixel_pos", [](const LightCircle& c) {
+            return nb::make_tuple(c.pixel_x, c.pixel_y);
+        })
+        .def_ro("world_x", &LightCircle::world_x)
+        .def_ro("world_y", &LightCircle::world_y)
+        .def_ro("pixel_x", &LightCircle::pixel_x)
+        .def_ro("pixel_y", &LightCircle::pixel_y)
+        .def_ro("radius_px", &LightCircle::radius_px)
+        .def_ro("radius_half_max_px", &LightCircle::radius_half_max_px)
+        .def_ro("n_bright_pixels", &LightCircle::n_bright_pixels)
+        .def_ro("sharpness", &LightCircle::sharpness)
+        .def_ro("mean_luminance", &LightCircle::mean_luminance)
+        .def_ro("profile", &LightCircle::profile);
+
+    // ── LightCircleParams ────────────────────────────────────────
+    nb::class_<LightCircleParams>(m, "LightCircleParams")
+        .def("__init__", [](LightCircleParams* self) {
+            new (self) LightCircleParams{};
+        })
+        .def_rw("max_radius_px", &LightCircleParams::max_radius_px)
+        .def_rw("bright_threshold", &LightCircleParams::bright_threshold)
+        .def_rw("min_bright_pixels", &LightCircleParams::min_bright_pixels)
+        .def_rw("radius_percentile", &LightCircleParams::radius_percentile)
+        .def_rw("half_max_fraction", &LightCircleParams::half_max_fraction);
+
+    // ── FrameAnalysis ────────────────────────────────────────────
+    nb::class_<FrameAnalysis>(m, "FrameAnalysis")
+        .def_ro("lum", &FrameAnalysis::lum)
+        .def_ro("color", &FrameAnalysis::color)
+        .def_ro("circles", &FrameAnalysis::circles);
+
+    // ── FrameAnalysisParams ──────────────────────────────────────
+    // Bound before the free functions so they can use it as a default arg.
+    nb::class_<FrameAnalysisParams>(m, "FrameAnalysisParams")
+        .def("__init__", [](FrameAnalysisParams* self) {
+            new (self) FrameAnalysisParams{};
+        })
+        .def_rw("analyze_luminance", &FrameAnalysisParams::analyze_luminance)
+        .def_rw("analyze_color", &FrameAnalysisParams::analyze_color)
+        .def_rw("analyze_circles", &FrameAnalysisParams::analyze_circles)
+        .def_rw("prefer_hdr_circles", &FrameAnalysisParams::prefer_hdr_circles)
+        .def_rw("circles", &FrameAnalysisParams::circles)
+        .def_rw("saturation_threshold", &FrameAnalysisParams::saturation_threshold);
+
+    // ── Free-function analyzers ──────────────────────────────────
+    // Accept raw bytes (RGB8, 3 bytes/pixel) and run the pure-CPU analyzers
+    // directly. The renderer/session hook-in lands in PR #2.
+
+    m.def("compute_luminance_stats",
+          [](nb::bytes rgb, int width, int height) {
+              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
+              const std::size_t expected =
+                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
+              if (rgb.size() < expected) {
+                  throw nb::value_error("rgb bytes shorter than width*height*3");
+              }
+              return compute_luminance_stats(data, width, height);
+          },
+          "rgb"_a, "width"_a, "height"_a);
+
+    m.def("compute_color_stats",
+          [](nb::bytes rgb, int width, int height, float saturation_threshold) {
+              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
+              const std::size_t expected =
+                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
+              if (rgb.size() < expected) {
+                  throw nb::value_error("rgb bytes shorter than width*height*3");
+              }
+              return compute_color_stats(data, width, height, saturation_threshold);
+          },
+          "rgb"_a, "width"_a, "height"_a, "saturation_threshold"_a = 0.05f);
+
+    m.def("measure_light_circles",
+          [](nb::bytes rgb, int width, int height, const Bounds& bounds,
+             const std::vector<LightRef>& lights, const LightCircleParams& params) {
+              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
+              const std::size_t expected =
+                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
+              if (rgb.size() < expected) {
+                  throw nb::value_error("rgb bytes shorter than width*height*3");
+              }
+              return measure_light_circles(
+                  data, width, height, bounds,
+                  std::span<const LightRef>(lights.data(), lights.size()), params);
+          },
+          "rgb"_a, "width"_a, "height"_a, "bounds"_a, "lights"_a,
+          "params"_a = LightCircleParams{});
+
+    m.def("analyze_frame",
+          [](nb::bytes rgb, int width, int height, const Bounds& bounds,
+             const std::vector<LightRef>& lights, const FrameAnalysisParams& params) {
+              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
+              const std::size_t expected =
+                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
+              if (rgb.size() < expected) {
+                  throw nb::value_error("rgb bytes shorter than width*height*3");
+              }
+              return analyze_frame(
+                  data, width, height, bounds,
+                  std::span<const LightRef>(lights.data(), lights.size()),
+                  nullptr, params);
+          },
+          "rgb"_a, "width"_a, "height"_a, "bounds"_a, "lights"_a,
+          "params"_a = FrameAnalysisParams{});
 
     // ── RenderResult ─────────────────────────────────────────────
     nb::class_<RenderResult>(m, "RenderResult")
@@ -667,15 +815,18 @@ NB_MODULE(_lpt2d, m) {
         .def_ro("total_rays", &RenderResult::total_rays)
         .def_ro("max_hdr", &RenderResult::max_hdr)
         .def_ro("metrics", &RenderResult::metrics)
+        .def_ro("analysis", &RenderResult::analysis)
         .def_ro("time_ms", &RenderResult::time_ms);
 
     // ── RenderSession ────────────────────────────────────────────
     nb::class_<RenderSession>(m, "RenderSession")
         .def(nb::init<int, int, bool>(), "width"_a, "height"_a, "half_float"_a = false)
         .def("close", &RenderSession::close)
-        .def("render_shot", &RenderSession::render_shot, "shot"_a, "frame"_a = 0)
+        .def("render_shot", &RenderSession::render_shot,
+             "shot"_a, "frame"_a = 0, "analyze"_a = false)
         .def("render_frame", &RenderSession::render_frame,
-             "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a)
+             "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a,
+             "analyze"_a = false)
         .def("resize", &RenderSession::resize, "width"_a, "height"_a)
         .def_prop_ro("width", &RenderSession::width)
         .def_prop_ro("height", &RenderSession::height);

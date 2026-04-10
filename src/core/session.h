@@ -18,7 +18,8 @@ struct RenderResult {
     int height = 0;
     int64_t total_rays = 0;
     float max_hdr = 0.0f;
-    FrameMetrics metrics;
+    FrameMetrics metrics;    // legacy luminance-only view (= analysis.lum)
+    FrameAnalysis analysis;  // full frame analysis: lum + color + per-light circles
     double time_ms = 0.0; // wall-clock milliseconds for render_frame
 };
 
@@ -34,12 +35,18 @@ public:
 
     // Render a complete frame from a Shot.
     // Resolves camera bounds, converts Look → PostProcess, traces rays, post-processes.
-    RenderResult render_shot(const Shot& shot, int frame = 0);
+    //
+    // `analyze` controls whether the result carries the full FrameAnalysis
+    // (colour statistics + per-light circles, O(W·H·L)). When false, only
+    // the cheap luminance stats in `result.metrics` are populated. Video
+    // batch paths and still exports should leave it at the default so they
+    // don't pay for work they never consume.
+    RenderResult render_shot(const Shot& shot, int frame = 0, bool analyze = false);
 
     // Render with pre-resolved parameters (for animation loops).
     RenderResult render_frame(const Scene& scene, const Bounds& bounds,
                               const TraceConfig& trace_cfg, const PostProcess& pp,
-                              int64_t total_rays);
+                              int64_t total_rays, bool analyze = false);
 
     void close();
     void resize(int width, int height);

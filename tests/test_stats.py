@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
 from anim import diagnose_scene
 from anim import types as types_mod
 from anim.stats import (
-    FrameStats,
     LookComparison,
     LookProfile,
     LookReport,
@@ -20,7 +20,6 @@ from anim.stats import (
     check_quality,
     compare_stats,
     compare_summary,
-    frame_stats_from_report,
 )
 from anim.types import (
     Arc,
@@ -34,6 +33,8 @@ from anim.types import (
     Scene,
     Transform2D,
 )
+
+from _metrics_fixtures import fake_metrics
 
 MAT_ID = "mat"
 GLASS_ID = "glass"
@@ -102,22 +103,26 @@ def test_quality_gate_no_metrics():
 # --- StatsDiff / compare_stats ---
 
 
-def _frame_stats(**kwargs) -> FrameStats:
-    defaults: dict = dict(
-        mean=50.0,
-        max=200,
-        min=0,
-        std=30.0,
-        pct_black=0.3,
-        pct_clipped=0.02,
-        p05=5.0,
-        p50=40.0,
-        p95=180.0,
-        width=100,
-        height=100,
-    )
-    defaults.update(kwargs)
-    return FrameStats(**defaults)
+_FRAME_STATS_DEFAULTS = dict(
+    mean_lum=50.0, pct_black=0.3, pct_clipped=0.02,
+    p05=5.0, p50=40.0, p95=180.0, p99=220.0,
+    std_dev=30.0, lum_min=0, lum_max=200,
+)
+_FRAME_STATS_ALIASES = {
+    "mean": "mean_lum", "std": "std_dev", "min": "lum_min", "max": "lum_max",
+}
+
+
+def _frame_stats(**kwargs) -> Any:
+    """Build a FrameMetrics-shaped fake for compare_stats / LookProfile tests.
+
+    Defaults match the historical ``FrameStats`` happy values so each call
+    site only overrides what it cares about. ``mean`` and ``std`` are
+    accepted as aliases for ``mean_lum`` / ``std_dev`` to keep the legacy
+    test cases readable.
+    """
+    overrides = {_FRAME_STATS_ALIASES.get(k, k): v for k, v in kwargs.items()}
+    return fake_metrics(**{**_FRAME_STATS_DEFAULTS, **overrides})
 
 
 def test_compare_stats_zero_diff():
@@ -164,27 +169,10 @@ def test_stats_diff_summary():
     assert "clip=+0.02" in s
 
 
-def test_frame_stats_from_report_uses_histogram():
-    report = _report(
-        mean=82.0,
-        pct_black=0.25,
-        pct_clipped=0.5,
-        p50=64.0,
-        p95=200.0,
-        histogram=[1, *([0] * 63), 2, *([0] * 135), 1, *([0] * 55)],
-    )
-
-    stats = frame_stats_from_report(report, width=2, height=2)
-
-    assert stats is not None
-    assert stats.mean == pytest.approx(82.0)
-    assert stats.min == 0
-    assert stats.max == 200
-    assert stats.p05 == pytest.approx(0.0)
-    assert stats.p50 == pytest.approx(64.0)
-    assert stats.p95 == pytest.approx(200.0)
-    assert stats.pct_black == pytest.approx(0.25)
-    assert stats.pct_clipped == pytest.approx(0.5)
+# frame_stats_from_report was deleted alongside the Python FrameStats
+# dataclass when luminance statistics moved to the C++ image_analysis
+# module. The equivalent now is `RenderResult.metrics` straight out of
+# `RenderSession.render_shot()` — no histogram reconstruction needed.
 
 
 # --- LookProfile / LookComparison / LookReport ---

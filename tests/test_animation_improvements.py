@@ -7,6 +7,8 @@ import math
 
 import pytest
 
+import _lpt2d
+
 from anim.easing import (
     EASING_DERIVATIVES,
     EASINGS,
@@ -14,8 +16,12 @@ from anim.easing import (
     smoothstep,
     smoothstep_d,
 )
-from anim.stats import color_stats
 from anim.track import Key, Track, Wrap
+
+
+# color_stats moved from anim.stats (numpy) to the C++ image_analysis module.
+# Tests here use the free-function binding directly.
+color_stats = _lpt2d.compute_color_stats
 
 # ─── Track derivatives ──────────────────────────────────────────
 
@@ -231,20 +237,15 @@ class TestColorStats:
         assert stats.hue_entropy > 2.0  # 6 evenly-spaced bins → ~2.58 bits
         assert stats.color_richness > 2.0
 
-    def test_summary_string(self):
-        pixels = [(255, 0, 0)] * 4
-        stats = color_stats(_make_rgb(pixels, 2, 2), 2, 2)
-        s = stats.summary()
-        assert "sat=" in s
-        assert "entropy=" in s
-        assert "richness=" in s
-
-    def test_zero_pixel_frame_raises(self):
-        with pytest.raises(ValueError, match="0-pixel"):
-            color_stats(b"", 0, 0)
+    def test_empty_frame_is_safe(self):
+        # The C++ analyzer returns a zeroed ColorStats for an empty buffer
+        # instead of raising.
+        stats = color_stats(b"", 0, 0)
+        assert stats.n_chromatic == 0
+        assert stats.color_richness == 0.0
 
     def test_wrong_byte_count_raises(self):
-        with pytest.raises(ValueError, match="Expected"):
+        with pytest.raises(ValueError, match="shorter than"):
             color_stats(b"\x00" * 10, 2, 2)  # expect 12 bytes
 
 

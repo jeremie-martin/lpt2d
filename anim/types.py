@@ -45,6 +45,11 @@ ProjectorProfile: TypeAlias = _lpt2d.ProjectorProfile
 RenderSession: TypeAlias = _lpt2d.RenderSession
 RenderResult: TypeAlias = _lpt2d.RenderResult
 FrameMetrics: TypeAlias = _lpt2d.FrameMetrics
+LuminanceStats: TypeAlias = _lpt2d.LuminanceStats
+ColorStats: TypeAlias = _lpt2d.ColorStats
+LightRef: TypeAlias = _lpt2d.LightRef
+LightCircle: TypeAlias = _lpt2d.LightCircle
+FrameAnalysis: TypeAlias = _lpt2d.FrameAnalysis
 TraceConfig: TypeAlias = _lpt2d.TraceConfig
 PostProcess: TypeAlias = _lpt2d.PostProcess
 

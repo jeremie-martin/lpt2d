@@ -29,7 +29,6 @@ from anim import (
     Scene,
     Shot,
     Timeline,
-    color_stats,
     glass,
     mirror_box,
     prism,
@@ -202,8 +201,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
-        render_result = session.render_shot(cpp_shot, fi)
-        cs = color_stats(render_result.pixels, PROBE_W, PROBE_H)
+        render_result = session.render_shot(cpp_shot, fi, True)
+        cs = render_result.analysis.color
         total_richness += cs.color_richness
         if cs.color_richness > RICHNESS_THRESHOLD:
             colorful += 1

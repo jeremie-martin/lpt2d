@@ -89,19 +89,17 @@ static uint32_t trace_dispatch_seed(const TraceConfig& cfg, uint32_t batch_count
 }
 
 // ─── Viewport helpers ────────────────────────────────────────────────
+//
+// ViewportXform and viewport_xform() live in image_analysis.h so the same
+// aspect-fit math is shared between the GL upload path and the CPU-side
+// frame analyser. The historical `compute_viewport_xform` helper used to
+// live here as a static — keep a thin alias for the call sites below.
 
-struct ViewportXform {
-    float scale;
-    float offset_x, offset_y;
-};
-
-static ViewportXform compute_viewport_xform(const Bounds& bounds, int width, int height) {
-    Vec2 size = bounds.max - bounds.min;
-    float sx = (float)width / size.x;
-    float sy = (float)height / size.y;
-    float s = std::min(sx, sy);
-    return {s, ((float)width - size.x * s) * 0.5f, ((float)height - size.y * s) * 0.5f};
+namespace {
+inline ViewportXform compute_viewport_xform(const Bounds& bounds, int width, int height) {
+    return viewport_xform(bounds, width, height);
 }
+}  // namespace
 
 // ─── GPU data structures (must match GLSL layout under std430) ───────
 
@@ -692,6 +690,12 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<float> cum_weights;
     float total = 0.0f;
 
+    // Rebuild the LightRef cache for the CPU-side frame analyzer. Only point
+    // lights contribute circles; segment/projector lights and shape emissions
+    // don't produce a single focal spot in screen space.
+    light_refs_.clear();
+    last_upload_bounds_ = bounds;
+
     for (const auto& light : all_lights) {
         GPULight gl{};
         std::visit(overloaded{
@@ -701,6 +705,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.pos_a[0] = l.position.x; gl.pos_a[1] = l.position.y;
                 gl.wavelength_min = l.wavelength_min;
                 gl.wavelength_max = l.wavelength_max;
+                light_refs_.push_back(LightRef{l.id, l.position.x, l.position.y});
             },
             [&](const SegmentLight& l) {
                 gl.type = 1;
@@ -792,6 +797,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 void Renderer::update_viewport(const Bounds& bounds) {
     auto vp = compute_viewport_xform(bounds, width_, height_);
     viewport_scale_ = vp.scale;
+    last_upload_bounds_ = bounds;
 
     glUseProgram(trace_program_);
     glUniform2f(trace_loc_bounds_min_, bounds.min.x, bounds.min.y);
@@ -1139,8 +1145,23 @@ void Renderer::update_display(const PostProcess& pp, float display_aspect, const
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+// Flip RGB8 row order in place (OpenGL bottom-up → top-left-origin).
+static void flip_rgb8_rows(uint8_t* data, int width, int height,
+                           std::vector<uint8_t>& row_scratch) {
+    const std::size_t row_bytes = static_cast<std::size_t>(width) * 3u;
+    row_scratch.resize(row_bytes);
+    for (int y = 0; y < height / 2; ++y) {
+        uint8_t* top = data + static_cast<std::size_t>(y) * row_bytes;
+        uint8_t* bot = data + static_cast<std::size_t>(height - 1 - y) * row_bytes;
+        std::memcpy(row_scratch.data(), top, row_bytes);
+        std::memcpy(top, bot, row_bytes);
+        std::memcpy(bot, row_scratch.data(), row_bytes);
+    }
+}
+
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect,
-                           const VignetteFrame* vignette_frame, FrameMetrics* out_metrics) {
+                           const VignetteFrame* vignette_frame, FrameMetrics* out_metrics,
+                           FrameAnalysis* out_analysis) {
     update_display(pp, display_aspect, vignette_frame);
 
     out_rgb.resize(width_ * height_ * 3);
@@ -1150,73 +1171,20 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, out_rgb.data());
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
-    int histogram[256] = {};
-    size_t clipped = 0;
-    const bool need_metrics = out_metrics != nullptr;
-    const size_t row_bytes = (size_t)width_ * 3;
-    rgb_row_buffer_.resize(row_bytes);
-    auto accumulate_row_metrics = [&](const uint8_t* row) {
-        for (size_t off = 0; off < row_bytes; off += 3) {
-            uint8_t r = row[off];
-            uint8_t g = row[off + 1];
-            uint8_t b = row[off + 2];
-            uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
-            if (lum > 255) lum = 255;
-            histogram[lum]++;
-            if (r == 255 || g == 255 || b == 255) ++clipped;
+    flip_rgb8_rows(out_rgb.data(), width_, height_, rgb_row_buffer_);
+
+    if (out_analysis != nullptr) {
+        FrameAnalysisParams params;
+        *out_analysis = analyze_frame(
+            out_rgb.data(), width_, height_, last_upload_bounds_,
+            std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
+            nullptr, params);
+        if (out_metrics != nullptr) {
+            *out_metrics = out_analysis->lum;
         }
-    };
-
-    // OpenGL returns rows bottom-up; flip here so saved PNG/video rows
-    // match the world-space orientation seen in the interactive viewport.
-    for (int y = 0; y < height_ / 2; ++y) {
-        uint8_t* top = out_rgb.data() + (size_t)y * row_bytes;
-        uint8_t* bottom = out_rgb.data() + (size_t)(height_ - 1 - y) * row_bytes;
-        if (need_metrics) {
-            accumulate_row_metrics(top);
-            accumulate_row_metrics(bottom);
-        }
-        std::memcpy(rgb_row_buffer_.data(), top, row_bytes);
-        std::memcpy(top, bottom, row_bytes);
-        std::memcpy(bottom, rgb_row_buffer_.data(), row_bytes);
+    } else if (out_metrics != nullptr) {
+        *out_metrics = compute_luminance_stats(out_rgb.data(), width_, height_);
     }
-
-    if (!need_metrics)
-        return;
-    if ((height_ & 1) != 0)
-        accumulate_row_metrics(out_rgb.data() + (size_t)(height_ / 2) * row_bytes);
-
-    const size_t n_pixels = (size_t)width_ * height_;
-    if (n_pixels == 0) {
-        *out_metrics = {0, 1, 0, 0, 0};
-        return;
-    }
-
-    double sum = 0.0;
-    for (int i = 0; i < 256; ++i)
-        sum += (double)i * histogram[i];
-
-    float mean = (float)(sum / n_pixels);
-    float pct_black = (float)histogram[0] / n_pixels;
-    float pct_clip = (float)clipped / n_pixels;
-
-    size_t target_50 = (size_t)(0.5f * n_pixels);
-    size_t target_95 = (size_t)(0.95f * n_pixels);
-    float p50 = 255.0f, p95 = 255.0f;
-    size_t cumul = 0;
-    for (int i = 0; i < 256; ++i) {
-        cumul += histogram[i];
-        if (p50 == 255.0f && cumul >= target_50)
-            p50 = (float)i;
-        if (cumul >= target_95) {
-            p95 = (float)i;
-            break;
-        }
-    }
-
-    *out_metrics = {mean, pct_black, pct_clip, p50, p95, {}};
-    std::copy(std::begin(histogram), std::end(histogram), out_metrics->histogram.begin());
 }
 
 void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
@@ -1236,52 +1204,32 @@ FrameMetrics Renderer::compute_display_metrics() {
 }
 
 FrameMetrics Renderer::compute_frame_metrics() const {
-    // Single pass over rgba_buffer_ (already populated by read_display_rgba).
-    // BT.709 luminance: integer approximation (>>10) of 0.2126/0.7152/0.0722.
-    // Must match Python stats.py and GLSL postprocess.frag.
-    static constexpr uint32_t BT709_R = 218, BT709_G = 732, BT709_B = 74;
-    const size_t n_pixels = (size_t)width_ * height_;
-    if (n_pixels == 0) return {0, 1, 0, 0, 0};
+    // rgba_buffer_ is populated by read_display_rgba(). Delegate to the pure
+    // analyser so there is exactly one BT.709 histogram implementation in the
+    // tree (shared with the RGB8 read_pixels path, the HDR path, and unit
+    // tests).
+    return compute_luminance_stats_rgba(rgba_buffer_.data(), width_, height_);
+}
 
-    int histogram[256] = {};
-    size_t clipped = 0;
+FrameAnalysis Renderer::compute_display_analysis() {
+    // Read RGB8 directly from the display FBO and flip in place — the
+    // previous RGBA→RGB strip is redundant now that we only need the
+    // three colour channels for analysis. The same orientation convention
+    // as read_pixels().
+    const std::size_t n_pixels = static_cast<std::size_t>(width_)
+                               * static_cast<std::size_t>(height_);
+    display_rgb_scratch_.resize(n_pixels * 3);
+    glFinish();
+    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE,
+                 display_rgb_scratch_.data());
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    flip_rgb8_rows(display_rgb_scratch_.data(), width_, height_, rgb_row_buffer_);
 
-    for (size_t i = 0; i < n_pixels; ++i) {
-        size_t off = i * 4; // RGBA8
-        uint8_t r = rgba_buffer_[off];
-        uint8_t g = rgba_buffer_[off + 1];
-        uint8_t b = rgba_buffer_[off + 2];
-
-        uint32_t lum = (BT709_R * r + BT709_G * g + BT709_B * b) >> 10;
-        if (lum > 255) lum = 255;
-        histogram[lum]++;
-
-        if (r == 255 || g == 255 || b == 255) ++clipped;
-    }
-
-    // Mean luminance
-    double sum = 0;
-    for (int i = 0; i < 256; ++i) sum += (double)i * histogram[i];
-    float mean = (float)(sum / n_pixels);
-
-    // pct_black: fraction with luminance < 1 (i.e., bin 0)
-    float pct_black = (float)histogram[0] / n_pixels;
-
-    // pct_clipped: any channel == 255
-    float pct_clip = (float)clipped / n_pixels;
-
-    // Percentiles from cumulative histogram (single pass for both p50 and p95)
-    size_t target_50 = (size_t)(0.5f * n_pixels);
-    size_t target_95 = (size_t)(0.95f * n_pixels);
-    float p50 = 255.0f, p95 = 255.0f;
-    size_t cumul = 0;
-    for (int i = 0; i < 256; ++i) {
-        cumul += histogram[i];
-        if (p50 == 255.0f && cumul >= target_50) p50 = (float)i;
-        if (cumul >= target_95) { p95 = (float)i; break; }
-    }
-
-    FrameMetrics m{mean, pct_black, pct_clip, p50, p95, {}};
-    std::copy(std::begin(histogram), std::end(histogram), m.histogram.begin());
-    return m;
+    FrameAnalysisParams params;
+    return analyze_frame(
+        display_rgb_scratch_.data(), width_, height_, last_upload_bounds_,
+        std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
+        nullptr, params);
 }

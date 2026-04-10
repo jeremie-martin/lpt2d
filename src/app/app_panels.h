@@ -2,6 +2,7 @@
 
 #include "app_actions.h"
 #include "editor.h"
+#include "renderer.h"  // for FrameMetrics (type alias for LuminanceStats)
 
 #include <array>
 #include <optional>
@@ -9,7 +10,6 @@
 #include <vector>
 
 class Renderer;
-struct FrameMetrics;
 struct ImGuiIO;
 
 // ─── Panel-local UI state ────────────────────────────────────────────
@@ -61,6 +61,7 @@ struct PanelState {
     bool paused = false;
     bool show_controls_panel = true;
     bool show_shortcuts_help = false;
+    bool show_circle_overlay = false; // draw measured light circles on top of viewport
     ContextMenuTarget context_menu;
     int active_tab = 0;               // 0 = Edit, 1 = Look
     bool tab_switch_requested = false; // set by keyboard shortcut, consumed by draw
@@ -72,7 +73,7 @@ struct PanelContext {
     Renderer& renderer;
     CompareSnapshot& compare_ab;
     PanelState& panel;
-    FrameMetrics& live_metrics;
+    FrameAnalysis& live_metrics;
     bool& force_live_metrics_refresh;
     const ImGuiIO& io;
     float dpi_scale;
@@ -95,7 +96,7 @@ void draw_controls_panel(
     Renderer& renderer,
     CompareSnapshot& compare_ab,
     PanelState& panel,
-    FrameMetrics& live_metrics,
+    FrameAnalysis& live_metrics,
     bool& force_live_metrics_refresh,
     const ImGuiIO& io,
     float dpi_scale,

@@ -292,8 +292,6 @@ def make_probe_shot() -> Shot:
 
 def check_beauty(p: AnimParams) -> tuple[bool, float]:
     """Render low-res frames, check illumination coverage. Returns (ok, avg_mean_lum)."""
-    from anim import frame_stats
-
     animate = build_animate(p)
     shot = make_probe_shot()
     timeline = Timeline(DURATION, fps=PROBE_FPS)
@@ -308,9 +306,9 @@ def check_beauty(p: AnimParams) -> tuple[bool, float]:
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
-        fs = frame_stats(render_result.pixels, PROBE_W, PROBE_H)
-        total_mean += fs.mean
-        if fs.mean > 30:
+        fs = render_result.metrics
+        total_mean += fs.mean_lum
+        if fs.mean_lum > 30:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0

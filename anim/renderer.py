@@ -12,15 +12,14 @@ from pathlib import Path
 import _lpt2d
 
 from .stats import (
-    FrameStats,
     QualityGate,
     check_quality,
-    frame_stats_from_report,
 )
 from .types import (
     AnimateFn,
     Camera2D,
     Frame,
+    FrameMetrics,
     FrameReport,
     Quality,
     RenderSession,
@@ -345,6 +344,7 @@ def render_frame(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     fast: bool = False,
+    analyze: bool = False,
 ) -> _lpt2d.RenderResult:
     """Render a single frame and return the result.
 
@@ -370,20 +370,26 @@ def render_frame(
         camera from the animate callback).
     fast : bool
         Use half-float precision for faster rendering (default False).
+    analyze : bool
+        When True, the returned ``RenderResult`` also carries a full
+        :class:`FrameAnalysis` (colour statistics + per-light circles) on
+        ``.analysis``.  Defaults to False so batch rendering paths do not
+        pay the ``O(W·H·L)`` circle-measurement cost they do not consume.
 
     Returns
     -------
     RenderResult
         Object with ``.pixels`` (bytes, RGB8), ``.time_ms`` (float),
         ``.total_rays`` (int), and ``.metrics`` (FrameMetrics with
-        histogram, luminance stats, etc.).
+        histogram, luminance stats, etc.).  When ``analyze=True``, also
+        ``.analysis`` with colour stats and per-light circles.
     """
     timeline, shot = _resolve_args(timeline, settings)
     session = RenderSession(shot.canvas.width, shot.canvas.height, fast)
     ctx = timeline.context_at(frame)
     result = animate(ctx)
     cpp_shot = _resolve_frame_shot(shot, result, camera)
-    rr = session.render_shot(cpp_shot, frame)
+    rr = session.render_shot(cpp_shot, frame, analyze)
     session.close()
     return rr
 
@@ -475,8 +481,8 @@ def render_stats(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     fast: bool = False,
-) -> list[tuple[int, float, FrameStats]]:
-    """Render frames and return their statistics."""
+) -> list[tuple[int, float, FrameMetrics]]:
+    """Render frames and return their per-frame C++ FrameMetrics."""
     timeline, shot = _resolve_args(timeline, settings)
     w, h = shot.canvas.width, shot.canvas.height
 
@@ -488,20 +494,14 @@ def render_stats(
         indices = list(frames)
 
     session = RenderSession(w, h, fast)
-    results: list[tuple[int, float, FrameStats]] = []
+    results: list[tuple[int, float, FrameMetrics]] = []
 
     for fi in indices:
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, camera)
-        t0 = time.monotonic()
         render_result = session.render_shot(cpp_shot, fi)
-        ms = (time.monotonic() - t0) * 1000
-        report = _report_from_result(render_result, fi, ms)
-        stats = frame_stats_from_report(report, w, h)
-        if stats is None:
-            raise RuntimeError("No stats report from renderer")
-        results.append((fi, ctx.time, stats))
+        results.append((fi, ctx.time, render_result.metrics))
 
     session.close()
     return results

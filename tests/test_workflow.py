@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
+
+from _metrics_fixtures import fake_metrics
 
 from anim import analysis as analysis_mod
 from anim import renderer as renderer_mod
-from anim.stats import FrameStats
 from anim.types import (
     Camera2D,
     Canvas,
@@ -121,21 +124,19 @@ def test_look_with_overrides():
 # ── Render stats mocking tests ───────────────────────────────────
 # These mock render_stats at the function level (not the old Renderer class).
 
+_SAMPLE_DEFAULTS = dict(
+    mean_lum=64.0, pct_black=0.2, pct_clipped=0.0,
+    p05=1.0, p50=40.0, p95=120.0, p99=200.0,
+    std_dev=10.0, lum_min=0, lum_max=200,
+)
+
+
+def _fake_sample(**overrides: Any) -> Any:
+    return fake_metrics(**{**_SAMPLE_DEFAULTS, **overrides})
+
 
 def test_auto_look_defaults_to_rays_normalization(monkeypatch):
-    sample = FrameStats(
-        mean=64.0,
-        max=200,
-        min=0,
-        std=10.0,
-        pct_black=0.2,
-        pct_clipped=0.0,
-        p05=1.0,
-        p50=40.0,
-        p95=120.0,
-        width=100,
-        height=100,
-    )
+    sample = _fake_sample()
 
     def fake_render_stats(*args, **kwargs):
         return [(0, 0.0, sample)]
@@ -149,19 +150,7 @@ def test_auto_look_defaults_to_rays_normalization(monkeypatch):
 
 
 def test_auto_look_respects_explicit_normalize(monkeypatch):
-    sample = FrameStats(
-        mean=64.0,
-        max=200,
-        min=0,
-        std=10.0,
-        pct_black=0.2,
-        pct_clipped=0.0,
-        p05=1.0,
-        p50=40.0,
-        p95=120.0,
-        width=100,
-        height=100,
-    )
+    sample = _fake_sample()
 
     called = {"count": 0}
 
@@ -183,19 +172,7 @@ def test_auto_look_respects_explicit_normalize(monkeypatch):
 
 
 def test_auto_look_shot_subject_uses_authored_settings(monkeypatch):
-    sample = FrameStats(
-        mean=64.0,
-        max=200,
-        min=0,
-        std=10.0,
-        pct_black=0.2,
-        pct_clipped=0.0,
-        p05=1.0,
-        p50=40.0,
-        p95=120.0,
-        width=480,
-        height=270,
-    )
+    sample = _fake_sample()
     captured: dict = {}
     shot = Shot(
         camera=Camera2D(bounds=[-2.0, -1.0, 2.0, 1.0]),
@@ -222,19 +199,7 @@ def test_auto_look_shot_subject_uses_authored_settings(monkeypatch):
 
 
 def test_auto_look_preserves_authored_look_fields(monkeypatch):
-    sample = FrameStats(
-        mean=64.0,
-        max=200,
-        min=0,
-        std=10.0,
-        pct_black=0.2,
-        pct_clipped=0.0,
-        p05=1.0,
-        p50=40.0,
-        p95=120.0,
-        width=480,
-        height=270,
-    )
+    sample = _fake_sample()
     captured: dict = {}
     shot = Shot(
         canvas=Canvas(width=960, height=540),

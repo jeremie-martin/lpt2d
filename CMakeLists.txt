@@ -50,6 +50,7 @@ add_library(lpt2d-core STATIC
     src/core/serialize_json.cpp
     src/core/headless.cpp
     src/core/session.cpp
+    src/core/image_analysis.cpp
 )
 
 target_include_directories(lpt2d-core PUBLIC
@@ -173,6 +174,7 @@ if(LPT2D_BUILD_TESTS)
         tests/cpp/test_geometry.cpp
         tests/cpp/test_scene.cpp
         tests/cpp/test_color.cpp
+        tests/cpp/test_image_analysis.cpp
     )
     target_include_directories(lpt2d-core-tests PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/cpp

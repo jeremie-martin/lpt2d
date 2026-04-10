@@ -32,7 +32,6 @@ from anim import (
     Track,
     Wrap,
     ball_lens,
-    frame_stats,
     glass,
     mirror_box,
     render,
@@ -244,9 +243,9 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
-        fs = frame_stats(render_result.pixels, PROBE_W, PROBE_H)
-        total_std += fs.std
-        if fs.std > MIN_CONTRAST_STD:
+        fs = render_result.metrics
+        total_std += fs.std_dev
+        if fs.std_dev > MIN_CONTRAST_STD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0

@@ -35,7 +35,7 @@ RenderSession::~RenderSession() { close(); }
 RenderSession::RenderSession(RenderSession&&) noexcept = default;
 RenderSession& RenderSession::operator=(RenderSession&&) noexcept = default;
 
-RenderResult RenderSession::render_shot(const Shot& shot, int frame) {
+RenderResult RenderSession::render_shot(const Shot& shot, int frame, bool analyze) {
     if (!impl_)
         throw std::runtime_error("RenderSession: session is closed");
 
@@ -52,12 +52,12 @@ RenderResult RenderSession::render_shot(const Shot& shot, int frame) {
     PostProcess pp = shot.look.to_post_process();
     int64_t total_rays = shot.trace.rays;
 
-    return render_frame(shot.scene, bounds, tcfg, pp, total_rays);
+    return render_frame(shot.scene, bounds, tcfg, pp, total_rays, analyze);
 }
 
 RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bounds,
                                           const TraceConfig& trace_cfg, const PostProcess& pp,
-                                          int64_t total_rays) {
+                                          int64_t total_rays, bool analyze) {
     auto t0 = std::chrono::steady_clock::now();
     auto& r = impl_->renderer;
 
@@ -85,9 +85,18 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
         }
     }
 
-    // Read pixels and compute metrics
+    // Read pixels and compute metrics. Full FrameAnalysis (colour +
+    // per-light circles) is only computed when the caller opted in —
+    // video batch paths and still exports leave analyze=false and pay
+    // nothing beyond the cheap luminance histogram.
     RenderResult result;
-    r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr, &result.metrics);
+    if (analyze) {
+        r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr,
+                      &result.metrics, &result.analysis);
+    } else {
+        r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr,
+                      &result.metrics, nullptr);
+    }
     result.width = impl_->width;
     result.height = impl_->height;
     result.total_rays = r.total_rays();

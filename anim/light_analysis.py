@@ -6,7 +6,6 @@ import _lpt2d
 
 from . import analysis as analysis_mod
 from .stats import (
-    FrameStats,
     LightContribution,
     StatsDiff,
     StructureReport,
@@ -238,8 +237,8 @@ def light_contributions(
             animate_solo, solo_shot, analysis_shot.camera
         )
         if s is not None:
-            results.append((label, idx, s.mean, 1.0 - s.pct_black))
-            total_mean += s.mean
+            results.append((label, idx, s.mean_lum, 1.0 - s.pct_black))
+            total_mean += s.mean_lum
         else:
             results.append((label, idx, 0.0, 0.0))
 
@@ -305,7 +304,9 @@ def structure_contribution(
         trace=analysis_shot.trace,
     )
 
-    _empty = FrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 480, 480)
+    # Empty FrameMetrics sentinel for the "render failed" fallback. The C++
+    # analyzer returns a zeroed LuminanceStats for an empty input buffer.
+    _empty = _lpt2d.compute_luminance_stats(b"", 0, 0)
     s_with = analysis_mod._measure_single_frame(
         lambda _ctx, _s=scene: Frame(scene=_s),
         shot_with,
@@ -318,7 +319,7 @@ def structure_contribution(
     ) or _empty
 
     diff = StatsDiff(
-        mean=s_without.mean - s_with.mean,
+        mean=s_without.mean_lum - s_with.mean_lum,
         pct_black=s_without.pct_black - s_with.pct_black,
         pct_clipped=s_without.pct_clipped - s_with.pct_clipped,
         p50=s_without.p50 - s_with.p50,

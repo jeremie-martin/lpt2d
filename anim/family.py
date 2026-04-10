@@ -26,9 +26,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+import _lpt2d  # for FrameAnalysis type reference only
+
 from .params import params_from_dict
 from .renderer import RenderSession, _resolve_frame_shot, render, save_image
-from .stats import color_stats, frame_stats
 from .types import AnimateFn, Camera2D, Shot, Timeline
 
 # ---------------------------------------------------------------------------
@@ -46,19 +47,49 @@ class Verdict:
 
 @dataclass(frozen=True)
 class ProbeFrame:
-    """Per-frame statistics from a probe render."""
+    """Per-frame statistics from a probe render.
+
+    Wraps the C++ FrameAnalysis for the probe frame and exposes convenience
+    accessors for the luminance / colour fields the filter loop reads in
+    tight inner expressions.
+    """
 
     time: float
-    # Luminance (from FrameStats)
-    mean: float
-    std: float
-    pct_black: float
-    pct_clipped: float
-    # Color (from ColorStats)
-    color_richness: float
-    mean_saturation: float
-    hue_entropy: float
-    chromatic_fraction: float
+    analysis: Any  # _lpt2d.FrameAnalysis
+
+    # Convenience accessors — all of these forward to rr.analysis. The
+    # luminance fields use the 0..255 scale, same as the C++ histogram.
+    @property
+    def mean(self) -> float:
+        return self.analysis.lum.mean_lum
+
+    @property
+    def std(self) -> float:
+        return self.analysis.lum.std_dev
+
+    @property
+    def pct_black(self) -> float:
+        return self.analysis.lum.pct_black
+
+    @property
+    def pct_clipped(self) -> float:
+        return self.analysis.lum.pct_clipped
+
+    @property
+    def color_richness(self) -> float:
+        return self.analysis.color.color_richness
+
+    @property
+    def mean_saturation(self) -> float:
+        return self.analysis.color.mean_saturation
+
+    @property
+    def hue_entropy(self) -> float:
+        return self.analysis.color.hue_entropy
+
+    @property
+    def chromatic_fraction(self) -> float:
+        return self.analysis.color.chromatic_fraction
 
 
 # ---------------------------------------------------------------------------
@@ -161,22 +192,8 @@ def probe(
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
-        rr = session.render_shot(cpp_shot, fi)
-        fs = frame_stats(rr.pixels, width, height)
-        cs = color_stats(rr.pixels, width, height)
-        frames.append(
-            ProbeFrame(
-                time=ctx.time,
-                mean=fs.mean,
-                std=fs.std,
-                pct_black=fs.pct_black,
-                pct_clipped=fs.pct_clipped,
-                color_richness=cs.color_richness,
-                mean_saturation=cs.mean_saturation,
-                hue_entropy=cs.hue_entropy,
-                chromatic_fraction=cs.chromatic_fraction,
-            )
-        )
+        rr = session.render_shot(cpp_shot, fi, True)
+        frames.append(ProbeFrame(time=ctx.time, analysis=rr.analysis))
 
     session.close()
     return frames

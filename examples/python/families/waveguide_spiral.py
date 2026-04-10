@@ -31,8 +31,6 @@ from anim import (
     Timeline,
     Track,
     Wrap,
-    color_stats,
-    frame_stats,
     glass,
     mirror_box,
     render,
@@ -291,14 +289,13 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float, float]:
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
-        render_result = session.render_shot(cpp_shot, fi)
-        pixels = render_result.pixels
+        render_result = session.render_shot(cpp_shot, fi, True)
 
-        fs = frame_stats(pixels, PROBE_W, PROBE_H)
-        cs = color_stats(pixels, PROBE_W, PROBE_H)
-        total_std += fs.std
+        fs = render_result.metrics
+        cs = render_result.analysis.color
+        total_std += fs.std_dev
         total_richness += cs.color_richness
-        if fs.std > MIN_CONTRAST_STD and cs.color_richness > RICHNESS_THRESHOLD:
+        if fs.std_dev > MIN_CONTRAST_STD and cs.color_richness > RICHNESS_THRESHOLD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0

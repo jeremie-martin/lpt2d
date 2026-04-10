@@ -31,7 +31,6 @@ from anim import (
     Timeline,
     Track,
     Wrap,
-    frame_stats,
     mirror_box,
     render,
 )
@@ -288,10 +287,10 @@ def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
-        fs = frame_stats(render_result.pixels, PROBE_W, PROBE_H)
-        total_mean += fs.mean
-        total_std += fs.std
-        if fs.mean > MIN_MEAN_LUM:
+        fs = render_result.metrics
+        total_mean += fs.mean_lum
+        total_std += fs.std_dev
+        if fs.mean_lum > MIN_MEAN_LUM:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0
