@@ -1,7 +1,21 @@
 """Frame statistics for automated analysis and agent workflows.
 
-Computes numeric summaries from raw RGB8 frame data without requiring
-image file I/O or visual inspection.
+This module used to contain numpy implementations of `frame_stats` and
+`color_stats` that operated on RGB8 byte buffers. Those have been moved to
+the C++ core — see `src/core/image_analysis.cpp`. Callers should read
+`rr.metrics` / `rr.analysis.lum` / `rr.analysis.color` directly, or use
+the free functions `_lpt2d.compute_luminance_stats` and
+`_lpt2d.compute_color_stats` when they only have raw bytes.
+
+What remains in this module:
+
+- `QualityGate` / `check_quality` — threshold policy on top of `FrameReport`.
+- `StatsDiff` / `compare_stats` / `compare_summary` — A/B comparison.
+- `LookProfile` / `LookComparison` / `LookReport` — Look-quality analytics.
+- `LightContribution` / `StructureReport` and the shape-clutter diagnostics.
+
+All of these operate on `FrameMetrics` (the C++ LuminanceStats type) rather
+than the historical `FrameStats` Python dataclass.
 """
 
 from __future__ import annotations
@@ -11,8 +25,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
-import numpy as np
-
 import _lpt2d
 
 from .types import (
@@ -20,6 +32,7 @@ from .types import (
     Bezier,
     Circle,
     Ellipse,
+    FrameMetrics,
     FrameReport,
     Look,
     Material,
@@ -31,261 +44,6 @@ from .types import (
     clamp_arc_sweep,
     normalize_angle,
 )
-
-# BT.709 luminance: integer approximation (>>10) of 0.2126/0.7152/0.0722.
-# Must match C++ renderer.cpp and GLSL postprocess.frag.
-BT709_WEIGHTS = np.array([218, 732, 74], dtype=np.uint32)
-
-
-@dataclass(frozen=True)
-class FrameStats:
-    """Numeric summary of a rendered frame (0-255 scale).
-
-    All metrics except pct_clipped use BT.709 luminance.
-    pct_clipped uses raw RGB channels (any channel == 255).
-    """
-
-    mean: float  # mean luminance
-    max: int  # brightest pixel luminance
-    min: int  # darkest pixel luminance
-    std: float  # standard deviation of luminance
-    pct_black: float  # fraction of pixels with luminance < 1
-    pct_clipped: float  # fraction of pixels with any RGB channel == 255
-    p05: float  # 5th percentile luminance
-    p50: float  # median luminance
-    p95: float  # 95th percentile luminance
-    width: int
-    height: int
-
-    def summary(self) -> str:
-        """One-line human-readable summary."""
-        return (
-            f"mean={self.mean:.1f} med={self.p50:.0f} "
-            f"range=[{self.min},{self.max}] std={self.std:.1f} "
-            f"black={self.pct_black:.1%} clipped={self.pct_clipped:.1%}"
-        )
-
-    def is_underexposed(self, threshold: float = 0.6) -> bool:
-        """True if most of the frame is very dark."""
-        return self.pct_black > threshold
-
-    def is_overexposed(self, threshold: float = 0.1) -> bool:
-        """True if significant portion of the frame is clipped to white."""
-        return self.pct_clipped > threshold
-
-
-@dataclass(frozen=True)
-class ColorStats:
-    """Spectral diversity summary of a rendered frame.
-
-    Measures color richness via HSV analysis — useful for evaluating
-    dispersion quality in spectral scenes.
-
-    ``mean_saturation`` averages over chromatic pixels only (those above
-    the saturation threshold).  ``chromatic_fraction`` is the share of
-    total pixels that are chromatic.  ``color_richness`` combines all
-    three factors so it answers "how spectrally rich is the whole image"
-    rather than "how colorful are the colorful parts."
-    """
-
-    mean_saturation: float  # mean HSV saturation across chromatic pixels
-    hue_entropy: float  # Shannon entropy of 36-bin hue histogram (bits)
-    chromatic_fraction: float  # fraction of pixels above saturation threshold
-    color_richness: float  # hue_entropy * mean_saturation * chromatic_fraction
-    n_chromatic: int  # pixel count above saturation threshold
-
-    def summary(self) -> str:
-        """One-line human-readable summary."""
-        return (
-            f"sat={self.mean_saturation:.3f} entropy={self.hue_entropy:.3f} "
-            f"richness={self.color_richness:.3f} chromatic={self.chromatic_fraction:.1%}"
-        )
-
-
-def color_stats(rgb: bytes, width: int, height: int, sat_threshold: float = 0.05) -> ColorStats:
-    """Compute color diversity statistics from raw RGB8 pixel data.
-
-    Args:
-        rgb: Raw RGB8 bytes (width * height * 3).
-        width: Frame width in pixels.
-        height: Frame height in pixels.
-        sat_threshold: Minimum HSV saturation to count a pixel as chromatic.
-
-    Returns:
-        ColorStats with saturation, hue entropy, and composite richness.
-    """
-    n_pixels = width * height
-    if n_pixels == 0:
-        raise ValueError("Cannot compute stats for a 0-pixel frame")
-    if len(rgb) != n_pixels * 3:
-        raise ValueError(f"Expected {n_pixels * 3} bytes, got {len(rgb)}")
-
-    arr = np.frombuffer(rgb, dtype=np.uint8).reshape(n_pixels, 3).astype(np.float32) / 255.0
-    r, g, b = arr[:, 0], arr[:, 1], arr[:, 2]
-
-    cmax = np.maximum(np.maximum(r, g), b)
-    cmin = np.minimum(np.minimum(r, g), b)
-    delta = cmax - cmin
-
-    # Saturation: S = delta / cmax (0 where cmax == 0)
-    safe_cmax = np.where(cmax > 0, cmax, 1.0)
-    sat = np.where(cmax > 0, delta / safe_cmax, 0.0)
-    mask = sat > sat_threshold
-    n_chromatic = int(np.count_nonzero(mask))
-
-    chromatic_frac = n_chromatic / n_pixels
-
-    if n_chromatic == 0:
-        return ColorStats(
-            mean_saturation=0.0,
-            hue_entropy=0.0,
-            chromatic_fraction=0.0,
-            color_richness=0.0,
-            n_chromatic=0,
-        )
-
-    mean_sat = float(np.mean(sat[mask]))
-
-    # Hue (standard RGB-to-HSV, normalized to [0, 1))
-    safe_delta = np.where(delta > 0, delta, 1.0)
-    hue = np.where(
-        r == cmax,
-        (g - b) / safe_delta,
-        np.where(g == cmax, 2.0 + (b - r) / safe_delta, 4.0 + (r - g) / safe_delta),
-    )
-    hue = (hue / 6.0) % 1.0
-
-    # 36-bin hue histogram over chromatic pixels only
-    hue_chromatic = hue[mask]
-    bins = np.floor(hue_chromatic * 36.0).astype(np.int32)
-    bins = np.clip(bins, 0, 35)
-    hist = np.bincount(bins, minlength=36).astype(np.float64)
-    hist = hist / hist.sum()
-
-    # Shannon entropy (bits)
-    nonzero = hist > 0
-    entropy = float(-np.sum(hist[nonzero] * np.log2(hist[nonzero])))
-
-    return ColorStats(
-        mean_saturation=mean_sat,
-        hue_entropy=entropy,
-        chromatic_fraction=chromatic_frac,
-        color_richness=entropy * mean_sat * chromatic_frac,
-        n_chromatic=n_chromatic,
-    )
-
-
-def frame_stats(rgb: bytes, width: int, height: int) -> FrameStats:
-    """Compute statistics from raw RGB8 pixel data.
-
-    Args:
-        rgb: Raw RGB8 bytes (width * height * 3).
-        width: Frame width in pixels.
-        height: Frame height in pixels.
-
-    Returns:
-        FrameStats with luminance and exposure metrics.
-    """
-    n_pixels = width * height
-    if n_pixels == 0:
-        raise ValueError("Cannot compute stats for a 0-pixel frame")
-    if len(rgb) != n_pixels * 3:
-        raise ValueError(f"Expected {n_pixels * 3} bytes, got {len(rgb)}")
-
-    arr = np.frombuffer(rgb, dtype=np.uint8).reshape(n_pixels, 3)
-
-    # BT.709 luminance via matrix multiply (uint32 intermediate, >>10)
-    lum = (arr.astype(np.uint32) @ BT709_WEIGHTS >> 10).astype(np.uint8)
-
-    # Histogram-based stats (256 bins, exact for uint8)
-    hist = np.bincount(lum, minlength=256)
-    bins = np.arange(256, dtype=np.float64)
-    total = float(n_pixels)
-
-    mean = float(np.dot(hist, bins) / total)
-    variance = float(np.dot(hist, bins * bins) / total) - mean * mean
-    std = variance**0.5 if variance > 0 else 0.0
-
-    nonzero = np.nonzero(hist)[0]
-    lum_min = int(nonzero[0])
-    lum_max = int(nonzero[-1])
-
-    pct_black = float(hist[0] / total)
-    pct_clipped = float(
-        np.count_nonzero((arr[:, 0] == 255) | (arr[:, 1] == 255) | (arr[:, 2] == 255)) / total
-    )
-
-    # Percentiles from cumulative histogram
-    cdf = np.cumsum(hist)
-
-    def _percentile(p: float) -> float:
-        target = p * total
-        idx = np.searchsorted(cdf, target)
-        return float(min(idx, 255))
-
-    p05 = _percentile(0.05)
-    p50 = _percentile(0.50)
-    p95 = _percentile(0.95)
-
-    return FrameStats(
-        mean=mean,
-        max=lum_max,
-        min=lum_min,
-        std=std,
-        pct_black=pct_black,
-        pct_clipped=pct_clipped,
-        p05=p05,
-        p50=p50,
-        p95=p95,
-        width=width,
-        height=height,
-    )
-
-
-def frame_stats_from_report(report: FrameReport, width: int, height: int) -> FrameStats | None:
-    """Reconstruct FrameStats from a renderer histogram report when available."""
-    histogram = report.histogram
-    if histogram is None or len(histogram) != 256:
-        return None
-
-    total = sum(histogram)
-    if total <= 0:
-        return None
-
-    bins = np.arange(256, dtype=np.float64)
-    hist = np.asarray(histogram, dtype=np.float64)
-
-    mean = report.mean if report.mean is not None else float(np.dot(hist, bins) / total)
-    variance = float(np.dot(hist, bins * bins) / total) - mean * mean
-    std = variance**0.5 if variance > 0 else 0.0
-
-    nonzero = np.nonzero(hist)[0]
-    lum_min = int(nonzero[0])
-    lum_max = int(nonzero[-1])
-
-    pct_black = report.pct_black if report.pct_black is not None else float(histogram[0] / total)
-    if report.pct_clipped is None:
-        return None
-
-    cdf = np.cumsum(hist)
-
-    def _percentile(p: float) -> float:
-        idx = np.searchsorted(cdf, p * total)
-        return float(min(idx, 255))
-
-    return FrameStats(
-        mean=mean,
-        max=lum_max,
-        min=lum_min,
-        std=std,
-        pct_black=pct_black,
-        pct_clipped=report.pct_clipped,
-        p05=_percentile(0.05),
-        p50=report.p50 if report.p50 is not None else _percentile(0.50),
-        p95=report.p95 if report.p95 is not None else _percentile(0.95),
-        width=width,
-        height=height,
-    )
 
 
 # --- Quality gates ---
@@ -327,7 +85,11 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
 
 @dataclass(frozen=True)
 class StatsDiff:
-    """Per-field difference between two FrameStats (b - a)."""
+    """Per-field difference between two FrameMetrics (b - a).
+
+    Field names are kept short for display; `mean` is the signed delta of
+    `FrameMetrics.mean_lum`.
+    """
 
     mean: float
     pct_black: float
@@ -353,8 +115,8 @@ class StatsDiff:
 
 
 def compare_stats(
-    a: list[tuple[int, float, FrameStats]],
-    b: list[tuple[int, float, FrameStats]],
+    a: list[tuple[int, float, FrameMetrics]],
+    b: list[tuple[int, float, FrameMetrics]],
 ) -> list[tuple[int, float, StatsDiff]]:
     """Compare two render_stats() results frame-by-frame.
 
@@ -372,7 +134,7 @@ def compare_stats(
                 fi_a,
                 t_a,
                 StatsDiff(
-                    mean=sb.mean - sa.mean,
+                    mean=sb.mean_lum - sa.mean_lum,
                     pct_black=sb.pct_black - sa.pct_black,
                     pct_clipped=sb.pct_clipped - sa.pct_clipped,
                     p50=sb.p50 - sa.p50,
@@ -698,7 +460,7 @@ class LookProfile:
     """
 
     look: Look
-    per_frame: list[tuple[int, float, FrameStats]]
+    per_frame: list[tuple[int, float, FrameMetrics]]
     mean_brightness: float
     std_brightness: float
     max_clipping: float
@@ -728,7 +490,7 @@ class LookProfile:
         return "\n".join(lines)
 
     @staticmethod
-    def from_stats(look: Look, results: list[tuple[int, float, FrameStats]]) -> "LookProfile":
+    def from_stats(look: Look, results: list[tuple[int, float, FrameMetrics]]) -> "LookProfile":
         """Compute profile from render_stats output."""
         if not results:
             return LookProfile(
@@ -741,7 +503,7 @@ class LookProfile:
                 mean_contrast_range=0,
                 std_contrast_range=0,
             )
-        brightnesses = [s.mean / 255.0 for _, _, s in results]
+        brightnesses = [s.mean_lum / 255.0 for _, _, s in results]
         contrast_ranges = [s.p95 - s.p05 for _, _, s in results]
         n = len(results)
         mean_b = sum(brightnesses) / n
@@ -845,7 +607,7 @@ class LookReport:
         clipping = []
         low_contrast = []
         for fi, _t, s in profile.per_frame:
-            b = s.mean / 255.0
+            b = s.mean_lum / 255.0
             if b < dark_threshold:
                 dark.append(fi)
             if b > bright_threshold:
@@ -887,8 +649,8 @@ class StructureReport:
     """Effect of a shape on the scene's appearance."""
 
     shape_id: str
-    stats_with: FrameStats
-    stats_without: FrameStats
+    stats_with: FrameMetrics
+    stats_without: FrameMetrics
     diff: StatsDiff
     role: str  # "brightener", "dimmer", "neutral"
 

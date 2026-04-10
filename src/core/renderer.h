@@ -1,24 +1,24 @@
 #pragma once
 
+#include "image_analysis.h"
+
 #include <GL/glew.h>
 #include <stddef.h>
-#include <array>
 #include <cstdint>
 #include <vector>
 
-struct Bounds;
+#include "scene.h"  // for Bounds (cached by value in Renderer)
+
 struct PostProcess;
 struct Scene;
 struct TraceConfig;
 
-struct FrameMetrics {
-    float mean_lum;    // mean BT.709 luminance (0-255 scale)
-    float pct_black;   // fraction of pixels with luminance < 1
-    float pct_clipped; // fraction of pixels with any channel == 255
-    float p50;         // median luminance
-    float p95;         // 95th percentile luminance
-    std::array<int, 256> histogram{}; // BT.709 luminance histogram (256 bins)
-};
+// FrameMetrics is the historical luminance-only metrics struct. It is now
+// an alias for LuminanceStats (defined in image_analysis.h) which is a
+// superset with extra fields (p05, p99, std_dev, lum_min/max, width/height).
+// The field names of the legacy six fields are preserved, so every existing
+// read site (GUI Stats panel, Python bindings, tests) keeps working unchanged.
+using FrameMetrics = LuminanceStats;
 
 struct VignetteFrame {
     float center[2] = {0.5f, 0.5f};
@@ -60,7 +60,8 @@ public:
     void update_display(const PostProcess& pp, float display_aspect = 0.0f,
                         const VignetteFrame* vignette_frame = nullptr);
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f,
-                     const VignetteFrame* vignette_frame = nullptr, FrameMetrics* out_metrics = nullptr);
+                     const VignetteFrame* vignette_frame = nullptr, FrameMetrics* out_metrics = nullptr,
+                     FrameAnalysis* out_analysis = nullptr);
     void read_display_rgba(std::vector<uint8_t>& out_rgba);
 
     GLuint display_texture() const { return display_texture_; }
@@ -80,6 +81,12 @@ public:
     // Compute metrics from the current display FBO (reads back RGBA8 pixels).
     // Standalone — does not require prior read_pixels() call.
     FrameMetrics compute_display_metrics();
+
+    // Full frame analysis (luminance + color + per-light circles). Reads the
+    // current display FBO and uses the bounds and point-light positions
+    // cached by the most recent upload_scene() / update_viewport() call.
+    // This is what the GUI stats panel and viewport overlay consume.
+    FrameAnalysis compute_display_analysis();
 
 private:
     int width_ = 0, height_ = 0;
@@ -177,6 +184,12 @@ private:
     float viewport_scale_ = 1.0f;
     std::vector<uint8_t> rgba_buffer_;
     std::vector<uint8_t> rgb_row_buffer_;
+    std::vector<uint8_t> display_rgb_scratch_;  // RGB8 readback for compute_display_analysis
+
+    // Cached from upload_scene() / update_viewport() so compute_display_analysis
+    // can run with no scene context from the caller.
+    Bounds last_upload_bounds_{};
+    std::vector<LightRef> light_refs_;
 
     // Cached PP uniform locations
     GLint loc_max_val_ = -1;

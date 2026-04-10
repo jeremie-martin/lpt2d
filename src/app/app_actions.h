@@ -36,7 +36,7 @@ struct CompareSnapshot {
     Shot shot;
     int frame = 0;
     Bounds view_bounds{{-1, -1}, {1, 1}};
-    FrameMetrics metrics{};
+    FrameAnalysis analysis{};
     GLuint texture = 0;
     int texture_width = 0;
     int texture_height = 0;

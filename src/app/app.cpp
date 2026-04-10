@@ -194,7 +194,7 @@ int App::run(const AppConfig& config) {
     ed.session.undo.push(ed.shot.scene); // initial state
 
     CompareSnapshot compare_ab;
-    FrameMetrics live_metrics{};
+    FrameAnalysis live_metrics{};
     int stats_counter = 30; // trigger immediate compute on first frame
     bool force_live_metrics_refresh = true;
     float frame_ms = 16.0f;
@@ -373,11 +373,11 @@ int App::run(const AppConfig& config) {
         }
 
         if (showing_snapshot_a && compare_ab.metrics_valid) {
-            live_metrics = compare_ab.metrics;
+            live_metrics = compare_ab.analysis;
         } else if (force_live_metrics_refresh || ++stats_counter >= 30) {
             stats_counter = 0;
             force_live_metrics_refresh = false;
-            live_metrics = renderer.compute_display_metrics();
+            live_metrics = renderer.compute_display_analysis();
         }
 
         // ImGui frame
@@ -708,6 +708,57 @@ int App::run(const AppConfig& config) {
                     ImVec2 text_pos((float)win_w * 0.5f - 100, (float)win_h - 30 * dpi_scale);
                     dl->AddText(text_pos, IM_COL32(255, 255, 255, 220), status);
                 }
+            }
+        }
+
+        // ── Light circle overlay ─────────────────────────────────────────
+        // Draws each measured LightCircle (from the C++ image_analysis
+        // module, via compute_display_analysis) on top of the viewport.
+        // Uses a thin green/red outline for pass/fail against a subset of
+        // the crystal_field check.py thresholds so the user can iterate on
+        // whether the measurement is catching what they see.
+        if (panel.show_circle_overlay && !live_metrics.circles.empty()) {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const float rw = (float)renderer.width();
+            const float rh = (float)renderer.height();
+            const float sx_scale = (rw > 0) ? (float)win_w / rw : 1.0f;
+            const float sy_scale = (rh > 0) ? (float)win_h / rh : 1.0f;
+            const float r_scale = 0.5f * (sx_scale + sy_scale);
+            // Thresholds mirrored from examples/python/families/crystal_field/check.py
+            // (they are the GUI's own hard-coded preview — the Python filter
+            // is the source of truth).
+            constexpr float kMinMovingRadiusPx = 3.0f;
+            constexpr float kMaxMovingRadiusPx = 80.0f;
+            constexpr float kMinSharpness = 0.010f;
+            constexpr int   kMinBrightPixels = 20;
+
+            for (const auto& c : live_metrics.circles) {
+                if (c.radius_px <= 0.0f) continue;
+                const float sx = c.pixel_x * sx_scale;
+                const float sy = c.pixel_y * sy_scale;
+                const ImVec2 center(sx, sy);
+                const float r_screen = c.radius_px * r_scale;
+                const float fwhm_screen = c.radius_half_max_px * r_scale;
+
+                const bool is_moving = c.id.rfind("light_", 0) == 0;
+                const bool ok = (!is_moving) ||
+                    (c.radius_px >= kMinMovingRadiusPx &&
+                     c.radius_px <= kMaxMovingRadiusPx &&
+                     c.sharpness >= kMinSharpness &&
+                     c.n_bright_pixels >= kMinBrightPixels);
+                const ImU32 col = ok ? IM_COL32(60, 220, 100, 220)
+                                     : IM_COL32(230, 80, 80, 220);
+                const ImU32 col_fwhm = ok ? IM_COL32(60, 220, 100, 110)
+                                          : IM_COL32(230, 80, 80, 110);
+                dl->AddCircle(center, r_screen, col, 0, 1.5f * dpi_scale);
+                if (fwhm_screen > 0.0f)
+                    dl->AddCircle(center, fwhm_screen, col_fwhm, 0, 1.0f * dpi_scale);
+                dl->AddCircleFilled(center, 2.0f * dpi_scale, col);
+                char label[64];
+                std::snprintf(label, sizeof(label), "%s r%.0f",
+                              c.id.c_str(), c.radius_px);
+                dl->AddText(ImVec2(sx + r_screen + 4 * dpi_scale, sy - 7 * dpi_scale),
+                            col, label);
             }
         }
 

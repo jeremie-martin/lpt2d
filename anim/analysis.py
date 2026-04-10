@@ -9,7 +9,6 @@ import _lpt2d
 
 from . import renderer as renderer_mod
 from .stats import (
-    FrameStats,
     LookComparison,
     LookProfile,
     LookReport,
@@ -20,6 +19,7 @@ from .types import (
     Canvas,
     Frame,
     FrameContext,
+    FrameMetrics,
     Look,
     ProjectorLight,
     Quality,
@@ -166,8 +166,8 @@ def _measure_single_frame(
     animate: AnimateFn,
     shot: Shot,
     camera: Camera2D | None = None,
-) -> FrameStats | None:
-    """Render frame 0 and return its FrameStats, or None on failure."""
+) -> FrameMetrics | None:
+    """Render frame 0 and return its FrameMetrics, or None on failure."""
     stats_list = renderer_mod.render_stats(
         animate,
         1.0,
@@ -181,13 +181,13 @@ def _measure_single_frame(
     return None
 
 
-def _summarize_brightness(stats_list: list[FrameStats]) -> float:
-    """Return representative brightness (0..1) from a list of FrameStats.
+def _summarize_brightness(stats_list: list[FrameMetrics]) -> float:
+    """Return representative brightness (0..1) from a list of FrameMetrics.
 
     When inter-frame variance is high (std > 0.05), uses the 25th percentile
     instead of the mean to bias toward darker frames.
     """
-    brightnesses = [s.mean / 255.0 for s in stats_list]
+    brightnesses = [s.mean_lum / 255.0 for s in stats_list]
     measured_mean = sum(brightnesses) / len(brightnesses)
     if len(brightnesses) > 1:
         std_b = (sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)) ** 0.5
@@ -238,7 +238,7 @@ def auto_look(
     chosen_tonemap = shot.look.tonemap if tonemap is None else tonemap
     chosen_normalize = shot.look.normalize if normalize is None else normalize
 
-    def measure_per_frame(look: Look) -> list[tuple[int, float, FrameStats]]:
+    def measure_per_frame(look: Look) -> list[tuple[int, float, FrameMetrics]]:
         draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
         return renderer_mod.render_stats(
             animate,

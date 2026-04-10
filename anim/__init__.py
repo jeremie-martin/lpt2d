@@ -47,8 +47,6 @@ from .renderer import render_frame as render_frame
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
 from .renderer import save_image as save_image
-from .stats import ColorStats as ColorStats
-from .stats import FrameStats as FrameStats
 from .stats import LightContribution as LightContribution
 from .stats import LookComparison as LookComparison
 from .stats import LookProfile as LookProfile
@@ -57,11 +55,9 @@ from .stats import QualityGate as QualityGate
 from .stats import StatsDiff as StatsDiff
 from .stats import StructureReport as StructureReport
 from .stats import check_quality as check_quality
-from .stats import color_stats as color_stats
 from .stats import compare_stats as compare_stats
 from .stats import compare_summary as compare_summary
 from .stats import diagnose_scene as diagnose_scene
-from .stats import frame_stats as frame_stats
 from .track import Key as Key
 from .track import Track as Track
 from .track import Wrap as Wrap
@@ -72,11 +68,17 @@ from .types import Bezier as Bezier
 from .types import Camera2D as Camera2D
 from .types import Canvas as Canvas
 from .types import Circle as Circle
+from .types import ColorStats as ColorStats
 from .types import Ellipse as Ellipse
 from .types import Frame as Frame
+from .types import FrameAnalysis as FrameAnalysis
 from .types import FrameContext as FrameContext
+from .types import FrameMetrics as FrameMetrics
 from .types import FrameReport as FrameReport
 from .types import Group as Group
+from .types import LightCircle as LightCircle
+from .types import LightRef as LightRef
+from .types import LuminanceStats as LuminanceStats
 from .types import Look as Look
 from .types import Material as Material
 from .types import Path as Path
@@ -114,10 +116,14 @@ __all__ = [
     "EASINGS",
     "FFmpegOutput",
     "Frame",
+    "FrameAnalysis",
     "FrameContext",
+    "FrameMetrics",
     "FrameReport",
-    "FrameStats",
     "Group",
+    "LightCircle",
+    "LightRef",
+    "LuminanceStats",
     "Key",
     "Look",
     "Material",
@@ -153,7 +159,6 @@ __all__ = [
     "ball_lens",
     "biconvex_lens",
     "calibrate_normalize_ref",
-    "color_stats",
     "diagnose_scene",
     "light_contributions",
     "LightContribution",
@@ -166,7 +171,6 @@ __all__ = [
     "check_quality",
     "compare_stats",
     "compare_summary",
-    "frame_stats",
     "glass",
     "hemispherical_lens",
     "mirror",

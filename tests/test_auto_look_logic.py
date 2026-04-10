@@ -7,27 +7,22 @@ any renderer monkeypatching.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
+from _metrics_fixtures import fake_metrics
+
 from anim.analysis import _choose_initial_exposure, _summarize_brightness
-from anim.stats import FrameStats
 
 
-def _fs(mean: float, pct_clipped: float = 0.0) -> FrameStats:
-    """Build a FrameStats with only the fields relevant to auto_look."""
-    return FrameStats(
-        mean=mean,
-        max=int(mean),
-        min=0,
-        std=0.0,
-        pct_black=0.0,
-        pct_clipped=pct_clipped,
-        p05=0.0,
+def _fs(mean: float, pct_clipped: float = 0.0) -> Any:
+    return fake_metrics(
+        mean_lum=mean,
         p50=mean,
         p95=mean,
-        width=100,
-        height=100,
+        lum_max=int(mean),
+        pct_clipped=pct_clipped,
     )
 
 

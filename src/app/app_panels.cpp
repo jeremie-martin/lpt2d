@@ -1580,7 +1580,7 @@ static void draw_section_display(PanelContext& ctx) {
             ctx.compare_ab.frame = ed.session.frame;
             ensure_scene_entity_ids(ctx.compare_ab.shot.scene);
             ctx.compare_ab.view_bounds = current_display_view(ed, ctx.compare_ab, ctx.win_w, ctx.win_h);
-            ctx.compare_ab.metrics = ctx.renderer.compute_frame_metrics();
+            ctx.compare_ab.analysis = ctx.renderer.compute_display_analysis();
             ctx.compare_ab.metrics_valid = true;
             upload_compare_snapshot(ctx.compare_ab, snapshot_rgba, ctx.fb_w, ctx.fb_h);
             ctx.compare_ab.active = true;
@@ -1699,7 +1699,9 @@ static void draw_section_output(PanelContext& ctx) {
 }
 
 static void draw_section_stats(PanelContext& ctx) {
-    auto& live_metrics = ctx.live_metrics;
+    auto& analysis = ctx.live_metrics;
+    const LuminanceStats& lum = analysis.lum;
+    const ColorStats& color = analysis.color;
 
     if (ImGui::CollapsingHeader("Stats")) {
         ImGui::PushID("Stats");
@@ -1707,26 +1709,66 @@ static void draw_section_stats(PanelContext& ctx) {
         float hist_f[256];
         float hist_max = 0;
         for (int i = 0; i < 256; ++i) {
-            hist_f[i] = (float)live_metrics.histogram[i];
+            hist_f[i] = (float)lum.histogram[i];
             if (hist_f[i] > hist_max) hist_max = hist_f[i];
         }
         ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
                              ImVec2(-1, 60.0f * ctx.dpi_scale));
 
         ImGui::Text("Mean: %.1f  Median: %.0f  P95: %.0f",
-                    live_metrics.mean_lum, live_metrics.p50, live_metrics.p95);
+                    lum.mean_lum, lum.p50, lum.p95);
+        ImGui::Text("P05: %.0f  P99: %.0f  Std: %.1f  Min: %d  Max: %d",
+                    lum.p05, lum.p99, lum.std_dev, lum.lum_min, lum.lum_max);
         ImGui::Text("Black: %.1f%%  Clipped: %.1f%%",
-                    live_metrics.pct_black * 100, live_metrics.pct_clipped * 100);
+                    lum.pct_black * 100, lum.pct_clipped * 100);
+
+        // Color row — populated only when the frame has chromatic content.
+        ImGui::Separator();
+        ImGui::Text("Sat: %.3f  Hue entropy: %.2f",
+                    color.mean_saturation, color.hue_entropy);
+        ImGui::Text("Richness: %.3f  Chromatic: %.1f%%",
+                    color.color_richness, color.chromatic_fraction * 100.0f);
+
+        // Per-light circles — one row per measured PointLight.
+        if (!analysis.circles.empty()) {
+            ImGui::Separator();
+            ImGui::Checkbox("Show light circle overlay", &ctx.panel.show_circle_overlay);
+            if (ImGui::BeginTable("##circles", 5,
+                                  ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Borders)) {
+                ImGui::TableSetupColumn("id");
+                ImGui::TableSetupColumn("radius");
+                ImGui::TableSetupColumn("fwhm");
+                ImGui::TableSetupColumn("sharp");
+                ImGui::TableSetupColumn("bright");
+                ImGui::TableHeadersRow();
+                for (const auto& c : analysis.circles) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(c.id.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%.1f", c.radius_px);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%.1f", c.radius_half_max_px);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%.3f", c.sharpness);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%d", c.n_bright_pixels);
+                }
+                ImGui::EndTable();
+            }
+        }
+
         if (ctx.compare_ab.metrics_valid) {
+            const LuminanceStats& alum = ctx.compare_ab.analysis.lum;
             ImGui::Separator();
             ImGui::Text("Snapshot A: mean %.1f  black %.1f%%  clipped %.1f%%",
-                        ctx.compare_ab.metrics.mean_lum,
-                        ctx.compare_ab.metrics.pct_black * 100.0f,
-                        ctx.compare_ab.metrics.pct_clipped * 100.0f);
+                        alum.mean_lum,
+                        alum.pct_black * 100.0f,
+                        alum.pct_clipped * 100.0f);
             ImGui::Text("Delta vs A: mean %+.1f  black %+.1f%%  clipped %+.1f%%",
-                        live_metrics.mean_lum - ctx.compare_ab.metrics.mean_lum,
-                        (live_metrics.pct_black - ctx.compare_ab.metrics.pct_black) * 100.0f,
-                        (live_metrics.pct_clipped - ctx.compare_ab.metrics.pct_clipped) * 100.0f);
+                        lum.mean_lum - alum.mean_lum,
+                        (lum.pct_black - alum.pct_black) * 100.0f,
+                        (lum.pct_clipped - alum.pct_clipped) * 100.0f);
         }
         ImGui::PopID();
     }
@@ -1739,7 +1781,7 @@ void draw_controls_panel(
     Renderer& renderer,
     CompareSnapshot& compare_ab,
     PanelState& panel,
-    FrameMetrics& live_metrics,
+    FrameAnalysis& live_metrics,
     bool& force_live_metrics_refresh,
     const ImGuiIO& io,
     float dpi_scale,

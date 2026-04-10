@@ -8,9 +8,11 @@ The check pipeline has two layers:
    fire for manually-loaded/edited Params because the sampler already
    suppresses them — they exist as belt-and-suspenders.
 
-2. **Measurement + thresholds** — render a probe frame, measure light
-   circles, extract luminance/colour stats, and apply the numeric
-   thresholds listed below.
+2. **Measurement + thresholds** — render a probe frame, read the C++
+   frame analysis (luminance + colour + per-light circles), and apply
+   the numeric thresholds listed below. All pixel math lives in
+   ``src/core/image_analysis.cpp``; this module is pure threshold
+   policy — no numpy, no pixel access.
 
 Both ``check()`` and ``measure_all()`` funnel through ``_measure_and_verdict``
 so they run one probe per call.  Catalogues and the characterize subcommand
@@ -24,13 +26,9 @@ import math
 import random
 from dataclasses import dataclass
 
-import numpy as np
-
-from anim import Camera2D, Shot, Timeline, render_frame
+from anim import Timeline
 from anim.family import Verdict, probe
-from anim.stats import frame_stats
 
-from ..light_circle import LightCircle, _luminance, measure_light_circles
 from .grid import build_grid, remove_holes
 from .params import DURATION, Params
 
@@ -52,12 +50,19 @@ MIN_MOVING_RADIUS_PX = 3.0  # moving light must be a visible blob
 MAX_MOVING_RADIUS_PX = 80.0  # not a featureless wash
 MAX_RADIUS_RATIO = 2.66  # max moving / ambient circle size ratio
 MIN_SHARPNESS = 0.010  # minimum edge sharpness (lum drop per pixel)
+# Baked-in improvement from the C++ port: a Voronoi cell with only a handful
+# of bright pixels will still report a "radius" thanks to the percentile, but
+# visually it's just speckle noise. Require at least this many bright pixels
+# in the moving light's cell before we trust the radius measurement.
+MIN_BRIGHT_PIXELS = 20
 
 # Analysis-driven constraint guards (pre-render).
 MAX_GLASS_CAUCHY_B = 30_000.0  # "dispersion should not exceed 30000"
 WARM_LIGHT_WL_MIN = 500.0  # wavelength_min at/above which a light is "warm"
 
-PROBE_W, PROBE_H, PROBE_RAYS = 640, 360, 200_000
+# Probe resolution: documented here for clarity. Actual values live in
+# anim.family.probe() which owns the probe render settings.
+PROBE_W, PROBE_H = 640, 360
 
 METRIC_KEYS: tuple[str, ...] = (
     "color",
@@ -142,45 +147,6 @@ def _find_clear_frame(
     return best_idx
 
 
-_PROBE_CAMERA_CENTER: tuple[float, float] = (0.0, 0.0)
-_PROBE_CAMERA_WIDTH: float = 3.2
-_PROBE_CAMERA = Camera2D(center=list(_PROBE_CAMERA_CENTER), width=_PROBE_CAMERA_WIDTH)
-
-
-def _render_probe_frame(
-    animate,
-    frame_idx: int,
-    duration: float,
-) -> tuple[list[LightCircle], bytes]:
-    """Render one probe-quality frame; return (circles, raw RGB8 bytes)."""
-    probe_shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS, depth=10)
-    rr = render_frame(
-        animate,
-        Timeline(duration, fps=4),
-        frame=frame_idx,
-        settings=probe_shot,
-        camera=_PROBE_CAMERA,
-    )
-
-    # Extract light positions from the animate callback's scene.
-    ctx = Timeline(duration, fps=4).context_at(frame_idx)
-    frame_result = animate(ctx)
-    positions = [(lt.position[0], lt.position[1]) for lt in frame_result.scene.lights]
-    labels = [lt.id for lt in frame_result.scene.lights]
-
-    circles = measure_light_circles(
-        rr.pixels,
-        PROBE_W,
-        PROBE_H,
-        positions,
-        camera_center=_PROBE_CAMERA_CENTER,
-        camera_width=_PROBE_CAMERA_WIDTH,
-        labels=labels,
-    )
-
-    return circles, rr.pixels
-
-
 # ---------------------------------------------------------------------------
 # Pre-render constraint guards
 # ---------------------------------------------------------------------------
@@ -248,24 +214,23 @@ def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
     if p.grid.hole_fraction > 0:
         positions = remove_holes(positions, p.grid.hole_fraction, rng)
 
-    # Clearest frame for light-circle measurement.
+    # Pick the clearest frame from the probe result for the light-circle
+    # measurement — the C++ analyser already measured every PointLight at
+    # every probe frame, so we just index into it instead of re-rendering.
     best_fi = _find_clear_frame(animate, DURATION, positions)
-    circles, pixel_bytes = _render_probe_frame(animate, best_fi, DURATION)
+    ana = frames[best_fi].analysis
 
-    moving = [c for c in circles if c.label.startswith("light_")]
-    ambient = [c for c in circles if c.label.startswith("amb_")]
+    # Label prefixes distinguish moving ("light_*") from ambient ("amb_*").
+    circles = list(ana.circles)
+    moving = [c for c in circles if c.id.startswith("light_")]
+    ambient = [c for c in circles if c.id.startswith("amb_")]
 
-    fs = frame_stats(pixel_bytes, PROBE_W, PROBE_H)
-    mean_lum = fs.mean / 255.0
-    p05 = fs.p05 / 255.0
-    p95 = fs.p95 / 255.0
+    mean_lum = ana.lum.mean_lum / 255.0
+    p05 = ana.lum.p05 / 255.0
+    p95 = ana.lum.p95 / 255.0
+    p99 = ana.lum.p99 / 255.0
     spread = p95 - p05
-    clip_frac = fs.pct_clipped
-
-    # p99 isn't in FrameStats — compute on the luminance array directly.
-    pixels = np.frombuffer(pixel_bytes, dtype=np.uint8).reshape(PROBE_H, PROBE_W, 3)
-    p99 = float(np.percentile(_luminance(pixels), 99.0))
-
+    clip_frac = ana.lum.pct_clipped
     sat = avg_frame_sat
 
     # Light circle aggregates.
@@ -275,6 +240,10 @@ def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
     )
     ratio = med_moving_r / med_ambient_r if med_ambient_r > 0 else 0.0
     min_sharpness = float(min(c.sharpness for c in moving)) if moving else 0.0
+    # Minimum bright-pixel count across moving lights — gates out speckled
+    # degenerate cases where the radius percentile is non-zero but only a
+    # handful of pixels actually lit up.
+    min_moving_bright = int(min(c.n_bright_pixels for c in moving)) if moving else 0
 
     metrics: dict[str, float] = {
         "color": colorful_s,
@@ -312,6 +281,10 @@ def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
         return fail(f"{prefix} moving_r={med_moving_r:.1f}px (too small)")
     if med_moving_r > MAX_MOVING_RADIUS_PX:
         return fail(f"{prefix} moving_r={med_moving_r:.1f}px (too large)")
+    if min_moving_bright < MIN_BRIGHT_PIXELS:
+        return fail(
+            f"{prefix} bright_px={min_moving_bright} (need {MIN_BRIGHT_PIXELS})"
+        )
     if min_sharpness < MIN_SHARPNESS:
         return fail(f"{prefix} sharp={min_sharpness:.4f} (too soft)")
     if ambient and ratio > MAX_RADIUS_RATIO:
