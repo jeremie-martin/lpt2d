@@ -197,7 +197,7 @@ def _check_constraint_guards(p: Params) -> Verdict | None:
     look = p.look
     light = p.light
 
-    if mat.style == "glass" and mat.cauchy_b > MAX_GLASS_CAUCHY_B:
+    if mat.outcome == "glass" and mat.cauchy_b > MAX_GLASS_CAUCHY_B:
         return Verdict(
             False,
             f"glass cauchy_b={mat.cauchy_b:.0f} > {MAX_GLASS_CAUCHY_B:.0f}",
@@ -209,7 +209,7 @@ def _check_constraint_guards(p: Params) -> Verdict | None:
             f"warm light (wl_min={light.wavelength_min:.0f}) + temperature={look.temperature:.2f}",
         )
 
-    if look.chromatic_aberration > 0.0 and mat.style == "glass":
+    if look.chromatic_aberration > 0.0 and mat.outcome == "glass":
         return Verdict(
             False,
             f"glass + chromatic_aberration={look.chromatic_aberration:.4f}",

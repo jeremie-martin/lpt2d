@@ -53,12 +53,18 @@ from .params import (
     AmbientConfig,
     GridConfig,
     LightConfig,
-    MaterialConfig,
     Params,
     RotationConfig,
     ShapeConfig,
 )
-from .sampling import _random_look
+from .sampling import (
+    _black_diffuse_material,
+    _brushed_metal_material,
+    _colored_diffuse_material,
+    _glass_material,
+    _gray_diffuse_material,
+    _random_look,
+)
 from .scene import build
 
 # ── Fixed defaults ───────────────────────────────────────────────────────
@@ -85,63 +91,22 @@ LIGHT_COLORS = {
 }
 
 
-# ── Material presets ─────────────────────────────────────────────────────
+# ── Outcome → material sampler ───────────────────────────────────────────
+#
+# Each catalog entry fixes the ``outcome`` (one of the 5 peers) and the
+# structural scaffolding (shape, grid, light topology, wavelengths,
+# n_lights).  Everything else — material fill / albedo / IOR / dispersion,
+# build_seed, ambient + moving intensities, full LookConfig — is drawn
+# fresh per attempt using the **same** per-branch sampling functions as
+# the general path.  No hardcoded material constants inside catalog.py.
 
-
-def _glass_mat() -> MaterialConfig:
-    return MaterialConfig(
-        style="glass",
-        ior=1.52,
-        cauchy_b=20_000,
-        absorption=1.0,
-        fill=0.09,
-        n_color_groups=0,
-        diffuse_style="dark",
-        color_names=[],
-        albedo=0.8,
-    )
-
-
-def _dark_mat() -> MaterialConfig:
-    return MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
-        fill=0.0,
-        n_color_groups=0,
-        diffuse_style="dark",
-        color_names=[],
-        albedo=0.15,
-    )
-
-
-def _colored_fill_mat(colors: list[str]) -> MaterialConfig:
-    return MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
-        fill=0.17,
-        n_color_groups=len(colors),
-        diffuse_style="colored_fill",
-        color_names=colors,
-        albedo=0.85,
-    )
-
-
-def _metallic_rough_mat(colors: list[str]) -> MaterialConfig:
-    return MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
-        fill=0.08,
-        n_color_groups=len(colors),
-        diffuse_style="metallic_rough",
-        color_names=colors,
-        albedo=0.85,
-    )
+_OUTCOME_MATERIAL_SAMPLERS = {
+    "glass": _glass_material,
+    "black_diffuse": _black_diffuse_material,
+    "gray_diffuse": _gray_diffuse_material,
+    "colored_diffuse": _colored_diffuse_material,
+    "brushed_metal": _brushed_metal_material,
+}
 
 
 # ── Shape presets ────────────────────────────────────────────────────────
@@ -162,37 +127,38 @@ def _polygon_shape(n_sides: int, spacing: float) -> ShapeConfig:
 
 # ── Catalog definition ───────────────────────────────────────────────────
 
-# Representative polygon sides per material (not all 4 for every material).
-SHAPES_FOR_MATERIAL = {
+# Representative polygon sides per outcome (glass gets the single circle
+# case).  Varied per outcome so each branch gets a feel for how shape
+# interacts with material without exploding the matrix size.
+SHAPES_FOR_OUTCOME: dict[str, list[tuple[str, int]]] = {
     "glass": [("circle", 0)],
-    "dark": [("triangle", 3), ("square", 4), ("hexagon", 6)],
-    "colored_fill": [("triangle", 3), ("pentagon", 5), ("hexagon", 6)],
-    "metallic_rough": [("pentagon", 5), ("hexagon", 6)],
+    "black_diffuse": [("triangle", 3), ("square", 4), ("hexagon", 6)],
+    "gray_diffuse": [("square", 4), ("pentagon", 5), ("hexagon", 6)],
+    "colored_diffuse": [("triangle", 3), ("pentagon", 5), ("hexagon", 6)],
+    "brushed_metal": [("pentagon", 5), ("hexagon", 6)],
 }
 
-COLOR_PALETTES = {
-    "colored_fill": ["cyan"],
-    "metallic_rough": ["gold"],
-}
-
-# Brightness search ranges (shared with sampling.py via _random_look for
-# the look dims; ambient + moving intensity ranges mirror sampling.py).
-AMB_INTENSITY_RANGE = (0.05, 1.2)
-MOV_INTENSITY_RANGE = (0.15, 1.5)
+_CATALOG_OUTCOMES: tuple[str, ...] = (
+    "glass",
+    "black_diffuse",
+    "gray_diffuse",
+    "colored_diffuse",
+    "brushed_metal",
+)
 
 
 def _build_catalog_entries() -> list[dict]:
-    """Build the list of all (material, shape, grid, light_color, n_lights) combos."""
+    """Build the list of all (outcome, shape, grid, light_color, n_lights) combos."""
     entries = []
 
-    for mat_name in ["glass", "dark", "colored_fill", "metallic_rough"]:
-        for shape_name, n_sides in SHAPES_FOR_MATERIAL[mat_name]:
+    for outcome in _CATALOG_OUTCOMES:
+        for shape_name, n_sides in SHAPES_FOR_OUTCOME[outcome]:
             for grid_name, grid in GRID_SIZES.items():
                 for lc_name, (wl_min, wl_max) in LIGHT_COLORS.items():
                     for n_lights in [1, 2]:
                         entries.append(
                             {
-                                "mat": mat_name,
+                                "outcome": outcome,
                                 "shape": shape_name,
                                 "grid": grid_name,
                                 "light_color": lc_name,
@@ -210,25 +176,16 @@ def _build_catalog_entries() -> list[dict]:
 # ── Per-entry sampling ───────────────────────────────────────────────────
 
 
-def _entry_material(e: dict) -> MaterialConfig:
-    mat_name = e["mat"]
-    if mat_name == "glass":
-        return _glass_mat()
-    if mat_name == "dark":
-        return _dark_mat()
-    if mat_name == "colored_fill":
-        return _colored_fill_mat(COLOR_PALETTES["colored_fill"])
-    return _metallic_rough_mat(COLOR_PALETTES["metallic_rough"])
-
-
 def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     """Draw a full Params for a catalog entry.
 
-    Structural dims (grid, shape, material preset, light topology, wavelengths)
-    come from the entry and are fixed.  Everything else — build_seed,
-    ``ambient.intensity``, ``moving_intensity``, and every ``LookConfig`` dim —
-    is drawn freshly per attempt using the same distributions as the general
-    sampling path.
+    The entry fixes only structural scaffolding (outcome name, shape,
+    grid size, light wavelengths, n_lights).  The material parameters
+    themselves — and everything inside the light + look — are drawn
+    freshly per attempt via the same per-branch sampling functions as
+    the general path.  This keeps catalog and general paths using
+    **exactly** the same material logic; catalog.py no longer hardcodes
+    any material constants.
     """
     grid = e["grid_cfg"]
     spacing = grid.spacing
@@ -239,13 +196,15 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     else:
         shape = _polygon_shape(e["n_sides"], spacing)
 
-    # Material (fixed per entry)
-    material = _entry_material(e)
+    # Material: drawn fresh per attempt via the matching per-outcome function.
+    material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)
 
     # Light topology fixed per entry; intensities drawn per attempt.
+    # Ranges are defined inline here (not imported from sampling.py) per the
+    # per-branch explicitness rule, even though they match the general path.
     ambient = AmbientConfig(
         style="corners",
-        intensity=rng.uniform(*AMB_INTENSITY_RANGE),
+        intensity=rng.uniform(0.05, 1.2),
     )
     light = LightConfig(
         n_lights=e["n_lights"],
@@ -253,7 +212,7 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
         n_waypoints=8,
         ambient=ambient,
         speed=0.12,
-        moving_intensity=rng.uniform(*MOV_INTENSITY_RANGE),
+        moving_intensity=rng.uniform(0.15, 1.5),
         wavelength_min=e["wl_min"],
         wavelength_max=e["wl_max"],
     )
@@ -364,31 +323,31 @@ def run_catalog(argv: list[str] | None = None) -> None:
     entries = _build_catalog_entries()
     print(f"Catalog: {len(entries)} combinations")
 
-    for mat_name in ["glass", "dark", "colored_fill", "metallic_rough"]:
-        mat_entries = [e for e in entries if e["mat"] == mat_name]
-        print(f"  {mat_name}: {len(mat_entries)} entries")
+    for outcome in _CATALOG_OUTCOMES:
+        outcome_entries = [e for e in entries if e["outcome"] == outcome]
+        print(f"  {outcome}: {len(outcome_entries)} entries")
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
 
-    # Per-entry verdicts keyed by "{material}/{tag}".  Persisted to
+    # Per-entry verdicts keyed by "{outcome}/{tag}".  Persisted to
     # verdicts.json so resumed runs keep red-border annotations on
     # already-rendered entries.
     verdicts_path = out / "verdicts.json"
     verdicts: dict[str, Verdict] = _load_verdicts(verdicts_path)
 
-    for mat_name in ["glass", "dark", "colored_fill", "metallic_rough"]:
-        mat_dir = out / mat_name
-        mat_dir.mkdir(parents=True, exist_ok=True)
+    for outcome in _CATALOG_OUTCOMES:
+        outcome_dir = out / outcome
+        outcome_dir.mkdir(parents=True, exist_ok=True)
 
-        mat_entries = [e for e in entries if e["mat"] == mat_name]
+        outcome_entries = [e for e in entries if e["outcome"] == outcome]
 
-        for e in mat_entries:
+        for e in outcome_entries:
             tag = _entry_tag(e)
-            key = f"{mat_name}/{tag}"
-            img_path = mat_dir / f"{tag}.png"
-            json_path = mat_dir / f"{tag}.json"
+            key = f"{outcome}/{tag}"
+            img_path = outcome_dir / f"{tag}.png"
+            json_path = outcome_dir / f"{tag}.json"
 
             if img_path.exists():
                 continue
@@ -436,7 +395,7 @@ def _write_index(
     entries: list[dict],
     verdicts: dict[str, Verdict],
 ) -> None:
-    """Write an HTML gallery grouped by material, rows=light color, cols=grid size.
+    """Write an HTML gallery grouped by outcome, rows=light color, cols=grid size.
 
     Entries whose verdict did not pass are tagged with a ``failed`` CSS
     class (red-orange border) and a tooltip showing ``verdict.summary``.
@@ -462,17 +421,17 @@ th { padding:4px 8px; color:#aaa; font-size:11px; }
 </style></head><body>
 <h1>Crystal Field — Parameter Catalog</h1>
 <p style="text-align:center;font-size:0.85em;color:#777">
-Rows = light color &times; n_lights, Columns = grid size, Grouped by material &times; shape.<br>
+Rows = light color &times; n_lights, Columns = grid size, Grouped by outcome &times; shape.<br>
 Red borders mark entries that failed <code>check.py</code>; hover for the reason.</p>
 """
     ]
 
-    for mat_name in ["glass", "dark", "colored_fill", "metallic_rough"]:
-        mat_entries = [e for e in entries if e["mat"] == mat_name]
-        shapes_used = sorted({e["shape"] for e in mat_entries})
+    for outcome in _CATALOG_OUTCOMES:
+        outcome_entries = [e for e in entries if e["outcome"] == outcome]
+        shapes_used = sorted({e["shape"] for e in outcome_entries})
 
         for shape_name in shapes_used:
-            html.append(f"<h2>{mat_name} — {shape_name}</h2>")
+            html.append(f"<h2>{outcome} — {shape_name}</h2>")
             html.append("<table><tr><th></th>")
             for gn in ["small", "medium", "large"]:
                 g = GRID_SIZES[gn]
@@ -484,7 +443,7 @@ Red borders mark entries that failed <code>check.py</code>; hover for the reason
                     html.append(f"<tr><th>{lc_name} {nl}L</th>")
                     for gn in ["small", "medium", "large"]:
                         tag = f"{shape_name}_{lc_name}_{gn}_{nl}light"
-                        key = f"{mat_name}/{tag}"
+                        key = f"{outcome}/{tag}"
                         src = f"{key}.png"
                         verdict = verdicts.get(key)
                         td_class = ""

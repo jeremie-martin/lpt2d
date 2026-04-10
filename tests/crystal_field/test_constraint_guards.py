@@ -31,15 +31,13 @@ def _base_params(**overrides) -> Params:
         rotation=None,
     )
     material = MaterialConfig(
-        style="glass",
+        outcome="glass",
+        albedo=0.8,
+        fill=0.1,
         ior=1.5,
         cauchy_b=20_000.0,
         absorption=1.0,
-        fill=0.1,
-        n_color_groups=0,
-        diffuse_style="dark",
         color_names=[],
-        albedo=0.8,
     )
     light = LightConfig(
         n_lights=1,
@@ -114,7 +112,7 @@ def test_cold_light_plus_positive_temperature_accepted():
 
 def test_glass_plus_chromatic_aberration_rejected():
     p = _base_params()
-    # p.material.style == 'glass' by default
+    # p.material.outcome == 'glass' by default
     p.look.chromatic_aberration = 0.003
     verdict = _check_constraint_guards(p)
     assert verdict is not None
@@ -124,7 +122,7 @@ def test_glass_plus_chromatic_aberration_rejected():
 
 def test_diffuse_plus_chromatic_aberration_accepted():
     p = _base_params()
-    p.material.style = "diffuse"
+    p.material.outcome = "black_diffuse"
     p.look.chromatic_aberration = 0.003
     assert _check_constraint_guards(p) is None
 

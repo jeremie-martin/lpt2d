@@ -34,15 +34,13 @@ def _params_with_populated_look() -> Params:
         rotation=None,
     )
     material = MaterialConfig(
-        style="glass",
+        outcome="glass",
+        albedo=0.8,
+        fill=0.08,
         ior=1.5,
         cauchy_b=18_000.0,
         absorption=1.0,
-        fill=0.08,
-        n_color_groups=0,
-        diffuse_style="dark",
         color_names=[],
-        albedo=0.8,
     )
     light = LightConfig(
         n_lights=1,

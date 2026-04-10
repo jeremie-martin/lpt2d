@@ -47,15 +47,40 @@ class ShapeConfig:
 
 @dataclass
 class MaterialConfig:
-    style: str  # "glass" or "diffuse"
-    ior: float  # only for glass
-    cauchy_b: float  # only for glass
-    absorption: float  # only for glass
-    fill: float  # interior fill visibility
-    n_color_groups: int  # 0 = no color
-    diffuse_style: str = "dark"  # "dark", "colored_fill", "metallic_rough" — only for diffuse
-    color_names: list[str] = field(default_factory=list)
-    albedo: float = 0.8  # diffuse albedo; dark style ignores this and uses a fixed low value
+    """Per-scene material config.
+
+    One ``outcome`` per scene — never mixed.  See
+    ``analysis.md`` for the visual reasoning behind each outcome and
+    ``sampling.py`` for the exact parameter ranges of each branch.
+
+    Outcomes and the fields they actually use:
+
+    - ``glass``           : ``albedo`` (drawn but visually irrelevant — transmission=1),
+                            ``ior``, ``cauchy_b``, ``absorption``, ``fill``.
+                            ``color_names`` is always empty.
+    - ``black_diffuse``   : ``albedo``, ``fill`` (= 0.0). ``color_names`` empty.
+    - ``gray_diffuse``    : ``albedo``, ``fill``. ``color_names`` empty.
+    - ``colored_diffuse`` : ``albedo``, ``fill``, ``color_names`` has exactly one
+                            palette entry (strictly 1 color for now).
+    - ``brushed_metal``   : ``albedo``, ``fill``. ``color_names`` has 0, 1, or 2
+                            entries. Any slot may be ``None`` meaning
+                            "no color for this group, just fill" — this is
+                            how the "mixed" brushed-metal sub-case expresses
+                            one colored half and one uncolored half sharing
+                            the same fill value.
+
+    The same-fill-per-scene rule applies to every outcome: the ``fill`` value
+    is drawn once for the scene and used for every material inside it,
+    including across color groups in brushed-metal.
+    """
+
+    outcome: str  # "glass" | "black_diffuse" | "gray_diffuse" | "colored_diffuse" | "brushed_metal"
+    albedo: float  # always ∈ [0.7, 1.0] — defined inline per branch (not hoisted)
+    fill: float
+    ior: float = 0.0  # glass only
+    cauchy_b: float = 0.0  # glass only
+    absorption: float = 0.0  # glass only
+    color_names: list[str | None] = field(default_factory=list)
 
 
 @dataclass

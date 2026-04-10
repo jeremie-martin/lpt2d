@@ -1,26 +1,25 @@
 """Parameter generation for crystal_field.
 
-The sampler picks a visual mode first, then derives everything else from it.
-Each decision is transparent and follows logically from the previous one.
+Top-level ``sample()`` picks one of **five peer outcomes** with equal
+probability (20% each) and draws every parameter for that outcome
+inline.  There is no umbrella "diffuse" category and no shared constants
+hoisted across outcomes — every range is spelled out literally in the
+branch where it is used, even when branches happen to agree on the same
+numbers.  This is deliberate: see ``analysis.md`` and
+``feedback_explicit_per_branch`` for the reasoning.
 
-Visual modes
-------------
-- **glass**: transparent circles refracting light into caustic webs.
-  Single slow light preferred.  No mixed object colours (caustics provide
-  the visual interest).  Optionally a warm-coloured light.
+The five peer outcomes:
 
-- **shadow**: opaque polygons casting shadow fans.  Rounded corners always.
-  One or two lights.  Colour comes from fill (colored_fill) or from a
-  warm moving light (dark style).  Metallic-rough is a third option that
-  gives soft reflections.
-
-Grid, exposure, ambient, and speed are straightforward and independent of
-the mode — just pick reasonable values.
+1. ``glass``           — refractive spheres, dispersion-aware IOR
+2. ``black_diffuse``   — high-albedo diffuse, fill = 0 (dark silhouettes)
+3. ``gray_diffuse``    — high-albedo diffuse, fill ∈ [0.12, 0.22], no color
+4. ``colored_diffuse`` — high-albedo diffuse, fill ∈ [0.12, 0.22], strictly 1 color
+5. ``brushed_metal``   — metallic+roughness, fill ∈ [0.066, 0.15], 0/1/2 colors
 
 Look dims (gamma, contrast, white_point, temperature, vignette, chromatic
-aberration) are drawn in ``_random_look`` alongside the structural params.
-Some are conditionally suppressed based on the already-drawn material and
-light colour (see ``_random_look``).
+aberration) are drawn by ``_random_look`` alongside the structural params,
+with conditional suppression based on the already-drawn material and
+light colour.
 """
 
 from __future__ import annotations
@@ -65,13 +64,13 @@ def _random_grid(rng: random.Random) -> GridConfig:
 
 
 def _glass_shape(rng: random.Random, spacing: float) -> ShapeConfig:
-    """Glass mode: always circles."""
+    """Glass outcome: always circles."""
     size = spacing * rng.uniform(0.25, 0.38)
     return ShapeConfig(kind="circle", size=size, n_sides=0, corner_radius=0.0, rotation=None)
 
 
-def _shadow_shape(rng: random.Random, spacing: float) -> ShapeConfig:
-    """Shadow mode: always polygons with rounded corners."""
+def _polygon_shape(rng: random.Random, spacing: float) -> ShapeConfig:
+    """Non-glass outcomes (black / gray / colored diffuse + brushed metal): rounded polygons."""
     n_sides = rng.choice([3, 4, 5, 6])
     size = spacing * rng.uniform(0.25, 0.40)
     corner_radius = size * rng.uniform(0.12, 0.35)
@@ -87,66 +86,139 @@ def _shadow_shape(rng: random.Random, spacing: float) -> ShapeConfig:
     )
 
 
-# ── Material ─────────────────────────────────────────────────────────────
+# ── Materials: one function per outcome ─────────────────────────────────
+#
+# Every range below is defined **inline, per outcome**.  The fact that
+# several branches happen to draw albedo from [0.7, 1.0] is intentional
+# duplication: each outcome is its own self-contained decision and the
+# values are written where they're used.  Do not hoist.
 
 
 def _glass_material(rng: random.Random) -> MaterialConfig:
-    """Glass: moderate IOR, no object colours (caustics are the colour)."""
+    """Glass — refractive spheres.
+
+    Dispersion-aware IOR range (see ``analysis.md``).  The analysis gives
+    one anchor point + one exchange rate:
+
+    - At dispersion = 20 000, the good IOR range is [1.40, 1.55].
+    - 25 000 dispersion ≈ 0.1 IOR in terms of caustic effect.
+
+    Treat caustic prominence as a linear function of an effective IOR:
+
+        effective_IOR = IOR + dispersion / 250_000
+
+    (because 25 000 / 250 000 = 0.1 — the stated exchange rate).  The
+    anchor point pins the "good" range in effective-IOR space:
+
+        effective ∈ [1.40 + 20_000/250_000, 1.55 + 20_000/250_000]
+                  = [1.48, 1.63]
+
+    For any drawn dispersion D, back out the actual IOR range:
+
+        ior ∈ [1.48 − D/250_000, 1.63 − D/250_000]
+
+    Sanity check endpoints:
+        D =      0  → [1.48, 1.63]
+        D = 20 000  → [1.40, 1.55]   ← matches analysis anchor
+        D = 30 000  → [1.36, 1.51]
+
+    Albedo is drawn from [0.7, 1.0] to keep the per-branch rule uniform,
+    but is visually irrelevant for glass (transmission = 1 inside
+    ``anim.glass()``).
+    """
+    cauchy_b = rng.uniform(0.0, 30_000.0)
+    shift = cauchy_b / 250_000.0
+    ior = rng.uniform(1.48 - shift, 1.63 - shift)
     return MaterialConfig(
-        style="glass",
-        ior=rng.uniform(1.40, 1.55),
-        cauchy_b=rng.uniform(15_000, 25_000),
-        absorption=rng.uniform(0.3, 2.0),
+        outcome="glass",
+        albedo=rng.uniform(0.7, 1.0),  # irrelevant for glass — see docstring
         fill=rng.uniform(0.05, 0.13),
-        n_color_groups=0,
-        diffuse_style="dark",
+        ior=ior,
+        cauchy_b=cauchy_b,
+        absorption=rng.uniform(0.3, 2.0),
         color_names=[],
-        albedo=0.8,
     )
 
 
-def _shadow_material(rng: random.Random) -> MaterialConfig:
-    """Shadow: one of three sub-styles, each with its own colour logic."""
-    sub = rng.choices(["dark", "colored_fill", "metallic_rough"], weights=[3, 5, 2])[0]
+def _black_diffuse_material(rng: random.Random) -> MaterialConfig:
+    """Black diffuse — high albedo but ``fill = 0`` reads as dark silhouettes.
 
-    if sub == "dark":
-        return MaterialConfig(
-            style="diffuse",
-            ior=1.5,
-            cauchy_b=0.0,
-            absorption=0.0,
-            fill=0.0,
-            n_color_groups=0,
-            diffuse_style="dark",
-            color_names=[],
-            albedo=0.15,
-        )
-
-    if sub == "colored_fill":
-        colors = rng.sample(PALETTE, 1)
-        return MaterialConfig(
-            style="diffuse",
-            ior=1.5,
-            cauchy_b=0.0,
-            absorption=0.0,
-            fill=rng.uniform(0.12, 0.22),
-            n_color_groups=1,
-            diffuse_style="colored_fill",
-            color_names=colors,
-            albedo=rng.uniform(0.7, 1.0),
-        )
-
-    colors = rng.sample(PALETTE, 1)
+    See ``analysis.md``: the black look comes from ``fill = 0``, not from
+    low albedo.  High albedo keeps the surface smooth under the moving
+    lights (low-albedo diffuse looks like wet wood).
+    """
     return MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
-        fill=rng.uniform(0.04, 0.12),
-        n_color_groups=1,
-        diffuse_style="metallic_rough",
-        color_names=colors,
+        outcome="black_diffuse",
         albedo=rng.uniform(0.7, 1.0),
+        fill=0.0,
+        color_names=[],
+    )
+
+
+def _gray_diffuse_material(rng: random.Random) -> MaterialConfig:
+    """Gray diffuse — high albedo, visible fill, no color.
+
+    A shade of gray: the fill makes the interior show through as a neutral
+    tint, but no palette color is applied.  See ``analysis.md``.
+    """
+    return MaterialConfig(
+        outcome="gray_diffuse",
+        albedo=rng.uniform(0.7, 1.0),
+        fill=rng.uniform(0.12, 0.22),
+        color_names=[],
+    )
+
+
+def _colored_diffuse_material(rng: random.Random) -> MaterialConfig:
+    """Colored diffuse — high albedo, visible fill, **exactly one** palette color.
+
+    Strictly one color per scene for now; multiple-color diffuse is
+    deferred until we understand the interaction with fill and lighting.
+    See ``analysis.md``.
+    """
+    return MaterialConfig(
+        outcome="colored_diffuse",
+        albedo=rng.uniform(0.7, 1.0),
+        fill=rng.uniform(0.12, 0.22),
+        color_names=[rng.choice(PALETTE)],
+    )
+
+
+def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
+    """Brushed metal — metallic+roughness, narrower fill, 4 color sub-cases at 25%.
+
+    Fill range is narrower than the diffuse outcomes on purpose (see
+    ``analysis.md``).
+
+    Internal color distribution (25% each):
+      - no color   : ``color_names = []``                      → single uncolored material
+      - one color  : ``color_names = [name]``                  → every object the same color
+      - mixed      : ``color_names = [name, None]``            → half colored, half uncolored
+      - two colors : ``color_names = [name_a, name_b]``        → half color A, half color B
+
+    The fill value is drawn **once** and applied to every material in the
+    scene (including the uncolored slot in the mixed case).  This is the
+    "same fill per scene" rule — see ``analysis.md``.
+    """
+    albedo = rng.uniform(0.7, 1.0)
+    fill = rng.uniform(0.066, 0.15)
+
+    sub = rng.choice(["no_color", "one_color", "mixed", "two_colors"])
+    if sub == "no_color":
+        color_names: list[str | None] = []
+    elif sub == "one_color":
+        color_names = [rng.choice(PALETTE)]
+    elif sub == "mixed":
+        color_names = [rng.choice(PALETTE), None]
+    else:  # "two_colors"
+        a, b = rng.sample(PALETTE, 2)
+        color_names = [a, b]
+
+    return MaterialConfig(
+        outcome="brushed_metal",
+        albedo=albedo,
+        fill=fill,
+        color_names=color_names,
     )
 
 
@@ -163,11 +235,11 @@ _WARM_SPECTRA = [
 
 def _random_light(
     rng: random.Random,
-    mode: str,
+    is_glass: bool,
     has_object_color: bool,
 ) -> LightConfig:
-    # Number of lights: glass prefers 1; shadow allows 1-2.
-    if mode == "glass":
+    # Number of lights: glass prefers 1; non-glass allows 1-3.
+    if is_glass:
         n_lights = rng.choices([1, 2], weights=[7, 3])[0]
     else:
         n_lights = rng.choices([1, 2, 3], weights=[5, 4, 1])[0]
@@ -242,7 +314,7 @@ def _random_look(
         vignette_radius = rng.uniform(1.5, 1.8)
 
     # Chromatic aberration: 50% off, 50% subtle — forbidden on glass.
-    if rng.random() < 0.5 or material.style == "glass":
+    if rng.random() < 0.5 or material.outcome == "glass":
         chromatic_aberration = 0.0
     else:
         chromatic_aberration = rng.uniform(0.0, 0.006)
@@ -262,40 +334,49 @@ def _random_look(
 # ── Top-level sampler ────────────────────────────────────────────────────
 
 
+OUTCOMES: tuple[str, ...] = (
+    "glass",
+    "black_diffuse",
+    "gray_diffuse",
+    "colored_diffuse",
+    "brushed_metal",
+)
+
+
 def sample(rng: random.Random) -> Params:
     """Generate one random crystal_field variant.
 
-    Picks a visual mode (glass or shadow), then derives grid, shape,
-    material, light, and look from it.  Every scene gets ambient lights.
+    Picks one of the five peer outcomes with equal probability (20% each)
+    and draws grid, shape, material, light, and look for it in one shot.
+    ``Family.search`` retries the whole sample on rejection — there is no
+    inner search loop.
 
-    Look dims (exposure, gamma, contrast, etc.) are drawn in one shot
-    alongside the structural params — there is no inner search loop.
-    ``Family.search`` retries the whole sample on rejection.
+    The even-ish 20% distribution is a provisional default.  Once the
+    catalog walk shows what actually looks good across all five outcomes
+    (with every shape / grid / light-colour combination), we revisit.
     """
-    # 1. Visual mode — equal chance.
-    mode = rng.choice(["glass", "shadow"])
+    outcome = rng.choice(OUTCOMES)
 
-    # 2. Grid — same for both modes.
     grid = _random_grid(rng)
 
-    # 3. Shape — mode-specific.
-    if mode == "glass":
+    if outcome == "glass":
         shape = _glass_shape(rng, grid.spacing)
-    else:
-        shape = _shadow_shape(rng, grid.spacing)
-
-    # 4. Material — mode-specific.
-    if mode == "glass":
         material = _glass_material(rng)
-    else:
-        material = _shadow_material(rng)
+    elif outcome == "black_diffuse":
+        shape = _polygon_shape(rng, grid.spacing)
+        material = _black_diffuse_material(rng)
+    elif outcome == "gray_diffuse":
+        shape = _polygon_shape(rng, grid.spacing)
+        material = _gray_diffuse_material(rng)
+    elif outcome == "colored_diffuse":
+        shape = _polygon_shape(rng, grid.spacing)
+        material = _colored_diffuse_material(rng)
+    else:  # "brushed_metal"
+        shape = _polygon_shape(rng, grid.spacing)
+        material = _brushed_metal_material(rng)
 
-    # 5. Light — aware of mode and whether objects have colour.
-    has_object_color = material.n_color_groups > 0
-    light = _random_light(rng, mode, has_object_color)
-
-    # 6. Look — draws exposure and all the post-process dials together,
-    #    with conditional suppression based on material and light colour.
+    has_object_color = any(name is not None for name in material.color_names)
+    light = _random_light(rng, is_glass=(outcome == "glass"), has_object_color=has_object_color)
     look = _random_look(rng, material, light)
 
     build_seed = rng.randint(0, 2**32)

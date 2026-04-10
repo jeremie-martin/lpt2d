@@ -28,21 +28,23 @@ def run_stats(argv: list[str] | None = None) -> None:
     n = args.n
 
     # Accumulators
-    shapes = Counter()
-    mat_styles = Counter()
-    diffuse_styles = Counter()
-    amb_styles = Counter()
-    n_lights_dist = Counter()
-    path_styles = Counter()
-    n_sides_dist = Counter()
+    shapes: Counter[str] = Counter()
+    outcomes: Counter[str] = Counter()
+    brushed_color_subcase: Counter[str] = Counter()
+    amb_styles: Counter[str] = Counter()
+    n_lights_dist: Counter[int] = Counter()
+    path_styles: Counter[str] = Counter()
+    n_sides_dist: Counter[int] = Counter()
     has_rotation = 0
     has_jitter = 0
     polygon_count = 0
-    n_color_dist = Counter()
+    n_color_dist: Counter[int] = Counter()
     colored_light = 0
     small_grid = 0
 
     iors: list[float] = []
+    cauchy_bs: list[float] = []
+    fills_by_outcome: dict[str, list[float]] = {}
     speeds: list[float] = []
     exposures: list[float] = []
     rows_list: list[int] = []
@@ -56,18 +58,16 @@ def run_stats(argv: list[str] | None = None) -> None:
     temperatures: list[float] = []
     vignettes: list[float] = []
     ca_values: list[float] = []
-    albedos: list[float] = []
+    albedos_by_outcome: dict[str, list[float]] = {}
 
     for _ in range(n):
         p = sample(rng)
         shapes[p.shape.kind] += 1
-        mat_styles[p.material.style] += 1
-        if p.material.style == "diffuse":
-            diffuse_styles[p.material.diffuse_style] += 1
+        outcomes[p.material.outcome] += 1
         amb_styles[p.light.ambient.style] += 1
         n_lights_dist[p.light.n_lights] += 1
         path_styles[p.light.path_style] += 1
-        n_color_dist[p.material.n_color_groups] += 1
+        n_color_dist[len(p.material.color_names)] += 1
 
         if p.shape.kind == "polygon":
             polygon_count += 1
@@ -77,10 +77,24 @@ def run_stats(argv: list[str] | None = None) -> None:
                 if p.shape.rotation.jitter > 0:
                     has_jitter += 1
 
-        if p.material.style == "glass":
+        if p.material.outcome == "glass":
             iors.append(p.material.ior)
-        if p.material.style == "diffuse" and p.material.diffuse_style != "dark":
-            albedos.append(p.material.albedo)
+            cauchy_bs.append(p.material.cauchy_b)
+        fills_by_outcome.setdefault(p.material.outcome, []).append(p.material.fill)
+        albedos_by_outcome.setdefault(p.material.outcome, []).append(p.material.albedo)
+
+        # Brushed-metal internal color sub-case distribution.
+        if p.material.outcome == "brushed_metal":
+            cnames = p.material.color_names
+            if not cnames:
+                brushed_color_subcase["no_color"] += 1
+            elif len(cnames) == 1:
+                brushed_color_subcase["one_color"] += 1
+            elif len(cnames) == 2 and None in cnames:
+                brushed_color_subcase["mixed"] += 1
+            else:
+                brushed_color_subcase["two_colors"] += 1
+
         speeds.append(p.light.speed)
         exposures.append(p.look.exposure)
         gammas.append(p.look.gamma)
@@ -111,8 +125,8 @@ def run_stats(argv: list[str] | None = None) -> None:
             return "n/a"
         s = sorted(values)
         return (
-            f"min={s[0]:.2f}  p25={s[len(s) // 4]:.2f}  "
-            f"median={s[len(s) // 2]:.2f}  p75={s[3 * len(s) // 4]:.2f}  max={s[-1]:.2f}"
+            f"min={s[0]:.3f}  p25={s[len(s) // 4]:.3f}  "
+            f"median={s[len(s) // 2]:.3f}  p75={s[3 * len(s) // 4]:.3f}  max={s[-1]:.3f}"
         )
 
     def counter_line(c: Counter, total: int | None = None) -> str:
@@ -137,13 +151,29 @@ def run_stats(argv: list[str] | None = None) -> None:
         print(f"  jitter     {100 * has_jitter / polygon_count:.1f}% of polygons")
     print()
 
-    print("── Material ──────────────────────────────────────────")
-    print(f"  style      {counter_line(mat_styles)}")
+    print("── Material outcomes (5 peers, ~20% each) ───────────")
+    print(f"  {counter_line(outcomes)}")
+    print()
+
+    print("── Glass ─────────────────────────────────────────────")
     if iors:
         print(f"  ior        {dist(iors)}")
-    if diffuse_styles:
-        print(f"  diffuse    {counter_line(diffuse_styles)} (of diffuse)")
-    print(f"  colors     {counter_line(n_color_dist)}")
+        print(f"  cauchy_b   {dist(cauchy_bs)}")
+    print()
+
+    print("── Albedo per outcome ────────────────────────────────")
+    for outcome in sorted(albedos_by_outcome):
+        print(f"  {outcome:<17} {dist(albedos_by_outcome[outcome])}")
+    print()
+
+    print("── Fill per outcome ──────────────────────────────────")
+    for outcome in sorted(fills_by_outcome):
+        print(f"  {outcome:<17} {dist(fills_by_outcome[outcome])}")
+    print()
+
+    print("── Brushed metal color sub-cases (25% each target) ──")
+    if brushed_color_subcase:
+        print(f"  {counter_line(brushed_color_subcase)}")
     print()
 
     print("── Light ─────────────────────────────────────────────")
@@ -151,6 +181,7 @@ def run_stats(argv: list[str] | None = None) -> None:
     print(f"  path       {counter_line(path_styles)}")
     print(f"  speed      {dist(speeds)}")
     print(f"  colored    {pct(colored_light)} (spectral narrowing)")
+    print(f"  color_grps {counter_line(n_color_dist)}  (len of material.color_names)")
     print()
 
     print("── Ambient ───────────────────────────────────────────")
@@ -158,11 +189,6 @@ def run_stats(argv: list[str] | None = None) -> None:
     if amb_intensities:
         print(f"  intensity  {dist(amb_intensities)} (when present)")
     print(f"  moving_int {dist(mov_intensities)}")
-    print()
-
-    print("── Material (diffuse) ────────────────────────────────")
-    if albedos:
-        print(f"  albedo     {dist(albedos)} (colored_fill + metallic_rough)")
     print()
 
     print("── Look dims ─────────────────────────────────────────")

@@ -8,7 +8,7 @@ metric overlay drawn on each frame.  This is the groundwork for tuning
 
 Scope
 -----
-- 3 hand-crafted base scenes (glass, colored_fill, dark) — deliberately
+- 3 hand-crafted base scenes (glass, colored_diffuse, black_diffuse) — deliberately
   not pulled from the catalog matrix so the scenes are stable across
   refactors of the catalog structure.
 - 7 swept parameters: exposure, gamma, white_point, contrast,
@@ -116,16 +116,15 @@ def _glass_scene() -> Params:
         corner_radius=0.0,
         rotation=None,
     )
+    # Glass at the analysis anchor (dispersion ≈ 20 000, IOR in the good range).
     material = MaterialConfig(
-        style="glass",
+        outcome="glass",
+        albedo=0.8,  # irrelevant for glass (transmission=1), set for consistency
+        fill=0.09,
         ior=1.52,
         cauchy_b=20_000,
         absorption=1.0,
-        fill=0.09,
-        n_color_groups=0,
-        diffuse_style="dark",
         color_names=[],
-        albedo=0.8,
     )
     return Params(
         grid=grid,
@@ -137,7 +136,7 @@ def _glass_scene() -> Params:
     )
 
 
-def _colored_fill_scene() -> Params:
+def _colored_diffuse_scene() -> Params:
     grid = _base_grid()
     shape = ShapeConfig(
         kind="polygon",
@@ -147,15 +146,10 @@ def _colored_fill_scene() -> Params:
         rotation=RotationConfig(base_angle=0.15, jitter=0.0),
     )
     material = MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
-        fill=0.17,
-        n_color_groups=1,
-        diffuse_style="colored_fill",
-        color_names=["cyan"],
+        outcome="colored_diffuse",
         albedo=0.85,
+        fill=0.17,
+        color_names=["cyan"],
     )
     return Params(
         grid=grid,
@@ -167,7 +161,7 @@ def _colored_fill_scene() -> Params:
     )
 
 
-def _dark_scene() -> Params:
+def _black_diffuse_scene() -> Params:
     grid = _base_grid()
     shape = ShapeConfig(
         kind="polygon",
@@ -176,20 +170,17 @@ def _dark_scene() -> Params:
         corner_radius=grid.spacing * 0.32 * 0.22,
         rotation=RotationConfig(base_angle=0.15, jitter=0.0),
     )
+    # High albedo + fill=0 → dark silhouettes.  Albedo is never 0.15 (analysis
+    # rules that out).  White light (not warm) so the temperature sweep can
+    # reach positive values — the check.py constraint guard forbids positive
+    # temperature on warm lights, which would fill the temperature strip with
+    # zero-metrics.
     material = MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
+        outcome="black_diffuse",
+        albedo=0.85,
         fill=0.0,
-        n_color_groups=0,
-        diffuse_style="dark",
         color_names=[],
-        albedo=0.15,
     )
-    # White light (not warm) so the temperature sweep can reach positive
-    # values — the check.py constraint guard forbids positive temperature on
-    # warm lights, which would fill the temperature strip with zero-metrics.
     return Params(
         grid=grid,
         shape=shape,
@@ -202,8 +193,8 @@ def _dark_scene() -> Params:
 
 BASE_SCENES: dict[str, Params] = {
     "glass": _glass_scene(),
-    "colored_fill": _colored_fill_scene(),
-    "dark": _dark_scene(),
+    "colored_diffuse": _colored_diffuse_scene(),
+    "black_diffuse": _black_diffuse_scene(),
 }
 
 
@@ -312,7 +303,7 @@ def run_characterize(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--scenes",
         type=str,
-        default="glass,colored_fill,dark",
+        default="glass,colored_diffuse,black_diffuse",
         help="Comma-separated list of base scenes (default: all three)",
     )
     args = parser.parse_args(argv)
