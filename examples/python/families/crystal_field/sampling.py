@@ -16,6 +16,11 @@ Visual modes
 
 Grid, exposure, ambient, and speed are straightforward and independent of
 the mode — just pick reasonable values.
+
+Look dims (gamma, contrast, white_point, temperature, vignette, chromatic
+aberration) are drawn in ``_random_look`` alongside the structural params.
+Some are conditionally suppressed based on the already-drawn material and
+light colour (see ``_random_look``).
 """
 
 from __future__ import annotations
@@ -24,16 +29,16 @@ import math
 import random
 
 from .params import (
+    PALETTE,
     AmbientConfig,
     GridConfig,
     LightConfig,
+    LookConfig,
     MaterialConfig,
-    PALETTE,
     Params,
     RotationConfig,
     ShapeConfig,
 )
-
 
 # ── Grid ─────────────────────────────────────────────────────────────────
 
@@ -51,8 +56,9 @@ def _random_grid(rng: random.Random) -> GridConfig:
 
     offset_rows = rng.choice([True, False])
     hole_fraction = 0.0 if rng.random() < 0.75 else rng.uniform(0.05, 0.15)
-    return GridConfig(rows=rows, cols=cols, spacing=spacing,
-                      offset_rows=offset_rows, hole_fraction=hole_fraction)
+    return GridConfig(
+        rows=rows, cols=cols, spacing=spacing, offset_rows=offset_rows, hole_fraction=hole_fraction
+    )
 
 
 # ── Shape ────────────────────────────────────────────────────────────────
@@ -61,8 +67,7 @@ def _random_grid(rng: random.Random) -> GridConfig:
 def _glass_shape(rng: random.Random, spacing: float) -> ShapeConfig:
     """Glass mode: always circles."""
     size = spacing * rng.uniform(0.25, 0.38)
-    return ShapeConfig(kind="circle", size=size, n_sides=0,
-                       corner_radius=0.0, rotation=None)
+    return ShapeConfig(kind="circle", size=size, n_sides=0, corner_radius=0.0, rotation=None)
 
 
 def _shadow_shape(rng: random.Random, spacing: float) -> ShapeConfig:
@@ -77,8 +82,9 @@ def _shadow_shape(rng: random.Random, spacing: float) -> ShapeConfig:
         jitter = rng.uniform(0.05, math.pi / n_sides) if rng.random() < 0.35 else 0.0
         rotation = RotationConfig(base_angle=base_angle, jitter=jitter)
 
-    return ShapeConfig(kind="polygon", size=size, n_sides=n_sides,
-                       corner_radius=corner_radius, rotation=rotation)
+    return ShapeConfig(
+        kind="polygon", size=size, n_sides=n_sides, corner_radius=corner_radius, rotation=rotation
+    )
 
 
 # ── Material ─────────────────────────────────────────────────────────────
@@ -88,13 +94,14 @@ def _glass_material(rng: random.Random) -> MaterialConfig:
     """Glass: moderate IOR, no object colours (caustics are the colour)."""
     return MaterialConfig(
         style="glass",
-        ior=rng.uniform(1.35, 1.70),
-        cauchy_b=rng.uniform(12_000, 28_000),
+        ior=rng.uniform(1.40, 1.55),
+        cauchy_b=rng.uniform(15_000, 25_000),
         absorption=rng.uniform(0.3, 2.0),
-        fill=rng.uniform(0.08, 0.16),
+        fill=rng.uniform(0.05, 0.13),
         n_color_groups=0,
         diffuse_style="dark",
         color_names=[],
+        albedo=0.8,
     )
 
 
@@ -103,29 +110,43 @@ def _shadow_material(rng: random.Random) -> MaterialConfig:
     sub = rng.choices(["dark", "colored_fill", "metallic_rough"], weights=[3, 5, 2])[0]
 
     if sub == "dark":
-        # Black silhouettes — colour comes from the light, not the objects.
         return MaterialConfig(
-            style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
-            fill=0.0, n_color_groups=0, diffuse_style="dark", color_names=[],
+            style="diffuse",
+            ior=1.5,
+            cauchy_b=0.0,
+            absorption=0.0,
+            fill=0.0,
+            n_color_groups=0,
+            diffuse_style="dark",
+            color_names=[],
+            albedo=0.15,
         )
 
     if sub == "colored_fill":
-        # Coloured interiors — 1-3 colours from the palette.
-        n_colors = rng.randint(1, 3)
-        colors = rng.sample(PALETTE, n_colors)
+        colors = rng.sample(PALETTE, 1)
         return MaterialConfig(
-            style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
-            fill=rng.uniform(0.08, 0.18), n_color_groups=n_colors,
-            diffuse_style="colored_fill", color_names=colors,
+            style="diffuse",
+            ior=1.5,
+            cauchy_b=0.0,
+            absorption=0.0,
+            fill=rng.uniform(0.12, 0.22),
+            n_color_groups=1,
+            diffuse_style="colored_fill",
+            color_names=colors,
+            albedo=rng.uniform(0.7, 1.0),
         )
 
-    # metallic_rough
-    n_colors = rng.choice([0, 1, 2])
-    colors = rng.sample(PALETTE, n_colors) if n_colors > 0 else []
+    colors = rng.sample(PALETTE, 1)
     return MaterialConfig(
-        style="diffuse", ior=1.5, cauchy_b=0.0, absorption=0.0,
-        fill=rng.uniform(0.04, 0.12), n_color_groups=n_colors,
-        diffuse_style="metallic_rough", color_names=colors,
+        style="diffuse",
+        ior=1.5,
+        cauchy_b=0.0,
+        absorption=0.0,
+        fill=rng.uniform(0.04, 0.12),
+        n_color_groups=1,
+        diffuse_style="metallic_rough",
+        color_names=colors,
+        albedo=rng.uniform(0.7, 1.0),
     )
 
 
@@ -133,10 +154,10 @@ def _shadow_material(rng: random.Random) -> MaterialConfig:
 
 # Warm spectral ranges for coloured moving lights.
 _WARM_SPECTRA = [
-    (550.0, 700.0),   # orange
-    (515.0, 700.0),   # yellow-orange
-    (570.0, 700.0),   # deep orange
-    (500.0, 620.0),   # warm green-yellow
+    (550.0, 700.0),  # orange
+    (515.0, 700.0),  # yellow-orange
+    (570.0, 700.0),  # deep orange
+    (500.0, 620.0),  # warm green-yellow
 ]
 
 
@@ -163,10 +184,11 @@ def _random_light(
     speed_max = 0.20 if n_lights == 1 else 0.14
     speed = rng.uniform(0.08, speed_max)
 
-    # Ambient: 4 corners almost always.
     amb_style = rng.choices(["corners", "sides"], weights=[8, 2])[0]
-    amb_intensity = rng.uniform(0.15, 0.35)
+    amb_intensity = rng.uniform(0.05, 1.2)
     ambient = AmbientConfig(style=amb_style, intensity=amb_intensity)
+
+    moving_intensity = rng.uniform(0.15, 1.5)
 
     # Light colour: warm tint when the scene has no object colour.
     # 70% of achromatic scenes get coloured light to avoid too much gray.
@@ -180,8 +202,60 @@ def _random_light(
         n_waypoints=n_waypoints,
         ambient=ambient,
         speed=speed,
+        moving_intensity=moving_intensity,
         wavelength_min=wl_min,
         wavelength_max=wl_max,
+    )
+
+
+# ── Look ─────────────────────────────────────────────────────────────────
+
+
+def _random_look(
+    rng: random.Random,
+    material: MaterialConfig,
+    light: LightConfig,
+) -> LookConfig:
+    """Draw a LookConfig alongside the structural params.
+
+    Positive temperature on warm light and chromatic aberration on glass are
+    suppressed here (and also hard-rejected in ``check.py``) — the first
+    pushes warm scenes into red mush, the second confuses refractive scenes.
+    """
+    exposure = rng.uniform(-6.5, -2.5)
+    gamma = rng.uniform(1.0, 2.2)
+    contrast = rng.uniform(1.00, 1.05)
+    white_point = rng.uniform(0.3, 1.0)
+
+    # Temperature: 50% off, 50% uniform(0.0, 0.55) — but forbidden on warm light.
+    if rng.random() < 0.5 or light.wavelength_min >= 500.0:
+        temperature = 0.0
+    else:
+        temperature = rng.uniform(0.0, 0.55)
+
+    # Vignette: 50% off (strength 0, radius default), 50% subtle fade.
+    if rng.random() < 0.5:
+        vignette = 0.0
+        vignette_radius = 0.7
+    else:
+        vignette = rng.uniform(0.0, 0.2)
+        vignette_radius = rng.uniform(1.5, 1.8)
+
+    # Chromatic aberration: 50% off, 50% subtle — forbidden on glass.
+    if rng.random() < 0.5 or material.style == "glass":
+        chromatic_aberration = 0.0
+    else:
+        chromatic_aberration = rng.uniform(0.0, 0.006)
+
+    return LookConfig(
+        exposure=exposure,
+        gamma=gamma,
+        contrast=contrast,
+        white_point=white_point,
+        temperature=temperature,
+        vignette=vignette,
+        vignette_radius=vignette_radius,
+        chromatic_aberration=chromatic_aberration,
     )
 
 
@@ -192,7 +266,11 @@ def sample(rng: random.Random) -> Params:
     """Generate one random crystal_field variant.
 
     Picks a visual mode (glass or shadow), then derives grid, shape,
-    material, and light from it.  Every scene gets ambient lights.
+    material, light, and look from it.  Every scene gets ambient lights.
+
+    Look dims (exposure, gamma, contrast, etc.) are drawn in one shot
+    alongside the structural params — there is no inner search loop.
+    ``Family.search`` retries the whole sample on rejection.
     """
     # 1. Visual mode — equal chance.
     mode = rng.choice(["glass", "shadow"])
@@ -216,12 +294,9 @@ def sample(rng: random.Random) -> Params:
     has_object_color = material.n_color_groups > 0
     light = _random_light(rng, mode, has_object_color)
 
-    # 6. Exposure — glass scenes need less (caustics are bright);
-    #    shadow scenes need a bit more.
-    if mode == "glass":
-        exposure = rng.uniform(-5.5, -4.0)
-    else:
-        exposure = rng.uniform(-5.0, -3.5)
+    # 6. Look — draws exposure and all the post-process dials together,
+    #    with conditional suppression based on material and light colour.
+    look = _random_look(rng, material, light)
 
     build_seed = rng.randint(0, 2**32)
 
@@ -230,6 +305,6 @@ def sample(rng: random.Random) -> Params:
         shape=shape,
         material=material,
         light=light,
-        exposure=exposure,
+        look=look,
         build_seed=build_seed,
     )
