@@ -153,6 +153,7 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
     renderer.upload_scene(render_scene, view);
     renderer.upload_fills(render_scene, view);
     renderer.clear();
+    ++ed.session.analysis_revision;
     if (mark_dirty)
         ed.session.dirty = true;
     light_analysis_valid = false;

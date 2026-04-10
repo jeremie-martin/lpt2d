@@ -340,7 +340,7 @@ def _analyzed_look(mode: str):
         camera=CAMERA,
         sample_count=6,
         target_mean=0.30,
-        max_clipping=0.01,
+        max_clipped_channel_fraction=0.01,
     )
 
 

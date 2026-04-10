@@ -270,7 +270,7 @@ def make_probe_shot() -> Shot:
 def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
     """Render low-res frames and check brightness and contrast.
 
-    Returns (ok, avg_mean_lum, avg_std_lum).
+    Returns (ok, avg_mean, avg_contrast_std).
     """
     animate = build_animate(p)
     shot = make_probe_shot()
@@ -288,9 +288,9 @@ def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_mean += fs.mean_lum
-        total_std += fs.std_dev
-        if fs.mean_lum > MIN_MEAN_LUM:
+        total_mean += fs.mean
+        total_std += fs.contrast_std
+        if fs.mean > MIN_MEAN_LUM:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0

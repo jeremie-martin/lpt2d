@@ -76,13 +76,14 @@ from .types import FrameContext as FrameContext
 from .types import FrameMetrics as FrameMetrics
 from .types import FrameReport as FrameReport
 from .types import Group as Group
-from .types import LightCircle as LightCircle
 from .types import LightRef as LightRef
 from .types import LuminanceStats as LuminanceStats
 from .types import Look as Look
 from .types import Material as Material
 from .types import Path as Path
 from .types import PointLight as PointLight
+from .types import PointLightAppearance as PointLightAppearance
+from .types import PointLightAppearanceParams as PointLightAppearanceParams
 from .types import Polygon as Polygon
 from .types import PolygonJoinMode as PolygonJoinMode
 from .types import ProjectorLight as ProjectorLight
@@ -121,7 +122,6 @@ __all__ = [
     "FrameMetrics",
     "FrameReport",
     "Group",
-    "LightCircle",
     "LightRef",
     "LuminanceStats",
     "Key",
@@ -134,6 +134,8 @@ __all__ = [
     "Path",
     "Polygon",
     "PolygonJoinMode",
+    "PointLightAppearance",
+    "PointLightAppearanceParams",
     "Quality",
     "Scene",
     "SeedMode",

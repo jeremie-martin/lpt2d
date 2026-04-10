@@ -244,8 +244,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_std += fs.std_dev
-        if fs.std_dev > MIN_CONTRAST_STD:
+        total_std += fs.contrast_std
+        if fs.contrast_std > MIN_CONTRAST_STD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0

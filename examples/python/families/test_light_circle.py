@@ -1,4 +1,4 @@
-"""Visual validation of light circle measurements.
+"""Visual validation of point-light appearance measurements.
 
 Renders a series of simple scenes with controlled light configurations,
 measures the apparent circle of each light via the C++ analyzer, and saves
@@ -69,8 +69,10 @@ def _render_scene(scene: Scene, exposure: float = -5.0) -> _lpt2d.RenderResult:
     return rr
 
 
-def _pixels_to_world(radius_px: float, canvas_width: int) -> float:
-    return radius_px * CAM_WIDTH / canvas_width
+def _short_side_world_span(canvas_width: int, canvas_height: int) -> float:
+    if canvas_width <= canvas_height:
+        return CAM_WIDTH
+    return CAM_WIDTH * canvas_height / canvas_width
 
 
 def _annotate_and_save(
@@ -78,32 +80,35 @@ def _annotate_and_save(
     path: Path,
     title: str,
 ) -> None:
-    """Save the image and a companion text file with measurements.
-
-    Circles are read directly from ``rr.analysis.circles`` — the C++ analyzer
-    has already measured every PointLight in the uploaded scene.
-    """
+    """Save the image and a companion text file with authored-camera measurements."""
     save_image(str(path), rr.pixels, rr.width, rr.height)
 
-    circles = list(rr.analysis.circles)
+    appearances = list(rr.analysis.lights)
+    short_side_px = min(rr.width, rr.height)
+    short_side_world = _short_side_world_span(rr.width, rr.height)
     txt = path.with_suffix(".txt")
     lines = [title, "=" * len(title), ""]
-    for c in circles:
-        r_world = _pixels_to_world(c.radius_px, rr.width)
+    for c in appearances:
+        radius_px = c.radius_ratio * short_side_px
+        edge_px = c.transition_width_ratio * short_side_px
+        radius_world = c.radius_ratio * short_side_world
         lines.append(
-            f"{c.id}:  r={c.radius_px:.1f}px ({r_world:.4f}u)  "
-            f"fwhm={c.radius_half_max_px:.1f}px  n_bright={c.n_bright_pixels}  "
-            f"sharp={c.sharpness:.3f}  mean={c.mean_luminance:.3f}  "
-            f"pixel=({c.pixel_x:.0f},{c.pixel_y:.0f})"
+            f"{c.id}:  radius={c.radius_ratio:.4f} "
+            f"({radius_px:.1f}px, {radius_world:.4f}u)  "
+            f"edge={c.transition_width_ratio:.4f} ({edge_px:.1f}px)  "
+            f"coverage={c.coverage_fraction:.6f}  contrast={c.peak_contrast:.3f}  "
+            f"conf={c.confidence:.2f}  image=({c.image_x:.0f},{c.image_y:.0f})"
         )
     txt.write_text("\n".join(lines))
     print(f"  {path.name}: {title}")
-    for c in circles:
-        r_world = _pixels_to_world(c.radius_px, rr.width)
+    for c in appearances:
+        radius_px = c.radius_ratio * short_side_px
+        radius_world = c.radius_ratio * short_side_world
         print(
-            f"    {c.id}: r={c.radius_px:.1f}px ({r_world:.4f}u) "
-            f"fwhm={c.radius_half_max_px:.1f}px n_bright={c.n_bright_pixels} "
-            f"sharp={c.sharpness:.3f}"
+            f"    {c.id}: radius={c.radius_ratio:.4f} "
+            f"({radius_px:.1f}px, {radius_world:.4f}u) "
+            f"edge={c.transition_width_ratio:.4f} contrast={c.peak_contrast:.3f} "
+            f"conf={c.confidence:.2f}"
         )
 
 
@@ -180,7 +185,7 @@ def _render_scene_at(scene: Scene, exposure: float, width: int, height: int,
 
 
 def test_resolution_scaling() -> None:
-    """Verify that world-space radius is stable across resolutions and ray counts."""
+    """Verify that normalized radius is stable across resolutions and ray counts."""
     print("Resolution scaling test")
     print("=" * 60)
 
@@ -198,16 +203,14 @@ def test_resolution_scaling() -> None:
         for rays in ray_counts:
             print(f"  rendering {w}x{h} @ {rays // 1000}K rays ...", end="", flush=True)
             rr = _render_scene_at(scene, exposure, w, h, rays)
-            circles = list(rr.analysis.circles)
-            moving = next((c for c in circles if c.id == "moving"), None)
-            for c in circles:
-                r_world = _pixels_to_world(c.radius_px, w)
-                results[c.id][(w, rays)] = r_world
+            appearances = list(rr.analysis.lights)
+            moving = next((c for c in appearances if c.id == "moving"), None)
+            for c in appearances:
+                results[c.id][(w, rays)] = c.radius_ratio
                 if c.id not in labels_seen:
                     labels_seen.append(c.id)
-            moving_px = moving.radius_px if moving else 0.0
-            moving_world = results["moving"].get((w, rays), 0.0)
-            print(f" moving r={moving_px:.1f}px ({moving_world:.4f}u)")
+            moving_ratio = moving.radius_ratio if moving else 0.0
+            print(f" moving radius_ratio={moving_ratio:.4f}")
 
     # Print comparison table.
     print(f"\n{'Label':>12s}", end="")
@@ -219,13 +222,13 @@ def test_resolution_scaling() -> None:
     for label in labels_seen:
         vals = results[label]
         print(f"{label:>12s}", end="")
-        world_radii = []
+        radius_ratios = []
         for w, h in resolutions:
             for rays in ray_counts:
                 r = vals.get((w, rays), 0.0)
-                world_radii.append(r)
+                radius_ratios.append(r)
                 print(f"  {r:12.4f}", end="")
-        nonzero = [r for r in world_radii if r > 0.001]
+        nonzero = [r for r in radius_ratios if r > 0.001]
         if len(nonzero) >= 2:
             mean = sum(nonzero) / len(nonzero)
             max_dev = max(abs(r - mean) / mean for r in nonzero)

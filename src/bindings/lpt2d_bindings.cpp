@@ -649,22 +649,18 @@ NB_MODULE(_lpt2d, m) {
     }, "scene"_a, "origin"_a, "direction"_a);
 
     // ── FrameMetrics / LuminanceStats ────────────────────────────
-    // `FrameMetrics` is a type alias for `LuminanceStats`, so we only bind
-    // the underlying type once (under the LuminanceStats name) and then
-    // expose it as `FrameMetrics` too for source compatibility with Python
-    // code that still reads `rr.metrics.mean_lum` etc.
     auto lum_stats_cls = nb::class_<LuminanceStats>(m, "LuminanceStats")
         .def(nb::init<>())
-        .def_ro("mean_lum", &LuminanceStats::mean_lum)
-        .def_ro("pct_black", &LuminanceStats::pct_black)
-        .def_ro("pct_clipped", &LuminanceStats::pct_clipped)
-        .def_ro("p05", &LuminanceStats::p05)
-        .def_ro("p50", &LuminanceStats::p50)
-        .def_ro("p95", &LuminanceStats::p95)
-        .def_ro("p99", &LuminanceStats::p99)
-        .def_ro("std_dev", &LuminanceStats::std_dev)
-        .def_ro("lum_min", &LuminanceStats::lum_min)
-        .def_ro("lum_max", &LuminanceStats::lum_max)
+        .def_ro("mean", &LuminanceStats::mean)
+        .def_ro("median", &LuminanceStats::median)
+        .def_ro("shadow_floor", &LuminanceStats::shadow_floor)
+        .def_ro("highlight_ceiling", &LuminanceStats::highlight_ceiling)
+        .def_ro("highlight_peak", &LuminanceStats::highlight_peak)
+        .def_ro("contrast_std", &LuminanceStats::contrast_std)
+        .def_ro("contrast_spread", &LuminanceStats::contrast_spread)
+        .def_ro("near_black_fraction", &LuminanceStats::near_black_fraction)
+        .def_ro("near_white_fraction", &LuminanceStats::near_white_fraction)
+        .def_ro("clipped_channel_fraction", &LuminanceStats::clipped_channel_fraction)
         .def_ro("width", &LuminanceStats::width)
         .def_ro("height", &LuminanceStats::height)
         .def_prop_ro("histogram", [](const LuminanceStats& s) {
@@ -677,9 +673,9 @@ NB_MODULE(_lpt2d, m) {
     nb::class_<ColorStats>(m, "ColorStats")
         .def_ro("mean_saturation", &ColorStats::mean_saturation)
         .def_ro("hue_entropy", &ColorStats::hue_entropy)
-        .def_ro("chromatic_fraction", &ColorStats::chromatic_fraction)
-        .def_ro("color_richness", &ColorStats::color_richness)
-        .def_ro("n_chromatic", &ColorStats::n_chromatic)
+        .def_ro("colored_fraction", &ColorStats::colored_fraction)
+        .def_ro("richness", &ColorStats::richness)
+        .def_ro("n_colored", &ColorStats::n_colored)
         .def_prop_ro("hue_histogram", [](const ColorStats& s) {
             std::vector<int> h(s.hue_histogram.begin(), s.hue_histogram.end());
             return h;
@@ -694,42 +690,48 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("world_x", &LightRef::world_x)
         .def_rw("world_y", &LightRef::world_y);
 
-    // ── LightCircle ──────────────────────────────────────────────
-    nb::class_<LightCircle>(m, "LightCircle")
-        .def_ro("id", &LightCircle::id)
-        .def_prop_ro("world_pos", [](const LightCircle& c) {
+    // ── PointLightAppearance ────────────────────────────────────
+    auto point_light_cls = nb::class_<PointLightAppearance>(m, "PointLightAppearance")
+        .def_ro("id", &PointLightAppearance::id)
+        .def_prop_ro("world_pos", [](const PointLightAppearance& c) {
             return nb::make_tuple(c.world_x, c.world_y);
         })
-        .def_prop_ro("pixel_pos", [](const LightCircle& c) {
-            return nb::make_tuple(c.pixel_x, c.pixel_y);
+        .def_prop_ro("image_pos", [](const PointLightAppearance& c) {
+            return nb::make_tuple(c.image_x, c.image_y);
         })
-        .def_ro("world_x", &LightCircle::world_x)
-        .def_ro("world_y", &LightCircle::world_y)
-        .def_ro("pixel_x", &LightCircle::pixel_x)
-        .def_ro("pixel_y", &LightCircle::pixel_y)
-        .def_ro("radius_px", &LightCircle::radius_px)
-        .def_ro("radius_half_max_px", &LightCircle::radius_half_max_px)
-        .def_ro("n_bright_pixels", &LightCircle::n_bright_pixels)
-        .def_ro("sharpness", &LightCircle::sharpness)
-        .def_ro("mean_luminance", &LightCircle::mean_luminance)
-        .def_ro("profile", &LightCircle::profile);
+        .def_ro("world_x", &PointLightAppearance::world_x)
+        .def_ro("world_y", &PointLightAppearance::world_y)
+        .def_ro("image_x", &PointLightAppearance::image_x)
+        .def_ro("image_y", &PointLightAppearance::image_y)
+        .def_ro("visible", &PointLightAppearance::visible)
+        .def_ro("radius_ratio", &PointLightAppearance::radius_ratio)
+        .def_ro("coverage_fraction", &PointLightAppearance::coverage_fraction)
+        .def_ro("saturated_radius_ratio", &PointLightAppearance::saturated_radius_ratio)
+        .def_ro("transition_width_ratio", &PointLightAppearance::transition_width_ratio)
+        .def_ro("peak_luminance", &PointLightAppearance::peak_luminance)
+        .def_ro("background_luminance", &PointLightAppearance::background_luminance)
+        .def_ro("peak_contrast", &PointLightAppearance::peak_contrast)
+        .def_ro("touches_frame_edge", &PointLightAppearance::touches_frame_edge)
+        .def_ro("confidence", &PointLightAppearance::confidence);
 
-    // ── LightCircleParams ────────────────────────────────────────
-    nb::class_<LightCircleParams>(m, "LightCircleParams")
-        .def("__init__", [](LightCircleParams* self) {
-            new (self) LightCircleParams{};
+    // ── PointLightAppearanceParams ───────────────────────────────
+    auto point_light_params_cls = nb::class_<PointLightAppearanceParams>(m, "PointLightAppearanceParams")
+        .def("__init__", [](PointLightAppearanceParams* self) {
+            new (self) PointLightAppearanceParams{};
         })
-        .def_rw("max_radius_px", &LightCircleParams::max_radius_px)
-        .def_rw("bright_threshold", &LightCircleParams::bright_threshold)
-        .def_rw("min_bright_pixels", &LightCircleParams::min_bright_pixels)
-        .def_rw("radius_percentile", &LightCircleParams::radius_percentile)
-        .def_rw("half_max_fraction", &LightCircleParams::half_max_fraction);
+        .def_rw("search_radius_ratio", &PointLightAppearanceParams::search_radius_ratio)
+        .def_rw("legacy_bright_threshold", &PointLightAppearanceParams::legacy_bright_threshold)
+        .def_rw("legacy_radius_percentile", &PointLightAppearanceParams::legacy_radius_percentile)
+        .def_rw("legacy_min_bright_pixels", &PointLightAppearanceParams::legacy_min_bright_pixels)
+        .def_rw("seed_fraction", &PointLightAppearanceParams::seed_fraction)
+        .def_rw("grow_fraction", &PointLightAppearanceParams::grow_fraction)
+        .def_rw("center_snap_px", &PointLightAppearanceParams::center_snap_px);
 
     // ── FrameAnalysis ────────────────────────────────────────────
     nb::class_<FrameAnalysis>(m, "FrameAnalysis")
-        .def_ro("lum", &FrameAnalysis::lum)
+        .def_ro("luminance", &FrameAnalysis::luminance)
         .def_ro("color", &FrameAnalysis::color)
-        .def_ro("circles", &FrameAnalysis::circles);
+        .def_ro("lights", &FrameAnalysis::lights);
 
     // ── FrameAnalysisParams ──────────────────────────────────────
     nb::class_<FrameAnalysisParams>(m, "FrameAnalysisParams")
@@ -738,14 +740,14 @@ NB_MODULE(_lpt2d, m) {
         })
         .def_rw("analyze_luminance", &FrameAnalysisParams::analyze_luminance)
         .def_rw("analyze_color", &FrameAnalysisParams::analyze_color)
-        .def_rw("analyze_circles", &FrameAnalysisParams::analyze_circles)
-        .def_rw("circles", &FrameAnalysisParams::circles)
-        .def_rw("saturation_threshold", &FrameAnalysisParams::saturation_threshold);
+        .def_rw("analyze_lights", &FrameAnalysisParams::analyze_lights)
+        .def_rw("lights", &FrameAnalysisParams::lights)
+        .def_rw("saturation_threshold", &FrameAnalysisParams::saturation_threshold)
+        .def_rw("near_black_bin_max", &FrameAnalysisParams::near_black_bin_max)
+        .def_rw("near_white_bin_min", &FrameAnalysisParams::near_white_bin_min);
 
-    // Raw-bytes analyser free functions used to live here. They were
-    // deleted alongside the CPU pixel-loop implementations in the GPU
-    // refactor — all frame analysis now goes through the GPU compute
-    // shader via `RenderSession.render_shot(..., analyze=True)`.
+    // Frame analysis is returned through `RenderSession.render_shot(...,
+    // analyze=True)` and the renderer readback paths.
 
     // ── RenderResult ─────────────────────────────────────────────
     nb::class_<RenderResult>(m, "RenderResult")

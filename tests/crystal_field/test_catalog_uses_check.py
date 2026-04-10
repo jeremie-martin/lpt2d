@@ -2,8 +2,8 @@
 mean-luminance-only shortcut.
 
 The rewrite replaces catalog.py's ``_search_good_params`` with a plain
-retry loop that calls the full ``check.py`` pipeline (color richness,
-light circles, sharpness, ratio, washed-out).  This test confirms that
+retry loop that calls the full ``check.py`` pipeline (richness,
+point-light appearance, edge width, ratio, washed-out).  This test confirms that
 the catalog's acceptance path now uses those extra thresholds by
 constructing a synthetic Params that would pass the old mean-luminance
 window but fails one of the newer gates.
@@ -36,22 +36,25 @@ def test_failure_distance_is_zero_for_passing():
 
     # Fabricate a metrics dict that lies safely inside every threshold.
     good_metrics = {
-        "color": 5.0,
+        "colorful_seconds": 5.0,
         "richness": 0.4,
         "mean": 0.35,
-        "spread": 0.40,
-        "p05": 0.05,
-        "p95": 0.45,
-        "p99": 0.55,
-        "clip%": 0.0,
-        "sat": 0.3,
-        "moving_r": 20.0,
-        "ambient_r": 15.0,
-        "ratio": 1.3,
-        "sharp": 0.03,
-        "exp": -4.5,
-        "gam": 1.8,
-        "wp": 0.5,
+        "contrast_spread": 0.40,
+        "shadow_floor": 0.05,
+        "highlight_ceiling": 0.45,
+        "highlight_peak": 0.55,
+        "clipped_channel_fraction": 0.0,
+        "mean_saturation": 0.3,
+        "moving_radius_ratio": 0.08,
+        "ambient_radius_ratio": 0.05,
+        "coverage_fraction": 0.0002,
+        "radius_ratio": 1.3,
+        "transition_width_ratio": 0.01,
+        "peak_contrast": 0.12,
+        "confidence": 0.6,
+        "exposure": -4.5,
+        "gamma": 1.8,
+        "white_point": 0.5,
     }
     result = MeasurementResult(
         metrics=good_metrics,
@@ -69,22 +72,25 @@ def test_failure_distance_increases_with_washed_out():
     from examples.python.families.crystal_field.check import MeasurementResult
 
     washed_metrics = {
-        "color": 5.0,
+        "colorful_seconds": 5.0,
         "richness": 0.4,
         "mean": 0.35,
-        "spread": MIN_CONTRAST_SPREAD / 2,  # half the threshold
-        "p05": 0.20,
-        "p95": 0.32,
-        "p99": 0.34,
-        "clip%": 0.0,
-        "sat": 0.3,
-        "moving_r": 20.0,
-        "ambient_r": 15.0,
-        "ratio": 1.3,
-        "sharp": 0.03,
-        "exp": -4.5,
-        "gam": 1.8,
-        "wp": 0.5,
+        "contrast_spread": MIN_CONTRAST_SPREAD / 2,  # half the threshold
+        "shadow_floor": 0.20,
+        "highlight_ceiling": 0.32,
+        "highlight_peak": 0.34,
+        "clipped_channel_fraction": 0.0,
+        "mean_saturation": 0.3,
+        "moving_radius_ratio": 0.08,
+        "ambient_radius_ratio": 0.05,
+        "coverage_fraction": 0.0002,
+        "radius_ratio": 1.3,
+        "transition_width_ratio": 0.01,
+        "peak_contrast": 0.12,
+        "confidence": 0.6,
+        "exposure": -4.5,
+        "gamma": 1.8,
+        "white_point": 0.5,
     }
     result = MeasurementResult(
         metrics=washed_metrics,
@@ -136,19 +142,21 @@ def test_measure_and_verdict_populates_all_overlay_keys():
 
     # Every overlay key must be present, regardless of pass/fail.
     required_keys = {
-        "color",
+        "colorful_seconds",
         "mean",
-        "spread",
-        "p99",
-        "clip%",
-        "sat",
-        "moving_r",
-        "ambient_r",
-        "ratio",
-        "sharp",
-        "exp",
-        "gam",
-        "wp",
+        "contrast_spread",
+        "highlight_peak",
+        "clipped_channel_fraction",
+        "mean_saturation",
+        "moving_radius_ratio",
+        "ambient_radius_ratio",
+        "radius_ratio",
+        "transition_width_ratio",
+        "peak_contrast",
+        "confidence",
+        "exposure",
+        "gamma",
+        "white_point",
     }
     missing = required_keys - set(result.metrics.keys())
     assert not missing, f"measure_all missing keys: {missing}"

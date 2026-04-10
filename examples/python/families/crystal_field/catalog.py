@@ -38,13 +38,16 @@ from anim.family import Verdict
 
 from .check import (
     MAX_MEAN_LUMINANCE,
-    MAX_MOVING_RADIUS_PX,
+    MAX_MOVING_RADIUS_RATIO,
     MAX_RADIUS_RATIO,
+    MAX_TRANSITION_WIDTH_RATIO,
     MIN_COLORFUL_SECONDS,
     MIN_CONTRAST_SPREAD,
+    MIN_CONFIDENCE,
+    MIN_COVERAGE_FRACTION,
     MIN_MEAN_LUMINANCE,
-    MIN_MOVING_RADIUS_PX,
-    MIN_SHARPNESS,
+    MIN_MOVING_RADIUS_RATIO,
+    MIN_PEAK_CONTRAST,
     MeasurementResult,
     _measure_and_verdict,
 )
@@ -227,28 +230,41 @@ def _failure_distance(result: MeasurementResult) -> float:
     m = result.metrics
     dist = 0.0
 
-    if m["color"] < MIN_COLORFUL_SECONDS:
-        dist += (MIN_COLORFUL_SECONDS - m["color"]) * 10.0
+    if m["colorful_seconds"] < MIN_COLORFUL_SECONDS:
+        dist += (MIN_COLORFUL_SECONDS - m["colorful_seconds"]) * 10.0
 
     if m["mean"] < MIN_MEAN_LUMINANCE:
         dist += (MIN_MEAN_LUMINANCE - m["mean"]) * 5.0
     elif m["mean"] > MAX_MEAN_LUMINANCE:
         dist += (m["mean"] - MAX_MEAN_LUMINANCE) * 5.0
 
-    if m["spread"] < MIN_CONTRAST_SPREAD:
-        dist += (MIN_CONTRAST_SPREAD - m["spread"]) * 3.0
+    if m["contrast_spread"] < MIN_CONTRAST_SPREAD:
+        dist += (MIN_CONTRAST_SPREAD - m["contrast_spread"]) * 3.0
 
-    if m["moving_r"] > 0:
-        if m["moving_r"] < MIN_MOVING_RADIUS_PX:
-            dist += (MIN_MOVING_RADIUS_PX - m["moving_r"]) / 10.0
-        elif m["moving_r"] > MAX_MOVING_RADIUS_PX:
-            dist += (m["moving_r"] - MAX_MOVING_RADIUS_PX) / 10.0
+    if m["moving_radius_ratio"] > 0:
+        if m["moving_radius_ratio"] < MIN_MOVING_RADIUS_RATIO:
+            dist += (MIN_MOVING_RADIUS_RATIO - m["moving_radius_ratio"]) * 100.0
+        elif m["moving_radius_ratio"] > MAX_MOVING_RADIUS_RATIO:
+            dist += (m["moving_radius_ratio"] - MAX_MOVING_RADIUS_RATIO) * 100.0
 
-    if m["sharp"] > 0 and m["sharp"] < MIN_SHARPNESS:
-        dist += (MIN_SHARPNESS - m["sharp"]) * 20.0
+    if (
+        m["moving_radius_ratio"] > 0
+        and m["transition_width_ratio"] > MAX_TRANSITION_WIDTH_RATIO
+    ):
+        dist += (m["transition_width_ratio"] - MAX_TRANSITION_WIDTH_RATIO) * 100.0
 
-    if m["ambient_r"] > 0 and m["ratio"] > MAX_RADIUS_RATIO:
-        dist += m["ratio"] - MAX_RADIUS_RATIO
+    if m["moving_radius_ratio"] > 0 and m["peak_contrast"] < MIN_PEAK_CONTRAST:
+        dist += (MIN_PEAK_CONTRAST - m["peak_contrast"]) * 10.0
+
+    if m["moving_radius_ratio"] > 0 and m["confidence"] < MIN_CONFIDENCE:
+        dist += (MIN_CONFIDENCE - m["confidence"]) * 5.0
+
+    coverage = m.get("coverage_fraction", MIN_COVERAGE_FRACTION)
+    if m["moving_radius_ratio"] > 0 and coverage < MIN_COVERAGE_FRACTION:
+        dist += (MIN_COVERAGE_FRACTION - coverage) * 5000.0
+
+    if m["ambient_radius_ratio"] > 0 and m["radius_ratio"] > MAX_RADIUS_RATIO:
+        dist += m["radius_ratio"] - MAX_RADIUS_RATIO
 
     return dist
 

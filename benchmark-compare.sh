@@ -24,6 +24,10 @@ else
     DIR_B="${DIRS[0]}"  # newer
 fi
 
+# Strip trailing slashes so path splitting works correctly in HTML generation
+DIR_A="${DIR_A%/}"
+DIR_B="${DIR_B%/}"
+
 for D in "$DIR_A" "$DIR_B"; do
     if [[ ! -f "$D/results.json" ]]; then
         echo "Not a benchmark directory (missing results.json): $D"

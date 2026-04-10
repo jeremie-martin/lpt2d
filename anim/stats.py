@@ -1,10 +1,9 @@
 """Frame statistics for automated analysis and agent workflows.
 
-The actual luminance + colour + light-circle math lives in the C++ core
-(see `src/core/gpu_image_analysis.cpp` and its shader in
-`src/shaders/analysis.comp`). Callers should read
-`rr.metrics` / `rr.analysis.lum` / `rr.analysis.color` directly after
-rendering a frame with ``analyze=True``.
+The actual luminance, colour, and point-light appearance math lives in
+the C++ frame-analysis core (see `src/core/image_analysis.cpp`). Callers
+should read `rr.metrics` / `rr.analysis.luminance` / `rr.analysis.color`
+directly after rendering a frame with ``analyze=True``.
 
 What remains in this module:
 
@@ -52,12 +51,12 @@ class QualityGate:
     """Threshold configuration for automated quality checks.
 
     ``min_mean`` uses 0-1 scale (mapped from the 0-255 mean luminance).
-    ``max_pct_clipped`` and ``max_pct_black`` are already fractions (0-1).
+    Fraction thresholds are already on the 0-1 scale.
     """
 
-    max_pct_clipped: float = 0.05  # warn if clipping > 5%
+    max_clipped_channel_fraction: float = 0.05  # warn if any-channel clipping > 5%
     min_mean: float = 0.3  # warn if mean brightness < 0.3
-    max_pct_black: float = 0.8  # warn if > 80% black pixels
+    max_near_black_fraction: float = 0.8  # warn if near-black occupancy > 80%
 
 
 def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
@@ -69,12 +68,24 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
     warnings: list[str] = []
     if report.mean is None:
         return warnings
-    if report.pct_clipped is not None and report.pct_clipped > gate.max_pct_clipped:
-        warnings.append(f"clipping {report.pct_clipped:.1%} > {gate.max_pct_clipped:.1%}")
+    if (
+        report.clipped_channel_fraction is not None
+        and report.clipped_channel_fraction > gate.max_clipped_channel_fraction
+    ):
+        warnings.append(
+            "clipping "
+            f"{report.clipped_channel_fraction:.1%} > {gate.max_clipped_channel_fraction:.1%}"
+        )
     if report.mean / 255.0 < gate.min_mean:
         warnings.append(f"mean brightness {report.mean / 255.0:.2f} < {gate.min_mean}")
-    if report.pct_black is not None and report.pct_black > gate.max_pct_black:
-        warnings.append(f"black pixels {report.pct_black:.1%} > {gate.max_pct_black:.1%}")
+    if (
+        report.near_black_fraction is not None
+        and report.near_black_fraction > gate.max_near_black_fraction
+    ):
+        warnings.append(
+            "near-black occupancy "
+            f"{report.near_black_fraction:.1%} > {gate.max_near_black_fraction:.1%}"
+        )
     return warnings
 
 
@@ -85,15 +96,14 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
 class StatsDiff:
     """Per-field difference between two FrameMetrics (b - a).
 
-    Field names are kept short for display; `mean` is the signed delta of
-    `FrameMetrics.mean_lum`.
+    `mean` is the signed delta of `FrameMetrics.mean`.
     """
 
     mean: float
-    pct_black: float
-    pct_clipped: float
-    p50: float
-    p95: float
+    near_black_fraction: float
+    clipped_channel_fraction: float
+    median: float
+    highlight_ceiling: float
 
     def summary(self) -> str:
         """One-line summary with signed deltas."""
@@ -104,10 +114,10 @@ class StatsDiff:
         return " ".join(
             [
                 _fmt("mean", self.mean),
-                _fmt("black", self.pct_black),
-                _fmt("clip", self.pct_clipped),
-                _fmt("p50", self.p50),
-                _fmt("p95", self.p95),
+                _fmt("near_black", self.near_black_fraction),
+                _fmt("clipped", self.clipped_channel_fraction),
+                _fmt("median", self.median),
+                _fmt("highlight_ceiling", self.highlight_ceiling),
             ]
         )
 
@@ -132,11 +142,13 @@ def compare_stats(
                 fi_a,
                 t_a,
                 StatsDiff(
-                    mean=sb.mean_lum - sa.mean_lum,
-                    pct_black=sb.pct_black - sa.pct_black,
-                    pct_clipped=sb.pct_clipped - sa.pct_clipped,
-                    p50=sb.p50 - sa.p50,
-                    p95=sb.p95 - sa.p95,
+                    mean=sb.mean - sa.mean,
+                    near_black_fraction=sb.near_black_fraction - sa.near_black_fraction,
+                    clipped_channel_fraction=(
+                        sb.clipped_channel_fraction - sa.clipped_channel_fraction
+                    ),
+                    median=sb.median - sa.median,
+                    highlight_ceiling=sb.highlight_ceiling - sa.highlight_ceiling,
                 ),
             )
         )
@@ -153,8 +165,8 @@ def compare_summary(diffs: list[tuple[int, float, StatsDiff]]) -> str:
     # Aggregate
     n = len(diffs)
     avg_mean = sum(d.mean for _, _, d in diffs) / n
-    avg_clip = sum(d.pct_clipped for _, _, d in diffs) / n
-    lines.append(f"  average: mean={avg_mean:+.2f} clip={avg_clip:+.4f}")
+    avg_clip = sum(d.clipped_channel_fraction for _, _, d in diffs) / n
+    lines.append(f"  average: mean={avg_mean:+.2f} clipped={avg_clip:+.4f}")
     return "\n".join(lines)
 
 
@@ -461,10 +473,10 @@ class LookProfile:
     per_frame: list[tuple[int, float, FrameMetrics]]
     mean_brightness: float
     std_brightness: float
-    max_clipping: float
-    max_pct_black: float
-    mean_contrast_range: float
-    std_contrast_range: float
+    max_clipped_channel_fraction: float
+    max_near_black_fraction: float
+    mean_contrast_spread: float
+    std_contrast_spread: float
 
     @property
     def stability(self) -> float:
@@ -481,8 +493,11 @@ class LookProfile:
             f" normalize={self.look.normalize}",
             f"Stability: {self.stability:.2f}",
             f"Brightness: mean={self.mean_brightness:.3f} std={self.std_brightness:.3f}",
-            f"Max clipping: {self.max_clipping:.1%}  Max black: {self.max_pct_black:.1%}",
-            f"Contrast range: mean={self.mean_contrast_range:.1f} std={self.std_contrast_range:.1f}",
+            "Max clipping: "
+            f"{self.max_clipped_channel_fraction:.1%}  "
+            f"Max near-black: {self.max_near_black_fraction:.1%}",
+            "Contrast spread: "
+            f"mean={self.mean_contrast_spread:.1f} std={self.std_contrast_spread:.1f}",
             f"Frames sampled: {len(self.per_frame)}",
         ]
         return "\n".join(lines)
@@ -496,27 +511,31 @@ class LookProfile:
                 per_frame=[],
                 mean_brightness=0,
                 std_brightness=0,
-                max_clipping=0,
-                max_pct_black=0,
-                mean_contrast_range=0,
-                std_contrast_range=0,
+                max_clipped_channel_fraction=0,
+                max_near_black_fraction=0,
+                mean_contrast_spread=0,
+                std_contrast_spread=0,
             )
-        brightnesses = [s.mean_lum / 255.0 for _, _, s in results]
-        contrast_ranges = [s.p95 - s.p05 for _, _, s in results]
+        brightnesses = [s.mean / 255.0 for _, _, s in results]
+        contrast_spreads = [
+            s.highlight_ceiling - s.shadow_floor for _, _, s in results
+        ]
         n = len(results)
         mean_b = sum(brightnesses) / n
         std_b = (sum((b - mean_b) ** 2 for b in brightnesses) / max(n - 1, 1)) ** 0.5
-        mean_cr = sum(contrast_ranges) / n
-        std_cr = (sum((c - mean_cr) ** 2 for c in contrast_ranges) / max(n - 1, 1)) ** 0.5
+        mean_cr = sum(contrast_spreads) / n
+        std_cr = (sum((c - mean_cr) ** 2 for c in contrast_spreads) / max(n - 1, 1)) ** 0.5
         return LookProfile(
             look=look,
             per_frame=list(results),
             mean_brightness=mean_b,
             std_brightness=std_b,
-            max_clipping=max(s.pct_clipped for _, _, s in results),
-            max_pct_black=max(s.pct_black for _, _, s in results),
-            mean_contrast_range=mean_cr,
-            std_contrast_range=std_cr,
+            max_clipped_channel_fraction=max(
+                s.clipped_channel_fraction for _, _, s in results
+            ),
+            max_near_black_fraction=max(s.near_black_fraction for _, _, s in results),
+            mean_contrast_spread=mean_cr,
+            std_contrast_spread=std_cr,
         )
 
 
@@ -539,7 +558,7 @@ class LookComparison:
             lines.append(
                 f"  {p.look.exposure:>10.2f} {p.look.tonemap:>10}"
                 f" {p.mean_brightness:>6.3f} {p.std_brightness:>6.3f}"
-                f" {p.max_clipping:>5.1%} {p.stability:>5.2f}"
+                f" {p.max_clipped_channel_fraction:>5.1%} {p.stability:>5.2f}"
             )
         return "\n".join(lines)
 
@@ -550,7 +569,11 @@ class LookComparison:
 
         def score(p: LookProfile) -> float:
             mean_err = abs(p.mean_brightness - target_mean)
-            return mean_err - weight_stability * p.stability + 2.0 * p.max_clipping
+            return (
+                mean_err
+                - weight_stability * p.stability
+                + 2.0 * p.max_clipped_channel_fraction
+            )
 
         return min(self.profiles, key=score)
 
@@ -596,8 +619,8 @@ class LookReport:
         *,
         dark_threshold: float = 0.15,
         bright_threshold: float = 0.70,
-        clip_threshold: float = 0.05,
-        contrast_threshold: float = 30.0,
+        clipped_channel_threshold: float = 0.05,
+        contrast_spread_threshold: float = 30.0,
     ) -> "LookReport":
         """Analyze a profile and flag problem frames."""
         dark = []
@@ -605,14 +628,14 @@ class LookReport:
         clipping = []
         low_contrast = []
         for fi, _t, s in profile.per_frame:
-            b = s.mean_lum / 255.0
+            b = s.mean / 255.0
             if b < dark_threshold:
                 dark.append(fi)
             if b > bright_threshold:
                 bright.append(fi)
-            if s.pct_clipped > clip_threshold:
+            if s.clipped_channel_fraction > clipped_channel_threshold:
                 clipping.append(fi)
-            if (s.p95 - s.p05) < contrast_threshold:
+            if (s.highlight_ceiling - s.shadow_floor) < contrast_spread_threshold:
                 low_contrast.append(fi)
         return LookReport(
             profile=profile,
@@ -638,7 +661,7 @@ class LightContribution:
     source_id: str
     source_index: int
     mean_linear_luma: float  # linear mean BT.709 luminance, 0-255 display scale
-    coverage_fraction: float  # spatial coverage (1 - pct_black)
+    coverage_fraction: float  # spatial coverage (1 - near_black_fraction)
     share: float  # this source's linear mean / summed linear mean across sources
 
 

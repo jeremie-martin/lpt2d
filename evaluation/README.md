@@ -373,12 +373,12 @@ pixel verdict):
 
 | Metric              | Default threshold |
 |---------------------|-------------------|
-| mean_lum_delta      | <= 5.0            |
+| mean_delta          | <= 5.0            |
 | histogram_overlap   | >= 0.98           |
-| p50_delta           | <= 10.0           |
-| p95_delta           | <= 15.0           |
-| pct_black_delta     | <= 0.05           |
-| pct_clipped_delta   | <= 0.05           |
+| median_delta        | <= 10.0           |
+| highlight_ceiling_delta | <= 15.0       |
+| near_black_fraction_delta | <= 0.05     |
+| clipped_channel_fraction_delta | <= 0.05 |
 
 ## Reference scenes
 

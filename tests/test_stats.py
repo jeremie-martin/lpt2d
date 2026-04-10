@@ -53,10 +53,15 @@ def _report(**kwargs) -> FrameReport:
         max_hdr=1.0,
         total_rays=1000,
         mean=50.0,
-        pct_black=0.3,
-        pct_clipped=0.01,
-        p50=40.0,
-        p95=180.0,
+        median=40.0,
+        shadow_floor=5.0,
+        highlight_ceiling=180.0,
+        highlight_peak=220.0,
+        contrast_std=30.0,
+        contrast_spread=175.0,
+        near_black_fraction=0.3,
+        near_white_fraction=0.0,
+        clipped_channel_fraction=0.01,
     )
     defaults.update(kwargs)
     return FrameReport(**defaults)
@@ -64,14 +69,14 @@ def _report(**kwargs) -> FrameReport:
 
 def test_quality_gate_passes():
     gate = QualityGate()
-    report = _report(mean=100.0, pct_clipped=0.01, pct_black=0.3)
+    report = _report(mean=100.0, clipped_channel_fraction=0.01, near_black_fraction=0.3)
     warnings = check_quality(report, gate)
     assert warnings == []
 
 
 def test_quality_gate_clipping():
-    gate = QualityGate(max_pct_clipped=0.05)
-    report = _report(mean=200.0, pct_clipped=0.12)
+    gate = QualityGate(max_clipped_channel_fraction=0.05)
+    report = _report(mean=200.0, clipped_channel_fraction=0.12)
     warnings = check_quality(report, gate)
     assert len(warnings) == 1
     assert "clipping" in warnings[0]
@@ -86,10 +91,10 @@ def test_quality_gate_underexposed():
 
 
 def test_quality_gate_too_black():
-    gate = QualityGate(max_pct_black=0.5)
-    report = _report(pct_black=0.85)
+    gate = QualityGate(max_near_black_fraction=0.5)
+    report = _report(near_black_fraction=0.85)
     warnings = check_quality(report, gate)
-    assert any("black" in w for w in warnings)
+    assert any("near-black" in w for w in warnings)
 
 
 def test_quality_gate_no_metrics():
@@ -104,25 +109,26 @@ def test_quality_gate_no_metrics():
 
 
 _FRAME_STATS_DEFAULTS = dict(
-    mean_lum=50.0, pct_black=0.3, pct_clipped=0.02,
-    p05=5.0, p50=40.0, p95=180.0, p99=220.0,
-    std_dev=30.0, lum_min=0, lum_max=200,
+    mean=50.0,
+    median=40.0,
+    shadow_floor=5.0,
+    highlight_ceiling=180.0,
+    highlight_peak=220.0,
+    contrast_std=30.0,
+    contrast_spread=175.0,
+    near_black_fraction=0.3,
+    near_white_fraction=0.0,
+    clipped_channel_fraction=0.02,
 )
-_FRAME_STATS_ALIASES = {
-    "mean": "mean_lum", "std": "std_dev", "min": "lum_min", "max": "lum_max",
-}
 
 
 def _frame_stats(**kwargs) -> Any:
     """Build a FrameMetrics-shaped fake for compare_stats / LookProfile tests.
 
-    Defaults match the historical ``FrameStats`` happy values so each call
-    site only overrides what it cares about. ``mean`` and ``std`` are
-    accepted as aliases for ``mean_lum`` / ``std_dev`` to keep the legacy
-    test cases readable.
+    Defaults match the normal luminance happy values so each call site only
+    overrides what it cares about.
     """
-    overrides = {_FRAME_STATS_ALIASES.get(k, k): v for k, v in kwargs.items()}
-    return fake_metrics(**{**_FRAME_STATS_DEFAULTS, **overrides})
+    return fake_metrics(**{**_FRAME_STATS_DEFAULTS, **kwargs})
 
 
 def test_compare_stats_zero_diff():
@@ -132,17 +138,17 @@ def test_compare_stats_zero_diff():
     assert len(diffs) == 1
     _, _, d = diffs[0]
     assert d.mean == 0.0
-    assert d.pct_clipped == 0.0
+    assert d.clipped_channel_fraction == 0.0
 
 
 def test_compare_stats_exposure_change():
-    a = [(0, 0.0, _frame_stats(mean=50.0, pct_clipped=0.02, p95=180.0))]
-    b = [(0, 0.0, _frame_stats(mean=80.0, pct_clipped=0.08, p95=220.0))]
+    a = [(0, 0.0, _frame_stats(mean=50.0, clipped_channel_fraction=0.02, highlight_ceiling=180.0))]
+    b = [(0, 0.0, _frame_stats(mean=80.0, clipped_channel_fraction=0.08, highlight_ceiling=220.0))]
     diffs = compare_stats(a, b)
     _, _, d = diffs[0]
     assert d.mean == pytest.approx(30.0)
-    assert d.pct_clipped == pytest.approx(0.06)
-    assert d.p95 == pytest.approx(40.0)
+    assert d.clipped_channel_fraction == pytest.approx(0.06)
+    assert d.highlight_ceiling == pytest.approx(40.0)
 
 
 def test_compare_stats_length_mismatch():
@@ -163,10 +169,16 @@ def test_compare_summary():
 
 
 def test_stats_diff_summary():
-    d = StatsDiff(mean=5.0, pct_black=-0.1, pct_clipped=0.02, p50=3.0, p95=10.0)
+    d = StatsDiff(
+        mean=5.0,
+        near_black_fraction=-0.1,
+        clipped_channel_fraction=0.02,
+        median=3.0,
+        highlight_ceiling=10.0,
+    )
     s = d.summary()
     assert "mean=+5.00" in s
-    assert "clip=+0.02" in s
+    assert "clipped=+0.02" in s
 
 
 # frame_stats_from_report was deleted alongside the Python FrameStats
@@ -181,7 +193,7 @@ def test_stats_diff_summary():
 def _make_profile(brightnesses: list[float], clipping: float = 0.0) -> LookProfile:
     """Build a LookProfile from per-frame brightness values (0-1 scale)."""
     per_frame = [
-        (i, i * 0.1, _frame_stats(mean=b * 255.0, pct_clipped=clipping))
+        (i, i * 0.1, _frame_stats(mean=b * 255.0, clipped_channel_fraction=clipping))
         for i, b in enumerate(brightnesses)
     ]
     return LookProfile.from_stats(Look(), per_frame)
@@ -191,7 +203,7 @@ def test_look_profile_from_stats_basic():
     profile = _make_profile([0.3, 0.35, 0.4])
     assert profile.mean_brightness == pytest.approx(0.35, abs=0.01)
     assert profile.std_brightness > 0
-    assert profile.max_clipping == 0.0
+    assert profile.max_clipped_channel_fraction == 0.0
     assert len(profile.per_frame) == 3
 
 
@@ -238,11 +250,11 @@ def test_look_report_flags_dark_frames():
 
 def test_look_report_flags_clipping():
     per_frame = [
-        (0, 0.0, _frame_stats(pct_clipped=0.0)),
-        (1, 0.1, _frame_stats(pct_clipped=0.10)),
+        (0, 0.0, _frame_stats(clipped_channel_fraction=0.0)),
+        (1, 0.1, _frame_stats(clipped_channel_fraction=0.10)),
     ]
     profile = LookProfile.from_stats(Look(), per_frame)
-    report = LookReport.from_profile(profile, clip_threshold=0.05)
+    report = LookReport.from_profile(profile, clipped_channel_threshold=0.05)
     assert 1 in report.clipping_frames
     assert 0 not in report.clipping_frames
 
@@ -255,11 +267,11 @@ def test_look_report_flags_bright_frames():
 
 def test_look_report_flags_low_contrast_frames():
     per_frame = [
-        (0, 0.0, _frame_stats(p05=10.0, p95=60.0)),
-        (1, 0.1, _frame_stats(p05=40.0, p95=55.0)),
+        (0, 0.0, _frame_stats(shadow_floor=10.0, highlight_ceiling=60.0)),
+        (1, 0.1, _frame_stats(shadow_floor=40.0, highlight_ceiling=55.0)),
     ]
     profile = LookProfile.from_stats(Look(), per_frame)
-    report = LookReport.from_profile(profile, contrast_threshold=20.0)
+    report = LookReport.from_profile(profile, contrast_spread_threshold=20.0)
     assert report.low_contrast_frames == [1]
 
 

@@ -14,7 +14,7 @@ from anim.family import Family, Verdict, ProbeFrame, probe
 |------|---------|
 | `Verdict(ok, summary)` | What `check` returns |
 | `probe(animate, duration)` | Render probe frames, return per-frame stats |
-| `ProbeFrame` | Per-frame stats (color_richness, mean, std, ...) |
+| `ProbeFrame` | Per-frame stats (`richness`, `mean`, `std`, ...) |
 | `Family(...)` | Runner with search/survey/render/main methods |
 
 ## What a family script provides
@@ -61,7 +61,7 @@ def build(p):
 
 def check(p, animate):
     frames = probe(animate, DURATION)
-    colorful = sum(1 for f in frames if f.color_richness > 0.3)
+    colorful = sum(1 for f in frames if f.richness > 0.3)
     return Verdict(colorful >= 8, f"colorful={colorful}")
 
 FAMILY = Family("my_family", DURATION, Params, sample, build, check=check)
@@ -97,7 +97,7 @@ def check(p, animate):
 ```python
 def check(p, animate):
     frames = probe(animate, 10.0)
-    avg = sum(f.color_richness for f in frames) / len(frames)
+    avg = sum(f.richness for f in frames) / len(frames)
     return Verdict(avg > 0.2, f"avg_richness={avg:.3f}")
 ```
 
@@ -111,7 +111,7 @@ def check(p, animate):
 
     # Stage 2: probe render (expensive, only runs if geometry passed)
     frames = probe(animate, 10.0)
-    colorful = sum(1 for f in frames if f.color_richness > 0.4)
+    colorful = sum(1 for f in frames if f.richness > 0.4)
     return Verdict(colorful >= 12, f"geo ok, colorful={colorful}")
 ```
 

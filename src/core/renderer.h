@@ -14,11 +14,9 @@ struct PostProcess;
 struct Scene;
 struct TraceConfig;
 
-// FrameMetrics is the historical luminance-only metrics struct. It is now
-// an alias for LuminanceStats (defined in image_analysis.h) which is a
-// superset with extra fields (p05, p99, std_dev, lum_min/max, width/height).
-// The field names of the legacy six fields are preserved, so every existing
-// read site (GUI Stats panel, Python bindings, tests) keeps working unchanged.
+// FrameMetrics is the luminance-only view of the authored-camera analysis.
+// It aliases the same LuminanceStats struct exposed on
+// FrameAnalysis.luminance.
 using FrameMetrics = LuminanceStats;
 
 struct VignetteFrame {
@@ -75,16 +73,9 @@ public:
     // Compute current max luminance from the float accumulation buffer (CPU readback).
     float compute_current_max();
 
-    // Run the GPU frame analyser on the current display FBO. Uses the
-    // bounds and point-light positions cached by the most recent
-    // upload_scene() / update_viewport() call. The caller should ensure
-    // that any draws into the display FBO are complete — this method
-    // issues the NVIDIA EGL ROP-cache-flushing barrier internally, so a
-    // plain sequence of `trace_and_draw(...); update_display(...);
-    // run_frame_analysis();` is safe.
-    //
-    // Returns the full FrameAnalysis struct. Callers that only need the
-    // luminance subset can read `.lum` off the result.
+    // Analyze the current display FBO. Callers that need authored-camera
+    // semantics must render/upload this Renderer with authored-camera bounds
+    // first; the GUI Stats path uses a dedicated renderer for that reason.
     FrameAnalysis run_frame_analysis(const FrameAnalysisParams& params = {});
 
 private:

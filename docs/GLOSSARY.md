@@ -131,7 +131,7 @@ Python wrappers in `anim/types.py` add a `color: ColorSpec` keyword for spectral
 
 | Term | Definition |
 |------|-----------|
-| **FrameMetrics** | C++ struct: `mean_lum`, `pct_black`, `pct_clipped`, `p50`, `p95`, `histogram`. |
+| **FrameMetrics** | C++ luminance summary: `mean`, `median`, `shadow_floor`, `highlight_ceiling`, `near_black_fraction`, `clipped_channel_fraction`, `histogram`. |
 | **FrameReport** | Python dataclass: enriched per-frame metadata from the renderer. |
 | **FrameStats** | Python dataclass: luminance analysis from raw RGB8 pixels. |
 

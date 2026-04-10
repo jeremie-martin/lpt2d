@@ -18,8 +18,8 @@ struct RenderResult {
     int height = 0;
     int64_t total_rays = 0;
     float max_hdr = 0.0f;
-    FrameMetrics metrics;    // legacy luminance-only view (= analysis.lum)
-    FrameAnalysis analysis;  // full frame analysis: lum + color + per-light circles
+    FrameMetrics metrics;    // luminance-only view (= analysis.luminance)
+    FrameAnalysis analysis;  // full frame analysis: luminance + color + point-light appearance
     double time_ms = 0.0; // wall-clock milliseconds for render_frame
 };
 

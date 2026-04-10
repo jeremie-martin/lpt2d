@@ -27,12 +27,12 @@ class Thresholds:
     warn_psnr: float = 40.0
     warn_ssim: float = 0.98
     # FrameMetrics secondary signal
-    max_mean_lum_delta: float = 5.0
+    max_mean_delta: float = 5.0
     min_histogram_overlap: float = 0.98
-    max_p50_delta: float = 10.0
-    max_p95_delta: float = 15.0
-    max_pct_black_delta: float = 0.05
-    max_pct_clipped_delta: float = 0.05
+    max_median_delta: float = 10.0
+    max_highlight_ceiling_delta: float = 15.0
+    max_near_black_fraction_delta: float = 0.05
+    max_clipped_channel_fraction_delta: float = 0.05
 
 
 DEFAULT_THRESHOLDS = Thresholds()
@@ -42,12 +42,12 @@ DEFAULT_THRESHOLDS = Thresholds()
 class MetricsComparison:
     """Secondary signal: FrameMetrics comparison result."""
 
-    mean_lum_delta: float
+    mean_delta: float
     histogram_overlap: float
-    p50_delta: float
-    p95_delta: float
-    pct_black_delta: float
-    pct_clipped_delta: float
+    median_delta: float
+    highlight_ceiling_delta: float
+    near_black_fraction_delta: float
+    clipped_channel_fraction_delta: float
     warnings: list[str] = field(default_factory=list)
 
 
@@ -76,52 +76,62 @@ def _histogram_overlap(a: list[int], b: list[int]) -> float:
 
 def compare_metrics(
     a_mean: float,
-    a_p50: float,
-    a_p95: float,
-    a_pct_black: float,
-    a_pct_clipped: float,
+    a_median: float,
+    a_highlight_ceiling: float,
+    a_near_black_fraction: float,
+    a_clipped_channel_fraction: float,
     a_histogram: list[int],
     b_mean: float,
-    b_p50: float,
-    b_p95: float,
-    b_pct_black: float,
-    b_pct_clipped: float,
+    b_median: float,
+    b_highlight_ceiling: float,
+    b_near_black_fraction: float,
+    b_clipped_channel_fraction: float,
     b_histogram: list[int],
     thresholds: Thresholds = DEFAULT_THRESHOLDS,
 ) -> MetricsComparison:
     """Compare FrameMetrics as a secondary diagnostic signal."""
     mean_delta = abs(a_mean - b_mean)
-    p50_delta = abs(a_p50 - b_p50)
-    p95_delta = abs(a_p95 - b_p95)
-    pct_black_delta = abs(a_pct_black - b_pct_black)
-    pct_clipped_delta = abs(a_pct_clipped - b_pct_clipped)
+    median_delta = abs(a_median - b_median)
+    highlight_ceiling_delta = abs(a_highlight_ceiling - b_highlight_ceiling)
+    near_black_fraction_delta = abs(a_near_black_fraction - b_near_black_fraction)
+    clipped_channel_fraction_delta = abs(
+        a_clipped_channel_fraction - b_clipped_channel_fraction
+    )
     hist_overlap = _histogram_overlap(a_histogram, b_histogram)
 
     warnings: list[str] = []
-    if mean_delta > thresholds.max_mean_lum_delta:
-        warnings.append(f"mean_lum_delta={mean_delta:.2f} > {thresholds.max_mean_lum_delta}")
+    if mean_delta > thresholds.max_mean_delta:
+        warnings.append(f"mean_delta={mean_delta:.2f} > {thresholds.max_mean_delta}")
     if hist_overlap < thresholds.min_histogram_overlap:
         warnings.append(
             f"histogram_overlap={hist_overlap:.4f} < {thresholds.min_histogram_overlap}"
         )
-    if p50_delta > thresholds.max_p50_delta:
-        warnings.append(f"p50_delta={p50_delta:.2f} > {thresholds.max_p50_delta}")
-    if p95_delta > thresholds.max_p95_delta:
-        warnings.append(f"p95_delta={p95_delta:.2f} > {thresholds.max_p95_delta}")
-    if pct_black_delta > thresholds.max_pct_black_delta:
-        warnings.append(f"pct_black_delta={pct_black_delta:.4f} > {thresholds.max_pct_black_delta}")
-    if pct_clipped_delta > thresholds.max_pct_clipped_delta:
+    if median_delta > thresholds.max_median_delta:
+        warnings.append(f"median_delta={median_delta:.2f} > {thresholds.max_median_delta}")
+    if highlight_ceiling_delta > thresholds.max_highlight_ceiling_delta:
         warnings.append(
-            f"pct_clipped_delta={pct_clipped_delta:.4f} > {thresholds.max_pct_clipped_delta}"
+            "highlight_ceiling_delta="
+            f"{highlight_ceiling_delta:.2f} > {thresholds.max_highlight_ceiling_delta}"
+        )
+    if near_black_fraction_delta > thresholds.max_near_black_fraction_delta:
+        warnings.append(
+            "near_black_fraction_delta="
+            f"{near_black_fraction_delta:.4f} > {thresholds.max_near_black_fraction_delta}"
+        )
+    if clipped_channel_fraction_delta > thresholds.max_clipped_channel_fraction_delta:
+        warnings.append(
+            "clipped_channel_fraction_delta="
+            f"{clipped_channel_fraction_delta:.4f} > "
+            f"{thresholds.max_clipped_channel_fraction_delta}"
         )
 
     return MetricsComparison(
-        mean_lum_delta=mean_delta,
+        mean_delta=mean_delta,
         histogram_overlap=hist_overlap,
-        p50_delta=p50_delta,
-        p95_delta=p95_delta,
-        pct_black_delta=pct_black_delta,
-        pct_clipped_delta=pct_clipped_delta,
+        median_delta=median_delta,
+        highlight_ceiling_delta=highlight_ceiling_delta,
+        near_black_fraction_delta=near_black_fraction_delta,
+        clipped_channel_fraction_delta=clipped_channel_fraction_delta,
         warnings=warnings,
     )
 
@@ -204,17 +214,17 @@ def compare_render_results(
     b_m = b_result.metrics
     if a_m is not None and b_m is not None:
         mc = compare_metrics(
-            a_mean=a_m.mean_lum,
-            a_p50=a_m.p50,
-            a_p95=a_m.p95,
-            a_pct_black=a_m.pct_black,
-            a_pct_clipped=a_m.pct_clipped,
+            a_mean=a_m.mean,
+            a_median=a_m.median,
+            a_highlight_ceiling=a_m.highlight_ceiling,
+            a_near_black_fraction=a_m.near_black_fraction,
+            a_clipped_channel_fraction=a_m.clipped_channel_fraction,
             a_histogram=list(a_m.histogram),
-            b_mean=b_m.mean_lum,
-            b_p50=b_m.p50,
-            b_p95=b_m.p95,
-            b_pct_black=b_m.pct_black,
-            b_pct_clipped=b_m.pct_clipped,
+            b_mean=b_m.mean,
+            b_median=b_m.median,
+            b_highlight_ceiling=b_m.highlight_ceiling,
+            b_near_black_fraction=b_m.near_black_fraction,
+            b_clipped_channel_fraction=b_m.clipped_channel_fraction,
             b_histogram=list(b_m.histogram),
             thresholds=thresholds,
         )
@@ -261,17 +271,17 @@ def compare_to_baseline(
     b_m = baseline.get("metrics")
     if r_m is not None and b_m is not None:
         mc = compare_metrics(
-            a_mean=r_m.mean_lum,
-            a_p50=r_m.p50,
-            a_p95=r_m.p95,
-            a_pct_black=r_m.pct_black,
-            a_pct_clipped=r_m.pct_clipped,
+            a_mean=r_m.mean,
+            a_median=r_m.median,
+            a_highlight_ceiling=r_m.highlight_ceiling,
+            a_near_black_fraction=r_m.near_black_fraction,
+            a_clipped_channel_fraction=r_m.clipped_channel_fraction,
             a_histogram=list(r_m.histogram),
-            b_mean=b_m["mean_lum"],
-            b_p50=b_m["p50"],
-            b_p95=b_m["p95"],
-            b_pct_black=b_m["pct_black"],
-            b_pct_clipped=b_m["pct_clipped"],
+            b_mean=b_m["mean"],
+            b_median=b_m["median"],
+            b_highlight_ceiling=b_m["highlight_ceiling"],
+            b_near_black_fraction=b_m["near_black_fraction"],
+            b_clipped_channel_fraction=b_m["clipped_channel_fraction"],
             b_histogram=b_m["histogram"],
             thresholds=thresholds,
         )

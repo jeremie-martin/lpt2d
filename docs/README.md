@@ -19,6 +19,10 @@ useful over time.
   GUI identity, friction analysis, and improvement directions.
 - [SEED_MODE.md](/home/holo/prog/lpt2d/docs/SEED_MODE.md)
   Shared semantics for deterministic and decorrelated rendering.
+- [TESTING_PHILOSOPHY.md](/home/holo/prog/lpt2d/docs/TESTING_PHILOSOPHY.md)
+  Repo-specific testing philosophy for renderer, authoring, and tooling code.
+- [TESTING_ANALYSIS.md](/home/holo/prog/lpt2d/docs/TESTING_ANALYSIS.md)
+  PR-oriented execution spec for short- and medium-term production-code testing work.
 - [FILL_SEMANTICS.md](/home/holo/prog/lpt2d/docs/FILL_SEMANTICS.md)
   Fill pipeline position, tonemap desaturation, and candidate fixes.
 - [FRAME_ANALYSIS.md](/home/holo/prog/lpt2d/docs/FRAME_ANALYSIS.md)
