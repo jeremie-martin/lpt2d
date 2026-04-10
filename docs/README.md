@@ -21,6 +21,9 @@ useful over time.
   Shared semantics for deterministic and decorrelated rendering.
 - [FILL_SEMANTICS.md](/home/holo/prog/lpt2d/docs/FILL_SEMANTICS.md)
   Fill pipeline position, tonemap desaturation, and candidate fixes.
+- [FRAME_ANALYSIS.md](/home/holo/prog/lpt2d/docs/FRAME_ANALYSIS.md)
+  What each field of `FrameAnalysis` measures, what scale it lives on,
+  and what range to expect for well-formed animation frames.
 - [IDEAS.md](/home/holo/prog/lpt2d/IDEAS.md)
   Centralized unscheduled ideas and follow-up work.
 
