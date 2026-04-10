@@ -12,17 +12,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-from anim import Camera2D, Shot, Timeline, render
+from anim import Camera2D, Shot, render
+
 from .catalog import (
-    EXPOSURE_RANGE,
     _build_catalog_entries,
     _entry_tag,
-    _entry_to_params,
-    _search_good_params,
+    _find_good_params,
 )
 from .params import DURATION
 from .scene import build
@@ -60,13 +60,15 @@ def run_catalog_videos(argv: list[str] | None = None) -> None:
                 print(f"  skip {mat}/{tag} (exists)", flush=True)
                 continue
 
-            p = _search_good_params(e)
-            if p is None:
-                print(f"  skip {mat}/{tag} (no valid params)", flush=True)
-                continue
+            entry_rng = random.Random(f"videos:{mat}/{tag}")
+            p, result = _find_good_params(e, entry_rng)
 
             animate = build(p)
-            print(f"  rendering {mat}/{tag} exp={p.exposure:.2f} ...", flush=True)
+            status = "OK" if result.verdict.ok else "FAIL"
+            print(
+                f"  rendering {mat}/{tag} {status} exp={p.look.exposure:.2f} ...",
+                flush=True,
+            )
             render(animate, DURATION, str(video_path), settings=shot, camera=cam, crf=18)
 
             # Save params
@@ -92,13 +94,26 @@ def run_catalog_videos(argv: list[str] | None = None) -> None:
                 continue
 
             cmd = [
-                "ffmpeg", "-y",
-                "-i", str(group[0]), "-i", str(group[1]),
-                "-i", str(group[2]), "-i", str(group[3]),
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(group[0]),
+                "-i",
+                str(group[1]),
+                "-i",
+                str(group[2]),
+                "-i",
+                str(group[3]),
                 "-filter_complex",
                 "[0:v][1:v]hstack=inputs=2[top];[2:v][3:v]hstack=inputs=2[bot];[top][bot]vstack=inputs=2[out]",
-                "-map", "[out]",
-                "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                "-map",
+                "[out]",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
                 str(collage_path),
             ]
             subprocess.run(cmd, capture_output=True)

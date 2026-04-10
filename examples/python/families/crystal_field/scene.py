@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import asdict
 
 from anim import (
     Circle,
@@ -86,22 +87,29 @@ def build(p: Params):
     spectral_boost = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
     intensity = p.light.moving_intensity * spectral_boost
 
+    look_kwargs = asdict(p.look)
+    frame_look = Look().with_overrides(**look_kwargs)
+
     def animate(ctx: FrameContext) -> Frame:
         lights = list(ambient_lights)
         for li in range(p.light.n_lights):
             lx = light_x_tracks[li].s(ctx.time)
             ly = light_y_tracks[li].s(ctx.time)
-            lights.append(PointLight(
-                id=f"light_{li}", position=[lx, ly], intensity=intensity,
-                wavelength_min=p.light.wavelength_min,
-                wavelength_max=p.light.wavelength_max,
-            ))
+            lights.append(
+                PointLight(
+                    id=f"light_{li}",
+                    position=[lx, ly],
+                    intensity=intensity,
+                    wavelength_min=p.light.wavelength_min,
+                    wavelength_max=p.light.wavelength_max,
+                )
+            )
 
         scene = Scene(
             materials=materials,
             shapes=[*wall_shapes, *shapes],
             lights=lights,
         )
-        return Frame(scene=scene, look=Look(exposure=p.exposure))
+        return Frame(scene=scene, look=frame_look)
 
     return animate

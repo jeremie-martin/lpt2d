@@ -49,6 +49,14 @@ def run_stats(argv: list[str] | None = None) -> None:
     cols_list: list[int] = []
     spacings: list[float] = []
     amb_intensities: list[float] = []
+    mov_intensities: list[float] = []
+    gammas: list[float] = []
+    contrasts: list[float] = []
+    white_points: list[float] = []
+    temperatures: list[float] = []
+    vignettes: list[float] = []
+    ca_values: list[float] = []
+    albedos: list[float] = []
 
     for _ in range(n):
         p = sample(rng)
@@ -71,8 +79,17 @@ def run_stats(argv: list[str] | None = None) -> None:
 
         if p.material.style == "glass":
             iors.append(p.material.ior)
+        if p.material.style == "diffuse" and p.material.diffuse_style != "dark":
+            albedos.append(p.material.albedo)
         speeds.append(p.light.speed)
-        exposures.append(p.exposure)
+        exposures.append(p.look.exposure)
+        gammas.append(p.look.gamma)
+        contrasts.append(p.look.contrast)
+        white_points.append(p.look.white_point)
+        temperatures.append(p.look.temperature)
+        vignettes.append(p.look.vignette)
+        ca_values.append(p.look.chromatic_aberration)
+        mov_intensities.append(p.light.moving_intensity)
         rows_list.append(p.grid.rows)
         cols_list.append(p.grid.cols)
         spacings.append(p.grid.spacing)
@@ -94,13 +111,13 @@ def run_stats(argv: list[str] | None = None) -> None:
             return "n/a"
         s = sorted(values)
         return (
-            f"min={s[0]:.2f}  p25={s[len(s)//4]:.2f}  "
-            f"median={s[len(s)//2]:.2f}  p75={s[3*len(s)//4]:.2f}  max={s[-1]:.2f}"
+            f"min={s[0]:.2f}  p25={s[len(s) // 4]:.2f}  "
+            f"median={s[len(s) // 2]:.2f}  p75={s[3 * len(s) // 4]:.2f}  max={s[-1]:.2f}"
         )
 
     def counter_line(c: Counter, total: int | None = None) -> str:
         t = total or sum(c.values())
-        return "  ".join(f"{k}={100*v/t:.1f}%" for k, v in sorted(c.items()))
+        return "  ".join(f"{k}={100 * v / t:.1f}%" for k, v in sorted(c.items()))
 
     print(f"Crystal Field Parameter Distributions (n={n}, seed={args.seed})")
     print()
@@ -116,8 +133,8 @@ def run_stats(argv: list[str] | None = None) -> None:
     print(f"  kind       {counter_line(shapes)}")
     if polygon_count > 0:
         print(f"  n_sides    {counter_line(n_sides_dist, polygon_count)} (of polygons)")
-        print(f"  rotation   {100*has_rotation/polygon_count:.1f}% of polygons")
-        print(f"  jitter     {100*has_jitter/polygon_count:.1f}% of polygons")
+        print(f"  rotation   {100 * has_rotation / polygon_count:.1f}% of polygons")
+        print(f"  jitter     {100 * has_jitter / polygon_count:.1f}% of polygons")
     print()
 
     print("── Material ──────────────────────────────────────────")
@@ -140,8 +157,24 @@ def run_stats(argv: list[str] | None = None) -> None:
     print(f"  style      {counter_line(amb_styles)}")
     if amb_intensities:
         print(f"  intensity  {dist(amb_intensities)} (when present)")
+    print(f"  moving_int {dist(mov_intensities)}")
     print()
 
-    print("── Exposure ──────────────────────────────────────────")
-    print(f"  exposure   {dist(exposures)}")
+    print("── Material (diffuse) ────────────────────────────────")
+    if albedos:
+        print(f"  albedo     {dist(albedos)} (colored_fill + metallic_rough)")
+    print()
+
+    print("── Look dims ─────────────────────────────────────────")
+    print(f"  exposure    {dist(exposures)}")
+    print(f"  gamma       {dist(gammas)}")
+    print(f"  contrast    {dist(contrasts)}")
+    print(f"  white_point {dist(white_points)}")
+    # Temperature / vignette / CA are probabilistically off — split the stats.
+    temp_on = [v for v in temperatures if v > 0]
+    vig_on = [v for v in vignettes if v > 0]
+    ca_on = [v for v in ca_values if v > 0]
+    print(f"  temperature on={pct(len(temp_on))} {dist(temp_on) if temp_on else ''}")
+    print(f"  vignette    on={pct(len(vig_on))} {dist(vig_on) if vig_on else ''}")
+    print(f"  ca          on={pct(len(ca_on))} {dist(ca_on) if ca_on else ''}")
     print()

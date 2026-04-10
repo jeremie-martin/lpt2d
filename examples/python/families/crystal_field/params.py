@@ -55,6 +55,7 @@ class MaterialConfig:
     n_color_groups: int  # 0 = no color
     diffuse_style: str = "dark"  # "dark", "colored_fill", "metallic_rough" — only for diffuse
     color_names: list[str] = field(default_factory=list)
+    albedo: float = 0.8  # diffuse albedo; dark style ignores this and uses a fixed low value
 
 
 @dataclass
@@ -78,12 +79,31 @@ class LightConfig:
 
 
 @dataclass
+class LookConfig:
+    """Post-process / tonemap dials threaded into ``anim.Look``.
+
+    Defaults mirror the C++ engine defaults in ``src/core/scene.h`` so a
+    ``LookConfig(exposure=x)`` with everything else default is equivalent
+    to today's ``Look(exposure=x)``.
+    """
+
+    exposure: float
+    gamma: float = 2.0
+    contrast: float = 1.0
+    white_point: float = 0.5
+    temperature: float = 0.0
+    vignette: float = 0.0
+    vignette_radius: float = 0.7
+    chromatic_aberration: float = 0.0
+
+
+@dataclass
 class Params:
     grid: GridConfig
     shape: ShapeConfig
     material: MaterialConfig
     light: LightConfig
-    exposure: float
+    look: LookConfig
     build_seed: int  # rng seed for build-time randomness (holes, material assignment, light paths)
 
 
