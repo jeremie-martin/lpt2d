@@ -43,30 +43,30 @@ def run_catalog_videos(argv: list[str] | None = None) -> None:
     shot = Shot.preset("preview", width=960, height=540, rays=2_000_000, depth=12)
     cam = Camera2D(center=[0, 0], width=3.2)
 
-    # Group by material, then by shape
-    for mat in ["glass", "dark", "colored_fill", "metallic_rough"]:
-        mat_entries = [e for e in medium if e["mat"] == mat]
-        mat_dir = out / mat
-        mat_dir.mkdir(parents=True, exist_ok=True)
+    # Group by outcome, then render videos + 2x2 collages.
+    for outcome in ["glass", "black_diffuse", "gray_diffuse", "colored_diffuse", "brushed_metal"]:
+        outcome_entries = [e for e in medium if e["outcome"] == outcome]
+        outcome_dir = out / outcome
+        outcome_dir.mkdir(parents=True, exist_ok=True)
 
         # Render individual videos
         video_paths: list[Path] = []
-        for e in mat_entries:
+        for e in outcome_entries:
             tag = _entry_tag(e)
-            video_path = mat_dir / f"{tag}.mp4"
+            video_path = outcome_dir / f"{tag}.mp4"
             video_paths.append(video_path)
 
             if video_path.exists():
-                print(f"  skip {mat}/{tag} (exists)", flush=True)
+                print(f"  skip {outcome}/{tag} (exists)", flush=True)
                 continue
 
-            entry_rng = random.Random(f"videos:{mat}/{tag}")
+            entry_rng = random.Random(f"videos:{outcome}/{tag}")
             p, result = _find_good_params(e, entry_rng)
 
             animate = build(p)
             status = "OK" if result.verdict.ok else "FAIL"
             print(
-                f"  rendering {mat}/{tag} {status} exp={p.look.exposure:.2f} ...",
+                f"  rendering {outcome}/{tag} {status} exp={p.look.exposure:.2f} ...",
                 flush=True,
             )
             render(animate, DURATION, str(video_path), settings=shot, camera=cam, crf=18)
@@ -82,15 +82,17 @@ def run_catalog_videos(argv: list[str] | None = None) -> None:
                 continue
 
             collage_idx = i // 4 + 1
-            collage_path = mat_dir / f"collage_{collage_idx}.mp4"
+            collage_path = outcome_dir / f"collage_{collage_idx}.mp4"
 
             if collage_path.exists():
-                print(f"  skip collage {mat}/collage_{collage_idx} (exists)", flush=True)
+                print(f"  skip collage {outcome}/collage_{collage_idx} (exists)", flush=True)
                 continue
 
             # Check all 4 videos exist
             if not all(v.exists() for v in group):
-                print(f"  skip collage {mat}/collage_{collage_idx} (missing videos)", flush=True)
+                print(
+                    f"  skip collage {outcome}/collage_{collage_idx} (missing videos)", flush=True
+                )
                 continue
 
             cmd = [
@@ -117,6 +119,6 @@ def run_catalog_videos(argv: list[str] | None = None) -> None:
                 str(collage_path),
             ]
             subprocess.run(cmd, capture_output=True)
-            print(f"  collage {mat}/collage_{collage_idx}.mp4", flush=True)
+            print(f"  collage {outcome}/collage_{collage_idx}.mp4", flush=True)
 
     print("Done!")

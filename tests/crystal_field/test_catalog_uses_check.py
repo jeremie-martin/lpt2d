@@ -111,15 +111,10 @@ def test_measure_and_verdict_populates_all_overlay_keys():
         rotation=None,
     )
     material = MaterialConfig(
-        style="diffuse",
-        ior=1.5,
-        cauchy_b=0.0,
-        absorption=0.0,
+        outcome="black_diffuse",
+        albedo=0.85,  # analysis: never 0.15; high albedo is the rule for diffuse
         fill=0.0,
-        n_color_groups=0,
-        diffuse_style="dark",
         color_names=[],
-        albedo=0.15,
     )
     light = LightConfig(
         n_lights=1,
