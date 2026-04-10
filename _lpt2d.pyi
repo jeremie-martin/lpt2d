@@ -914,6 +914,7 @@ def _polygon_fill_boundary(polygon: Polygon, arc_segments: int = 8) -> list[Vec2
 def _triangulate_simple_polygon(vertices: Sequence[Vec2Like]) -> list[int]: ...
 
 class LuminanceStats:
+    def __init__(self) -> None: ...
     @property
     def mean_lum(self) -> float: ...
     @property
@@ -1015,30 +1016,13 @@ class FrameAnalysisParams:
     analyze_luminance: bool
     analyze_color: bool
     analyze_circles: bool
-    prefer_hdr_circles: bool
     circles: LightCircleParams
     saturation_threshold: float
 
-def compute_luminance_stats(rgb: bytes, width: int, height: int) -> LuminanceStats: ...
-def compute_color_stats(
-    rgb: bytes, width: int, height: int, saturation_threshold: float = 0.05
-) -> ColorStats: ...
-def measure_light_circles(
-    rgb: bytes,
-    width: int,
-    height: int,
-    bounds: Bounds,
-    lights: list[LightRef],
-    params: LightCircleParams = ...,
-) -> list[LightCircle]: ...
-def analyze_frame(
-    rgb: bytes,
-    width: int,
-    height: int,
-    bounds: Bounds,
-    lights: list[LightRef],
-    params: FrameAnalysisParams = ...,
-) -> FrameAnalysis: ...
+# Frame analysis goes through the GPU compute shader via
+# RenderSession.render_shot(..., analyze=True). The historical
+# compute_luminance_stats / compute_color_stats / measure_light_circles /
+# analyze_frame free functions were deleted in the GPU refactor.
 
 class RenderResult:
     @property

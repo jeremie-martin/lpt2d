@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gpu_image_analysis.h"
 #include "image_analysis.h"
 
 #include <GL/glew.h>
@@ -74,19 +75,17 @@ public:
     // Compute current max luminance from the float accumulation buffer (CPU readback).
     float compute_current_max();
 
-    // Compute per-frame stats from the post-processed RGBA8 buffer.
-    // Must be called after read_display_rgba() (which populates rgba_buffer_).
-    FrameMetrics compute_frame_metrics() const;
-
-    // Compute metrics from the current display FBO (reads back RGBA8 pixels).
-    // Standalone — does not require prior read_pixels() call.
-    FrameMetrics compute_display_metrics();
-
-    // Full frame analysis (luminance + color + per-light circles). Reads the
-    // current display FBO and uses the bounds and point-light positions
-    // cached by the most recent upload_scene() / update_viewport() call.
-    // This is what the GUI stats panel and viewport overlay consume.
-    FrameAnalysis compute_display_analysis();
+    // Run the GPU frame analyser on the current display FBO. Uses the
+    // bounds and point-light positions cached by the most recent
+    // upload_scene() / update_viewport() call. The caller should ensure
+    // that any draws into the display FBO are complete — this method
+    // issues the NVIDIA EGL ROP-cache-flushing barrier internally, so a
+    // plain sequence of `trace_and_draw(...); update_display(...);
+    // run_frame_analysis();` is safe.
+    //
+    // Returns the full FrameAnalysis struct. Callers that only need the
+    // luminance subset can read `.lum` off the result.
+    FrameAnalysis run_frame_analysis(const FrameAnalysisParams& params = {});
 
 private:
     int width_ = 0, height_ = 0;
@@ -184,12 +183,16 @@ private:
     float viewport_scale_ = 1.0f;
     std::vector<uint8_t> rgba_buffer_;
     std::vector<uint8_t> rgb_row_buffer_;
-    std::vector<uint8_t> display_rgb_scratch_;  // RGB8 readback for compute_display_analysis
 
-    // Cached from upload_scene() / update_viewport() so compute_display_analysis
+    // Cached from upload_scene() / update_viewport() so run_frame_analysis
     // can run with no scene context from the caller.
     Bounds last_upload_bounds_{};
     std::vector<LightRef> light_refs_;
+
+    // GPU frame analyser. Lifetime tied to this Renderer; init() in
+    // Renderer::init() after the GL context is current, shutdown() in
+    // Renderer::shutdown().
+    GpuImageAnalyzer analyzer_;
 
     // Cached PP uniform locations
     GLint loc_max_val_ = -1;

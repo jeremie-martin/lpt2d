@@ -15,7 +15,6 @@
 #include "spectrum.h"
 
 #include <cstdint>
-#include <span>
 #include <sstream>
 #include <vector>
 
@@ -655,6 +654,7 @@ NB_MODULE(_lpt2d, m) {
     // expose it as `FrameMetrics` too for source compatibility with Python
     // code that still reads `rr.metrics.mean_lum` etc.
     auto lum_stats_cls = nb::class_<LuminanceStats>(m, "LuminanceStats")
+        .def(nb::init<>())
         .def_ro("mean_lum", &LuminanceStats::mean_lum)
         .def_ro("pct_black", &LuminanceStats::pct_black)
         .def_ro("pct_clipped", &LuminanceStats::pct_clipped)
@@ -732,7 +732,6 @@ NB_MODULE(_lpt2d, m) {
         .def_ro("circles", &FrameAnalysis::circles);
 
     // ── FrameAnalysisParams ──────────────────────────────────────
-    // Bound before the free functions so they can use it as a default arg.
     nb::class_<FrameAnalysisParams>(m, "FrameAnalysisParams")
         .def("__init__", [](FrameAnalysisParams* self) {
             new (self) FrameAnalysisParams{};
@@ -740,70 +739,13 @@ NB_MODULE(_lpt2d, m) {
         .def_rw("analyze_luminance", &FrameAnalysisParams::analyze_luminance)
         .def_rw("analyze_color", &FrameAnalysisParams::analyze_color)
         .def_rw("analyze_circles", &FrameAnalysisParams::analyze_circles)
-        .def_rw("prefer_hdr_circles", &FrameAnalysisParams::prefer_hdr_circles)
         .def_rw("circles", &FrameAnalysisParams::circles)
         .def_rw("saturation_threshold", &FrameAnalysisParams::saturation_threshold);
 
-    // ── Free-function analyzers ──────────────────────────────────
-    // Accept raw bytes (RGB8, 3 bytes/pixel) and run the pure-CPU analyzers
-    // directly. The renderer/session hook-in lands in PR #2.
-
-    m.def("compute_luminance_stats",
-          [](nb::bytes rgb, int width, int height) {
-              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
-              const std::size_t expected =
-                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
-              if (rgb.size() < expected) {
-                  throw nb::value_error("rgb bytes shorter than width*height*3");
-              }
-              return compute_luminance_stats(data, width, height);
-          },
-          "rgb"_a, "width"_a, "height"_a);
-
-    m.def("compute_color_stats",
-          [](nb::bytes rgb, int width, int height, float saturation_threshold) {
-              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
-              const std::size_t expected =
-                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
-              if (rgb.size() < expected) {
-                  throw nb::value_error("rgb bytes shorter than width*height*3");
-              }
-              return compute_color_stats(data, width, height, saturation_threshold);
-          },
-          "rgb"_a, "width"_a, "height"_a, "saturation_threshold"_a = 0.05f);
-
-    m.def("measure_light_circles",
-          [](nb::bytes rgb, int width, int height, const Bounds& bounds,
-             const std::vector<LightRef>& lights, const LightCircleParams& params) {
-              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
-              const std::size_t expected =
-                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
-              if (rgb.size() < expected) {
-                  throw nb::value_error("rgb bytes shorter than width*height*3");
-              }
-              return measure_light_circles(
-                  data, width, height, bounds,
-                  std::span<const LightRef>(lights.data(), lights.size()), params);
-          },
-          "rgb"_a, "width"_a, "height"_a, "bounds"_a, "lights"_a,
-          "params"_a = LightCircleParams{});
-
-    m.def("analyze_frame",
-          [](nb::bytes rgb, int width, int height, const Bounds& bounds,
-             const std::vector<LightRef>& lights, const FrameAnalysisParams& params) {
-              const auto* data = reinterpret_cast<const std::uint8_t*>(rgb.c_str());
-              const std::size_t expected =
-                  static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 3u;
-              if (rgb.size() < expected) {
-                  throw nb::value_error("rgb bytes shorter than width*height*3");
-              }
-              return analyze_frame(
-                  data, width, height, bounds,
-                  std::span<const LightRef>(lights.data(), lights.size()),
-                  nullptr, params);
-          },
-          "rgb"_a, "width"_a, "height"_a, "bounds"_a, "lights"_a,
-          "params"_a = FrameAnalysisParams{});
+    // Raw-bytes analyser free functions used to live here. They were
+    // deleted alongside the CPU pixel-loop implementations in the GPU
+    // refactor — all frame analysis now goes through the GPU compute
+    // shader via `RenderSession.render_shot(..., analyze=True)`.
 
     // ── RenderResult ─────────────────────────────────────────────
     nb::class_<RenderResult>(m, "RenderResult")

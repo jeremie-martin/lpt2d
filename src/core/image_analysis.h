@@ -1,26 +1,18 @@
 #pragma once
 
-// Pure-CPU frame and light-circle analysis.
+// Frame-analysis data types and the shared CPU-side post-processing helper.
 //
-// This module is deliberately free of any OpenGL / GLEW / EGL dependency so
-// it can be unit-tested on raw pixel buffers without a GPU context. Both the
-// interactive Renderer and the headless RenderSession funnel their readback
-// buffers through these functions, so Python, CLI, and GUI all see the same
-// numbers.
-//
-// Everything operates on either:
-//   - a post-tonemap RGB8 or RGBA8 pixel buffer (0..255), OR
-//   - a pre-tonemap linear HDR RGBA float buffer (0..inf in linear units).
-//
-// The HDR path exists to fix the "all clipped whites look the same"
-// degeneracy that the RGB8 path has: a scene blown out above 1.0 reads as
-// white regardless of how overblown it is, so a washed-out frame trivially
-// passes a "luminance >= 0.92" bright test. On the HDR buffer we can set a
-// meaningful threshold relative to the image mean.
+// All the pixel-scanning math (luminance histogram, colour histogram,
+// per-light Voronoi circle measurement) lives in the GPU compute shader
+// `src/shaders/analysis.comp` dispatched by GpuImageAnalyzer. What stays
+// in this header is the public data contract — the structs every caller
+// reads (GUI Stats panel, Python `rr.analysis`, native tests) plus the
+// one pure helper (`finalize_luminance`) that turns a 256-bin histogram
+// into a complete LuminanceStats. The GPU and CPU paths share that
+// helper so the mean/std/percentile math has a single implementation.
 
 #include <array>
 #include <cstdint>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -62,6 +54,12 @@ ViewportXform viewport_xform(const Bounds& bounds, int width, int height);
 //
 // The new fields (p05, p99, std_dev, lum_min, lum_max, width, height) are
 // additive and drive the crystal_field acceptance filter on the Python side.
+//
+// `finalize_luminance` takes a populated 256-bin histogram plus the clipped
+// count and derives every scalar field (mean, std, percentiles, min, max).
+// Both the CPU pixel-loop path and the GPU compute-shader path call this
+// helper after they've built the histogram, so there is exactly one place
+// in the tree that converts a histogram into the public struct.
 
 struct LuminanceStats {
     // === preserved from the historical FrameMetrics (same names, same math) ===
@@ -82,22 +80,12 @@ struct LuminanceStats {
     int height = 0;
 };
 
-// RGB8 input (channels-stride 3). Top-left-origin, row-major.
-LuminanceStats compute_luminance_stats(const uint8_t* rgb, int width, int height);
-
-// RGBA8 variant — uses .rgb, ignores .a. Stride 4.
-LuminanceStats compute_luminance_stats_rgba(const uint8_t* rgba, int width, int height);
-
-// HDR variant. Operates on a linear-light RGB float buffer
-// (channels-stride 3, matching the renderer's GL_RGB32F / GL_RGB16F
-// accumulation texture). Luminance is computed with the same BT.709
-// weights as the LDR path, then each pixel is normalised by the frame's
-// maximum luminance so the resulting 0..255 histogram is directly
-// comparable to the LDR histogram regardless of the raw accumulation
-// scale. `pct_clipped` counts pixels whose raw linear luminance is at
-// or above 1.0 (pre-normalisation) — i.e. the post-tonemap clipping a
-// naive LDR viewer would see.
-LuminanceStats compute_luminance_stats_hdr(const float* rgb, int width, int height);
+// Finalise a LuminanceStats from a 256-bin histogram and the pixel counts.
+// Derives mean/std/percentiles/min/max from the histogram; `clipped` is
+// the number of pixels where any channel saturated (255). Shared by
+// every analysis path (GPU shader readback + native test fixtures).
+LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
+                                  int clipped, int width, int height);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Colour statistics
@@ -111,11 +99,6 @@ struct ColorStats {
     int n_chromatic = 0;
     std::array<int, 36> hue_histogram{};
 };
-
-// RGB8 input. `saturation_threshold` in [0, 1]; pixels below this S are
-// treated as achromatic and excluded from the hue histogram.
-ColorStats compute_color_stats(const uint8_t* rgb, int width, int height,
-                               float saturation_threshold = 0.05f);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Light circles
@@ -183,22 +166,6 @@ struct LightCircleParams {
     float half_max_fraction = 0.5f;   // fraction of peak for FWHM-style radius
 };
 
-// LDR path — RGB8 post-tonemap buffer.
-std::vector<LightCircle>
-measure_light_circles(const uint8_t* rgb, int width, int height,
-                      const Bounds& world_bounds,
-                      std::span<const LightRef> lights,
-                      const LightCircleParams& params = {});
-
-// HDR path — pre-tonemap linear RGB float buffer (stride 3). The
-// frame-max normalisation is computed internally so `bright_threshold`
-// keeps the same 0..1 semantics as the LDR path.
-std::vector<LightCircle>
-measure_light_circles_hdr(const float* rgb, int width, int height,
-                          const Bounds& world_bounds,
-                          std::span<const LightRef> lights,
-                          const LightCircleParams& params = {});
-
 // ───────────────────────────────────────────────────────────────────────────
 // Aggregate frame analysis
 // ───────────────────────────────────────────────────────────────────────────
@@ -213,26 +180,6 @@ struct FrameAnalysisParams {
     bool analyze_luminance = true;
     bool analyze_color = true;
     bool analyze_circles = true;
-    // HDR light-circle measurement is available (see
-    // `measure_light_circles_hdr`) but defaults to off: for normally-exposed
-    // scenes the post-tonemap LDR buffer is what the user actually sees, so
-    // LDR circles track the perceived "bright halo" better. The HDR path is
-    // an escape hatch for pathologically clipped frames where the LDR
-    // buffer is uniformly saturated; flip this on when you want the
-    // frame-max-normalised HDR measurement.
-    bool prefer_hdr_circles = false;
     LightCircleParams circles = {};
     float saturation_threshold = 0.05f;
 };
-
-// Single entry point used by the renderer and session. `rgb` must be a
-// top-left-origin RGB8 buffer (what Renderer::read_pixels returns). The
-// optional `hdr_rgb` is a pre-tonemap linear RGB float buffer (stride 3)
-// at the same dimensions and same top-left orientation; when provided
-// and `prefer_hdr_circles` is true, circles are measured on the HDR
-// buffer instead of the RGB8 buffer.
-FrameAnalysis analyze_frame(const uint8_t* rgb, int width, int height,
-                            const Bounds& world_bounds,
-                            std::span<const LightRef> lights,
-                            const float* hdr_rgb = nullptr,
-                            const FrameAnalysisParams& params = {});

@@ -143,7 +143,7 @@ Bounds current_display_view(const EditorState& ed, const CompareSnapshot& compar
 // ─── Scene actions ──────────────────────────────────────────────────
 
 void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                  bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                  bool& light_analysis_valid,
                   int win_w, int win_h, bool mark_dirty) {
     ensure_scene_entity_ids(ed.shot.scene);
 
@@ -156,7 +156,6 @@ void reload_scene(EditorState& ed, Renderer& renderer, const CompareSnapshot& co
     if (mark_dirty)
         ed.session.dirty = true;
     light_analysis_valid = false;
-    force_live_metrics_refresh = true;
 }
 
 bool export_authored_png(const Shot& source_shot, int frame) {
@@ -191,7 +190,7 @@ bool export_authored_png(const Shot& source_shot, int frame) {
 }
 
 bool try_load_scene(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
-                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    bool& light_analysis_valid,
                     int win_w, int win_h,
                     const std::string& path, std::string* error) {
     std::string local_error;
@@ -203,8 +202,7 @@ bool try_load_scene(EditorState& ed, Renderer& renderer, CompareSnapshot& compar
     ed.shot = *loaded;
     ed.shot.trace.batch = kGuiTraceBatch;
     ed.session.save_path = path;
-    reset_editor(ed, renderer, compare_ab, light_analysis_valid,
-                 force_live_metrics_refresh, win_w, win_h);
+    reset_editor(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h);
     return true;
 }
 
@@ -261,7 +259,7 @@ void copy_to_clipboard(EditorState& ed) {
 }
 
 bool delete_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                     bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                     bool& light_analysis_valid,
                      int win_w, int win_h) {
     if (ed.interaction.selection.empty()) return false;
     ed.session.undo.push(ed.shot.scene);
@@ -276,12 +274,12 @@ bool delete_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot&
     std::erase_if(ed.shot.scene.lights, [&](const Light& l) { return light_ids.contains(light_id(l)); });
     std::erase_if(ed.shot.scene.groups, [&](const Group& g) { return group_ids.contains(g.id); });
     ed.clear_selection();
-    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h);
     return true;
 }
 
 void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_ab,
-                  bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                  bool& light_analysis_valid,
                   int win_w, int win_h) {
     ed.clear_selection();
     ed.interaction.creating = false;
@@ -307,12 +305,12 @@ void reset_editor(EditorState& ed, Renderer& renderer, CompareSnapshot& compare_
 
     ed.view.scene_bounds = scene_default_bounds(ed.shot.scene);
     ed.view.camera.fit(ed.view.scene_bounds, (float)win_w, (float)win_h);
-    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h, false);
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h, false);
     ed.session.dirty = false;
 }
 
 void duplicate_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                        bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                        bool& light_analysis_valid,
                         int win_w, int win_h) {
     if (ed.interaction.selection.empty()) return;
     ed.session.undo.push(ed.shot.scene);
@@ -342,11 +340,11 @@ void duplicate_selected(EditorState& ed, Renderer& renderer, const CompareSnapsh
         }
     }
     ed.replace_selection(std::move(new_sel));
-    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h);
 }
 
 bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                    bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                    bool& light_analysis_valid,
                     int win_w, int win_h) {
     int n_ungrouped = 0;
     bool has_groups = false;
@@ -387,12 +385,12 @@ bool group_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& 
     std::string new_group_id = group.id;
     ed.shot.scene.groups.push_back(std::move(group));
     ed.select_only({SelectionRef::Group, new_group_id, ""});
-    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h);
     return true;
 }
 
 bool ungroup_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot& compare_ab,
-                      bool& light_analysis_valid, bool& force_live_metrics_refresh,
+                      bool& light_analysis_valid,
                       int win_w, int win_h) {
     bool any_ungrouped = false;
     for (auto& sid : ed.interaction.selection) {
@@ -425,6 +423,6 @@ bool ungroup_selected(EditorState& ed, Renderer& renderer, const CompareSnapshot
     std::erase_if(ed.shot.scene.groups, [&](const Group& g) { return groups_to_remove.contains(g.id); });
     ed.replace_selection(std::move(new_sel));
     ed.validate_selection();
-    reload_scene(ed, renderer, compare_ab, light_analysis_valid, force_live_metrics_refresh, win_w, win_h);
+    reload_scene(ed, renderer, compare_ab, light_analysis_valid, win_w, win_h);
     return true;
 }

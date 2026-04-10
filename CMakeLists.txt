@@ -24,6 +24,7 @@ set(SHADER_FILES
     ${SHADER_DIR}/postprocess.vert
     ${SHADER_DIR}/postprocess.frag
     ${SHADER_DIR}/max_reduce.comp
+    ${SHADER_DIR}/analysis.comp
 )
 set(GENERATED_SHADER_HEADER ${PROJECT_BINARY_DIR}/generated/shaders.h)
 
@@ -51,6 +52,8 @@ add_library(lpt2d-core STATIC
     src/core/headless.cpp
     src/core/session.cpp
     src/core/image_analysis.cpp
+    src/core/gpu_image_analysis.cpp
+    src/core/gl_shader_utils.cpp
 )
 
 target_include_directories(lpt2d-core PUBLIC
@@ -174,7 +177,7 @@ if(LPT2D_BUILD_TESTS)
         tests/cpp/test_geometry.cpp
         tests/cpp/test_scene.cpp
         tests/cpp/test_color.cpp
-        tests/cpp/test_image_analysis.cpp
+        tests/cpp/test_gpu_image_analysis.cpp
     )
     target_include_directories(lpt2d-core-tests PRIVATE
         ${PROJECT_SOURCE_DIR}/tests/cpp
