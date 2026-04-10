@@ -33,6 +33,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from anim import Camera2D, Shot, Timeline, render_frame, save_image
+from anim.examples_support import _authored_shot
 from anim.family import Verdict
 
 from .check import (
@@ -54,15 +55,15 @@ from .params import (
     GridConfig,
     LightConfig,
     Params,
-    RotationConfig,
-    ShapeConfig,
 )
 from .sampling import (
     _black_diffuse_material,
     _brushed_metal_material,
     _colored_diffuse_material,
     _glass_material,
+    _glass_shape,
     _gray_diffuse_material,
+    _polygon_shape,
     _random_look,
 )
 from .scene import build
@@ -71,8 +72,13 @@ from .scene import build
 
 _CAM = Camera2D(center=[0, 0], width=3.2)
 _SHOT = Shot.preset("production", width=1920, height=1080, rays=10_000_000, depth=12)
+# Bake the camera onto _SHOT so _authored_shot() can use settings.camera
+# when exporting the authored scene JSON.  render_frame still takes an
+# explicit camera= kwarg below and the values agree.
+_SHOT.camera = Camera2D(center=_CAM.center, width=_CAM.width)
 _TIMELINE = Timeline(DURATION, fps=30)
 _FRAME = int(_TIMELINE.total_frames * 0.4)  # 40% of animation
+_CTX = _TIMELINE.context_at(_FRAME)
 
 
 # ── Axes ─────────────────────────────────────────────────────────────────
@@ -93,12 +99,12 @@ LIGHT_COLORS = {
 
 # ── Outcome → material sampler ───────────────────────────────────────────
 #
-# Each catalog entry fixes the ``outcome`` (one of the 5 peers) and the
-# structural scaffolding (shape, grid, light topology, wavelengths,
-# n_lights).  Everything else — material fill / albedo / IOR / dispersion,
-# build_seed, ambient + moving intensities, full LookConfig — is drawn
-# fresh per attempt using the **same** per-branch sampling functions as
-# the general path.  No hardcoded material constants inside catalog.py.
+# Each catalog entry fixes only the ``outcome`` (one of the 5 peers) and a
+# thin structural scaffolding (grid, light topology, wavelengths,
+# n_lights).  Everything else — **including the shape** — is drawn fresh
+# per attempt via the same per-branch sampling functions as the general
+# path.  No hardcoded material constants inside catalog.py, and no
+# shape-in-the-matrix multiplier.
 
 _OUTCOME_MATERIAL_SAMPLERS = {
     "glass": _glass_material,
@@ -106,36 +112,6 @@ _OUTCOME_MATERIAL_SAMPLERS = {
     "gray_diffuse": _gray_diffuse_material,
     "colored_diffuse": _colored_diffuse_material,
     "brushed_metal": _brushed_metal_material,
-}
-
-
-# ── Shape presets ────────────────────────────────────────────────────────
-
-
-def _circle_shape(spacing: float) -> ShapeConfig:
-    return ShapeConfig(
-        kind="circle", size=spacing * 0.30, n_sides=0, corner_radius=0.0, rotation=None
-    )
-
-
-def _polygon_shape(n_sides: int, spacing: float) -> ShapeConfig:
-    size = spacing * 0.32
-    cr = size * 0.22
-    rot = RotationConfig(base_angle=0.15, jitter=0.0)
-    return ShapeConfig(kind="polygon", size=size, n_sides=n_sides, corner_radius=cr, rotation=rot)
-
-
-# ── Catalog definition ───────────────────────────────────────────────────
-
-# Representative polygon sides per outcome (glass gets the single circle
-# case).  Varied per outcome so each branch gets a feel for how shape
-# interacts with material without exploding the matrix size.
-SHAPES_FOR_OUTCOME: dict[str, list[tuple[str, int]]] = {
-    "glass": [("circle", 0)],
-    "black_diffuse": [("triangle", 3), ("square", 4), ("hexagon", 6)],
-    "gray_diffuse": [("square", 4), ("pentagon", 5), ("hexagon", 6)],
-    "colored_diffuse": [("triangle", 3), ("pentagon", 5), ("hexagon", 6)],
-    "brushed_metal": [("pentagon", 5), ("hexagon", 6)],
 }
 
 _CATALOG_OUTCOMES: tuple[str, ...] = (
@@ -147,28 +123,34 @@ _CATALOG_OUTCOMES: tuple[str, ...] = (
 )
 
 
+# ── Catalog definition ───────────────────────────────────────────────────
+
+
 def _build_catalog_entries() -> list[dict]:
-    """Build the list of all (outcome, shape, grid, light_color, n_lights) combos."""
+    """Build the list of all (outcome, grid, light_color, n_lights) combos.
+
+    Shape is no longer a matrix axis — it's part of the per-attempt
+    randomness (same as material params, look dims, intensities).  With
+    5 outcomes × 3 grids × 4 light colors × 2 n_lights, the catalog
+    contains **120 entries**.
+    """
     entries = []
 
     for outcome in _CATALOG_OUTCOMES:
-        for shape_name, n_sides in SHAPES_FOR_OUTCOME[outcome]:
-            for grid_name, grid in GRID_SIZES.items():
-                for lc_name, (wl_min, wl_max) in LIGHT_COLORS.items():
-                    for n_lights in [1, 2]:
-                        entries.append(
-                            {
-                                "outcome": outcome,
-                                "shape": shape_name,
-                                "grid": grid_name,
-                                "light_color": lc_name,
-                                "n_lights": n_lights,
-                                "grid_cfg": grid,
-                                "wl_min": wl_min,
-                                "wl_max": wl_max,
-                                "n_sides": n_sides,
-                            }
-                        )
+        for grid_name, grid in GRID_SIZES.items():
+            for lc_name, (wl_min, wl_max) in LIGHT_COLORS.items():
+                for n_lights in [1, 2]:
+                    entries.append(
+                        {
+                            "outcome": outcome,
+                            "grid": grid_name,
+                            "light_color": lc_name,
+                            "n_lights": n_lights,
+                            "grid_cfg": grid,
+                            "wl_min": wl_min,
+                            "wl_max": wl_max,
+                        }
+                    )
 
     return entries
 
@@ -179,22 +161,22 @@ def _build_catalog_entries() -> list[dict]:
 def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     """Draw a full Params for a catalog entry.
 
-    The entry fixes only structural scaffolding (outcome name, shape,
-    grid size, light wavelengths, n_lights).  The material parameters
-    themselves — and everything inside the light + look — are drawn
-    freshly per attempt via the same per-branch sampling functions as
-    the general path.  This keeps catalog and general paths using
-    **exactly** the same material logic; catalog.py no longer hardcodes
-    any material constants.
+    The entry fixes only the thin structural scaffolding (outcome name,
+    grid size, light wavelengths, n_lights).  Shape, material, look,
+    build_seed, and light intensities are drawn freshly per attempt via
+    the same per-branch sampling functions as the general path.  This
+    keeps catalog and general paths using **exactly** the same logic;
+    catalog.py no longer hardcodes shape or material constants.
     """
     grid = e["grid_cfg"]
-    spacing = grid.spacing
 
-    # Shape
-    if e["n_sides"] == 0:
-        shape = _circle_shape(spacing)
+    # Shape: drawn per attempt.  Glass always gets a circle, non-glass
+    # outcomes get a randomized polygon (3/4/5/6 sides, varied size and
+    # rotation).  Same helpers the general sampling path uses.
+    if e["outcome"] == "glass":
+        shape = _glass_shape(rng, grid.spacing)
     else:
-        shape = _polygon_shape(e["n_sides"], spacing)
+        shape = _polygon_shape(rng, grid.spacing)
 
     # Material: drawn fresh per attempt via the matching per-outcome function.
     material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)
@@ -302,7 +284,7 @@ def _find_good_params(
 
 
 def _entry_tag(e: dict) -> str:
-    return f"{e['shape']}_{e['light_color']}_{e['grid']}_{e['n_lights']}light"
+    return f"{e['light_color']}_{e['grid']}_{e['n_lights']}light"
 
 
 # ── Main ─────────────────────────────────────────────────────────────────
@@ -347,7 +329,8 @@ def run_catalog(argv: list[str] | None = None) -> None:
             tag = _entry_tag(e)
             key = f"{outcome}/{tag}"
             img_path = outcome_dir / f"{tag}.png"
-            json_path = outcome_dir / f"{tag}.json"
+            params_path = outcome_dir / f"{tag}.json"
+            shot_path = outcome_dir / f"{tag}.shot.json"
 
             if img_path.exists():
                 continue
@@ -361,7 +344,14 @@ def run_catalog(argv: list[str] | None = None) -> None:
             save_image(str(img_path), rr.pixels, 1920, 1080)
             draw_metrics_overlay(img_path, result.metrics)
 
-            json_path.write_text(json.dumps(asdict(p), indent=2))
+            # Three artifacts per entry:
+            #   *.png        — the overlay-annotated render
+            #   *.json       — the crystal_field Params that drove this render
+            #   *.shot.json  — the authored Shot (version:10) that the engine sees
+            params_path.write_text(json.dumps(asdict(p), indent=2))
+            authored = _authored_shot(_SHOT, animate, _CTX)
+            authored.name = f"crystal_field/{key}"
+            authored.save(shot_path)
             _save_verdicts(verdicts_path, verdicts)
 
             status = "OK" if result.verdict.ok else "FAIL"
@@ -374,7 +364,7 @@ def run_catalog(argv: list[str] | None = None) -> None:
     elapsed = time.monotonic() - t0
     print(f"\nDone in {elapsed:.0f}s — {len(entries)} images in {out}/")
 
-    _write_index(out, entries, verdicts)
+    _write_index(out, verdicts)
     print(f"Index: {out}/index.html")
 
 
@@ -392,7 +382,6 @@ def _save_verdicts(path: Path, verdicts: dict[str, Verdict]) -> None:
 
 def _write_index(
     out: Path,
-    entries: list[dict],
     verdicts: dict[str, Verdict],
 ) -> None:
     """Write an HTML gallery grouped by outcome, rows=light color, cols=grid size.
@@ -421,44 +410,41 @@ th { padding:4px 8px; color:#aaa; font-size:11px; }
 </style></head><body>
 <h1>Crystal Field — Parameter Catalog</h1>
 <p style="text-align:center;font-size:0.85em;color:#777">
-Rows = light color &times; n_lights, Columns = grid size, Grouped by outcome &times; shape.<br>
+Rows = light color &times; n_lights, Columns = grid size, Grouped by outcome.<br>
+Shape is drawn per attempt (not a matrix axis) — expect variety within each cell.<br>
 Red borders mark entries that failed <code>check.py</code>; hover for the reason.</p>
 """
     ]
 
     for outcome in _CATALOG_OUTCOMES:
-        outcome_entries = [e for e in entries if e["outcome"] == outcome]
-        shapes_used = sorted({e["shape"] for e in outcome_entries})
+        html.append(f"<h2>{outcome}</h2>")
+        html.append("<table><tr><th></th>")
+        for gn in ["small", "medium", "large"]:
+            g = GRID_SIZES[gn]
+            html.append(f"<th>{gn}<br>{g.rows}×{g.cols}</th>")
+        html.append("</tr>")
 
-        for shape_name in shapes_used:
-            html.append(f"<h2>{outcome} — {shape_name}</h2>")
-            html.append("<table><tr><th></th>")
-            for gn in ["small", "medium", "large"]:
-                g = GRID_SIZES[gn]
-                html.append(f"<th>{gn}<br>{g.rows}×{g.cols}</th>")
-            html.append("</tr>")
+        for lc_name in ["white", "orange", "yellow", "deep_orange"]:
+            for nl in [1, 2]:
+                html.append(f"<tr><th>{lc_name} {nl}L</th>")
+                for gn in ["small", "medium", "large"]:
+                    tag = f"{lc_name}_{gn}_{nl}light"
+                    key = f"{outcome}/{tag}"
+                    src = f"{key}.png"
+                    verdict = verdicts.get(key)
+                    td_class = ""
+                    tooltip = ""
+                    if verdict is not None and not verdict.ok:
+                        td_class = ' class="failed"'
+                        tooltip = f' title="{verdict.summary}"'
+                    html.append(
+                        f'<td{td_class}><img src="{src}" loading="lazy"{tooltip} '
+                        f"onclick=\"this.classList.toggle('big')\">"
+                        f"<small>{tag}</small></td>"
+                    )
+                html.append("</tr>")
 
-            for lc_name in ["white", "orange", "yellow", "deep_orange"]:
-                for nl in [1, 2]:
-                    html.append(f"<tr><th>{lc_name} {nl}L</th>")
-                    for gn in ["small", "medium", "large"]:
-                        tag = f"{shape_name}_{lc_name}_{gn}_{nl}light"
-                        key = f"{outcome}/{tag}"
-                        src = f"{key}.png"
-                        verdict = verdicts.get(key)
-                        td_class = ""
-                        tooltip = ""
-                        if verdict is not None and not verdict.ok:
-                            td_class = ' class="failed"'
-                            tooltip = f' title="{verdict.summary}"'
-                        html.append(
-                            f'<td{td_class}><img src="{src}" loading="lazy"{tooltip} '
-                            f"onclick=\"this.classList.toggle('big')\">"
-                            f"<small>{tag}</small></td>"
-                        )
-                    html.append("</tr>")
-
-            html.append("</table>")
+        html.append("</table>")
 
     html.append("</body></html>")
     (out / "index.html").write_text("\n".join(html))
