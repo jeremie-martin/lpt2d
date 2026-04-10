@@ -358,9 +358,6 @@ bool Renderer::create_trace_shader() {
     trace_loc_num_dispatches_ = glGetUniformLocation(trace_program_, "uNumDispatches");
     trace_loc_dispatch_seeds_ = glGetUniformLocation(trace_program_, "uDispatchSeeds[0]");
     trace_loc_max_segments_ = glGetUniformLocation(trace_program_, "uMaxSegments");
-    trace_loc_bounds_min_ = glGetUniformLocation(trace_program_, "uBoundsMin");
-    trace_loc_view_scale_ = glGetUniformLocation(trace_program_, "uViewScale");
-    trace_loc_view_offset_ = glGetUniformLocation(trace_program_, "uViewOffset");
     trace_loc_wavelength_lut_ = glGetUniformLocation(trace_program_, "uWavelengthLUT");
     trace_loc_material_offsets_ = glGetUniformLocation(trace_program_, "uMaterialOffsets");
     return true;
@@ -374,6 +371,9 @@ bool Renderer::create_line_shader() {
     if (!line_program_) return false;
     loc_resolution_ = glGetUniformLocation(line_program_, "uResolution");
     loc_thickness_ = glGetUniformLocation(line_program_, "uThickness");
+    line_loc_bounds_min_ = glGetUniformLocation(line_program_, "uBoundsMin");
+    line_loc_view_scale_ = glGetUniformLocation(line_program_, "uViewScale");
+    line_loc_view_offset_ = glGetUniformLocation(line_program_, "uViewOffset");
     return true;
 }
 
@@ -505,6 +505,9 @@ void Renderer::clear() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     batch_counter_ = 0;
     total_rays_ = 0;
+    last_trace_rays_ = 0;
+    last_trace_dispatches_ = 0;
+    ++trace_generation_;
 }
 
 // ─── Scene upload ────────────────────────────────────────────────────
@@ -762,12 +765,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 void Renderer::update_viewport(const Bounds& bounds) {
     auto vp = compute_viewport_xform(bounds, width_, height_);
     viewport_scale_ = vp.scale;
+    viewport_offset_x_ = vp.offset_x;
+    viewport_offset_y_ = vp.offset_y;
     last_upload_bounds_ = bounds;
-
-    glUseProgram(trace_program_);
-    glUniform2f(trace_loc_bounds_min_, bounds.min.x, bounds.min.y);
-    glUniform2f(trace_loc_view_scale_, vp.scale, vp.scale);
-    glUniform2f(trace_loc_view_offset_, vp.offset_x, vp.offset_y);
 }
 
 // ─── Fill pass (shape interiors) ────────────────────────────────────
@@ -983,12 +983,30 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glUniform1ui(trace_loc_seed_, dispatch_seeds[0]);
     glDispatchCompute(groups, 1, 1);
     batch_counter_ += (uint32_t)num_dispatches;
-    total_rays_ += (int64_t)cfg.batch_size * num_dispatches;
+    last_trace_dispatches_ = num_dispatches;
+    last_trace_rays_ = (int64_t)cfg.batch_size * num_dispatches;
+    total_rays_ += last_trace_rays_;
+    ++trace_generation_;
 
     // Final barrier before draw (need command barrier for indirect draw)
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
 
-    // ── Single draw for all accumulated segments ──
+    draw_trace_output(output_ssbo_, draw_cmd_buffer_);
+}
+
+void Renderer::draw_trace_output_from(const Renderer& source) {
+    if (source.last_trace_rays_ <= 0 || source.last_trace_dispatches_ <= 0)
+        return;
+    draw_trace_output(source.output_ssbo_, source.draw_cmd_buffer_);
+    batch_counter_ += static_cast<uint32_t>(source.last_trace_dispatches_);
+    total_rays_ += source.last_trace_rays_;
+}
+
+void Renderer::draw_trace_output(GLuint output_ssbo, GLuint draw_cmd_buffer) {
+    if (output_ssbo == 0 || draw_cmd_buffer == 0)
+        return;
+
+    // ── Single draw for all supplied segments ──
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, width_, height_);
     glEnable(GL_BLEND);
@@ -997,12 +1015,17 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
     glUseProgram(line_program_);
     glUniform2f(loc_resolution_, (float)width_, (float)height_);
     glUniform1f(loc_thickness_, 1.5f);
+    glUniform2f(line_loc_bounds_min_, last_upload_bounds_.min.x, last_upload_bounds_.min.y);
+    glUniform2f(line_loc_view_scale_, viewport_scale_, viewport_scale_);
+    glUniform2f(line_loc_view_offset_, viewport_offset_x_, viewport_offset_y_);
 
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, output_ssbo);
     glBindVertexArray(line_vao_);
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer_);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, draw_cmd_buffer);
     glDrawArraysIndirect(GL_TRIANGLES, nullptr);
 
     glBindVertexArray(0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, 0);
     glDisable(GL_BLEND);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

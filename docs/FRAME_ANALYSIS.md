@@ -24,7 +24,12 @@ short image side", regardless of probe resolution.
 
 ## Current Paths
 
-- Python, headless, export, and GUI Stats paths analyze the authored camera image.
+- Python/headless render paths analyze the authored camera at the shot canvas
+  size.
+- GUI Stats analyzes the authored camera too, but caps the live probe resolution
+  to keep interactive editing responsive. Public GUI metrics are normalized
+  ratios/fractions; `luminance.width` and `luminance.height` report the actual
+  probe dimensions used for raw histogram counts and overlay scaling.
 - `rr.metrics` is the luminance-only alias view of `rr.analysis.luminance`.
 - When the GUI editor viewport diverges from the authored camera, the live
   light overlay is hidden because overlay geometry would no longer line up

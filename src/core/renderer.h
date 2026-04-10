@@ -55,6 +55,12 @@ public:
     // Multi-batch: dispatch N compute batches, then one draw call
     void trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches);
 
+    // Draw the most recent traced world-space line batch from another
+    // renderer into this renderer's accumulation buffer using this
+    // renderer's viewport transform. This lets the GUI reuse one trace for
+    // both the viewport and authored-camera analysis.
+    void draw_trace_output_from(const Renderer& source);
+
     // Post-processing and readback (unchanged)
     void update_display(const PostProcess& pp, float display_aspect = 0.0f,
                         const VignetteFrame* vignette_frame = nullptr);
@@ -69,6 +75,8 @@ public:
     int height() const { return height_; }
     int num_lights() const { return num_lights_; }
     int64_t total_rays() const { return total_rays_; }
+    int64_t last_trace_rays() const { return last_trace_rays_; }
+    uint64_t trace_generation() const { return trace_generation_; }
 
     // Compute current max luminance from the float accumulation buffer (CPU readback).
     float compute_current_max();
@@ -131,20 +139,23 @@ private:
     GLint trace_loc_num_dispatches_ = -1;
     GLint trace_loc_dispatch_seeds_ = -1;
     GLint trace_loc_max_segments_ = -1;
-    GLint trace_loc_view_offset_ = -1;
-    GLint trace_loc_view_scale_ = -1;
-    GLint trace_loc_bounds_min_ = -1;
     GLint trace_loc_wavelength_lut_ = -1;
     GLint trace_loc_material_offsets_ = -1;
 
     uint32_t batch_counter_ = 0;
     int64_t total_rays_ = 0;
+    int64_t last_trace_rays_ = 0;
+    int last_trace_dispatches_ = 0;
+    uint64_t trace_generation_ = 0;
 
     // --- Instanced line drawing ---
     GLuint line_program_ = 0;
     GLuint line_vao_ = 0;
     GLint loc_resolution_ = -1;
     GLint loc_thickness_ = -1;
+    GLint line_loc_bounds_min_ = -1;
+    GLint line_loc_view_scale_ = -1;
+    GLint line_loc_view_offset_ = -1;
 
     // --- Fill pass (shape interiors) ---
     GLuint fill_program_ = 0;
@@ -172,6 +183,8 @@ private:
 
     float last_max_ = 0.0f;
     float viewport_scale_ = 1.0f;
+    float viewport_offset_x_ = 0.0f;
+    float viewport_offset_y_ = 0.0f;
     std::vector<uint8_t> rgba_buffer_;
     std::vector<uint8_t> rgb_row_buffer_;
 
@@ -218,6 +231,7 @@ private:
     bool create_fill_shader();
     bool create_pp_shader();
     bool create_compute_shader();
+    void draw_trace_output(GLuint output_ssbo, GLuint draw_cmd_buffer);
     void create_wavelength_lut();
     float compute_max_gpu(float percentile = 1.0f);
 };

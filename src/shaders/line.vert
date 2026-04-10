@@ -10,15 +10,24 @@ layout(std430, binding = 3) readonly buffer OutputBuf { LineSeg segs[]; };
 
 uniform vec2 uResolution;
 uniform float uThickness;
+uniform vec2 uBoundsMin;
+uniform vec2 uViewScale;
+uniform vec2 uViewOffset;
 
 flat out vec3 vColor;
 noperspective out float vLineDist;
+
+vec2 world_to_pixel(vec2 w) {
+    return (w - uBoundsMin) * uViewScale + uViewOffset;
+}
 
 void main() {
     uint seg_id = gl_InstanceID;
     LineSeg s = segs[seg_id];
 
-    vec2 dir = s.p1 - s.p0;
+    vec2 p0 = world_to_pixel(s.p0);
+    vec2 p1 = world_to_pixel(s.p1);
+    vec2 dir = p1 - p0;
     float len = length(dir);
     if (len < 0.001) { gl_Position = vec4(0); return; }
 
@@ -28,12 +37,12 @@ void main() {
     vec2 pos;
     float dist;
     int vid = gl_VertexID;
-    if      (vid == 0) { pos = s.p0 - n; dist = -1.0; }
-    else if (vid == 1) { pos = s.p0 + n; dist =  1.0; }
-    else if (vid == 2) { pos = s.p1 - n; dist = -1.0; }
-    else if (vid == 3) { pos = s.p0 + n; dist =  1.0; }
-    else if (vid == 4) { pos = s.p1 + n; dist =  1.0; }
-    else               { pos = s.p1 - n; dist = -1.0; }
+    if      (vid == 0) { pos = p0 - n; dist = -1.0; }
+    else if (vid == 1) { pos = p0 + n; dist =  1.0; }
+    else if (vid == 2) { pos = p1 - n; dist = -1.0; }
+    else if (vid == 3) { pos = p0 + n; dist =  1.0; }
+    else if (vid == 4) { pos = p1 + n; dist =  1.0; }
+    else               { pos = p1 - n; dist = -1.0; }
 
     vec2 ndc = (pos / uResolution) * 2.0 - 1.0;
     ndc.y = -ndc.y;

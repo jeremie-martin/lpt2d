@@ -111,9 +111,6 @@ uniform uint uSeed;
 uniform uint uDispatchSeeds[16];
 uniform float uIntensity;
 uniform uint uMaxSegments;
-uniform vec2 uBoundsMin;
-uniform vec2 uViewScale;
-uniform vec2 uViewOffset;
 
 // ── PCG RNG ──
 uint rng_state;
@@ -133,10 +130,6 @@ const float TWO_PI = 2.0 * PI;
 const float INTERSECT_EPS = 1e-5;
 const float SCATTER_EPS = 1e-4;
 const float ESCAPE_DIST = 10.0;
-
-vec2 world_to_pixel(vec2 w) {
-    return (w - uBoundsMin) * uViewScale + uViewOffset;
-}
 
 vec3 wavelength_rgb(float nm) {
     float t = (nm - 380.0) / 400.0;
@@ -404,8 +397,8 @@ HitGeo hit_scene(vec2 ro, vec2 rd, out uint out_type, out uint out_index) {
 void emit(vec2 p0, vec2 p1, vec4 color) {
     uint idx = atomicAdd(instance_count, 1u);
     if (idx >= uMaxSegments) return;
-    output_segs[idx].p0 = world_to_pixel(p0);
-    output_segs[idx].p1 = world_to_pixel(p1);
+    output_segs[idx].p0 = p0;
+    output_segs[idx].p1 = p1;
     output_segs[idx].color = color;
 }
 
