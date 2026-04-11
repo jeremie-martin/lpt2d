@@ -202,13 +202,35 @@ TEST(frame_luminance_near_black_white_defaults_cpu) {
     ASSERT_NEAR(a.luminance.near_white_fraction, 0.5f, 1e-6f);
 }
 
+TEST(frame_luminance_standard_histogram_metrics_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        0, 0, 0,
+        64, 64, 64,
+        128, 128, 128,
+        255, 255, 255,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.luminance.percentile_01, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.luminance.percentile_10, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.luminance.percentile_90, 255.0f, 1e-6f);
+    ASSERT_NEAR(a.luminance.shadow_fraction, 0.5f, 1e-6f);
+    ASSERT_NEAR(a.luminance.midtone_fraction, 0.25f, 1e-6f);
+    ASSERT_NEAR(a.luminance.highlight_fraction, 0.25f, 1e-6f);
+    ASSERT_NEAR(a.luminance.histogram_entropy, 2.0f, 1e-6f);
+    ASSERT_NEAR(a.luminance.histogram_entropy_normalized, 0.25f, 1e-6f);
+}
+
 TEST(frame_luminance_tiny_solid_grey_percentiles_cpu) {
     for (int size : {1, 4}) {
         auto buf = make_solid_rgb(size, size, 128, 128, 128);
         auto a = analyze_cpu(buf, size, size);
 
+        ASSERT_NEAR(a.luminance.percentile_01, 128.0f, 1.0f);
+        ASSERT_NEAR(a.luminance.percentile_10, 128.0f, 1.0f);
         ASSERT_NEAR(a.luminance.shadow_floor, 128.0f, 1.0f);
         ASSERT_NEAR(a.luminance.median, 128.0f, 1.0f);
+        ASSERT_NEAR(a.luminance.percentile_90, 128.0f, 1.0f);
         ASSERT_NEAR(a.luminance.highlight_ceiling, 128.0f, 1.0f);
         ASSERT_NEAR(a.luminance.highlight_peak, 128.0f, 1.0f);
     }
@@ -239,6 +261,7 @@ TEST(frame_color_stats_greyscale_zero_cpu) {
 
     ASSERT_NEAR(a.color.colored_fraction, 0.0f, 1e-6f);
     ASSERT_NEAR(a.color.mean_saturation, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.color.saturation_coverage, 0.0f, 1e-6f);
     ASSERT_NEAR(a.color.hue_entropy, 0.0f, 1e-6f);
     ASSERT_NEAR(a.color.richness, 0.0f, 1e-6f);
 }
@@ -267,6 +290,7 @@ TEST(frame_color_stats_three_primaries_cpu) {
     auto a = analyze_cpu(buf, w, h);
     ASSERT_NEAR(a.color.colored_fraction, 1.0f, 1e-4f);
     ASSERT_NEAR(a.color.mean_saturation, 1.0f, 0.01f);
+    ASSERT_NEAR(a.color.saturation_coverage, 1.0f, 0.01f);
     ASSERT_NEAR(a.color.hue_entropy, 1.585f, 0.02f);
     ASSERT_TRUE(a.color.richness > 1.5f);
 }
@@ -400,6 +424,10 @@ TEST(gpu_analyzer_smoke_luminance_color_contract) {
     ASSERT_EQ(a.luminance.width, 16);
     ASSERT_EQ(a.luminance.height, 16);
     ASSERT_NEAR(a.luminance.mean, 128.0f, 1.0f);
+    ASSERT_NEAR(a.luminance.percentile_10, 128.0f, 1.0f);
+    ASSERT_NEAR(a.luminance.percentile_90, 128.0f, 1.0f);
+    ASSERT_NEAR(a.luminance.histogram_entropy_normalized, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.luminance.midtone_fraction, 1.0f, 1e-6f);
     ASSERT_NEAR(a.color.colored_fraction, 0.0f, 1e-6f);
     ASSERT_TRUE(a.lights.empty());
 }

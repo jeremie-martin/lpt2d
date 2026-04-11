@@ -15,14 +15,22 @@ from typing import Any, cast
 @dataclass
 class FakeMetrics:
     mean: float = 0.0
+    percentile_01: float = 0.0
+    percentile_10: float = 0.0
     median: float = 0.0
+    percentile_90: float = 0.0
     shadow_floor: float = 0.0
     highlight_ceiling: float = 0.0
     highlight_peak: float = 0.0
     contrast_std: float = 0.0
     contrast_spread: float = 0.0
+    histogram_entropy: float = 0.0
+    histogram_entropy_normalized: float = 0.0
     near_black_fraction: float = 0.0
     near_white_fraction: float = 0.0
+    shadow_fraction: float = 0.0
+    midtone_fraction: float = 0.0
+    highlight_fraction: float = 0.0
     clipped_channel_fraction: float = 0.0
     width: int = 100
     height: int = 100

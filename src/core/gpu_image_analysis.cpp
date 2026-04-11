@@ -377,6 +377,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             }
             cs.hue_entropy = static_cast<float>(entropy);
         }
+        cs.saturation_coverage = cs.mean_saturation * cs.colored_fraction;
         cs.richness = cs.hue_entropy * cs.mean_saturation * cs.colored_fraction;
         out.color = cs;
     }

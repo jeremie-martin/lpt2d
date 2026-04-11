@@ -22,6 +22,9 @@ __pycache__/
 /middle_frame.json
 /twin_prisms.json
 /prism_sweep_frame0.json
+/crystal_field*.json
+/renders/*
+!/renders/README.md
 /renders/archive/
 /renders/prism_sweep_gen/
 /renders/light_radius_characterization*/

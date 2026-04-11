@@ -1787,9 +1787,18 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         ImGui::SetTooltip("BT.709 luminance on a 0-255 scale, measured on the post-tonemap display buffer.");
     stats_labelled_text("Brightness:", "Mean luminance (0-255, BT.709).",
                         " %.1f", lum.mean);
+    stats_labelled_text("P01:",
+                        "1st percentile luminance.",
+                        " %.0f", lum.percentile_01);
+    stats_labelled_text("P10:",
+                        "10th percentile luminance.",
+                        " %.0f", lum.percentile_10);
     stats_labelled_text("Median:",
                         "50th percentile luminance.",
                         " %.0f", lum.median);
+    stats_labelled_text("P90:",
+                        "90th percentile luminance.",
+                        " %.0f", lum.percentile_90);
     stats_labelled_text("Contrast std:",
                         "Standard deviation of luminance (0-255 scale).",
                         " %.1f", lum.contrast_std);
@@ -1808,6 +1817,18 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     stats_labelled_text("Range:",
                         "First and last populated histogram bins (min / max luminance).",
                         " %d - %d", hist_min < 256 ? hist_min : 0, hist_max_bin >= 0 ? hist_max_bin : 0);
+    stats_labelled_text("Luma entropy:",
+                        "Shannon entropy of the 256-bin luminance histogram, normalized to [0, 1].",
+                        " %.3f", lum.histogram_entropy_normalized);
+    stats_labelled_text("Shadow pixels:",
+                        "Fraction of pixels with luminance <= 64.",
+                        " %.1f%%", lum.shadow_fraction * 100.0f);
+    stats_labelled_text("Midtone pixels:",
+                        "Fraction of pixels with luminance from 65 to 191.",
+                        " %.1f%%", lum.midtone_fraction * 100.0f);
+    stats_labelled_text("Highlight pixels:",
+                        "Fraction of pixels with luminance >= 192.",
+                        " %.1f%%", lum.highlight_fraction * 100.0f);
     stats_labelled_text("Near-black:",
                         "Fraction of pixels at luminance <= 10.",
                         " %.1f%%", lum.near_black_fraction * 100.0f);
@@ -1826,6 +1847,9 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     stats_labelled_text("Saturation:",
                         "Average HSV saturation of pixels above the 0.05 chroma threshold.",
                         " %.3f", color.mean_saturation);
+    stats_labelled_text("Saturation coverage:",
+                        "Mean saturation multiplied by colored-pixel fraction.",
+                        " %.3f", color.saturation_coverage);
     stats_labelled_text("Colour variety:",
                         "Shannon entropy of the 36-bin hue histogram, in bits.\n"
                         "0 = single colour, ~2.6 = six evenly-spaced hues, ~5 = rainbow.",

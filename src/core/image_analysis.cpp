@@ -85,6 +85,9 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
     double squared_sum = 0.0;
     std::size_t near_black_count = 0;
     std::size_t near_white_count = 0;
+    std::size_t shadow_count = 0;
+    std::size_t highlight_count = 0;
+    double entropy = 0.0;
     for (int i = 0; i < 256; ++i) {
         const double count = static_cast<double>(histogram[i]);
         sum += count * static_cast<double>(i);
@@ -93,15 +96,30 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
             near_black_count += static_cast<std::size_t>(histogram[i]);
         if (i >= near_white_bin_min)
             near_white_count += static_cast<std::size_t>(histogram[i]);
+        if (i <= 64)
+            shadow_count += static_cast<std::size_t>(histogram[i]);
+        if (i >= 192)
+            highlight_count += static_cast<std::size_t>(histogram[i]);
+        if (count > 0.0) {
+            const double p = count / static_cast<double>(n);
+            entropy -= p * std::log2(p);
+        }
     }
 
     const double mean = sum / static_cast<double>(n);
     const double var = (squared_sum / static_cast<double>(n)) - mean * mean;
+    const std::size_t midtone_count = n - shadow_count - highlight_count;
 
     s.mean = static_cast<float>(mean);
     s.contrast_std = var > 0.0 ? static_cast<float>(std::sqrt(var)) : 0.0f;
+    s.histogram_entropy = static_cast<float>(entropy);
+    s.histogram_entropy_normalized =
+        static_cast<float>(std::clamp(entropy / 8.0, 0.0, 1.0));
     s.near_black_fraction = static_cast<float>(near_black_count) / static_cast<float>(n);
     s.near_white_fraction = static_cast<float>(near_white_count) / static_cast<float>(n);
+    s.shadow_fraction = static_cast<float>(shadow_count) / static_cast<float>(n);
+    s.midtone_fraction = static_cast<float>(midtone_count) / static_cast<float>(n);
+    s.highlight_fraction = static_cast<float>(highlight_count) / static_cast<float>(n);
     s.clipped_channel_fraction = static_cast<float>(clipped) / static_cast<float>(n);
 
     const auto target = [n](float pct) -> std::size_t {
@@ -110,29 +128,50 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
             std::ceil(p * static_cast<double>(n)));
         return std::clamp<std::size_t>(rank, 1u, n);
     };
+    const std::size_t p01_target = target(0.01f);
     const std::size_t shadow_target = target(0.05f);
+    const std::size_t p10_target = target(0.10f);
     const std::size_t median_target = target(0.50f);
+    const std::size_t p90_target = target(0.90f);
     const std::size_t ceiling_target = target(0.95f);
     const std::size_t peak_target = target(0.99f);
 
+    float p01 = 255.0f;
     float shadow_floor = 255.0f;
+    float p10 = 255.0f;
     float median = 255.0f;
+    float p90 = 255.0f;
     float highlight_ceiling = 255.0f;
     float highlight_peak = 255.0f;
+    bool have_p01 = false;
     bool have_shadow = false;
+    bool have_p10 = false;
     bool have_median = false;
+    bool have_p90 = false;
     bool have_ceiling = false;
     bool have_peak = false;
     std::size_t cumul = 0;
     for (int i = 0; i < 256; ++i) {
         cumul += static_cast<std::size_t>(histogram[i]);
+        if (!have_p01 && cumul >= p01_target) {
+            p01 = static_cast<float>(i);
+            have_p01 = true;
+        }
         if (!have_shadow && cumul >= shadow_target) {
             shadow_floor = static_cast<float>(i);
             have_shadow = true;
         }
+        if (!have_p10 && cumul >= p10_target) {
+            p10 = static_cast<float>(i);
+            have_p10 = true;
+        }
         if (!have_median && cumul >= median_target) {
             median = static_cast<float>(i);
             have_median = true;
+        }
+        if (!have_p90 && cumul >= p90_target) {
+            p90 = static_cast<float>(i);
+            have_p90 = true;
         }
         if (!have_ceiling && cumul >= ceiling_target) {
             highlight_ceiling = static_cast<float>(i);
@@ -145,8 +184,11 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
         }
     }
 
+    s.percentile_01 = p01;
     s.shadow_floor = shadow_floor;
+    s.percentile_10 = p10;
     s.median = median;
+    s.percentile_90 = p90;
     s.highlight_ceiling = highlight_ceiling;
     s.highlight_peak = highlight_peak;
     s.contrast_spread = s.highlight_ceiling - s.shadow_floor;
@@ -254,6 +296,7 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
             }
             cs.hue_entropy = static_cast<float>(entropy);
         }
+        cs.saturation_coverage = cs.mean_saturation * cs.colored_fraction;
         cs.richness = cs.hue_entropy * cs.mean_saturation * cs.colored_fraction;
         out.color = cs;
     }

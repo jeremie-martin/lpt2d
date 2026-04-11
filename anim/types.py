@@ -518,14 +518,22 @@ class FrameReport:
     total_rays: int
     time_ms_exact: float | None = None
     mean: float | None = None
+    percentile_01: float | None = None
+    percentile_10: float | None = None
     median: float | None = None
+    percentile_90: float | None = None
     shadow_floor: float | None = None
     highlight_ceiling: float | None = None
     highlight_peak: float | None = None
     contrast_std: float | None = None
     contrast_spread: float | None = None
+    histogram_entropy: float | None = None
+    histogram_entropy_normalized: float | None = None
     near_black_fraction: float | None = None
     near_white_fraction: float | None = None
+    shadow_fraction: float | None = None
+    midtone_fraction: float | None = None
+    highlight_fraction: float | None = None
     clipped_channel_fraction: float | None = None
     stats_ms: float | None = None
     histogram: list[int] | None = None
@@ -544,14 +552,22 @@ def _report_from_result(result: RenderResult, frame_idx: int, time_ms: float) ->
         total_rays=result.total_rays,
         time_ms_exact=actual_ms,
         mean=m.mean,
+        percentile_01=m.percentile_01,
+        percentile_10=m.percentile_10,
         median=m.median,
+        percentile_90=m.percentile_90,
         shadow_floor=m.shadow_floor,
         highlight_ceiling=m.highlight_ceiling,
         highlight_peak=m.highlight_peak,
         contrast_std=m.contrast_std,
         contrast_spread=m.contrast_spread,
+        histogram_entropy=m.histogram_entropy,
+        histogram_entropy_normalized=m.histogram_entropy_normalized,
         near_black_fraction=m.near_black_fraction,
         near_white_fraction=m.near_white_fraction,
+        shadow_fraction=m.shadow_fraction,
+        midtone_fraction=m.midtone_fraction,
+        highlight_fraction=m.highlight_fraction,
         clipped_channel_fraction=m.clipped_channel_fraction,
         histogram=m.histogram,
     )

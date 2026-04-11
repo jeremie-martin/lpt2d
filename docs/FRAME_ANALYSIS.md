@@ -71,14 +71,22 @@ highlights, and clipping in the final image.
 | `width`, `height` | Dimensions of the image actually analyzed |
 | `histogram` | 256-bin luminance histogram; counts sum to `width * height` |
 | `mean` | Average brightness |
+| `percentile_01` | 1st-percentile brightness |
+| `percentile_10` | 10th-percentile brightness |
 | `median` | 50th-percentile brightness |
+| `percentile_90` | 90th-percentile brightness |
 | `shadow_floor` | 5th-percentile brightness |
 | `highlight_ceiling` | 95th-percentile brightness |
 | `highlight_peak` | 99th-percentile brightness |
 | `contrast_std` | Standard deviation of luminance |
 | `contrast_spread` | `highlight_ceiling - shadow_floor` |
+| `histogram_entropy` | Shannon entropy of the 256-bin luminance histogram, in bits |
+| `histogram_entropy_normalized` | Luminance entropy divided by 8 bits, in `[0, 1]` |
 | `near_black_fraction` | Fraction of the image at or below the near-black threshold; default luminance bin `10` |
 | `near_white_fraction` | Fraction of the image at or above the near-white threshold; default luminance bin `245` |
+| `shadow_fraction` | Fraction of pixels with luminance `<= 64` |
+| `midtone_fraction` | Fraction of pixels with luminance from `65` to `191` |
+| `highlight_fraction` | Fraction of pixels with luminance `>= 192` |
 | `clipped_channel_fraction` | Fraction of the image where any RGB channel is exactly 255 |
 
 Interpretation:
@@ -87,9 +95,15 @@ Interpretation:
 - `contrast_std` is sensitive to global variation across the frame.
 - `contrast_spread` ignores extreme outliers and is useful for washed-out or
   flat-image checks.
+- `histogram_entropy_normalized` is a compact tonal-complexity score. It uses
+  normalized bin probabilities, so it is designed for resolution-independent
+  comparisons.
 - `shadow_floor` and `near_black_fraction` describe dark occupancy.
 - `highlight_ceiling`, `highlight_peak`, `near_white_fraction`, and
   `clipped_channel_fraction` describe bright occupancy and saturation.
+- `shadow_fraction`, `midtone_fraction`, and `highlight_fraction` give a
+  coarse tonal occupancy split that is less threshold-specific than
+  near-black and near-white.
 - `clipped_channel_fraction` is not the same as white-pixel fraction; it counts
   any pixel with at least one saturated RGB channel.
 
@@ -103,15 +117,18 @@ they intentionally need resolution-dependent information.
 | Field | Meaning |
 |---|---|
 | `mean_saturation` | Average HSV saturation of pixels above the chroma threshold |
+| `saturation_coverage` | `mean_saturation * colored_fraction`; chroma amount over the whole image |
 | `hue_entropy` | Shannon entropy of the hue histogram |
 | `colored_fraction` | Fraction of the image considered chromatic |
 | `richness` | Combined colorfulness score: entropy, saturation, and area |
 | `n_colored` | Raw count of chromatic pixels |
 | `hue_histogram` | 36-bin hue histogram |
 
-`richness` is a compact "does this frame contain meaningful color variety?"
-score. Use the component fields when a decision needs to distinguish "small but
-very saturated" from "large but mildly colored".
+`saturation_coverage` is useful when the amount of chroma matters more than
+hue variety. `richness` is a compact "does this frame contain meaningful color
+variety?" score. Hue-distribution metrics are diagnostic and can be more
+sensitive to low ray counts than luminance-histogram metrics; prefer
+`saturation_coverage` and `colored_fraction` for stable catalog comparisons.
 
 ## Point-Light Appearance
 

@@ -32,14 +32,22 @@ ViewportXform viewport_xform(const Bounds& bounds, int width, int height);
 
 struct LuminanceStats {
     float mean = 0.0f;                     // BT.709 mean, 0..255 scale
+    float percentile_01 = 0.0f;            // 1st percentile, 0..255
+    float percentile_10 = 0.0f;            // 10th percentile, 0..255
     float median = 0.0f;                   // 50th percentile, 0..255
+    float percentile_90 = 0.0f;            // 90th percentile, 0..255
     float shadow_floor = 0.0f;             // 5th percentile, 0..255
     float highlight_ceiling = 0.0f;        // 95th percentile, 0..255
     float highlight_peak = 0.0f;           // 99th percentile, 0..255
     float contrast_std = 0.0f;             // standard deviation, 0..255
     float contrast_spread = 0.0f;          // highlight_ceiling - shadow_floor, 0..255
+    float histogram_entropy = 0.0f;        // Shannon entropy of luminance histogram, bits
+    float histogram_entropy_normalized = 0.0f; // entropy / 8 bits, [0,1]
     float near_black_fraction = 0.0f;      // luminance <= near_black_bin_max
     float near_white_fraction = 0.0f;      // luminance >= near_white_bin_min
+    float shadow_fraction = 0.0f;          // luminance <= 64
+    float midtone_fraction = 0.0f;         // 65 <= luminance <= 191
+    float highlight_fraction = 0.0f;       // luminance >= 192
     float clipped_channel_fraction = 0.0f; // any channel == 255
     std::array<int, 256> histogram{};
     int width = 0;
@@ -57,6 +65,7 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
 
 struct ColorStats {
     float mean_saturation = 0.0f;
+    float saturation_coverage = 0.0f;
     float hue_entropy = 0.0f;
     float colored_fraction = 0.0f;
     float richness = 0.0f;
