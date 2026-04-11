@@ -574,39 +574,6 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                             static_cast<int>(std::ceil(std::max(4.0f, 0.04f * search_radius_px) *
                                                         static_cast<float>(max_bins) /
                                                         search_radius_px))));
-            double inner_r_sum = 0.0;
-            double inner_g_sum = 0.0;
-            double inner_b_sum = 0.0;
-            double inner_count = 0.0;
-            for (int r = 0; r <= inner_end; ++r) {
-                for (int s = 0; s < kNumSectors; ++s) {
-                    const std::size_t idx = static_cast<std::size_t>(r) *
-                                            static_cast<std::size_t>(kNumSectors) +
-                                            static_cast<std::size_t>(s);
-                    const double count = static_cast<double>(counts[idx]);
-                    if (count <= 0.0) continue;
-                    inner_r_sum += static_cast<double>(mean_r[idx]) * count;
-                    inner_g_sum += static_cast<double>(mean_g[idx]) * count;
-                    inner_b_sum += static_cast<double>(mean_b[idx]) * count;
-                    inner_count += count;
-                }
-            }
-
-            float dir_r = inner_count > 0.0 ? static_cast<float>(inner_r_sum / inner_count) - bg_r : 1.0f;
-            float dir_g = inner_count > 0.0 ? static_cast<float>(inner_g_sum / inner_count) - bg_g : 1.0f;
-            float dir_b = inner_count > 0.0 ? static_cast<float>(inner_b_sum / inner_count) - bg_b : 1.0f;
-            dir_r = std::max(0.0f, dir_r);
-            dir_g = std::max(0.0f, dir_g);
-            dir_b = std::max(0.0f, dir_b);
-            const float dir_sum = dir_r + dir_g + dir_b;
-            if (dir_sum <= 1.0e-3f) {
-                dir_r = 1.0f;
-                dir_g = 1.0f;
-                dir_b = 1.0f;
-            }
-            const float signal_norm = 255.0f * std::max(1.0e-6f, dir_r + dir_g + dir_b);
-            const float bg_signal = (bg_r * dir_r + bg_g * dir_g + bg_b * dir_b) / signal_norm;
-
             std::vector<float> profile(static_cast<std::size_t>(max_bins), 0.0f);
             std::vector<float> profile_low(static_cast<std::size_t>(max_bins), 0.0f);
             std::vector<float> profile_high(static_cast<std::size_t>(max_bins), 0.0f);
@@ -623,14 +590,12 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                                             static_cast<std::size_t>(kNumSectors) +
                                             static_cast<std::size_t>(s);
                     if (counts[idx] == 0u) continue;
-                    const float signal =
-                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
-                        signal_norm;
-                    sector_values.push_back(std::max(0.0f, signal - bg_signal));
-                    luminance_values.push_back(
+                    const float luminance =
                         clamp01((0.2126f * mean_r[idx] +
                                  0.7152f * mean_g[idx] +
-                                 0.0722f * mean_b[idx]) / 255.0f));
+                                 0.0722f * mean_b[idx]) / 255.0f);
+                    sector_values.push_back(std::max(0.0f, luminance - c.background_luminance));
+                    luminance_values.push_back(luminance);
                 }
                 if (!sector_values.empty()) {
                     std::vector<float> tmp = sector_values;
@@ -715,12 +680,14 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                                             static_cast<std::size_t>(kNumSectors) +
                                             static_cast<std::size_t>(s);
                     if (counts[idx] == 0u) continue;
-                    const float signal =
-                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
-                        signal_norm;
+                    const float luminance =
+                        clamp01((0.2126f * mean_r[idx] +
+                                 0.7152f * mean_g[idx] +
+                                 0.0722f * mean_b[idx]) / 255.0f);
                     sector_profile[static_cast<std::size_t>(r)] =
-                        std::max(0.0f, signal - bg_signal);
+                        std::max(0.0f, luminance - c.background_luminance);
                 }
+
                 std::vector<float> sector_smooth = smooth_profile(sector_profile);
                 int sector_peak_bin = 0;
                 float sector_peak_excess = 0.0f;
