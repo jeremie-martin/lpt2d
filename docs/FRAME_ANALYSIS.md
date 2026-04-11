@@ -134,6 +134,7 @@ disk visible in the current final frame.
 | `radius_candidate_sector_consensus_ratio` | Temporary exploration candidate: radius with strongest angular-sector edge agreement |
 | `radius_candidate_knee_ratio` | Temporary exploration candidate: knee of the global radial signal profile |
 | `radius_candidate_robust_sector_edge_ratio` | Temporary exploration candidate: median of robust per-sector shaped-profile edge estimates, with knee fallback |
+| `radius_candidate_outer_shoulder_ratio` | Temporary exploration candidate: outer edge of a broad shoulder after a small bright core |
 | `coverage_fraction` | Area of that disk as a fraction of the image |
 | `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
 | `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |
@@ -158,6 +159,16 @@ signal used for detection. It still analyzes the real final RGB8 camera image;
 the shaping suppresses low-level halo tails before choosing per-sector
 boundaries, rather than changing the rendered image or the public
 post-processing settings.
+
+The outer-shoulder candidate targets two-scale profiles: a small very bright
+core followed by a broader, dimmer but still coherent disk. It is not
+color-specific; it looks for profile structure and may fall back toward the
+robust sector-edge behavior when no shoulder is evident.
+
+The radius candidates currently use a light-color-direction signal derived from
+the final RGB8 image, not pure luminance. Luminance/desaturated-profile
+candidates may be useful future comparisons, especially for colored lights, but
+they should still analyze the final camera image rather than a different render.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light
