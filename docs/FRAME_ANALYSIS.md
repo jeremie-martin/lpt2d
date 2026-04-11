@@ -165,10 +165,10 @@ core followed by a broader, dimmer but still coherent disk. It is not
 color-specific; it looks for profile structure and may fall back toward the
 robust sector-edge behavior when no shoulder is evident.
 
-The radius candidates currently use a light-color-direction signal derived from
-the final RGB8 image, not pure luminance. Luminance/desaturated-profile
-candidates may be useful future comparisons, especially for colored lights, but
-they should still analyze the final camera image rather than a different render.
+The radius candidates currently use BT.709 luminance from the final RGB8 camera
+image as their radial signal, subtracting a local background estimate before
+looking for the apparent light-disk boundary. They do not render a different
+image or change public post-processing settings.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light
