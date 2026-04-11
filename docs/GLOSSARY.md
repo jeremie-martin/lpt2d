@@ -100,7 +100,7 @@ Python wrappers in `anim/types.py` add a `color: ColorSpec` keyword for spectral
 
 | Term | Definition |
 |------|-----------|
-| **RenderSession** | Headless GPU render context. Methods: `render_shot()`, `render_frame()`. |
+| **RenderSession** | Headless GPU render context. Methods: `render_shot()`, `render_frame()`, `postprocess()`. |
 | **RenderResult** | Output: `pixels` (RGB8), `width`, `height`, `total_rays`, `max_hdr`, `metrics`, `time_ms`. |
 | **rays** | Total ray count for a render. |
 | **batch** / **batch_size** | Rays per GPU compute dispatch. |

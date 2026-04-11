@@ -784,6 +784,8 @@ NB_MODULE(_lpt2d, m) {
         .def("render_frame", &RenderSession::render_frame,
              "scene"_a, "bounds"_a, "trace_cfg"_a, "pp"_a, "total_rays"_a,
              "analyze"_a = false)
+        .def("postprocess", &RenderSession::postprocess,
+             "pp"_a, "analyze"_a = false)
         .def("resize", &RenderSession::resize, "width"_a, "height"_a)
         .def_prop_ro("width", &RenderSession::width)
         .def_prop_ro("height", &RenderSession::height);

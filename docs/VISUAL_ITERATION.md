@@ -14,6 +14,12 @@ Top-level helpers:
   Suggest one stable look from representative frames.
 - `compare_looks(...)`
   Compare candidate looks across the same sampled frames.
+- `iter_frame_variants(...)`
+  Trace one frame once, then stream many post-processing variants over that
+  retained frame.
+- `render_frame_variants(...)`
+  Materialize a small named set of post-processing variants for one traced
+  frame.
 - `look_report(...)`
   Flag dark, bright, clipped, or low-contrast frames.
 - `diagnose_scene(scene)`
@@ -27,6 +33,42 @@ Top-level helpers:
   the frame.
 
 The heavier report types live under `anim.stats`.
+
+### Render Once, Tune Many
+
+Post-processing parameters such as exposure, contrast, gamma, tonemap,
+temperature, saturation, highlights, and shadows are replayable in Python.
+They use the same retained HDR accumulation that the GUI uses for real-time
+look edits.
+
+```python
+for variant in iter_frame_variants(
+    animate,
+    timeline,
+    frame=analysis_frame,
+    settings=shot,
+    camera=camera,
+    variants=random_look_overrides,
+    analyze=True,
+):
+    metrics = metrics_from_analysis(variant.result.analysis)
+    if verdict_for(metrics).ok:
+        save_image(path, variant.result.pixels, variant.result.width, variant.result.height)
+        accepted_look = variant.look
+        break
+```
+
+This is intended for workflows such as crystal-field catalog search: generate
+one scene, choose the analysis frame, try many random post-processing variants,
+accept the first one whose metrics pass, and only generate a new scene if none
+of those variants works.
+
+Replay targets the most recent traced frame in the session. Scene, camera,
+resolution, trace depth, ray count, or light changes require a fresh render.
+`normalize="max"` is replayable, but it still scans the retained HDR buffer to
+find the max/percentile, so it is cheaper than tracing but not free.
+
+See `examples/experiments/post_process_sweep.py` for a minimal runnable sweep.
 
 ## GUI
 

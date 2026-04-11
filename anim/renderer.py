@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass
 import math
 import subprocess
 import sys
 import time
 import warnings
 from pathlib import Path
+from typing import Any
 
 import _lpt2d
 
@@ -22,6 +25,8 @@ from .types import (
     FrameMetrics,
     FrameReport,
     Quality,
+    Look,
+    RenderResult,
     RenderSession,
     Scene,
     Shot,
@@ -30,6 +35,19 @@ from .types import (
     _apply_trace_override,
     _report_from_result,
 )
+
+_LookVariant = Look | dict[str, Any]
+_NamedLookVariant = tuple[str, _LookVariant]
+_LookVariants = Mapping[str, _LookVariant] | Iterable[_LookVariant | _NamedLookVariant]
+
+
+@dataclass(frozen=True)
+class RenderVariant:
+    """One post-processed output from a render-once variant sweep."""
+
+    name: str
+    look: Look
+    result: RenderResult
 
 # ─── Output backends ─────────────────────────────────────────────
 
@@ -235,6 +253,103 @@ def _resolve_frame_shot(
         look=look,
         trace=trace,
     )
+
+
+def _iter_named_look_variants(variants: _LookVariants) -> Iterator[_NamedLookVariant]:
+    """Normalize variant inputs to ``(name, look_or_overrides)`` pairs."""
+    if isinstance(variants, Mapping):
+        for name, variant in variants.items():
+            yield str(name), variant
+        return
+
+    for idx, item in enumerate(variants):
+        if (
+            isinstance(item, tuple)
+            and len(item) == 2
+            and isinstance(item[0], str)
+        ):
+            yield item
+        else:
+            yield f"variant_{idx:03d}", item
+
+
+def _resolve_variant_look(base: Look, variant: _LookVariant) -> Look:
+    return _apply_look_override(base, variant)
+
+
+def iter_frame_variants(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    *,
+    variants: _LookVariants,
+    frame: int = 0,
+    settings: Shot | Quality | str | None = None,
+    camera: Camera2D | None = None,
+    fast: bool = False,
+    analyze: bool = False,
+) -> Iterator[RenderVariant]:
+    """Yield post-processing variants for one traced frame.
+
+    The first variant traces the scene; every following variant reuses the
+    cached GPU accumulation and only re-runs post-processing. This is intended
+    for workflows that search many Looks for one candidate scene and stop as
+    soon as a variant passes.
+    """
+    named_variants = _iter_named_look_variants(variants)
+    try:
+        first_name, first_variant = next(named_variants)
+    except StopIteration:
+        return
+
+    timeline, shot = _resolve_args(timeline, settings)
+    session = RenderSession(shot.canvas.width, shot.canvas.height, fast)
+
+    try:
+        ctx = timeline.context_at(frame)
+        frame_result = animate(ctx)
+        cpp_shot = _resolve_frame_shot(shot, frame_result, camera)
+        # Freeze the resolved authored/frame look before replacing
+        # cpp_shot.look for the first variant.
+        base_look = _apply_look_override(cpp_shot.look, {})
+
+        first_look = _resolve_variant_look(base_look, first_variant)
+        cpp_shot.look = first_look
+        first_result = session.render_shot(cpp_shot, frame, analyze)
+        yield RenderVariant(first_name, first_look, first_result)
+
+        for name, variant in named_variants:
+            look = _resolve_variant_look(base_look, variant)
+            result = session.postprocess(look.to_post_process(), analyze)
+            yield RenderVariant(name, look, result)
+    finally:
+        session.close()
+
+
+def render_frame_variants(
+    animate: AnimateFn,
+    timeline: Timeline | float,
+    *,
+    variants: _LookVariants,
+    frame: int = 0,
+    settings: Shot | Quality | str | None = None,
+    camera: Camera2D | None = None,
+    fast: bool = False,
+    analyze: bool = False,
+) -> dict[str, RenderVariant]:
+    """Render one frame once and return all post-processing variants."""
+    return {
+        variant.name: variant
+        for variant in iter_frame_variants(
+            animate,
+            timeline,
+            variants=variants,
+            frame=frame,
+            settings=settings,
+            camera=camera,
+            fast=fast,
+            analyze=analyze,
+        )
+    }
 
 
 def render(

@@ -40,6 +40,7 @@ struct RenderSession::Impl {
     Renderer renderer;
     int width;
     int height;
+    bool has_current_frame = false;
 };
 
 RenderSession::RenderSession(int width, int height, bool half_float) : impl_(std::make_unique<Impl>()) {
@@ -84,6 +85,9 @@ RenderResult RenderSession::render_shot(const Shot& shot, int frame, bool analyz
 RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bounds,
                                           const TraceConfig& trace_cfg, const PostProcess& pp,
                                           int64_t total_rays, bool analyze) {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+
     auto t0 = std::chrono::steady_clock::now();
     auto& r = impl_->renderer;
 
@@ -112,6 +116,25 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
             remaining = 0;
         }
     }
+
+    RenderResult result = develop_result(pp, analyze, t0);
+    impl_->has_current_frame = true;
+    return result;
+}
+
+RenderResult RenderSession::postprocess(const PostProcess& pp, bool analyze) {
+    if (!impl_)
+        throw std::runtime_error("RenderSession: session is closed");
+    if (!impl_->has_current_frame)
+        throw std::runtime_error("RenderSession: no frame has been rendered for postprocess replay");
+
+    auto t0 = std::chrono::steady_clock::now();
+    return develop_result(pp, analyze, t0);
+}
+
+RenderResult RenderSession::develop_result(const PostProcess& pp, bool analyze,
+                                           std::chrono::steady_clock::time_point t0) {
+    auto& r = impl_->renderer;
 
     // Read pixels for the render result. The analyzer runs on the GPU display
     // texture first; analyze=false requests luminance only.
@@ -146,6 +169,9 @@ void RenderSession::resize(int width, int height) {
     if (!impl_)
         throw std::runtime_error("RenderSession: session is closed");
 
+    const bool dimensions_changed = (width != impl_->width || height != impl_->height);
+    if (dimensions_changed)
+        impl_->has_current_frame = false;
     impl_->renderer.resize(width, height);
     impl_->width = width;
     impl_->height = height;
