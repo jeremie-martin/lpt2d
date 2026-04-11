@@ -145,6 +145,46 @@ int knee_bin(const std::vector<float>& envelope,
     return best_distance > 0.015f ? best_bin : first_below(envelope, peak_bin, peak_excess * 0.50f);
 }
 
+void shape_normalized_profile(const std::vector<float>& src,
+                              float peak_excess,
+                              float exponent,
+                              std::vector<float>& dst) {
+    dst.resize(src.size());
+    const float inv_peak = 1.0f / std::max(peak_excess, 1.0e-6f);
+    for (std::size_t i = 0; i < src.size(); ++i) {
+        const float normalized = clamp01(src[i] * inv_peak);
+        dst[i] = std::pow(normalized, exponent);
+    }
+}
+
+float trimmed_quantile(std::vector<float> values, float q) {
+    if (values.empty()) return 0.0f;
+    if (values.size() < 6u) {
+        return quantile_sorted(values, q);
+    }
+
+    std::vector<float> sorted = values;
+    const float q25 = quantile_sorted(sorted, 0.25f);
+    sorted = values;
+    const float q75 = quantile_sorted(sorted, 0.75f);
+    const float iqr = q75 - q25;
+    if (iqr <= 1.0e-6f) {
+        return quantile_sorted(values, q);
+    }
+
+    const float lo = q25 - 1.5f * iqr;
+    const float hi = q75 + 1.5f * iqr;
+    std::vector<float> trimmed;
+    trimmed.reserve(values.size());
+    for (float v : values) {
+        if (v >= lo && v <= hi) trimmed.push_back(v);
+    }
+    if (trimmed.size() >= std::max<std::size_t>(4u, values.size() / 2u)) {
+        return quantile_sorted(trimmed, q);
+    }
+    return quantile_sorted(values, q);
+}
+
 }  // namespace
 
 // ─── Init / shutdown ───────────────────────────────────────────────────
@@ -655,34 +695,16 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                 knee_bin(envelope, peak_bin, min_edge_bin, signal_peak_excess);
             const float knee_px = bin_radius_px(knee_candidate_bin, max_bins, search_radius_px);
 
-            double energy_area_px = 0.0;
-            for (int r = 0; r < max_bins; ++r) {
-                for (int s = 0; s < kNumSectors; ++s) {
-                    const std::size_t idx = static_cast<std::size_t>(r) *
-                                            static_cast<std::size_t>(kNumSectors) +
-                                            static_cast<std::size_t>(s);
-                    if (counts[idx] == 0u) continue;
-                    const float signal =
-                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
-                        signal_norm;
-                    const float excess = std::max(0.0f, signal - bg_signal);
-                    const float normalized = excess / std::max(signal_peak_excess, 1.0e-6f);
-                    const float weight = clamp01((normalized - 0.03f) / 0.97f);
-                    energy_area_px += static_cast<double>(weight) *
-                                      static_cast<double>(counts[idx]);
-                }
-            }
-            const float energy_px = std::min(
-                search_radius_px,
-                std::sqrt(static_cast<float>(std::max(0.0, energy_area_px)) / PI));
-
             std::vector<float> sector_envelopes(
                 static_cast<std::size_t>(kNumSectors) * static_cast<std::size_t>(max_bins),
                 0.0f);
             std::vector<float> sector_peaks(static_cast<std::size_t>(kNumSectors), 0.0f);
             std::vector<int> sector_peak_bins(static_cast<std::size_t>(kNumSectors), 0);
+            std::vector<float> sector_edge_px;
+            sector_edge_px.reserve(kNumSectors);
             int valid_sectors = 0;
             std::vector<float> sector_profile(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> sector_shaped(static_cast<std::size_t>(max_bins), 0.0f);
             for (int s = 0; s < kNumSectors; ++s) {
                 std::fill(sector_profile.begin(), sector_profile.end(), 0.0f);
                 for (int r = 0; r < max_bins; ++r) {
@@ -709,6 +731,35 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                     continue;
                 }
                 enforce_nonincreasing_after_peak(sector_smooth, sector_peak_bin);
+
+                const int sector_min_edge_bin = std::min(
+                    max_bins - 2,
+                    std::max(sector_peak_bin + 1,
+                             static_cast<int>(std::ceil(2.0f * static_cast<float>(max_bins) /
+                                                         search_radius_px))));
+                shape_normalized_profile(sector_smooth, sector_peak_excess, 1.75f,
+                                         sector_shaped);
+                float shaped_drop = 0.0f;
+                const int shaped_edge_bin = strongest_edge_bin(
+                    sector_shaped, sector_peak_bin, sector_min_edge_bin, 1.0f,
+                    &shaped_drop);
+                const int shaped_knee_bin =
+                    knee_bin(sector_shaped, sector_peak_bin, sector_min_edge_bin, 1.0f);
+                const int sector_candidate_bin =
+                    (shaped_edge_bin >= 0 && shaped_drop >= 0.025f)
+                        ? shaped_edge_bin
+                        : shaped_knee_bin;
+                const int shaped_tail_bin =
+                    first_below(sector_shaped, sector_min_edge_bin, 0.08f);
+                const bool shaped_has_falloff =
+                    shaped_tail_bin > sector_min_edge_bin && shaped_tail_bin < max_bins - 1;
+                if (sector_candidate_bin >= sector_min_edge_bin &&
+                    (shaped_has_falloff ||
+                     (shaped_edge_bin >= 0 && shaped_drop >= 0.025f))) {
+                    sector_edge_px.push_back(
+                        bin_radius_px(sector_candidate_bin, max_bins, search_radius_px));
+                }
+
                 sector_peaks[static_cast<std::size_t>(s)] = sector_peak_excess;
                 sector_peak_bins[static_cast<std::size_t>(s)] = sector_peak_bin;
                 ++valid_sectors;
@@ -720,6 +771,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                 }
             }
             float sector_consensus_px = radius_px;
+            float robust_sector_edge_px = knee_px;
             const int min_valid_sectors = std::max(6, kNumSectors / 4);
             if (valid_sectors >= min_valid_sectors) {
                 std::vector<float> sector_drops;
@@ -760,12 +812,16 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                         bin_radius_px(sector_consensus_bin, max_bins, search_radius_px);
                 }
             }
+            if (sector_edge_px.size() >=
+                static_cast<std::size_t>(std::max(6, valid_sectors / 3))) {
+                robust_sector_edge_px = trimmed_quantile(sector_edge_px, 0.50f);
+            }
 
             c.visible = radius_px > 0.0f;
             c.radius_ratio = radius_px / short_side;
             c.radius_candidate_sector_consensus_ratio = sector_consensus_px / short_side;
             c.radius_candidate_knee_ratio = knee_px / short_side;
-            c.radius_candidate_energy_ratio = energy_px / short_side;
+            c.radius_candidate_robust_sector_edge_ratio = robust_sector_edge_px / short_side;
             c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
                                           static_cast<float>(width * height));
             c.transition_width_ratio =

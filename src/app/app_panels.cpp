@@ -1849,7 +1849,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
             ImGui::TableSetupColumn("Radius %");
             ImGui::TableSetupColumn("Sector %");
             ImGui::TableSetupColumn("Knee %");
-            ImGui::TableSetupColumn("Energy %");
+            ImGui::TableSetupColumn("Robust %");
             ImGui::TableSetupColumn("Core %");
             ImGui::TableSetupColumn("Edge %");
             ImGui::TableSetupColumn("Contrast");
@@ -1858,7 +1858,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::SetTooltip(
                     "Radius: estimated apparent point-light disc radius as %% of the short image side.\n"
-                    "Sector/Knee/Energy: temporary GPU radius candidates for detector comparison.\n"
+                    "Sector/Knee/Robust: temporary GPU radius candidates for detector comparison.\n"
                     "Core: diagnostic saturated-core radius as %% of the short image side.\n"
                     "Edge: transition width as %% of the short image side.\n"
                     "Contrast: peak minus background luminance.\n"
@@ -1879,7 +1879,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                 ImGui::TableSetColumnIndex(3);
                 ImGui::Text("%.2f", c.radius_candidate_knee_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%.2f", c.radius_candidate_energy_ratio * 100.0f);
+                ImGui::Text("%.2f", c.radius_candidate_robust_sector_edge_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(5);
                 ImGui::Text("%.2f", c.saturated_radius_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(6);
