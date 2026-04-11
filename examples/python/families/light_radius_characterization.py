@@ -51,13 +51,14 @@ from anim import (
     Segment,
     Shot,
     TraceDefaults,
-    glass,
     mirror_box,
 )
 from anim.renderer import RenderSession, save_image
 
 
 OUT = Path("renders/light_radius_characterization")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+COMPLEX_SOURCE_SHOT = Path("test.json")
 CAMERA_WIDTH = 4.0
 ROOM_HALF = 1.8
 LIGHT_ID = "light_0"
@@ -70,6 +71,7 @@ class Case:
     label: str
     wall: str = "absorber"
     perturbation: str = "none"
+    source_shot_path: str | None = None
     light_position: tuple[float, float] = (0.0, 0.0)
     light_intensity: float = 1.0
     wavelength_min: float = 380.0
@@ -135,15 +137,12 @@ def _build_scene(case: Case) -> Scene:
     materials: dict[str, Material] = {
         "wall": _wall_material(case.wall),
         "absorber": Material(albedo=0.0, transmission=0.0, metallic=0.0, absorption=1.0),
-        "glass": glass(1.5, cauchy_b=20_000.0, absorption=1.0, fill=0.0),
         "mirror": Material(metallic=1.0, roughness=0.05, transmission=0.0, albedo=0.95),
     }
     shapes = list(mirror_box(ROOM_HALF, ROOM_HALF, "wall", id_prefix="wall"))
 
     if case.perturbation == "absorber_near":
         shapes.append(Circle(id="absorber_near", center=[0.34, 0.0], radius=0.12, material_id="absorber"))
-    elif case.perturbation == "glass_near":
-        shapes.append(Circle(id="glass_near", center=[0.34, 0.0], radius=0.12, material_id="glass"))
     elif case.perturbation == "mirror_near":
         shapes.append(Circle(id="mirror_near", center=[0.34, 0.0], radius=0.12, material_id="mirror"))
     elif case.perturbation == "occluder_bar":
@@ -165,7 +164,30 @@ def _build_scene(case: Case) -> Scene:
     return Scene(materials=materials, shapes=shapes, lights=lights)
 
 
+def _make_complex_shot(case: Case, width: int, height: int, rays: int, batch: int, depth: int) -> Shot:
+    if case.source_shot_path is None:
+        raise ValueError("complex case requires source_shot_path")
+    source_path = Path(case.source_shot_path)
+    if not source_path.is_absolute():
+        source_path = REPO_ROOT / source_path
+    shot = Shot.load(source_path)
+    shot.name = f"light_radius_characterization/{case.case_id}"
+    shot.canvas = Canvas(width, height)
+    shot.trace = TraceDefaults(rays=rays, batch=batch, depth=depth)
+    shot.look.exposure = case.exposure
+    shot.look.white_point = case.white_point
+    shot.look.contrast = case.contrast
+    shot.look.gamma = case.gamma
+    shot.look.tonemap = case.tonemap
+    shot.look.normalize = "rays"
+    shot.look.ambient = 0.0
+    shot.look.background = [0.0, 0.0, 0.0]
+    return shot
+
+
 def _make_shot(case: Case, width: int, height: int, rays: int, batch: int, depth: int) -> Shot:
+    if case.source_shot_path is not None:
+        return _make_complex_shot(case, width, height, rays, batch, depth)
     scene = _build_scene(case)
     return Shot(
         name=f"light_radius_characterization/{case.case_id}",
@@ -177,20 +199,48 @@ def _make_shot(case: Case, width: int, height: int, rays: int, batch: int, depth
     )
 
 
+def _light_metrics(light) -> dict[str, float | int | str | bool]:
+    return {
+        "id": light.id,
+        "visible": bool(light.visible),
+        "world_x": light.world_x,
+        "world_y": light.world_y,
+        "image_x": light.image_x,
+        "image_y": light.image_y,
+        "radius_ratio": light.radius_ratio,
+        "radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
+        "radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
+        "radius_candidate_energy_ratio": light.radius_candidate_energy_ratio,
+        "saturated_radius_ratio": light.saturated_radius_ratio,
+        "transition_width_ratio": light.transition_width_ratio,
+        "coverage_fraction": light.coverage_fraction,
+        "peak_contrast": light.peak_contrast,
+        "confidence": light.confidence,
+    }
+
+
 def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
-    light = next(iter(rr.analysis.lights), None)
-    if light is None:
+    lights = list(rr.analysis.lights)
+    if not lights:
         raise RuntimeError(f"{case.case_id}: render produced no light appearance")
+    visible_lights = [light for light in lights if light.visible and light.radius_ratio > 0.0]
+    ranked_lights = visible_lights if visible_lights else lights
+    light = max(ranked_lights, key=lambda item: (float(item.radius_ratio), float(item.peak_contrast)))
     lum = rr.analysis.luminance
     color = rr.analysis.color
     return {
         "case_id": case.case_id,
         "group": case.group,
         "label": case.label,
+        "source_shot": case.source_shot_path or "",
         "wall": case.wall,
         "perturbation": case.perturbation,
-        "light_x": case.light_position[0],
-        "light_y": case.light_position[1],
+        "light_id": light.id,
+        "light_count": len(lights),
+        "visible_light_count": len(visible_lights),
+        "lights_json": json.dumps([_light_metrics(item) for item in lights], separators=(",", ":")),
+        "light_x": light.world_x,
+        "light_y": light.world_y,
         "light_intensity": case.light_intensity,
         "wavelength_min": case.wavelength_min,
         "wavelength_max": case.wavelength_max,
@@ -245,6 +295,31 @@ def _metric_float(metrics: dict[str, float | int | str], key: str, default: floa
         return default
 
 
+def _light_entries(metrics: dict[str, float | int | str]) -> list[dict[str, float | int | str | bool]]:
+    raw = metrics.get("lights_json", "")
+    if isinstance(raw, str) and raw:
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                return [item for item in parsed if isinstance(item, dict)]
+        except json.JSONDecodeError:
+            pass
+    return [
+        {
+            "id": str(metrics.get("light_id", LIGHT_ID)),
+            "visible": True,
+            "image_x": _metric_float(metrics, "image_x"),
+            "image_y": _metric_float(metrics, "image_y"),
+            "radius_ratio": _metric_float(metrics, "cpp_radius_ratio"),
+            "radius_candidate_sector_consensus_ratio": _metric_float(
+                metrics, "cpp_radius_candidate_sector_consensus_ratio"
+            ),
+            "radius_candidate_knee_ratio": _metric_float(metrics, "cpp_radius_candidate_knee_ratio"),
+            "radius_candidate_energy_ratio": _metric_float(metrics, "cpp_radius_candidate_energy_ratio"),
+        }
+    ]
+
+
 def _draw_label_block(draw: ImageDraw.ImageDraw, lines: list[LabelLine], width: int, height: int) -> None:
     font = _font(max(11, width // 72))
     padding = max(8, width // 180)
@@ -287,8 +362,6 @@ def _draw_dashed_ring(
 def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) -> None:
     image = Image.frombytes("RGB", (rr.width, rr.height), rr.pixels).convert("RGBA")
     draw = ImageDraw.Draw(image, "RGBA")
-    cx = float(metrics["image_x"])
-    cy = float(metrics["image_y"])
     short_side = min(rr.width, rr.height)
 
     radius_color = (60, 255, 90, 255)
@@ -298,38 +371,51 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
-    radius_px = float(metrics["cpp_radius_ratio"]) * short_side
     candidate_width = max(line_width, 2)
-    # Exploration mode: draw the official radius plus temporary GPU candidates.
-    _draw_dashed_ring(
-        draw,
-        cx,
-        cy,
-        _metric_float(metrics, "cpp_radius_candidate_energy_ratio") * short_side,
-        energy_candidate_color,
-        width=candidate_width,
-        phase=0.15,
-    )
-    _draw_dashed_ring(
-        draw,
-        cx,
-        cy,
-        _metric_float(metrics, "cpp_radius_candidate_knee_ratio") * short_side,
-        knee_candidate_color,
-        width=candidate_width,
-        phase=0.08,
-    )
-    _draw_dashed_ring(
-        draw,
-        cx,
-        cy,
-        _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio") * short_side,
-        sector_candidate_color,
-        width=candidate_width,
-        phase=0.0,
-    )
-    _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3), phase=0.22)
-    draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
+    entries = [
+        entry
+        for entry in _light_entries(metrics)
+        if bool(entry.get("visible", True)) and _metric_float(entry, "radius_ratio") > 0.0
+    ]
+    if not entries:
+        entries = _light_entries(metrics)
+    label_font = _font(max(10, rr.width // 96))
+    for entry in entries:
+        cx = _metric_float(entry, "image_x")
+        cy = _metric_float(entry, "image_y")
+        radius_px = _metric_float(entry, "radius_ratio") * short_side
+        # Exploration mode: draw the official radius plus temporary GPU candidates.
+        _draw_dashed_ring(
+            draw,
+            cx,
+            cy,
+            _metric_float(entry, "radius_candidate_energy_ratio") * short_side,
+            energy_candidate_color,
+            width=candidate_width,
+            phase=0.15,
+        )
+        _draw_dashed_ring(
+            draw,
+            cx,
+            cy,
+            _metric_float(entry, "radius_candidate_knee_ratio") * short_side,
+            knee_candidate_color,
+            width=candidate_width,
+            phase=0.08,
+        )
+        _draw_dashed_ring(
+            draw,
+            cx,
+            cy,
+            _metric_float(entry, "radius_candidate_sector_consensus_ratio") * short_side,
+            sector_candidate_color,
+            width=candidate_width,
+            phase=0.0,
+        )
+        _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3), phase=0.22)
+        draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
+        if len(entries) > 1:
+            draw.text((cx + 5, cy + 5), str(entry.get("id", ""))[:22], fill=radius_color, font=label_font)
 
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
     sector_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio")
@@ -346,10 +432,23 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     near_black = 100.0 * _metric_float(metrics, "near_black_fraction")
     near_white = 100.0 * _metric_float(metrics, "near_white_fraction")
     clipped = 100.0 * _metric_float(metrics, "clipped_channel_fraction")
+    source_shot = str(metrics.get("source_shot", ""))
+    total_lights = int(_metric_float(metrics, "light_count", 1.0))
+    visible_lights = int(_metric_float(metrics, "visible_light_count", 1.0))
+    scene_line = (
+        f"Scene: {Path(source_shot).name}; visible point lights={visible_lights}/{total_lights}"
+        if source_shot
+        else f"Scene: wall={metrics['wall']}; nearby object={metrics['perturbation']}"
+    )
+    light_line = (
+        f"Dominant light for numbers: {metrics.get('light_id', LIGHT_ID)}"
+        if total_lights > 1
+        else f"Light intensity: {float(metrics['light_intensity']):.3g}"
+    )
     lines: list[LabelLine] = [
         f"Case: {metrics['case_id']} ({metrics['label']})",
-        f"Scene: wall={metrics['wall']}; nearby object={metrics['perturbation']}",
-        f"Light intensity: {float(metrics['light_intensity']):.3g}",
+        scene_line,
+        light_line,
         f"Look: exposure={float(metrics['exposure']):.3g}; white point={float(metrics['white_point']):.3g}; "
         f"contrast={float(metrics['contrast']):.3g}; gamma={float(metrics['gamma']):.3g}",
         (
@@ -422,7 +521,7 @@ def _case_sweeps() -> list[Case]:
     base = Case(case_id="base", group="base", label="baseline")
 
     cases = [base]
-    for value in (0.25, 0.5, 1.0, 2.0):
+    for value in (0.25, 0.5, 2.0):
         cases.append(
             Case(
                 case_id=f"intensity_{value:g}".replace(".", "p"),
@@ -431,7 +530,7 @@ def _case_sweeps() -> list[Case]:
                 light_intensity=value,
             )
         )
-    for value in (-7.0, -6.0, -5.0, -4.0):
+    for value in (-7.0, -6.0, -4.0):
         cases.append(
             Case(
                 case_id=f"exposure_{value:g}".replace("-", "m").replace(".", "p"),
@@ -440,7 +539,7 @@ def _case_sweeps() -> list[Case]:
                 exposure=value,
             )
         )
-    for value in (0.25, 0.5, 1.0, 2.0):
+    for value in (0.25, 1.0, 2.0):
         cases.append(
             Case(
                 case_id=f"white_point_{value:g}".replace(".", "p"),
@@ -449,7 +548,7 @@ def _case_sweeps() -> list[Case]:
                 white_point=value,
             )
         )
-    for value in (0.7, 1.0, 1.5, 2.0):
+    for value in (0.7, 1.5, 2.0):
         cases.append(
             Case(
                 case_id=f"contrast_{value:g}".replace(".", "p"),
@@ -458,7 +557,7 @@ def _case_sweeps() -> list[Case]:
                 contrast=value,
             )
         )
-    for value in (1.2, 1.6, 2.0, 2.8):
+    for value in (1.2, 1.6, 2.8):
         cases.append(
             Case(
                 case_id=f"gamma_{value:g}".replace(".", "p"),
@@ -469,27 +568,13 @@ def _case_sweeps() -> list[Case]:
         )
     for value in ("absorber", "diffuse", "standard_mirror", "rough_mirror"):
         cases.append(Case(case_id=f"wall_{value}", group="wall", label=f"wall {value}", wall=value))
-    for value in ("none", "absorber_near", "glass_near", "mirror_near", "occluder_bar"):
+    for value in ("absorber_near", "mirror_near", "occluder_bar"):
         cases.append(
             Case(
                 case_id=f"perturb_{value}",
                 group="perturbation",
                 label=f"perturb {value}",
                 perturbation=value,
-            )
-        )
-    for label, position in (
-        ("center", (0.0, 0.0)),
-        ("right", (0.9, 0.0)),
-        ("upper_right", (0.9, 0.9)),
-        ("near_edge", (1.45, 0.0)),
-    ):
-        cases.append(
-            Case(
-                case_id=f"position_{label}",
-                group="position",
-                label=f"position {label}",
-                light_position=position,
             )
         )
     for label, wavelength in (
@@ -615,6 +700,34 @@ def _case_sweeps() -> list[Case]:
                 label=label,
                 wall="standard_mirror",
                 **overrides,
+            )
+        )
+
+    complex_cases = [
+        (-6.5, 0.75),
+        (-6.0, 0.5),
+        (-5.5, 0.75),
+        (-5.5, 0.35),
+        (-5.0, 0.5),
+        (-5.0, 0.25),
+        (-4.5, 0.35),
+        (-4.0, 0.25),
+    ]
+    for exposure, white_point in complex_cases:
+        case_id = (
+            f"complex_test_exp_{exposure:g}_wp{white_point:g}"
+            .replace("-", "m")
+            .replace(".", "p")
+        )
+        cases.append(
+            Case(
+                case_id=case_id,
+                group="complex_test_scene",
+                label=f"test.json exposure {exposure:g}, white point {white_point:g}",
+                source_shot_path=str(COMPLEX_SOURCE_SHOT),
+                exposure=exposure,
+                white_point=white_point,
+                gamma=1.6,
             )
         )
 

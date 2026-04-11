@@ -1,0 +1,775 @@
+{
+  "version": 11,
+  "name": "crystal_field/glass/circle_white_large_1light",
+  "camera": {
+    "center": [
+      0.0,
+      0.0
+    ],
+    "width": 3.200000047683716
+  },
+  "canvas": {
+    "width": 1920,
+    "height": 1080
+  },
+  "look": {
+    "exposure": -5.848503589630127,
+    "contrast": 1.0,
+    "gamma": 1.600000023841858,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.699999988079071,
+    "temperature": 0.0,
+    "highlights": 0.0,
+    "shadows": 0.0,
+    "hue_shift": 0.0,
+    "grain": 0.0,
+    "grain_seed": 0,
+    "chromatic_aberration": 0.0
+  },
+  "trace": {
+    "rays": 10000000,
+    "batch": 200000,
+    "depth": 12,
+    "intensity": 1.0,
+    "seed_mode": "deterministic"
+  },
+  "materials": {
+    "crystal": {
+      "ior": 1.5199999809265137,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 1.0,
+      "absorption": 1.0,
+      "cauchy_b": 20000.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.11999999731779099
+    },
+    "wall": {
+      "ior": 1.0,
+      "roughness": 0.10000000149011612,
+      "metallic": 1.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.0
+    }
+  },
+  "shapes": [
+    {
+      "id": "wall_bottom",
+      "type": "segment",
+      "a": [
+        -1.600000023841858,
+        -0.8999999761581421
+      ],
+      "b": [
+        1.600000023841858,
+        -0.8999999761581421
+      ],
+      "material_id": "wall"
+    },
+    {
+      "id": "wall_top",
+      "type": "segment",
+      "a": [
+        1.600000023841858,
+        0.8999999761581421
+      ],
+      "b": [
+        -1.600000023841858,
+        0.8999999761581421
+      ],
+      "material_id": "wall"
+    },
+    {
+      "id": "wall_left",
+      "type": "segment",
+      "a": [
+        -1.600000023841858,
+        0.8999999761581421
+      ],
+      "b": [
+        -1.600000023841858,
+        -0.8999999761581421
+      ],
+      "material_id": "wall"
+    },
+    {
+      "id": "wall_right",
+      "type": "segment",
+      "a": [
+        1.600000023841858,
+        -0.8999999761581421
+      ],
+      "b": [
+        1.600000023841858,
+        0.8999999761581421
+      ],
+      "material_id": "wall"
+    },
+    {
+      "id": "obj_0",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_1",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_2",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_3",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_4",
+      "type": "circle",
+      "center": [
+        0.0,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_5",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_6",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_7",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_8",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        -0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_9",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_10",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_11",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_12",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_13",
+      "type": "circle",
+      "center": [
+        0.0,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_14",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_15",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_16",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_17",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        -0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_18",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_19",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_20",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_21",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_22",
+      "type": "circle",
+      "center": [
+        0.0,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_23",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_24",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_25",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_26",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        -0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_27",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_28",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_29",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_30",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_31",
+      "type": "circle",
+      "center": [
+        0.0,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_32",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_33",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_34",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_35",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        0.11999999731779099
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_36",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_37",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_38",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_39",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_40",
+      "type": "circle",
+      "center": [
+        0.0,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_41",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_42",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_43",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_44",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        0.36000001430511475
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_45",
+      "type": "circle",
+      "center": [
+        -0.9599999785423279,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_46",
+      "type": "circle",
+      "center": [
+        -0.7200000286102295,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_47",
+      "type": "circle",
+      "center": [
+        -0.47999998927116394,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_48",
+      "type": "circle",
+      "center": [
+        -0.23999999463558197,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_49",
+      "type": "circle",
+      "center": [
+        0.0,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_50",
+      "type": "circle",
+      "center": [
+        0.23999999463558197,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_51",
+      "type": "circle",
+      "center": [
+        0.47999998927116394,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_52",
+      "type": "circle",
+      "center": [
+        0.7200000286102295,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    },
+    {
+      "id": "obj_53",
+      "type": "circle",
+      "center": [
+        0.9599999785423279,
+        0.6000000238418579
+      ],
+      "radius": 0.07199999690055847,
+      "material_id": "crystal"
+    }
+  ],
+  "lights": [
+    {
+      "id": "amb_0",
+      "type": "point",
+      "position": [
+        -1.399999976158142,
+        0.75
+      ],
+      "intensity": 0.20000000298023224,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "amb_1",
+      "type": "point",
+      "position": [
+        1.399999976158142,
+        0.75
+      ],
+      "intensity": 0.800000011920929,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "amb_2",
+      "type": "point",
+      "position": [
+        -1.399999976158142,
+        -0.75
+      ],
+      "intensity": 0.4000000059604645,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "amb_3",
+      "type": "point",
+      "position": [
+        1.399999976158142,
+        -0.75
+      ],
+      "intensity": 0.6000000238418579,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "light_0",
+      "type": "point",
+      "position": [
+        -0.6007646918296814,
+        -0.6558259129524231
+      ],
+      "intensity": 1.4630000591278076,
+      "wavelength_min": 558.0,
+      "wavelength_max": 645.0
+    },
+    {
+      "id": "point_light_0",
+      "type": "point",
+      "position": [
+        0.6045925617218018,
+        0.24537035822868347
+      ],
+      "intensity": 1.5809999704360962,
+      "wavelength_min": 380.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "point_light_1",
+      "type": "point",
+      "position": [
+        -0.36314812302589417,
+        0.5398147702217102
+      ],
+      "intensity": 1.5809999704360962,
+      "wavelength_min": 502.0,
+      "wavelength_max": 780.0
+    },
+    {
+      "id": "point_light_2",
+      "type": "point",
+      "position": [
+        -0.8004962205886841,
+        -0.025322208181023598
+      ],
+      "intensity": 1.5809999704360962,
+      "wavelength_min": 380.0,
+      "wavelength_max": 564.0
+    },
+    {
+      "id": "point_light_3",
+      "type": "point",
+      "position": [
+        0.2791334390640259,
+        -0.49280181527137756
+      ],
+      "intensity": 1.5809999704360962,
+      "wavelength_min": 558.0,
+      "wavelength_max": 780.0
+    }
+  ],
+  "groups": []
+}
