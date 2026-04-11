@@ -621,7 +621,13 @@ def _copy_existing_files(src_dir: Path, web_dir: Path) -> None:
             shutil.copy2(path, shot_dst / path.name)
 
 
-def _web_gallery_index(rows: list[dict[str, str]], title: str, description: str) -> str:
+def _web_gallery_index(
+    rows: list[dict[str, str]],
+    title: str,
+    description: str,
+    *,
+    include_raw_gallery: bool,
+) -> str:
     groups: dict[str, list[dict[str, str]]] = {}
     for row in rows:
         groups.setdefault(row["group"], []).append(row)
@@ -654,11 +660,13 @@ h3 { margin: 0 0 8px; }
 .metrics { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 12px; }
 .metric { border: 1px solid #2c2924; border-radius: 8px; padding: 6px; background: #13120f; }
 .metric b { display: block; color: var(--good); font-size: 14px; }
-.thumb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
+.thumb-row { display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); }
+.thumb-row.with-raw { grid-template-columns: 1fr 1fr; }
 button.thumb { appearance: none; border: 0; padding: 0; margin: 0; background: #050505; color: var(--ink); cursor: zoom-in; position: relative; text-align: left; }
 button.thumb img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
 button.thumb.sheet img { aspect-ratio: 16 / 9; object-fit: contain; background: #050505; }
 button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px; border-radius: 999px; background: rgba(0,0,0,.72); font-size: 12px; }
+.raw-link { margin-top: 9px; font-size: 12px; }
 .group-title { max-width: 1180px; margin: 28px auto 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
 .viewer[hidden] { display: none; }
 .viewer { position: fixed; inset: 0; z-index: 20; display: grid; grid-template-rows: auto 1fr auto; background: rgba(0,0,0,.94); }
@@ -717,21 +725,22 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
                 f"core {_pct(row, 'cpp_saturated_radius_ratio')}, "
                 f"edge {_pct(row, 'cpp_transition_width_ratio')}"
             )
-            raw_caption = f"{cid} raw render"
             parts.append('<article class="card">')
-            parts.append('<div class="thumb-row">')
+            parts.append('<div class="thumb-row{}">'.format(" with-raw" if include_raw_gallery else ""))
             parts.append(
                 '<button class="thumb" data-full="overlays/{0}.jpg" data-caption="{1}">'
                 '<img loading="lazy" src="thumbs/overlays_{0}.jpg" alt="{1}"><span>Overlay</span></button>'.format(
                     html.escape(cid), html.escape(overlay_caption)
                 )
             )
-            parts.append(
-                '<button class="thumb" data-full="images/{0}.jpg" data-caption="{1}">'
-                '<img loading="lazy" src="thumbs/images_{0}.jpg" alt="{1}"><span>Raw</span></button>'.format(
-                    html.escape(cid), html.escape(raw_caption)
+            if include_raw_gallery:
+                raw_caption = f"{cid} raw render"
+                parts.append(
+                    '<button class="thumb" data-full="images/{0}.jpg" data-caption="{1}">'
+                    '<img loading="lazy" src="thumbs/images_{0}.jpg" alt="{1}"><span>Raw</span></button>'.format(
+                        html.escape(cid), html.escape(raw_caption)
+                    )
                 )
-            )
             parts.append("</div>")
             parts.append('<div class="card-body">')
             parts.append(f'<div class="case-title">{html.escape(cid)}</div>')
@@ -748,7 +757,10 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
                 parts.append(
                     f'<div class="metric"><span>{html.escape(label_text)}</span><b>{html.escape(value)}</b></div>'
                 )
-            parts.append("</div></div></article>")
+            parts.append("</div>")
+            if not include_raw_gallery:
+                parts.append(f'<div class="raw-link"><a href="images/{html.escape(cid)}.jpg">raw JPEG</a></div>')
+            parts.append("</div></article>")
         parts.append("</section>")
 
     parts.append(
@@ -844,6 +856,7 @@ def _write_web_gallery(
     title: str,
     description: str,
     jpeg_quality: int,
+    include_raw_gallery: bool,
 ) -> None:
     metrics_path = src_dir / "metrics.csv"
     if not metrics_path.exists():
@@ -867,7 +880,14 @@ def _write_web_gallery(
 
     _copy_existing_files(src_dir, web_dir)
     rows = list(csv.DictReader(metrics_path.open()))
-    (web_dir / "index.html").write_text(_web_gallery_index(rows, title, description))
+    (web_dir / "index.html").write_text(
+        _web_gallery_index(
+            rows,
+            title,
+            description,
+            include_raw_gallery=include_raw_gallery,
+        )
+    )
 
 
 def run(args: argparse.Namespace) -> None:
@@ -880,6 +900,7 @@ def run(args: argparse.Namespace) -> None:
             title=args.web_title,
             description=args.web_description,
             jpeg_quality=args.jpeg_quality,
+            include_raw_gallery=args.include_raw_gallery,
         )
         print(f"wrote JPEG web gallery to {web_out}")
         return
@@ -946,6 +967,7 @@ def run(args: argparse.Namespace) -> None:
             title=args.web_title,
             description=args.web_description,
             jpeg_quality=args.jpeg_quality,
+            include_raw_gallery=args.include_raw_gallery,
         )
         print(f"JPEG web gallery: {web_out}")
 
@@ -970,6 +992,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--web-out", help="write a JPEG web gallery to this directory")
     parser.add_argument("--web-only", action="store_true", help="build only the JPEG web gallery from --out")
     parser.add_argument("--jpeg-quality", type=int, default=91, help="JPEG quality for web gallery images")
+    parser.add_argument(
+        "--include-raw-gallery",
+        action="store_true",
+        help="include raw renders in the thumbnail/lightbox sequence; otherwise link them as secondary files",
+    )
     parser.add_argument(
         "--web-title",
         default="LPT2D Light Radius Characterization",
