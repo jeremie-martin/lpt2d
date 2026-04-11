@@ -1004,9 +1004,9 @@ class PointLightAppearance:
 class PointLightAppearanceParams:
     def __init__(self) -> None: ...
     search_radius_ratio: float
-    legacy_bright_threshold: float
-    legacy_radius_percentile: float
-    legacy_min_bright_pixels: int
+    saturated_core_threshold: float
+    saturated_core_percentile: float
+    min_saturated_core_pixels: int
     seed_fraction: float
     grow_fraction: float
     center_snap_px: int

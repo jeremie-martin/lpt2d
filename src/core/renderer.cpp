@@ -193,9 +193,8 @@ bool Renderer::init(int width, int height, bool half_float) {
     rgba_buffer_.resize(width * height * 4);
 
     // GPU frame analyser — compile analysis.comp + allocate its SSBOs
-    // now that the GL context is current. Non-fatal if it fails: the
-    // GUI paths that call run_frame_analysis() will short-circuit, but
-    // rendering continues.
+    // now that the GL context is current. Non-fatal if it fails: rendering
+    // continues, but FrameAnalysis calls return zeroed analysis.
     if (!analyzer_.init()) {
         std::cerr << "Renderer: GpuImageAnalyzer init failed (analysis disabled)\n";
     }
@@ -658,9 +657,9 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
     std::vector<float> cum_weights;
     float total = 0.0f;
 
-    // Rebuild the LightRef cache for the CPU-side frame analyzer. Only point
-    // lights contribute circles; segment/projector lights and shape emissions
-    // don't produce a single focal spot in screen space.
+    // Rebuild the LightRef cache for frame analysis. Only point lights
+    // contribute circles; segment/projector lights and shape emissions don't
+    // produce a single focal spot in screen space.
     light_refs_.clear();
     last_upload_bounds_ = bounds;
 
@@ -1152,6 +1151,25 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
                            FrameAnalysis* out_analysis) {
     update_display(pp, display_aspect, vignette_frame);
 
+    FrameAnalysis analysis_scratch{};
+    const bool want_analysis = (out_analysis != nullptr) || (out_metrics != nullptr);
+    if (want_analysis) {
+        FrameAnalysisParams params;
+        if (out_analysis == nullptr) {
+            params.analyze_color = false;
+            params.analyze_lights = false;
+        }
+        glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
+        FrameAnalysis& slot = (out_analysis != nullptr) ? *out_analysis : analysis_scratch;
+        slot = analyzer_.analyze(
+            display_texture_, width_, height_, last_upload_bounds_,
+            std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
+            params);
+        if (out_metrics != nullptr) {
+            *out_metrics = slot.luminance;
+        }
+    }
+
     out_rgb.resize(width_ * height_ * 3);
     glFinish();
     glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
@@ -1160,25 +1178,6 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     flip_rgb8_rows(out_rgb.data(), width_, height_, rgb_row_buffer_);
-
-    FrameAnalysis analysis_scratch{};
-    const bool want_analysis = (out_analysis != nullptr) || (out_metrics != nullptr);
-    if (want_analysis) {
-        FrameAnalysisParams params;
-        FrameAnalysis& slot = (out_analysis != nullptr) ? *out_analysis : analysis_scratch;
-        if (out_analysis == nullptr) {
-            params.analyze_color = false;
-            params.analyze_lights = false;
-        }
-        slot = analyze_rgb8_frame(
-            std::span<const std::uint8_t>(out_rgb.data(), out_rgb.size()),
-            width_, height_, last_upload_bounds_,
-            std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
-            params);
-        if (out_metrics != nullptr) {
-            *out_metrics = slot.luminance;
-        }
-    }
 }
 
 void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
@@ -1193,18 +1192,9 @@ void Renderer::read_display_rgba(std::vector<uint8_t>& out_rgba) {
 }
 
 FrameAnalysis Renderer::run_frame_analysis(const FrameAnalysisParams& params) {
-    std::vector<std::uint8_t> rgb(static_cast<std::size_t>(width_) *
-                                  static_cast<std::size_t>(height_) * 3u);
-    glFinish();
-    glBindFramebuffer(GL_FRAMEBUFFER, display_fbo_);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glReadPixels(0, 0, width_, height_, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    flip_rgb8_rows(rgb.data(), width_, height_, rgb_row_buffer_);
-
-    return analyze_rgb8_frame(
-        std::span<const std::uint8_t>(rgb.data(), rgb.size()),
-        width_, height_, last_upload_bounds_,
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
+    return analyzer_.analyze(
+        display_texture_, width_, height_, last_upload_bounds_,
         std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
         params);
 }

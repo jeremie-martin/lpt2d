@@ -368,7 +368,7 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                 radial_sum[static_cast<std::size_t>(rbin)] += excess;
                 radial_count[static_cast<std::size_t>(rbin)] += 1;
 
-                if (lum >= params.lights.legacy_bright_threshold) {
+                if (lum >= params.lights.saturated_core_threshold) {
                     bright_distances.push_back(dist);
                 }
             }
@@ -378,9 +378,9 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
         app.peak_luminance = clamp01(app.background_luminance + peak_excess);
 
         const bool enough_bright =
-            static_cast<int>(bright_distances.size()) >= params.lights.legacy_min_bright_pixels;
+            static_cast<int>(bright_distances.size()) >= params.lights.min_saturated_core_pixels;
         if (enough_bright) {
-            const float pct = std::clamp(params.lights.legacy_radius_percentile / 100.0f,
+            const float pct = std::clamp(params.lights.saturated_core_percentile / 100.0f,
                                          0.0f, 1.0f);
             const std::size_t idx = static_cast<std::size_t>(
                 std::floor(pct * static_cast<float>(bright_distances.size() - 1)));

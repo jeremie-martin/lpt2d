@@ -720,9 +720,9 @@ NB_MODULE(_lpt2d, m) {
             new (self) PointLightAppearanceParams{};
         })
         .def_rw("search_radius_ratio", &PointLightAppearanceParams::search_radius_ratio)
-        .def_rw("legacy_bright_threshold", &PointLightAppearanceParams::legacy_bright_threshold)
-        .def_rw("legacy_radius_percentile", &PointLightAppearanceParams::legacy_radius_percentile)
-        .def_rw("legacy_min_bright_pixels", &PointLightAppearanceParams::legacy_min_bright_pixels)
+        .def_rw("saturated_core_threshold", &PointLightAppearanceParams::saturated_core_threshold)
+        .def_rw("saturated_core_percentile", &PointLightAppearanceParams::saturated_core_percentile)
+        .def_rw("min_saturated_core_pixels", &PointLightAppearanceParams::min_saturated_core_pixels)
         .def_rw("seed_fraction", &PointLightAppearanceParams::seed_fraction)
         .def_rw("grow_fraction", &PointLightAppearanceParams::grow_fraction)
         .def_rw("center_snap_px", &PointLightAppearanceParams::center_snap_px);

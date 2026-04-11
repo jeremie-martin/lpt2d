@@ -27,9 +27,13 @@ short image side", regardless of probe resolution.
 - Python/headless render paths analyze the authored camera at the shot canvas
   size.
 - GUI Stats analyzes the authored camera too, but caps the live probe resolution
-  to keep interactive editing responsive. Public GUI metrics are normalized
-  ratios/fractions; `luminance.width` and `luminance.height` report the actual
-  probe dimensions used for raw histogram counts and overlay scaling.
+  when the editor viewport does not match the authored camera. Public GUI
+  metrics are normalized ratios/fractions; `luminance.width` and
+  `luminance.height` report the actual probe dimensions used for raw histogram
+  counts and overlay scaling.
+- Live renderer analysis is GPU-first. The compute shader reads the final
+  post-processed RGB8 display texture and reads back compact histogram and
+  per-light radial/sector bins, not the whole RGB frame.
 - `rr.metrics` is the luminance-only alias view of `rr.analysis.luminance`.
 - When the GUI editor viewport diverges from the authored camera, the live
   light overlay is hidden because overlay geometry would no longer line up
@@ -122,11 +126,11 @@ robustly.
 | `id` | Source `PointLight` id |
 | `world_x`, `world_y` | Light position in world coordinates |
 | `image_x`, `image_y` | Projected image-space center in pixels |
-| `visible` | Whether a connected bright structure was found |
-| `radius_ratio` | Primary size metric: equivalent connected-component radius, normalized by short side |
-| `coverage_fraction` | Connected-component area as a fraction of the whole image |
-| `saturated_radius_ratio` | Secondary size metric from the legacy bright-threshold radius |
-| `transition_width_ratio` | Edge width (`r20 - r80`) normalized by short side |
+| `visible` | Whether the authored point light has a measurable appearance |
+| `radius_ratio` | Estimated apparent radius of the point-light disc, normalized by short side |
+| `coverage_fraction` | Area of the estimated circular disc as a fraction of the whole image |
+| `saturated_radius_ratio` | Diagnostic bright-core radius from a high max-channel threshold |
+| `transition_width_ratio` | Estimated edge/falloff width normalized by short side |
 | `peak_luminance` | Peak luminance at the light structure |
 | `background_luminance` | Estimated local background luminance |
 | `peak_contrast` | `peak_luminance - background_luminance` |
@@ -135,14 +139,15 @@ robustly.
 
 ### Interpretation
 
-- `radius_ratio` is the primary "how big is the light disc?" answer.
-- `saturated_radius_ratio` preserves the old threshold-based behavior as a
-  secondary metric.
+- `radius_ratio` is the "how big is the light disc?" answer.
+- `saturated_radius_ratio` is a diagnostic for saturated or near-saturated
+  cores. It is useful for debugging, but it is not the general light radius.
 - Small `transition_width_ratio` means a sharper edge.
 - Large `peak_contrast` means the light stands out strongly from local
   background.
-- Low `confidence` usually means weak contrast, tiny area, center mismatch, or
-  truncation at the frame edge.
+- Low `confidence` usually means weak contrast, weak/ambiguous edge strength,
+  inconsistent radius across angular sectors, contamination, or truncation at
+  the frame/search boundary.
 
 ### Common Cases
 
@@ -155,20 +160,20 @@ robustly.
 ## FrameAnalysisParams
 
 `FrameAnalysisParams` controls which parts of the analysis run and the default
-thresholds used by the CPU analyzer.
+thresholds used by the analyzer.
 
 | Field | Meaning |
 |---|---|
 | `analyze_luminance` | Populate `luminance` |
 | `analyze_color` | Populate `color` |
 | `analyze_lights` | Populate `lights` |
-| `lights.search_radius_ratio` | Search radius for each light patch |
-| `lights.legacy_bright_threshold` | Threshold for `saturated_radius_ratio` |
-| `lights.legacy_radius_percentile` | Percentile for `saturated_radius_ratio` |
-| `lights.legacy_min_bright_pixels` | Minimum sample count for the legacy radius |
-| `lights.seed_fraction` | Seed threshold relative to peak excess luminance |
-| `lights.grow_fraction` | Grow threshold for connected-component expansion |
-| `lights.center_snap_px` | Max image-space snap distance when the exact center is not a seed |
+| `lights.search_radius_ratio` | Search radius for each light, as a fraction of short side |
+| `lights.saturated_core_threshold` | Max-channel threshold for diagnostic `saturated_radius_ratio` |
+| `lights.saturated_core_percentile` | Percentile for diagnostic `saturated_radius_ratio` |
+| `lights.min_saturated_core_pixels` | Minimum sample count for diagnostic `saturated_radius_ratio` |
+| `lights.seed_fraction` | CPU RGB8 analyzer threshold for connected-component seeding |
+| `lights.grow_fraction` | CPU RGB8 analyzer threshold for connected-component growth |
+| `lights.center_snap_px` | CPU RGB8 analyzer seed snap radius around the projected light center |
 | `saturation_threshold` | Color-analysis chroma threshold |
 | `near_black_bin_max` | Upper histogram bin for `near_black_fraction` |
 | `near_white_bin_min` | Lower histogram bin for `near_white_fraction` |
@@ -177,6 +182,6 @@ thresholds used by the CPU analyzer.
 
 - Use `luminance` for exposure and washed-out detection.
 - Use `color` for chromatic richness.
-- Use `lights` for per-light apparent size, edge softness, contrast, and
+- Use `lights` for per-light apparent radius, edge softness, contrast, and
   confidence.
 - Prefer normalized ratios over raw pixels when writing filters.

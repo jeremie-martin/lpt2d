@@ -85,10 +85,8 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
         }
     }
 
-    // Read pixels and compute metrics. Full FrameAnalysis (colour +
-    // per-light circles) is only computed when the caller opted in —
-    // video batch paths and still exports leave analyze=false and pay
-    // nothing beyond the cheap luminance histogram.
+    // Read pixels for the render result. The analyzer runs on the GPU display
+    // texture first; analyze=false requests luminance only.
     RenderResult result;
     if (analyze) {
         r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr,
