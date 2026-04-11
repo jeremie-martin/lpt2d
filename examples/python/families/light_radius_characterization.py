@@ -82,6 +82,12 @@ class Case:
     contrast: float = 1.0
     gamma: float = 2.0
     tonemap: str = "reinhardx"
+    stability_family: str = ""
+    stability_axis: str = ""
+    width_override: int | None = None
+    height_override: int | None = None
+    rays_override: int | None = None
+    batch_override: int | None = None
 
 
 @dataclass
@@ -221,7 +227,7 @@ def _light_metrics(light) -> dict[str, float | int | str | bool]:
     }
 
 
-def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
+def _metrics_for_case(case: Case, rr, *, rays: int, batch: int) -> dict[str, float | int | str]:
     lights = list(rr.analysis.lights)
     if not lights:
         raise RuntimeError(f"{case.case_id}: render produced no light appearance")
@@ -236,6 +242,8 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "label": case.label,
         "source_shot": case.source_shot_path or "",
         "gamma_family": case.gamma_family,
+        "stability_family": case.stability_family,
+        "stability_axis": case.stability_axis,
         "wall": case.wall,
         "perturbation": case.perturbation,
         "light_id": light.id,
@@ -254,6 +262,8 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "tonemap": case.tonemap,
         "width": rr.width,
         "height": rr.height,
+        "requested_rays": rays,
+        "requested_batch": batch,
         "mean": lum.mean,
         "median": lum.median,
         "shadow_floor": lum.shadow_floor,
@@ -627,6 +637,71 @@ def _case_sweeps() -> list[Case]:
                     **overrides,
                 )
             )
+
+    ray_count_values = (500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000)
+    stability_families: list[tuple[str, str, dict[str, float | str]]] = [
+        ("baseline", "baseline light", {}),
+        ("large_white", "large white disk", {"exposure": -4.0, "white_point": 0.125}),
+        (
+            "two_scale_green",
+            "two-scale green disk",
+            {
+                "exposure": -4.0,
+                "white_point": 0.125,
+                "wavelength_min": 500.0,
+                "wavelength_max": 570.0,
+            },
+        ),
+        (
+            "standard_mirror_large",
+            "standard-mirror large disk",
+            {
+                "wall": "standard_mirror",
+                "exposure": -6.0,
+                "white_point": 0.125,
+            },
+        ),
+        (
+            "test_scene",
+            "test.json complex scene",
+            {
+                "source_shot_path": str(COMPLEX_SOURCE_SHOT),
+                "exposure": -6.0,
+                "white_point": 0.5,
+                "gamma": 1.6,
+            },
+        ),
+    ]
+    for family, family_label, overrides in stability_families:
+        for rays in ray_count_values:
+            cases.append(
+                Case(
+                    case_id=f"ray_count_stability_{family}_r{rays // 1000}k",
+                    group="ray_count_stability",
+                    label=f"{family_label}: {rays / 1_000_000:g}M rays",
+                    stability_family=family,
+                    stability_axis=f"{rays / 1_000_000:g}M rays",
+                    rays_override=rays,
+                    batch_override=min(1_000_000, rays),
+                    **overrides,
+                )
+            )
+
+    resolution_values = ((640, 360), (960, 540), (1280, 720), (1920, 1080))
+    for family, family_label, overrides in stability_families:
+        for width, height in resolution_values:
+            cases.append(
+                Case(
+                    case_id=f"resolution_stability_{family}_{width}x{height}",
+                    group="resolution_stability",
+                    label=f"{family_label}: {width}x{height}",
+                    stability_family=family,
+                    stability_axis=f"{width}x{height}",
+                    width_override=width,
+                    height_override=height,
+                    **overrides,
+                )
+            )
     for value in ("absorber", "diffuse", "standard_mirror", "rough_mirror"):
         cases.append(Case(case_id=f"wall_{value}", group="wall", label=f"wall {value}", wall=value))
     for value in ("absorber_near", "mirror_near", "occluder_bar"):
@@ -947,45 +1022,111 @@ def _format_radius_range(rows: list[dict[str, str]], key: str) -> str:
     return f"{lo:.2f}-{hi:.2f}% range; {drift:.2f} point drift; {relative:.0f}% relative"
 
 
-def _gamma_stability_table(rows: list[dict[str, str]]) -> str:
+RADIUS_STABILITY_COLUMNS = (
+    ("Official radius", "cpp_radius_ratio"),
+    ("Sector candidate", "cpp_radius_candidate_sector_consensus_ratio"),
+    ("Profile knee", "cpp_radius_candidate_knee_ratio"),
+    ("Robust sector edge", "cpp_radius_candidate_robust_sector_edge_ratio"),
+    ("Outer shoulder", "cpp_radius_candidate_outer_shoulder_ratio"),
+)
+
+
+def _stability_sort_key(group: str, row: dict[str, str]) -> float:
+    if group == "gamma_stability":
+        return _safe_float(row, "gamma") or 0.0
+    if group == "ray_count_stability":
+        return _safe_float(row, "requested_rays") or 0.0
+    if group == "resolution_stability":
+        width = _safe_float(row, "width") or 0.0
+        height = _safe_float(row, "height") or 0.0
+        return width * height
+    return 0.0
+
+
+def _stability_axis_values(group: str, family_rows: list[dict[str, str]]) -> str:
+    if group == "gamma_stability":
+        values = [_safe_float(row, "gamma") for row in family_rows]
+        return ", ".join(f"{value:.3g}" for value in values if value is not None)
+    if group == "ray_count_stability":
+        values = [_safe_float(row, "requested_rays") for row in family_rows]
+        return ", ".join(f"{value / 1_000_000:g}M" for value in values if value is not None)
+    if group == "resolution_stability":
+        values = []
+        for row in family_rows:
+            width = _safe_float(row, "width")
+            height = _safe_float(row, "height")
+            if width is not None and height is not None:
+                values.append(f"{int(width)}x{int(height)}")
+        return ", ".join(values)
+    return ", ".join(row.get("stability_axis", "") for row in family_rows if row.get("stability_axis"))
+
+
+def _radius_stability_table(
+    rows: list[dict[str, str]], *, group: str, title: str, family_field: str, axis_heading: str
+) -> str:
     families: dict[str, list[dict[str, str]]] = {}
     for row in rows:
-        if row.get("group") != "gamma_stability":
+        if row.get("group") != group:
             continue
-        family = row.get("gamma_family") or "gamma_stability"
+        family = row.get(family_field) or group
         families.setdefault(family, []).append(row)
     if not families:
         return ""
 
+    radius_headers = "".join(f"<th>{html.escape(label)}</th>" for label, _ in RADIUS_STABILITY_COLUMNS)
     parts = [
-        "<h2>Gamma Stability</h2>",
+        f"<h2>{html.escape(title)}</h2>",
         '<section class="table-wrap">',
         '<table class="stability">',
         "<thead><tr>"
-        "<th>Family</th><th>Gamma values</th><th>Official radius</th>"
-        "<th>Sector candidate</th><th>Profile knee</th><th>Robust sector edge</th><th>Outer shoulder</th>"
+        f"<th>Family</th><th>{html.escape(axis_heading)}</th>{radius_headers}"
         "</tr></thead><tbody>",
     ]
     for family, family_rows in families.items():
-        family_rows = sorted(
-            family_rows,
-            key=lambda row: _safe_float(row, "gamma") if _safe_float(row, "gamma") is not None else 0.0,
+        family_rows = sorted(family_rows, key=lambda row: _stability_sort_key(group, row))
+        cells = "".join(
+            f"<td>{html.escape(_format_radius_range(family_rows, key))}</td>"
+            for _, key in RADIUS_STABILITY_COLUMNS
         )
-        gamma_values = [_safe_float(row, "gamma") for row in family_rows]
-        gammas = ", ".join(f"{value:.3g}" for value in gamma_values if value is not None)
         parts.append(
             "<tr>"
             f"<td>{html.escape(family.replace('_', ' '))}</td>"
-            f"<td>{html.escape(gammas)}</td>"
-            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_ratio'))}</td>"
-            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_sector_consensus_ratio'))}</td>"
-            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_knee_ratio'))}</td>"
-            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_robust_sector_edge_ratio'))}</td>"
-            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_outer_shoulder_ratio'))}</td>"
+            f"<td>{html.escape(_stability_axis_values(group, family_rows))}</td>"
+            f"{cells}"
             "</tr>"
         )
     parts.append("</tbody></table></section>")
     return "\n".join(parts)
+
+
+def _gamma_stability_table(rows: list[dict[str, str]]) -> str:
+    return _radius_stability_table(
+        rows,
+        group="gamma_stability",
+        title="Gamma Stability",
+        family_field="gamma_family",
+        axis_heading="Gamma values",
+    )
+
+
+def _ray_count_stability_table(rows: list[dict[str, str]]) -> str:
+    return _radius_stability_table(
+        rows,
+        group="ray_count_stability",
+        title="Ray Count Stability",
+        family_field="stability_family",
+        axis_heading="Ray counts",
+    )
+
+
+def _resolution_stability_table(rows: list[dict[str, str]]) -> str:
+    return _radius_stability_table(
+        rows,
+        group="resolution_stability",
+        title="Resolution Stability",
+        family_field="stability_family",
+        axis_heading="Resolutions",
+    )
 
 
 def _copy_existing_files(src_dir: Path, web_dir: Path) -> None:
@@ -1079,6 +1220,8 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
         '<nav class="links"><a class="pill" href="metrics.csv">metrics.csv</a><a class="pill" href="metrics.jsonl">metrics.jsonl</a><a class="pill" href="sheets/all.jpg">all contact sheet</a></nav>',
         "</header>",
         _gamma_stability_table(rows),
+        _ray_count_stability_table(rows),
+        _resolution_stability_table(rows),
         "<h2>Contact Sheets</h2>",
         '<section class="grid sheet-grid">',
     ]
@@ -1310,11 +1453,15 @@ def run(args: argparse.Namespace) -> None:
     outputs: list[RenderedCase] = []
     start = time.monotonic()
     for index, case in enumerate(cases, 1):
-        shot = _make_shot(case, args.width, args.height, args.rays, args.batch, args.depth)
+        width = case.width_override or args.width
+        height = case.height_override or args.height
+        rays = case.rays_override or args.rays
+        batch = case.batch_override or min(args.batch, rays)
+        shot = _make_shot(case, width, height, rays, batch, args.depth)
         shot_path = shot_dir / f"{case.case_id}.json"
         shot.save(shot_path)
 
-        session = RenderSession(args.width, args.height, args.fast)
+        session = RenderSession(width, height, args.fast)
         t0 = time.monotonic()
         rr = session.render_shot(shot.to_cpp(), 0, True)
         session.close()
@@ -1323,7 +1470,7 @@ def run(args: argparse.Namespace) -> None:
         light = next(iter(rr.analysis.lights), None)
         if light is None:
             raise RuntimeError(f"{case.case_id}: no point-light measurement")
-        metrics = _metrics_for_case(case, rr)
+        metrics = _metrics_for_case(case, rr, rays=rays, batch=batch)
         metrics["render_ms"] = render_ms
 
         image_path = image_dir / f"{case.case_id}.png"
