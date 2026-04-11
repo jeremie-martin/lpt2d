@@ -498,7 +498,7 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                          PI) / short_side;
             app.radius_candidate_sector_consensus_ratio = app.radius_ratio;
             app.radius_candidate_knee_ratio = app.radius_ratio;
-            app.radius_candidate_energy_ratio = app.radius_ratio;
+            app.radius_candidate_robust_sector_edge_ratio = app.radius_ratio;
         }
 
         std::vector<float> radial_profile(static_cast<std::size_t>(search_radius) + 1u, 0.0f);

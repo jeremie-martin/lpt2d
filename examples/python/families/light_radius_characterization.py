@@ -72,6 +72,7 @@ class Case:
     wall: str = "absorber"
     perturbation: str = "none"
     source_shot_path: str | None = None
+    gamma_family: str = ""
     light_position: tuple[float, float] = (0.0, 0.0)
     light_intensity: float = 1.0
     wavelength_min: float = 380.0
@@ -210,7 +211,7 @@ def _light_metrics(light) -> dict[str, float | int | str | bool]:
         "radius_ratio": light.radius_ratio,
         "radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
         "radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
-        "radius_candidate_energy_ratio": light.radius_candidate_energy_ratio,
+        "radius_candidate_robust_sector_edge_ratio": light.radius_candidate_robust_sector_edge_ratio,
         "saturated_radius_ratio": light.saturated_radius_ratio,
         "transition_width_ratio": light.transition_width_ratio,
         "coverage_fraction": light.coverage_fraction,
@@ -233,6 +234,7 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "group": case.group,
         "label": case.label,
         "source_shot": case.source_shot_path or "",
+        "gamma_family": case.gamma_family,
         "wall": case.wall,
         "perturbation": case.perturbation,
         "light_id": light.id,
@@ -267,7 +269,7 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "cpp_radius_ratio": light.radius_ratio,
         "cpp_radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
         "cpp_radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
-        "cpp_radius_candidate_energy_ratio": light.radius_candidate_energy_ratio,
+        "cpp_radius_candidate_robust_sector_edge_ratio": light.radius_candidate_robust_sector_edge_ratio,
         "cpp_saturated_radius_ratio": light.saturated_radius_ratio,
         "cpp_transition_width_ratio": light.transition_width_ratio,
         "cpp_coverage_fraction": light.coverage_fraction,
@@ -315,7 +317,9 @@ def _light_entries(metrics: dict[str, float | int | str]) -> list[dict[str, floa
                 metrics, "cpp_radius_candidate_sector_consensus_ratio"
             ),
             "radius_candidate_knee_ratio": _metric_float(metrics, "cpp_radius_candidate_knee_ratio"),
-            "radius_candidate_energy_ratio": _metric_float(metrics, "cpp_radius_candidate_energy_ratio"),
+            "radius_candidate_robust_sector_edge_ratio": _metric_float(
+                metrics, "cpp_radius_candidate_robust_sector_edge_ratio"
+            ),
         }
     ]
 
@@ -367,7 +371,7 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     radius_color = (60, 255, 90, 255)
     sector_candidate_color = (70, 235, 255, 255)
     knee_candidate_color = (255, 80, 230, 255)
-    energy_candidate_color = (255, 170, 50, 255)
+    robust_candidate_color = (255, 230, 40, 255)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
@@ -389,8 +393,8 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             draw,
             cx,
             cy,
-            _metric_float(entry, "radius_candidate_energy_ratio") * short_side,
-            energy_candidate_color,
+            _metric_float(entry, "radius_candidate_robust_sector_edge_ratio") * short_side,
+            robust_candidate_color,
             width=candidate_width,
             phase=0.15,
         )
@@ -420,7 +424,7 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
     sector_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio")
     knee_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_knee_ratio")
-    energy_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_energy_ratio")
+    robust_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_robust_sector_edge_ratio")
     edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
     confidence = _metric_float(metrics, "cpp_confidence")
     mean = _metric_float(metrics, "mean")
@@ -464,8 +468,8 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             knee_candidate_color,
         ),
         (
-            f"ORANGE candidate energy equivalent: {energy_candidate_percent:.2f}%",
-            energy_candidate_color,
+            f"YELLOW candidate robust sector edge: {robust_candidate_percent:.2f}%",
+            robust_candidate_color,
         ),
         (
             f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
@@ -503,7 +507,7 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
             f"official {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%; "
             f"sector {100*_metric_float(metric, 'cpp_radius_candidate_sector_consensus_ratio'):.2f}%; "
             f"knee {100*_metric_float(metric, 'cpp_radius_candidate_knee_ratio'):.2f}%; "
-            f"energy {100*_metric_float(metric, 'cpp_radius_candidate_energy_ratio'):.2f}%"
+            f"robust {100*_metric_float(metric, 'cpp_radius_candidate_robust_sector_edge_ratio'):.2f}%"
         )
         sub2 = (
             f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}; "
@@ -566,6 +570,42 @@ def _case_sweeps() -> list[Case]:
                 gamma=value,
             )
         )
+    gamma_values = (0.6, 0.8, 1.0, 1.6, 2.4, 3.0)
+    gamma_families: list[tuple[str, str, dict[str, float | str]]] = [
+        ("baseline", "baseline light", {}),
+        ("large_white", "large white disk", {"exposure": -4.0, "white_point": 0.125}),
+        (
+            "large_orange",
+            "large orange disk",
+            {
+                "exposure": -3.5,
+                "white_point": 0.125,
+                "wavelength_min": 585.0,
+                "wavelength_max": 620.0,
+            },
+        ),
+        (
+            "test_scene",
+            "test.json complex scene",
+            {
+                "source_shot_path": str(COMPLEX_SOURCE_SHOT),
+                "exposure": -6.0,
+                "white_point": 0.5,
+            },
+        ),
+    ]
+    for family, family_label, overrides in gamma_families:
+        for value in gamma_values:
+            cases.append(
+                Case(
+                    case_id=f"gamma_stability_{family}_g{value:g}".replace(".", "p"),
+                    group="gamma_stability",
+                    label=f"{family_label}: gamma {value:g}",
+                    gamma_family=family,
+                    gamma=value,
+                    **overrides,
+                )
+            )
     for value in ("absorber", "diffuse", "standard_mirror", "rough_mirror"):
         cases.append(Case(case_id=f"wall_{value}", group="wall", label=f"wall {value}", wall=value))
     for value in ("absorber_near", "mirror_near", "occluder_bar"):
@@ -787,6 +827,66 @@ def _num(row: dict[str, str], key: str, digits: int = 2) -> str:
         return "n/a"
 
 
+def _safe_float(row: dict[str, str], key: str) -> float | None:
+    try:
+        return float(row[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _format_radius_range(rows: list[dict[str, str]], key: str) -> str:
+    values = [value * 100.0 for row in rows if (value := _safe_float(row, key)) is not None]
+    if not values:
+        return "n/a"
+    values.sort()
+    lo = values[0]
+    hi = values[-1]
+    median = values[len(values) // 2]
+    drift = hi - lo
+    relative = 100.0 * drift / max(abs(median), 1.0e-6)
+    return f"{lo:.2f}-{hi:.2f}% range; {drift:.2f} point drift; {relative:.0f}% relative"
+
+
+def _gamma_stability_table(rows: list[dict[str, str]]) -> str:
+    families: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        if row.get("group") != "gamma_stability":
+            continue
+        family = row.get("gamma_family") or "gamma_stability"
+        families.setdefault(family, []).append(row)
+    if not families:
+        return ""
+
+    parts = [
+        "<h2>Gamma Stability</h2>",
+        '<section class="table-wrap">',
+        '<table class="stability">',
+        "<thead><tr>"
+        "<th>Family</th><th>Gamma values</th><th>Official radius</th>"
+        "<th>Sector candidate</th><th>Profile knee</th><th>Robust sector edge</th>"
+        "</tr></thead><tbody>",
+    ]
+    for family, family_rows in families.items():
+        family_rows = sorted(
+            family_rows,
+            key=lambda row: _safe_float(row, "gamma") if _safe_float(row, "gamma") is not None else 0.0,
+        )
+        gamma_values = [_safe_float(row, "gamma") for row in family_rows]
+        gammas = ", ".join(f"{value:.3g}" for value in gamma_values if value is not None)
+        parts.append(
+            "<tr>"
+            f"<td>{html.escape(family.replace('_', ' '))}</td>"
+            f"<td>{html.escape(gammas)}</td>"
+            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_ratio'))}</td>"
+            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_sector_consensus_ratio'))}</td>"
+            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_knee_ratio'))}</td>"
+            f"<td>{html.escape(_format_radius_range(family_rows, 'cpp_radius_candidate_robust_sector_edge_ratio'))}</td>"
+            "</tr>"
+        )
+    parts.append("</tbody></table></section>")
+    return "\n".join(parts)
+
+
 def _copy_existing_files(src_dir: Path, web_dir: Path) -> None:
     for name in ("metrics.csv", "metrics.jsonl"):
         source = src_dir / name
@@ -832,6 +932,10 @@ h3 { margin: 0 0 8px; }
 .pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; background: #171613; text-decoration: none; }
 .grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
 .sheet-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.table-wrap { max-width: 1180px; margin: 0 auto 20px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.stability { width: 100%; border-collapse: collapse; min-width: 900px; font-size: 13px; }
+.stability th, .stability td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.stability th { color: var(--good); background: #13120f; }
 .card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
 .card-body { padding: 10px 12px 12px; }
 .case-title { font-weight: 700; overflow-wrap: anywhere; }
@@ -873,6 +977,7 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
         '<p class="muted">Click any thumbnail to open the viewer. Use previous/next, arrow keys, swipe, or zoom controls. Web images are JPEG to keep upload size manageable.</p>',
         '<nav class="links"><a class="pill" href="metrics.csv">metrics.csv</a><a class="pill" href="metrics.jsonl">metrics.jsonl</a><a class="pill" href="sheets/all.jpg">all contact sheet</a></nav>',
         "</header>",
+        _gamma_stability_table(rows),
         "<h2>Contact Sheets</h2>",
         '<section class="grid sheet-grid">',
     ]
@@ -903,7 +1008,7 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
                 f"{cid} overlay: official {_pct(row, 'cpp_radius_ratio')}, "
                 f"sector candidate {_pct(row, 'cpp_radius_candidate_sector_consensus_ratio')}, "
                 f"knee candidate {_pct(row, 'cpp_radius_candidate_knee_ratio')}, "
-                f"energy candidate {_pct(row, 'cpp_radius_candidate_energy_ratio')}, "
+                f"robust sector-edge candidate {_pct(row, 'cpp_radius_candidate_robust_sector_edge_ratio')}, "
                 f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
@@ -931,7 +1036,7 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
                 ("official radius", _pct(row, "cpp_radius_ratio")),
                 ("sector candidate", _pct(row, "cpp_radius_candidate_sector_consensus_ratio")),
                 ("knee candidate", _pct(row, "cpp_radius_candidate_knee_ratio")),
-                ("energy candidate", _pct(row, "cpp_radius_candidate_energy_ratio")),
+                ("robust candidate", _pct(row, "cpp_radius_candidate_robust_sector_edge_ratio")),
                 ("brightness", _num(row, "mean", 1)),
                 ("contrast", _num(row, "contrast_std", 1)),
                 ("near white", _pct(row, "near_white_fraction")),
