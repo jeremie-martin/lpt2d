@@ -711,6 +711,8 @@ NB_MODULE(_lpt2d, m) {
                 &PointLightAppearance::radius_candidate_knee_ratio)
         .def_ro("radius_candidate_robust_sector_edge_ratio",
                 &PointLightAppearance::radius_candidate_robust_sector_edge_ratio)
+        .def_ro("radius_candidate_outer_shoulder_ratio",
+                &PointLightAppearance::radius_candidate_outer_shoulder_ratio)
         .def_ro("coverage_fraction", &PointLightAppearance::coverage_fraction)
         .def_ro("saturated_radius_ratio", &PointLightAppearance::saturated_radius_ratio)
         .def_ro("transition_width_ratio", &PointLightAppearance::transition_width_ratio)

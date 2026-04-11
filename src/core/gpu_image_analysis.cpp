@@ -702,9 +702,12 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             std::vector<int> sector_peak_bins(static_cast<std::size_t>(kNumSectors), 0);
             std::vector<float> sector_edge_px;
             sector_edge_px.reserve(kNumSectors);
+            std::vector<float> sector_outer_shoulder_px;
+            sector_outer_shoulder_px.reserve(kNumSectors);
             int valid_sectors = 0;
             std::vector<float> sector_profile(static_cast<std::size_t>(max_bins), 0.0f);
             std::vector<float> sector_shaped(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> sector_shoulder(static_cast<std::size_t>(max_bins), 0.0f);
             for (int s = 0; s < kNumSectors; ++s) {
                 std::fill(sector_profile.begin(), sector_profile.end(), 0.0f);
                 for (int r = 0; r < max_bins; ++r) {
@@ -760,6 +763,34 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                         bin_radius_px(sector_candidate_bin, max_bins, search_radius_px));
                 }
 
+                shape_normalized_profile(sector_smooth, sector_peak_excess, 0.75f,
+                                         sector_shoulder);
+                float shoulder_drop = 0.0f;
+                const int shoulder_floor_bin =
+                    first_below(sector_shoulder, sector_peak_bin, 0.70f);
+                const int shoulder_start_bin = std::min(
+                    max_bins - 2,
+                    std::max({sector_min_edge_bin,
+                              sector_candidate_bin + 2,
+                              shoulder_floor_bin}));
+                const int shoulder_edge_bin = strongest_edge_bin(
+                    sector_shoulder, sector_peak_bin, shoulder_start_bin, 1.0f,
+                    &shoulder_drop);
+                const int shoulder_tail_bin =
+                    first_below(sector_shoulder, shoulder_start_bin, 0.12f);
+                const float shoulder_mid =
+                    shoulder_edge_bin >= 0
+                        ? sector_shoulder[static_cast<std::size_t>(shoulder_edge_bin)]
+                        : 0.0f;
+                if (shoulder_edge_bin >= shoulder_start_bin &&
+                    shoulder_edge_bin > sector_candidate_bin + 1 &&
+                    shoulder_tail_bin < max_bins - 1 &&
+                    shoulder_drop >= 0.035f &&
+                    shoulder_mid >= 0.18f) {
+                    sector_outer_shoulder_px.push_back(
+                        bin_radius_px(shoulder_edge_bin, max_bins, search_radius_px));
+                }
+
                 sector_peaks[static_cast<std::size_t>(s)] = sector_peak_excess;
                 sector_peak_bins[static_cast<std::size_t>(s)] = sector_peak_bin;
                 ++valid_sectors;
@@ -772,6 +803,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             }
             float sector_consensus_px = radius_px;
             float robust_sector_edge_px = knee_px;
+            float outer_shoulder_px = robust_sector_edge_px;
             const int min_valid_sectors = std::max(6, kNumSectors / 4);
             if (valid_sectors >= min_valid_sectors) {
                 std::vector<float> sector_drops;
@@ -815,6 +847,11 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             if (sector_edge_px.size() >=
                 static_cast<std::size_t>(std::max(6, valid_sectors / 3))) {
                 robust_sector_edge_px = trimmed_quantile(sector_edge_px, 0.50f);
+                outer_shoulder_px = robust_sector_edge_px;
+            }
+            if (sector_outer_shoulder_px.size() >=
+                static_cast<std::size_t>(std::max(5, valid_sectors / 4))) {
+                outer_shoulder_px = trimmed_quantile(sector_outer_shoulder_px, 0.50f);
             }
 
             c.visible = radius_px > 0.0f;
@@ -822,6 +859,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             c.radius_candidate_sector_consensus_ratio = sector_consensus_px / short_side;
             c.radius_candidate_knee_ratio = knee_px / short_side;
             c.radius_candidate_robust_sector_edge_ratio = robust_sector_edge_px / short_side;
+            c.radius_candidate_outer_shoulder_ratio = outer_shoulder_px / short_side;
             c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
                                           static_cast<float>(width * height));
             c.transition_width_ratio =
