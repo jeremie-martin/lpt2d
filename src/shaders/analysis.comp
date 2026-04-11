@@ -11,8 +11,9 @@
 //
 // The luminance and colour math mirrors the CPU RGB8 analyzer where possible
 // (same BT.709 integer weights and HSV formulas). Point-light bins keep RGB
-// radial/sector sums so the CPU side can derive both BT.709 luminance profiles
-// and saturated-core diagnostics from the final display image.
+// radial/sector sums so the CPU side can derive BT.709 luminance fields,
+// low-gamma grayscale radius profiles, and saturated-core diagnostics from the
+// final display image.
 //
 // Workgroup: 16x16 = 256 threads. The luminance and hue histograms are
 // tile-reduced in shared memory and committed to global with one atomicAdd
@@ -26,7 +27,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 const int MAX_BINS = 320;
 const int NUM_SECTORS = 32;
-const int LIGHT_BIN_STRIDE = 5;  // sumR, sumG, sumB, count, brightCount
+const int LIGHT_BIN_STRIDE = 6;  // sumR, sumG, sumB, count, brightCount, radiusSignal
 const float PI = 3.14159265358979323846264;
 
 // ── Inputs ─────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ uniform int   uNLights;              // runtime light count; 0 disables light bi
 uniform float uBrightThreshold;      // 0..1 max-channel threshold for saturated-core diagnostics
 uniform int   uMaxRadiusBins;        // effective MAX_BINS for this call
 uniform float uSearchRadiusPx;       // pixel search radius represented by uMaxRadiusBins
+uniform float uRadiusSignalInvGamma; // radius-only grayscale signal exponent
 uniform float uSatThreshold;         // default 0.05, matches CPU path
 
 layout(std430, binding = 3) readonly buffer Lights {
@@ -74,7 +76,7 @@ layout(std430, binding = 1) buffer ColorResult {
 layout(std430, binding = 2) buffer LightBinsResult {
     // Runtime-sized: length = uNLights * MAX_BINS * NUM_SECTORS *
     // LIGHT_BIN_STRIDE, interleaved as [sumR, sumG, sumB, count,
-    // brightCount] per (light, radius-bin, sector). Flat layout lets the
+    // brightCount, radiusSignal] per (light, radius-bin, sector). Flat layout lets the
     // whole light-bin SSBO be a single unsized std430 array (the GLSL
     // spec only allows one unsized member per buffer, and it must be
     // last). The CPU side reads this back as one contiguous uint32 blob.
@@ -116,6 +118,8 @@ void main() {
 
         uint lum = (218u * r + 732u * g + 74u * b) >> 10;
         if (lum > 255u) lum = 255u;
+        uint radius_signal = uint(
+            pow(float(lum) / 255.0, max(uRadiusSignalInvGamma, 0.01)) * 255.0 + 0.5);
 
         // Luminance histogram (tile-local).
         atomicAdd(tile_lum_hist[lum], 1u);
@@ -196,6 +200,7 @@ void main() {
                 uint bright_channel = uint(uBrightThreshold * 255.0 + 0.5);
                 if (max(r, max(g, b)) >= bright_channel)
                     atomicAdd(circle_bins[base + 4], 1u);
+                atomicAdd(circle_bins[base + 5], radius_signal);
             }
         }
     }

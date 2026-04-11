@@ -415,7 +415,7 @@ TEST(gpu_analyzer_smoke_light_contract) {
     ASSERT_TRUE(a.lights[0].confidence > 0.0f);
 }
 
-TEST(gpu_analyzer_colored_light_uses_channel_signal_not_luminance_only) {
+TEST(gpu_analyzer_colored_light_uses_luminance_radius_signal) {
     GpuFixture f;
     init_gpu_fixture(f);
     REQUIRE_TRUE(f.ready);

@@ -31,7 +31,7 @@ public:
     // all get one PointLightAppearance per input entry.
     static constexpr int kMaxBins = 320;
     static constexpr int kNumSectors = 32;
-    static constexpr int kLightBinStride = 5;  // sumR, sumG, sumB, count, brightCount
+    static constexpr int kLightBinStride = 6;  // sumR, sumG, sumB, count, brightCount, radiusSignal
 
     // Compile analysis.comp and allocate the 4 SSBOs. The caller MUST have
     // a current GL 4.3 Core context on the calling thread. Returns false
@@ -92,6 +92,7 @@ private:
     GLint u_bright_     = -1;
     GLint u_max_bins_   = -1;
     GLint u_search_radius_px_ = -1;
+    GLint u_radius_signal_inv_gamma_ = -1;
     GLint u_sat_        = -1;
     GLint u_src_        = -1;
 

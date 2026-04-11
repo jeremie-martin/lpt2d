@@ -160,21 +160,26 @@ post-processing, stochastic noise, or image-size changes. All radius values in
 those tables are normalized by the image short side, so resolution changes
 should ideally produce very small drift for the same apparent image.
 
-The robust sector-edge candidate intentionally shapes only the internal radial
-signal used for detection. It still analyzes the real final RGB8 camera image;
-the shaping suppresses low-level halo tails before choosing per-sector
-boundaries, rather than changing the rendered image or the public
-post-processing settings.
+The light-radius detector intentionally uses an internal grayscale radius signal
+rather than raw RGB channels: BT.709 luminance from the real final RGB8 camera
+image, remapped with `lights.radius_signal_gamma` before radial profiles are
+measured. This is equivalent to asking "what circle would be visible if this
+final image were converted to luminance and viewed with a low gamma", without
+changing the rendered image, the public post-processing settings, or the
+whole-frame luminance/color metrics.
+
+The robust sector-edge candidate then shapes only that internal radial signal.
+The shaping suppresses low-level halo tails before choosing per-sector
+boundaries.
 
 The outer-shoulder candidate targets two-scale profiles: a small very bright
 core followed by a broader, dimmer but still coherent disk. It is not
 color-specific; it looks for profile structure and may fall back toward the
 robust sector-edge behavior when no shoulder is evident.
 
-The radius candidates currently use BT.709 luminance from the final RGB8 camera
-image as their radial signal, subtracting a local background estimate before
-looking for the apparent light-disk boundary. They do not render a different
-image or change public post-processing settings.
+The radius candidates subtract a local background estimate in the same
+low-gamma radius-signal space before looking for the apparent light-disk
+boundary.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light
@@ -201,6 +206,7 @@ thresholds that define public semantic boundaries.
 | `near_white_bin_min` | Lower luminance bin counted as near white |
 | `saturation_threshold` | Chroma threshold used by color analysis |
 | `lights.search_radius_ratio` | Maximum search distance around each light, as a short-side fraction |
+| `lights.radius_signal_gamma` | Gamma used only for the internal grayscale light-radius signal; default `0.5` |
 | `lights.saturated_core_threshold` | Threshold for the diagnostic saturated-core radius |
 | `lights.saturated_core_percentile` | Percentile used for the diagnostic saturated-core radius |
 | `lights.min_saturated_core_pixels` | Minimum evidence for the diagnostic saturated core |

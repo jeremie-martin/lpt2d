@@ -1012,6 +1012,7 @@ class PointLightAppearance:
 class PointLightAppearanceParams:
     def __init__(self) -> None: ...
     search_radius_ratio: float
+    radius_signal_gamma: float
     saturated_core_threshold: float
     saturated_core_percentile: float
     min_saturated_core_pixels: int

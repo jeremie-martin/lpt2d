@@ -34,6 +34,11 @@ float quantile_in_place(std::vector<float>& values, float pct) {
     return values[idx];
 }
 
+float radius_signal_luminance01(float luminance, float gamma) {
+    const float g = std::max(gamma, 0.05f);
+    return std::pow(clamp01(luminance), 1.0f / g);
+}
+
 struct ProjectedLight {
     float x = 0.0f;
     float y = 0.0f;
@@ -299,13 +304,18 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                     static_cast<std::size_t>(patch_h);
 
         std::vector<float> patch_luma(patch_n, 0.0f);
+        std::vector<float> patch_radius_signal(patch_n, 0.0f);
         std::vector<float> patch_excess(patch_n, 0.0f);
         std::vector<std::uint8_t> owned(patch_n, 0u);
         std::vector<std::uint8_t> in_radius(patch_n, 0u);
         std::vector<float> owned_values;
         std::vector<float> ring_values;
+        std::vector<float> radius_owned_values;
+        std::vector<float> radius_ring_values;
         owned_values.reserve(patch_n);
         ring_values.reserve(patch_n / 4u + 1u);
+        radius_owned_values.reserve(patch_n);
+        radius_ring_values.reserve(patch_n / 4u + 1u);
 
         for (int py = y0; py <= y1; ++py) {
             for (int px = x0; px <= x1; ++px) {
@@ -316,13 +326,17 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                               static_cast<std::size_t>(width) +
                                               static_cast<std::size_t>(px);
                 const float lum = luminance01[pixel_idx];
+                const float radius_signal =
+                    radius_signal_luminance01(lum, params.lights.radius_signal_gamma);
                 patch_luma[patch_idx] = lum;
+                patch_radius_signal[patch_idx] = radius_signal;
 
                 if (owner_for_pixel(px, py, projected) != static_cast<int>(i)) {
                     continue;
                 }
                 owned[patch_idx] = 1u;
                 owned_values.push_back(lum);
+                radius_owned_values.push_back(radius_signal);
 
                 const float dx = static_cast<float>(px) - app.image_x;
                 const float dy = static_cast<float>(py) - app.image_y;
@@ -333,6 +347,7 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                 if (dist >= 0.85f * static_cast<float>(search_radius) &&
                     dist <= static_cast<float>(search_radius)) {
                     ring_values.push_back(lum);
+                    radius_ring_values.push_back(radius_signal);
                 }
             }
         }
@@ -344,10 +359,17 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
             background = quantile_in_place(owned_values, 0.25f);
         }
         app.background_luminance = clamp01(background);
+        float radius_background = 0.0f;
+        if (radius_ring_values.size() >= 8u) {
+            radius_background = quantile_in_place(radius_ring_values, 0.5f);
+        } else if (!radius_owned_values.empty()) {
+            radius_background = quantile_in_place(radius_owned_values, 0.25f);
+        }
 
         std::vector<float> radial_sum(static_cast<std::size_t>(search_radius) + 1u, 0.0f);
         std::vector<int> radial_count(static_cast<std::size_t>(search_radius) + 1u, 0);
         std::vector<float> bright_distances;
+        float actual_peak_luminance = app.background_luminance;
         float peak_excess = 0.0f;
 
         for (int py = y0; py <= y1; ++py) {
@@ -359,10 +381,12 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                     continue;
                 }
 
-                const float lum = patch_luma[patch_idx];
-                const float excess = std::max(0.0f, lum - app.background_luminance);
+                const float excess =
+                    std::max(0.0f, patch_radius_signal[patch_idx] - radius_background);
                 patch_excess[patch_idx] = excess;
                 peak_excess = std::max(peak_excess, excess);
+                actual_peak_luminance =
+                    std::max(actual_peak_luminance, patch_luma[patch_idx]);
 
                 const float dx = static_cast<float>(px) - app.image_x;
                 const float dy = static_cast<float>(py) - app.image_y;
@@ -371,14 +395,14 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                 radial_sum[static_cast<std::size_t>(rbin)] += excess;
                 radial_count[static_cast<std::size_t>(rbin)] += 1;
 
-                if (lum >= params.lights.saturated_core_threshold) {
+                if (patch_luma[patch_idx] >= params.lights.saturated_core_threshold) {
                     bright_distances.push_back(dist);
                 }
             }
         }
 
-        app.peak_contrast = peak_excess;
-        app.peak_luminance = clamp01(app.background_luminance + peak_excess);
+        app.peak_luminance = clamp01(actual_peak_luminance);
+        app.peak_contrast = std::max(0.0f, app.peak_luminance - app.background_luminance);
 
         const bool enough_bright =
             static_cast<int>(bright_distances.size()) >= params.lights.min_saturated_core_pixels;

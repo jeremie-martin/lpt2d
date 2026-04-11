@@ -40,6 +40,7 @@ from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFont
 
+import _lpt2d
 from anim import (
     Camera2D,
     Canvas,
@@ -62,6 +63,7 @@ COMPLEX_SOURCE_SHOT = Path("test.json")
 CAMERA_WIDTH = 4.0
 ROOM_HALF = 1.8
 LIGHT_ID = "light_0"
+RADIUS_SIGNAL_GAMMA = float(_lpt2d.PointLightAppearanceParams().radius_signal_gamma)
 
 
 @dataclass(frozen=True)
@@ -264,6 +266,7 @@ def _metrics_for_case(case: Case, rr, *, rays: int, batch: int) -> dict[str, flo
         "height": rr.height,
         "requested_rays": rays,
         "requested_batch": batch,
+        "radius_signal_gamma": RADIUS_SIGNAL_GAMMA,
         "mean": lum.mean,
         "median": lum.median,
         "shadow_floor": lum.shadow_floor,
@@ -481,6 +484,7 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         light_line,
         f"Look: exposure={float(metrics['exposure']):.3g}; white point={float(metrics['white_point']):.3g}; "
         f"contrast={float(metrics['contrast']):.3g}; gamma={float(metrics['gamma']):.3g}",
+        f"Radius signal: BT.709 luminance with gamma={float(metrics['radius_signal_gamma']):.3g}",
         (
             f"GREEN official radius: {radius_percent:.2f}% of image short side",
             radius_color,

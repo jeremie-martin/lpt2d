@@ -100,6 +100,7 @@ struct PointLightAppearance {
 
 struct PointLightAppearanceParams {
     float search_radius_ratio = 0.25f;
+    float radius_signal_gamma = 0.5f;
     float saturated_core_threshold = 0.92f;
     float saturated_core_percentile = 90.0f;
     int min_saturated_core_pixels = 6;

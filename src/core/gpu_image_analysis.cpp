@@ -208,6 +208,8 @@ bool GpuImageAnalyzer::init() {
     u_bright_     = glGetUniformLocation(program_, "uBrightThreshold");
     u_max_bins_   = glGetUniformLocation(program_, "uMaxRadiusBins");
     u_search_radius_px_ = glGetUniformLocation(program_, "uSearchRadiusPx");
+    u_radius_signal_inv_gamma_ =
+        glGetUniformLocation(program_, "uRadiusSignalInvGamma");
     u_sat_        = glGetUniformLocation(program_, "uSatThreshold");
 
     // Allocate the 4 SSBOs. Luminance and colour are fixed-size (one
@@ -353,6 +355,10 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
     if (u_bright_ >= 0)     glUniform1f(u_bright_, params.lights.saturated_core_threshold);
     if (u_max_bins_ >= 0)   glUniform1i(u_max_bins_, max_bins);
     if (u_search_radius_px_ >= 0) glUniform1f(u_search_radius_px_, search_radius_px);
+    if (u_radius_signal_inv_gamma_ >= 0) {
+        const float gamma = std::max(params.lights.radius_signal_gamma, 0.05f);
+        glUniform1f(u_radius_signal_inv_gamma_, 1.0f / gamma);
+    }
     if (u_sat_ >= 0)        glUniform1f(u_sat_, params.saturation_threshold);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, lum_ssbo_);
@@ -468,7 +474,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             }
 
             // Flat interleaved layout per (bin, sector):
-            // [sumR, sumG, sumB, count, brightCount].
+            // [sumR, sumG, sumB, count, brightCount, radiusSignal].
             const uint32_t* base =
                 circles_raw_scratch_.data() +
                 static_cast<std::size_t>(i) * kMaxBins *
@@ -485,6 +491,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             std::vector<float> mean_r(static_cast<std::size_t>(max_bins) * kNumSectors, 0.0f);
             std::vector<float> mean_g(mean_r.size(), 0.0f);
             std::vector<float> mean_b(mean_r.size(), 0.0f);
+            std::vector<float> mean_radius_signal(mean_r.size(), 0.0f);
             std::vector<uint32_t> counts(mean_r.size(), 0u);
             uint32_t total_bright = 0;
             for (int r = 0; r < max_bins; ++r) {
@@ -495,6 +502,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                     const uint32_t sb = base[raw + 2];
                     const uint32_t pcnt = base[raw + 3];
                     const uint32_t pbr = base[raw + 4];
+                    const uint32_t srs = base[raw + 5];
                     const std::size_t idx = static_cast<std::size_t>(r) *
                                             static_cast<std::size_t>(kNumSectors) +
                                             static_cast<std::size_t>(s);
@@ -505,6 +513,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                         mean_r[idx] = static_cast<float>(sr) * inv;
                         mean_g[idx] = static_cast<float>(sg) * inv;
                         mean_b[idx] = static_cast<float>(sb) * inv;
+                        mean_radius_signal[idx] = static_cast<float>(srs) * inv / 255.0f;
                     }
                 }
             }
@@ -549,6 +558,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             double bg_r_sum = 0.0;
             double bg_g_sum = 0.0;
             double bg_b_sum = 0.0;
+            double bg_radius_signal_sum = 0.0;
             double bg_count = 0.0;
             for (int r = outer_start; r < max_bins; ++r) {
                 for (int s = 0; s < kNumSectors; ++s) {
@@ -560,6 +570,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                     bg_r_sum += static_cast<double>(mean_r[idx]) * count;
                     bg_g_sum += static_cast<double>(mean_g[idx]) * count;
                     bg_b_sum += static_cast<double>(mean_b[idx]) * count;
+                    bg_radius_signal_sum += static_cast<double>(mean_radius_signal[idx]) * count;
                     bg_count += count;
                 }
             }
@@ -568,6 +579,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             const float bg_b = bg_count > 0.0 ? static_cast<float>(bg_b_sum / bg_count) : 0.0f;
             c.background_luminance =
                 clamp01((0.2126f * bg_r + 0.7152f * bg_g + 0.0722f * bg_b) / 255.0f);
+            const float background_radius_signal =
+                bg_count > 0.0 ? clamp01(static_cast<float>(bg_radius_signal_sum / bg_count))
+                               : 0.0f;
 
             const int inner_end = std::max(
                 1, std::min(max_bins - 1,
@@ -594,7 +608,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                         clamp01((0.2126f * mean_r[idx] +
                                  0.7152f * mean_g[idx] +
                                  0.0722f * mean_b[idx]) / 255.0f);
-                    sector_values.push_back(std::max(0.0f, luminance - c.background_luminance));
+                    const float radius_signal = clamp01(mean_radius_signal[idx]);
+                    sector_values.push_back(
+                        std::max(0.0f, radius_signal - background_radius_signal));
                     luminance_values.push_back(luminance);
                 }
                 if (!sector_values.empty()) {
@@ -680,12 +696,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                                             static_cast<std::size_t>(kNumSectors) +
                                             static_cast<std::size_t>(s);
                     if (counts[idx] == 0u) continue;
-                    const float luminance =
-                        clamp01((0.2126f * mean_r[idx] +
-                                 0.7152f * mean_g[idx] +
-                                 0.0722f * mean_b[idx]) / 255.0f);
                     sector_profile[static_cast<std::size_t>(r)] =
-                        std::max(0.0f, luminance - c.background_luminance);
+                        std::max(0.0f, clamp01(mean_radius_signal[idx]) -
+                                             background_radius_signal);
                 }
 
                 std::vector<float> sector_smooth = smooth_profile(sector_profile);
