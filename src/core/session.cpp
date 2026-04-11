@@ -7,7 +7,33 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <stdexcept>
+
+namespace {
+
+constexpr int64_t kTraceLineSegBytes = 32;
+constexpr int64_t kTraceOutputBudgetBytes = 512ll * 1024ll * 1024ll;
+
+int budgeted_batch_size(const TraceConfig& cfg) {
+    const int64_t requested = std::max<int64_t>(1, cfg.batch_size);
+    const int64_t depth = std::max<int64_t>(1, cfg.depth);
+    const int64_t max_batch =
+        std::max<int64_t>(1, kTraceOutputBudgetBytes / (depth * kTraceLineSegBytes));
+    return static_cast<int>(std::min(requested, max_batch));
+}
+
+int budgeted_dispatches_per_draw(const TraceConfig& cfg) {
+    constexpr int kMaxDispatchesPerDraw = 16;
+    const int64_t batch = std::max<int64_t>(1, cfg.batch_size);
+    const int64_t depth = std::max<int64_t>(1, cfg.depth);
+    const int64_t bytes_per_dispatch = batch * depth * kTraceLineSegBytes;
+    const int64_t max_dispatches =
+        std::max<int64_t>(1, kTraceOutputBudgetBytes / std::max<int64_t>(1, bytes_per_dispatch));
+    return static_cast<int>(std::min<int64_t>(kMaxDispatchesPerDraw, max_dispatches));
+}
+
+}  // namespace
 
 struct RenderSession::Impl {
     HeadlessGL gl;
@@ -67,18 +93,20 @@ RenderResult RenderSession::render_frame(const Scene& scene, const Bounds& bound
 
     // Trace rays in batched dispatches (skip if no lights)
     if (r.num_lights() > 0 && total_rays > 0) {
-        constexpr int dispatches_per_draw = 16;
+        TraceConfig batch_cfg = trace_cfg;
+        batch_cfg.batch_size = budgeted_batch_size(trace_cfg);
+        const int dispatches_per_draw = budgeted_dispatches_per_draw(batch_cfg);
         int64_t remaining = total_rays;
         while (remaining > 0) {
-            int64_t full_batches = remaining / trace_cfg.batch_size;
+            int64_t full_batches = remaining / batch_cfg.batch_size;
             if (full_batches > 0) {
                 int n = (int)std::min((int64_t)dispatches_per_draw, full_batches);
-                r.trace_and_draw_multi(trace_cfg, n);
-                remaining -= (int64_t)n * trace_cfg.batch_size;
+                r.trace_and_draw_multi(batch_cfg, n);
+                remaining -= (int64_t)n * batch_cfg.batch_size;
                 continue;
             }
 
-            TraceConfig tail = trace_cfg;
+            TraceConfig tail = batch_cfg;
             tail.batch_size = (int)remaining;
             r.trace_and_draw(tail);
             remaining = 0;

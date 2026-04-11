@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <stdexcept>
 #include <variant>
 
 // Thin wrappers over gl_shader_utils.{h,cpp} so existing call sites
@@ -933,6 +934,15 @@ void Renderer::trace_and_draw_multi(const TraceConfig& cfg, int num_dispatches) 
         // LineSeg = vec2 p0 + vec2 p1 + vec4 color = 32 bytes (must match GLSL std430)
         static constexpr size_t kLineSegBytes = 32;
         glBufferData(GL_SHADER_STORAGE_BUFFER, max_segs * kLineSegBytes, nullptr, GL_DYNAMIC_COPY);
+        GLenum err = glGetError();
+        if (err == GL_OUT_OF_MEMORY) {
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            throw std::runtime_error("Renderer: trace output buffer allocation exceeded available GPU memory");
+        }
+        if (err != GL_NO_ERROR) {
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+            throw std::runtime_error("Renderer: trace output buffer allocation failed");
+        }
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 

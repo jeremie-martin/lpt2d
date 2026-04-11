@@ -482,3 +482,50 @@ TEST(render_session_analysis_keeps_display_texture_y_convention) {
     ASSERT_NEAR(light.radius_ratio, 0.10f, 0.03f);
     ASSERT_TRUE(light.confidence > 0.0f);
 }
+
+TEST(render_session_large_standard_mirror_batch_stays_finite) {
+    constexpr int w = 1280;
+    constexpr int h = 720;
+    constexpr float room_half = 1.8f;
+
+    Scene scene;
+    scene.materials["wall"] = mat_opaque_mirror(1.0f, 0.1f);
+    scene.shapes.emplace_back(Segment{"wall_bottom", Vec2{-room_half, -room_half}, Vec2{ room_half, -room_half}, "wall"});
+    scene.shapes.emplace_back(Segment{"wall_right",  Vec2{ room_half, -room_half}, Vec2{ room_half,  room_half}, "wall"});
+    scene.shapes.emplace_back(Segment{"wall_top",    Vec2{ room_half,  room_half}, Vec2{-room_half,  room_half}, "wall"});
+    scene.shapes.emplace_back(Segment{"wall_left",   Vec2{-room_half,  room_half}, Vec2{-room_half, -room_half}, "wall"});
+    scene.lights.emplace_back(PointLight{"light_0", Vec2{0.0f, 0.0f}, 1.0f});
+
+    Shot shot;
+    shot.scene = scene;
+    shot.camera.center = Vec2{0.0f, 0.0f};
+    shot.camera.width = 4.0f;
+    shot.canvas = Canvas{w, h};
+    shot.look.exposure = -6.0f;
+    shot.look.white_point = 0.125f;
+    shot.look.gamma = 2.0f;
+    shot.look.tonemap = ToneMap::ReinhardExtended;
+    shot.look.normalize = NormalizeMode::Rays;
+    shot.trace.rays = 10'000'000;
+    shot.trace.batch = 1'000'000;
+    shot.trace.depth = 12;
+
+    RenderSession session(w, h);
+    RenderResult rr = session.render_shot(shot, 0, true);
+
+    const auto max_px = *std::max_element(rr.pixels.begin(), rr.pixels.end());
+    REQUIRE_TRUE(max_px > 0);
+
+    const auto& lum = rr.analysis.luminance;
+    ASSERT_TRUE(lum.mean >= 0.0f && lum.mean <= 255.0f);
+    ASSERT_TRUE(lum.near_black_fraction >= 0.0f && lum.near_black_fraction <= 1.0f);
+    ASSERT_TRUE(lum.near_white_fraction >= 0.0f && lum.near_white_fraction <= 1.0f);
+    ASSERT_TRUE(lum.clipped_channel_fraction >= 0.0f && lum.clipped_channel_fraction <= 1.0f);
+
+    REQUIRE_TRUE(rr.analysis.lights.size() == 1);
+    const auto& light = rr.analysis.lights[0];
+    ASSERT_TRUE(light.visible);
+    ASSERT_TRUE(light.radius_ratio > 0.03f);
+    ASSERT_TRUE(light.radius_ratio < 0.10f);
+    ASSERT_TRUE(light.confidence > 0.5f);
+}
