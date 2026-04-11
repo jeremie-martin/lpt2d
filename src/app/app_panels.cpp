@@ -1790,9 +1790,12 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     stats_labelled_text("Median:",
                         "50th percentile luminance.",
                         " %.0f", lum.median);
-    stats_labelled_text("Contrast:",
+    stats_labelled_text("Contrast std:",
                         "Standard deviation of luminance (0-255 scale).",
                         " %.1f", lum.contrast_std);
+    stats_labelled_text("Contrast spread:",
+                        "95th percentile minus 5th percentile luminance.",
+                        " %.1f", lum.contrast_spread);
     stats_labelled_text("Shadows:",
                         "5th percentile luminance.",
                         " %.0f", lum.shadow_floor);
@@ -1806,10 +1809,10 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                         "First and last populated histogram bins (min / max luminance).",
                         " %d - %d", hist_min < 256 ? hist_min : 0, hist_max_bin >= 0 ? hist_max_bin : 0);
     stats_labelled_text("Near-black:",
-                        "Fraction of pixels at luminance <= 5.",
+                        "Fraction of pixels at luminance <= 10.",
                         " %.1f%%", lum.near_black_fraction * 100.0f);
     stats_labelled_text("Near-white:",
-                        "Fraction of pixels at luminance >= 250.",
+                        "Fraction of pixels at luminance >= 245.",
                         " %.1f%%", lum.near_white_fraction * 100.0f);
     stats_labelled_text("Clipped channels:",
                         "Fraction of pixels with any channel at 255 (highlight clip).",

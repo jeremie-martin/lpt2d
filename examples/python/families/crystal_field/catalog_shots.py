@@ -2,9 +2,9 @@
 
 For every ``renders/families/crystal_field/catalog/<material>/<tag>.json`` parameter
 file produced by ``catalog.py``, reconstruct the :class:`Params`, rebuild the
-animate callback, resolve it at the same frame the catalog images were rendered
-from (40% of the timeline), and save the resulting authored :class:`Shot` JSON
-(the strict ``version: 10`` format) to the output directory.
+animate callback, resolve it at the same clear-light frame selected by
+``check.py``, and save the resulting authored :class:`Shot` JSON (the strict
+``version: 10`` format) to the output directory.
 
 No images are rendered.
 
@@ -27,7 +27,8 @@ from anim import Camera2D, Shot
 from anim.examples_support import _authored_shot
 from anim.params import params_from_dict
 
-from .catalog import _CAM, _FRAME, _TIMELINE
+from .catalog import _CAM
+from .check import measurement_context
 from .params import Params
 from .scene import build
 
@@ -62,9 +63,12 @@ def run_catalog_shots(argv: list[str] | None = None) -> None:
     out_dir = Path(args.out)
 
     settings = _base_settings()
-    ctx = _TIMELINE.context_at(_FRAME)
 
-    param_files = sorted(in_dir.glob("*/*.json"))
+    param_files = sorted(
+        p
+        for p in in_dir.glob("*/*.json")
+        if not p.name.endswith(".shot.json") and not p.name.endswith(".metrics.json")
+    )
     if not param_files:
         print(f"No parameter JSONs found under {in_dir}")
         return
@@ -85,6 +89,7 @@ def run_catalog_shots(argv: list[str] | None = None) -> None:
             data = json.loads(src.read_text())
             p = params_from_dict(Params, data)
             animate = build(p)
+            ctx = measurement_context(p, animate)
             authored = _authored_shot(settings, animate, ctx)
             authored.name = f"crystal_field/{mat_name}/{tag}"
             authored.save(dst)

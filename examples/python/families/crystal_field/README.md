@@ -19,7 +19,7 @@ walls bounce escaped light back into the field.
 | `paths.py` | 5 light path generators + arc-length track conversion |
 | `scene.py` | Scene assembly — the `build()` function |
 | `sampling.py` | Parameter generation — the `sample()` function |
-| `check.py` | Quality gates (color richness + point-light appearance metrics) |
+| `check.py` | Rejection gates (light-radius + luminance metrics) |
 | `describe.py` | One-line variant summary |
 | `stats.py` | Parameter distribution analysis (no rendering) |
 
@@ -47,6 +47,9 @@ walls bounce escaped light back into the field.
 python -m examples.python.families.crystal_field search -n 4
 python -m examples.python.families.crystal_field survey -n 16
 python -m examples.python.families.crystal_field render path/to/params.json
+python -m examples.python.families.crystal_field catalog \
+  --out renders/lpt2d_crystal_field_catalog_YYYYMMDD \
+  --web-out renders/lpt2d_crystal_field_catalog_YYYYMMDD_web
 
 # Parameter distributions (instant, no rendering)
 python -m examples.python.families.crystal_field stats
@@ -64,16 +67,19 @@ python -m examples.python.families.crystal_field stats -n 50000 --seed 99
 | Exposure | -5.5 to -3.5 | Log scale brightness |
 | Corner radius | 10–35% of size | Always applied to polygons |
 
-## Quality checks
+## Rejection Criteria
 
-Variants must pass two gates:
+Variants are rejected only by the current light-radius and luminance gates:
 
-1. **Color richness** — at least 2.5 seconds of the 10s animation must
-   have richness > 0.15 (measured via probe rendering at 4 fps).
-2. **Point-light appearance** — the apparent size and edge quality of each
-   moving light is measured on the final image in normalized camera units:
-   - Moving radius: 0.8%–22.2% of the short image side
-   - Edge width: ≤ 3.3% of the short image side
-   - Peak contrast: ≥ 0.08
-   - Confidence: ≥ 0.35
-   - Moving/ambient size ratio: ≤ 2.66:1
+- Moving light radius: 1.0% to 4.2% of the short image side.
+- Ambient light radius: 0.8% to 4.2% of the short image side.
+- Mean moving radius divided by mean ambient radius: 1.0 to 2.33.
+- Near-black fraction: below 3.5%.
+- Brightness: below 150 on the 0-255 luminance scale.
+- Contrast spread: above 5 on the 0-255 luminance scale.
+
+`check.py` first selects the frame where moving lights are furthest from
+object centres, then computes all gates from the core `FrameAnalysis`
+binding for that frame.  Catalog PNGs and authored `.shot.json` exports
+use that same selected frame, and each catalog entry also writes a
+`.metrics.json` sidecar with the selected frame and canonical metric names.

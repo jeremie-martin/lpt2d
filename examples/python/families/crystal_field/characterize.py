@@ -36,7 +36,7 @@ from PIL import Image
 
 from anim import Camera2D, Shot, Timeline, render_frame, save_image
 
-from .check import measure_all
+from .check import _measure_and_verdict
 from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
@@ -59,8 +59,6 @@ _WIDTH = 960
 _HEIGHT = 540
 _RAYS = 2_000_000
 _CAM = Camera2D(center=[0, 0], width=3.2)
-_TIMELINE = Timeline(DURATION, fps=30)
-_FRAME = int(_TIMELINE.total_frames * 0.4)
 
 _SHOT = Shot.preset("draft", width=_WIDTH, height=_HEIGHT, rays=_RAYS, depth=12)
 
@@ -170,11 +168,9 @@ def _black_diffuse_scene() -> Params:
         corner_radius=grid.spacing * 0.32 * 0.22,
         rotation=RotationConfig(base_angle=0.15, jitter=0.0),
     )
-    # High albedo + fill=0 → dark silhouettes.  Albedo is never 0.15 (analysis
-    # rules that out).  White light (not warm) so the temperature sweep can
-    # reach positive values — the check.py constraint guard forbids positive
-    # temperature on warm lights, which would fill the temperature strip with
-    # zero-metrics.
+    # High albedo + fill=0 -> dark silhouettes.  Albedo is never 0.15 (analysis
+    # rules that out).  White light (not warm) lets the temperature sweep reach
+    # positive values without changing the light-colour axis at the same time.
     material = MaterialConfig(
         outcome="black_diffuse",
         albedo=0.85,
@@ -243,12 +239,19 @@ def _apply_sweep(base: Params, param: str, value: float) -> Params:
 
 
 def _render_and_overlay(p: Params, out_path: Path) -> None:
-    """Render one frame, save PNG, overlay metrics, save again."""
+    """Render the selected analysis frame, save PNG, overlay metrics."""
     animate = build(p)
-    rr = render_frame(animate, _TIMELINE, frame=_FRAME, settings=_SHOT, camera=_CAM)
+    result = _measure_and_verdict(p, animate)
+    timeline = Timeline(DURATION, fps=result.analysis_fps)
+    rr = render_frame(
+        animate,
+        timeline,
+        frame=result.analysis_frame,
+        settings=_SHOT,
+        camera=_CAM,
+    )
     save_image(str(out_path), rr.pixels, _WIDTH, _HEIGHT)
-    metrics = measure_all(p, animate)
-    draw_metrics_overlay(out_path, metrics, font_size=14, padding=6, margin=8)
+    draw_metrics_overlay(out_path, result.metrics, font_size=14, padding=6, margin=8)
 
 
 def _concat_strip(frame_paths: list[Path], out_path: Path) -> None:

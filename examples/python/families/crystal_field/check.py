@@ -1,23 +1,10 @@
-"""Quality check — colour richness, point-light appearance, and washed-out guards.
+"""Quality check for crystal_field variants.
 
-The check pipeline has two layers:
-
-1. **Cheap pre-render guards** — reject manually-authored Params that violate
-   the sampler's constraints (no positive temperature on warm lights, no
-   chromatic aberration on glass, glass dispersion ≤ 30 000).  These only
-   fire for manually-loaded/edited Params because the sampler already
-   suppresses them — they exist as belt-and-suspenders.
-
-2. **Measurement + thresholds** — render a probe frame, read the C++
-   frame analysis (luminance + colour + per-light appearance), and apply
-   the numeric thresholds listed below. All pixel math lives in
-   ``src/core/image_analysis.cpp``; this module is pure threshold
-   policy — no numpy, no pixel access.
-
-Both ``check()`` and ``measure_all()`` funnel through ``_measure_and_verdict``
-so they run one probe per call.  Catalogues and the characterize subcommand
-use ``measure_all()`` for the metric overlays; ``Family.search`` uses
-``check()``.
+The rejection policy is intentionally small and explicit: one analyzed
+probe frame supplies the moving/ambient light radii plus luminance stats,
+and the thresholds below decide acceptance. Older colour-richness,
+edge-width, peak-contrast, confidence, coverage, and pre-render constraint
+guards are deliberately not part of this policy.
 """
 
 from __future__ import annotations
@@ -26,8 +13,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from anim import Timeline
-from anim.family import Verdict, probe
+from anim import Camera2D, Shot, Timeline, Verdict, render_frame
 
 from .grid import build_grid, remove_holes
 from .params import DURATION, Params
@@ -36,68 +22,63 @@ from .params import DURATION, Params
 # Thresholds
 # ---------------------------------------------------------------------------
 
-PROBE_W, PROBE_H = 640, 360
+PROBE_W, PROBE_H = 960, 540
+PROBE_FPS = 4
+PROBE_RAYS = 400_000
 
-RICHNESS_THRESHOLD = 0.15
-MIN_COLORFUL_SECONDS = 2.5
+MIN_MOVING_RADIUS_RATIO = 0.010
+MAX_MOVING_RADIUS_RATIO = 0.042
+MIN_AMBIENT_RADIUS_RATIO = 0.008
+MAX_AMBIENT_RADIUS_RATIO = 0.042
+MIN_RADIUS_RATIO = 1.00
+MAX_RADIUS_RATIO = 2.33
 
-# Point-light appearance thresholds (measured on the normalized authored
-# camera image at probe resolution 640x360).
-MAX_MEAN_LUMINANCE = 0.70  # reject if scene is too bright overall (hard backstop)
-MIN_MEAN_LUMINANCE = 0.12  # reject if scene is too dark (objects blocking too much light)
-MIN_CONTRAST_SPREAD = 0.25  # reject washed-out scenes: p95_luminance - p05_luminance
-MIN_MOVING_RADIUS_RATIO = 3.0 / PROBE_H  # moving light must be a visible blob
-MAX_MOVING_RADIUS_RATIO = 80.0 / PROBE_H  # not a featureless wash
-MIN_COVERAGE_FRACTION = 20.0 / float(PROBE_W * PROBE_H)
-MAX_RADIUS_RATIO = 2.66  # max moving / ambient point-light appearance size ratio
-MAX_TRANSITION_WIDTH_RATIO = 12.0 / PROBE_H
-MIN_PEAK_CONTRAST = 0.08
-MIN_CONFIDENCE = 0.35
-
-# Analysis-driven constraint guards (pre-render).
-MAX_GLASS_CAUCHY_B = 30_000.0  # "dispersion should not exceed 30000"
-WARM_LIGHT_WL_MIN = 500.0  # wavelength_min at/above which a light is "warm"
+MAX_NEAR_BLACK_FRACTION = 0.035
+MAX_MEAN_LUMINANCE = 150.0
+MIN_CONTRAST_SPREAD = 5.0
 
 METRIC_KEYS: tuple[str, ...] = (
-    "colorful_seconds",
-    "richness",
     "mean",
     "contrast_spread",
-    "shadow_floor",
-    "highlight_ceiling",
-    "highlight_peak",
-    "clipped_channel_fraction",
-    "mean_saturation",
-    "moving_radius_ratio",
-    "ambient_radius_ratio",
-    "coverage_fraction",
-    "radius_ratio",
-    "transition_width_ratio",
-    "peak_contrast",
-    "confidence",
-    "exposure",
-    "gamma",
-    "white_point",
+    "near_black_fraction",
+    "moving_radius_min",
+    "moving_radius_mean",
+    "moving_radius_max",
+    "ambient_radius_min",
+    "ambient_radius_mean",
+    "ambient_radius_max",
+    "moving_to_ambient_radius_ratio",
 )
 
 
 @dataclass
 class MeasurementResult:
-    """Bundled measurement + verdict returned by ``_measure_and_verdict``.
-
-    ``metrics`` contains every numeric value used by the filters (plus a
-    few extras that are displayed on catalogue overlays but not yet
-    applied as thresholds). ``verdict`` carries
-    the pass/fail decision and a human-readable summary string.
-    """
+    """Bundled measurement + verdict returned by ``_measure_and_verdict``."""
 
     metrics: dict[str, float]
     verdict: Verdict
+    analysis_frame: int = 0
+    analysis_fps: int = PROBE_FPS
+    analysis_time: float = 0.0
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _make_measurement_shot() -> Shot:
+    """Low-res authored shot used by the rejection metrics."""
+    shot = Shot.preset("draft", width=PROBE_W, height=PROBE_H, rays=PROBE_RAYS, depth=10)
+    shot.camera = Camera2D(center=[0, 0], width=3.2)
+    shot.look = shot.look.with_overrides(
+        gamma=2.0,
+        tonemap="reinhardx",
+        white_point=0.5,
+        normalize="rays",
+        temperature=0.1,
+    )
+    return shot
 
 
 def _min_object_distance(
@@ -114,12 +95,12 @@ def _find_clear_frame(
     animate,
     duration: float,
     object_positions: list[tuple[float, float]],
-    fps: int = 4,
+    fps: int = PROBE_FPS,
 ) -> int:
     """Frame index where moving lights are furthest from objects.
 
     Calls ``animate()`` without rendering to inspect light positions.
-    Returns the single best frame index for point-light appearance measurement.
+    Returns the single best frame index for light-radius measurement.
     """
     timeline = Timeline(duration, fps=fps)
     best_idx = 0
@@ -135,7 +116,6 @@ def _find_clear_frame(
         ]
         if not moving:
             continue
-        # Worst-case clearance across all moving lights in this frame.
         clearance = min(_min_object_distance(lp, object_positions) for lp in moving)
         if clearance > best_clearance:
             best_clearance = clearance
@@ -144,41 +124,133 @@ def _find_clear_frame(
     return best_idx
 
 
-# ---------------------------------------------------------------------------
-# Pre-render constraint guards
-# ---------------------------------------------------------------------------
+def _mean(values: list[float]) -> float:
+    return float(sum(values) / len(values)) if values else 0.0
 
 
-def _check_constraint_guards(p: Params) -> Verdict | None:
-    """Return a failing Verdict if the Params violates a hard constraint.
+def _object_positions_for_params(p: Params) -> list[tuple[float, float]]:
+    rng = random.Random(p.build_seed)
+    positions = build_grid(p.grid)
+    if p.grid.hole_fraction > 0:
+        positions = remove_holes(positions, p.grid.hole_fraction, rng)
+    return positions
 
-    These are cheap pre-render checks; the sampler already avoids these
-    combinations, but ``check.py`` is the authoritative filter for
-    manually-loaded / manually-edited Params.
+
+def _selected_measurement_frame(p: Params, animate) -> tuple[Timeline, int]:
+    """Return the single frame used for crystal_field probe/check analysis."""
+    positions = _object_positions_for_params(p)
+    timeline = Timeline(DURATION, fps=PROBE_FPS)
+    return timeline, _find_clear_frame(animate, DURATION, positions, fps=PROBE_FPS)
+
+
+def measurement_context(p: Params, animate):
+    """Return the FrameContext selected for probe/check/catalog consistency."""
+    timeline, frame = _selected_measurement_frame(p, animate)
+    return timeline.context_at(frame)
+
+
+def metrics_from_analysis(analysis) -> dict[str, float]:
+    """Build crystal_field metrics from core FrameAnalysis binding data.
+
+    Pixel statistics and per-light circle radii come from the C++ analysis
+    object.  Python only groups the already-measured light radii into the
+    moving/ambient aggregates used by the family rejection policy.
     """
-    mat = p.material
-    look = p.look
-    light = p.light
+    lights = list(analysis.lights)
+    moving = [c for c in lights if c.id.startswith("light_")]
+    ambient = [c for c in lights if c.id.startswith("amb_")]
 
-    if mat.outcome == "glass" and mat.cauchy_b > MAX_GLASS_CAUCHY_B:
+    moving_radii = [float(c.radius_ratio) for c in moving]
+    ambient_radii = [float(c.radius_ratio) for c in ambient]
+
+    moving_radius_mean = _mean(moving_radii)
+    moving_radius_min = float(min(moving_radii)) if moving_radii else 0.0
+    moving_radius_max = float(max(moving_radii)) if moving_radii else 0.0
+    ambient_radius_mean = _mean(ambient_radii)
+    ambient_radius_min = float(min(ambient_radii)) if ambient_radii else 0.0
+    ambient_radius_max = float(max(ambient_radii)) if ambient_radii else 0.0
+    radius_ratio = moving_radius_mean / ambient_radius_mean if ambient_radius_mean > 0 else 0.0
+
+    metrics: dict[str, float] = {
+        "mean": float(analysis.luminance.mean),
+        "contrast_spread": float(analysis.luminance.contrast_spread),
+        "near_black_fraction": float(analysis.luminance.near_black_fraction),
+        "moving_radius_min": moving_radius_min,
+        "moving_radius_mean": moving_radius_mean,
+        "moving_radius_max": moving_radius_max,
+        "ambient_radius_min": ambient_radius_min,
+        "ambient_radius_mean": ambient_radius_mean,
+        "ambient_radius_max": ambient_radius_max,
+        "moving_to_ambient_radius_ratio": radius_ratio,
+    }
+
+    # Legacy aliases kept for existing scripts/artifacts that still expect
+    # the old names.  New code should use the explicit *_mean and
+    # moving_to_ambient_* keys above.
+    metrics["moving_radius_ratio"] = moving_radius_mean
+    metrics["ambient_radius_ratio"] = ambient_radius_mean
+    metrics["radius_ratio"] = radius_ratio
+    return metrics
+
+
+def _verdict_for_metrics(
+    metrics: dict[str, float],
+    *,
+    moving_count: int,
+    ambient_count: int,
+) -> Verdict:
+    """Apply the rejection thresholds to already-measured metrics."""
+    moving_radius_mean = metrics["moving_radius_mean"]
+    ambient_radius_mean = metrics["ambient_radius_mean"]
+    moving_radius_min = metrics["moving_radius_min"]
+    moving_radius_max = metrics["moving_radius_max"]
+    ambient_radius_min = metrics["ambient_radius_min"]
+    ambient_radius_max = metrics["ambient_radius_max"]
+    radius_ratio = metrics["moving_to_ambient_radius_ratio"]
+    near_black_fraction = metrics["near_black_fraction"]
+    mean_brightness = metrics["mean"]
+    contrast_spread = metrics["contrast_spread"]
+
+    prefix = (
+        f"moving_mean={moving_radius_mean:.3f} "
+        f"ambient_mean={ambient_radius_mean:.3f} "
+        f"moving_to_ambient={radius_ratio:.2f}"
+    )
+
+    if moving_count <= 0:
+        return Verdict(False, "no moving lights")
+    if ambient_count <= 0:
+        return Verdict(False, f"{prefix} -- no ambient lights")
+    if moving_radius_min < MIN_MOVING_RADIUS_RATIO:
+        return Verdict(False, f"{prefix} moving_radius_min={moving_radius_min:.3f} (too small)")
+    if moving_radius_max > MAX_MOVING_RADIUS_RATIO:
+        return Verdict(False, f"{prefix} moving_radius_max={moving_radius_max:.3f} (too large)")
+    if ambient_radius_min < MIN_AMBIENT_RADIUS_RATIO:
+        return Verdict(False, f"{prefix} ambient_radius_min={ambient_radius_min:.3f} (too small)")
+    if ambient_radius_max > MAX_AMBIENT_RADIUS_RATIO:
+        return Verdict(False, f"{prefix} ambient_radius_max={ambient_radius_max:.3f} (too large)")
+    if radius_ratio < MIN_RADIUS_RATIO:
         return Verdict(
             False,
-            f"glass cauchy_b={mat.cauchy_b:.0f} > {MAX_GLASS_CAUCHY_B:.0f}",
+            f"{prefix} moving_to_ambient_radius_ratio={radius_ratio:.2f} (too small)",
         )
-
-    if look.temperature > 0.0 and light.wavelength_min >= WARM_LIGHT_WL_MIN:
+    if radius_ratio > MAX_RADIUS_RATIO:
         return Verdict(
             False,
-            f"warm light (wl_min={light.wavelength_min:.0f}) + temperature={look.temperature:.2f}",
+            f"{prefix} moving_to_ambient_radius_ratio={radius_ratio:.2f} (too large)",
         )
+    if near_black_fraction > MAX_NEAR_BLACK_FRACTION:
+        return Verdict(False, f"{prefix} near_black={near_black_fraction:.1%} (too dark)")
+    if mean_brightness > MAX_MEAN_LUMINANCE:
+        return Verdict(False, f"{prefix} brightness={mean_brightness:.1f} (too bright)")
+    if contrast_spread < MIN_CONTRAST_SPREAD:
+        return Verdict(False, f"{prefix} contrast_spread={contrast_spread:.1f} (too low)")
 
-    if look.chromatic_aberration > 0.0 and mat.outcome == "glass":
-        return Verdict(
-            False,
-            f"glass + chromatic_aberration={look.chromatic_aberration:.4f}",
-        )
-
-    return None
+    return Verdict(
+        True,
+        f"{prefix} near_black={near_black_fraction:.1%} "
+        f"brightness={mean_brightness:.1f} contrast_spread={contrast_spread:.1f}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -187,144 +259,32 @@ def _check_constraint_guards(p: Params) -> Verdict | None:
 
 
 def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
-    """Run all measurements, return metrics dict + Verdict in one pass.
-
-    This is the single source of truth — ``check()`` and ``measure_all()``
-    both delegate here.  The catalogue loop also imports it directly to
-    avoid running the probe twice per entry.
-    """
-    # Guards first — cheap, no render.
-    guard = _check_constraint_guards(p)
-    if guard is not None:
-        return MeasurementResult(metrics=_empty_metrics(p), verdict=guard)
-
-    # ── Colour richness across the animation (probe at 4 fps) ──
-    frames = probe(animate, DURATION)
-    colorful = sum(1 for f in frames if f.richness > RICHNESS_THRESHOLD)
-    colorful_s = colorful / 4  # probe runs at 4 fps
-    avg_richness = sum(f.richness for f in frames) / len(frames)
-    avg_frame_sat = sum(f.mean_saturation for f in frames) / len(frames) if frames else 0.0
-
-    # Object positions (deterministic from build_seed + grid config).
-    rng = random.Random(p.build_seed)
-    positions = build_grid(p.grid)
-    if p.grid.hole_fraction > 0:
-        positions = remove_holes(positions, p.grid.hole_fraction, rng)
-
-    # Pick the clearest frame from the probe result for the point-light
-    # appearance measurement — the C++ analyser already measured every PointLight at
-    # every probe frame, so we just index into it instead of re-rendering.
-    best_fi = _find_clear_frame(animate, DURATION, positions)
-    ana = frames[best_fi].analysis
-
-    # Label prefixes distinguish moving ("light_*") from ambient ("amb_*").
-    lights = list(ana.lights)
-    moving = [c for c in lights if c.id.startswith("light_")]
-    ambient = [c for c in lights if c.id.startswith("amb_")]
-
-    mean_brightness = ana.luminance.mean / 255.0
-    shadow_floor = ana.luminance.shadow_floor / 255.0
-    highlight_ceiling = ana.luminance.highlight_ceiling / 255.0
-    highlight_peak = ana.luminance.highlight_peak / 255.0
-    contrast_spread = highlight_ceiling - shadow_floor
-    clip_frac = ana.luminance.clipped_channel_fraction
-    mean_saturation = avg_frame_sat
-
-    # Point-light appearance aggregates.
-    med_moving_r = (
-        float(sorted(c.radius_ratio for c in moving)[len(moving) // 2])
-        if moving
-        else 0.0
+    """Run the rejection measurements and return metrics plus Verdict."""
+    timeline, best_fi = _selected_measurement_frame(p, animate)
+    rr = render_frame(
+        animate,
+        timeline,
+        frame=best_fi,
+        settings=_make_measurement_shot(),
+        analyze=True,
     )
-    med_ambient_r = (
-        float(sorted(c.radius_ratio for c in ambient)[len(ambient) // 2])
-        if ambient
-        else 0.0
-    )
-    ratio = med_moving_r / med_ambient_r if med_ambient_r > 0 else 0.0
-    max_edge = float(max(c.transition_width_ratio for c in moving)) if moving else 0.0
-    min_contrast = float(min(c.peak_contrast for c in moving)) if moving else 0.0
-    min_confidence = float(min(c.confidence for c in moving)) if moving else 0.0
-    min_coverage = float(min(c.coverage_fraction for c in moving)) if moving else 0.0
+    ana = rr.analysis
+    metrics = metrics_from_analysis(ana)
+    metrics["analysis_frame"] = float(best_fi)
+    metrics["analysis_fps"] = float(PROBE_FPS)
+    metrics["analysis_time"] = timeline.time_at(best_fi)
 
-    metrics: dict[str, float] = {
-        "colorful_seconds": colorful_s,
-        "richness": avg_richness,
-        "mean": mean_brightness,
-        "contrast_spread": contrast_spread,
-        "shadow_floor": shadow_floor,
-        "highlight_ceiling": highlight_ceiling,
-        "highlight_peak": highlight_peak,
-        "clipped_channel_fraction": clip_frac,
-        "mean_saturation": mean_saturation,
-        "moving_radius_ratio": med_moving_r,
-        "ambient_radius_ratio": med_ambient_r,
-        "coverage_fraction": min_coverage,
-        "radius_ratio": ratio,
-        "transition_width_ratio": max_edge,
-        "peak_contrast": min_contrast,
-        "confidence": min_confidence,
-        "exposure": float(p.look.exposure),
-        "gamma": float(p.look.gamma),
-        "white_point": float(p.look.white_point),
-    }
-
-    def fail(summary: str) -> MeasurementResult:
-        return MeasurementResult(metrics=metrics, verdict=Verdict(False, summary))
-
-    prefix = f"color={colorful_s:.1f}s"
-
-    if colorful_s < MIN_COLORFUL_SECONDS:
-        return fail(f"{prefix} avg={avg_richness:.3f}")
-    if not moving:
-        return fail(f"{prefix} -- no moving lights")
-    if mean_brightness > MAX_MEAN_LUMINANCE:
-        return fail(f"{prefix} mean={mean_brightness:.2f} (too bright)")
-    if mean_brightness < MIN_MEAN_LUMINANCE:
-        return fail(f"{prefix} mean={mean_brightness:.2f} (too dark)")
-    if med_moving_r < MIN_MOVING_RADIUS_RATIO:
-        return fail(f"{prefix} moving_radius_ratio={med_moving_r:.3f} (too small)")
-    if med_moving_r > MAX_MOVING_RADIUS_RATIO:
-        return fail(f"{prefix} moving_radius_ratio={med_moving_r:.3f} (too large)")
-    if min_coverage < MIN_COVERAGE_FRACTION:
-        return fail(f"{prefix} coverage_fraction={min_coverage:.5f} (too small)")
-    if max_edge > MAX_TRANSITION_WIDTH_RATIO:
-        return fail(f"{prefix} transition_width_ratio={max_edge:.4f} (too soft)")
-    if min_contrast < MIN_PEAK_CONTRAST:
-        return fail(f"{prefix} peak_contrast={min_contrast:.3f} (too weak)")
-    if min_confidence < MIN_CONFIDENCE:
-        return fail(f"{prefix} confidence={min_confidence:.2f} (too uncertain)")
-    if ambient and ratio > MAX_RADIUS_RATIO:
-        return fail(
-            f"{prefix} radius_ratio={ratio:.1f} "
-            f"(moving {med_moving_r:.3f} / ambient {med_ambient_r:.3f})"
-        )
-    # Washed-out guard runs last so trivially-dark scenes get caught by the
-    # mean-luminance floor first.
-    if contrast_spread < MIN_CONTRAST_SPREAD:
-        return fail(f"{prefix} contrast_spread={contrast_spread:.2f} (washed out)")
-
-    ratio_msg = f" radius_ratio={ratio:.1f}" if ambient else ""
     return MeasurementResult(
         metrics=metrics,
-        verdict=Verdict(
-            True,
-            f"{prefix} moving_radius_ratio={med_moving_r:.3f} "
-            f"transition_width_ratio={max_edge:.4f} "
-            f"peak_contrast={min_contrast:.3f} "
-            f"confidence={min_confidence:.2f} "
-            f"contrast_spread={contrast_spread:.2f}{ratio_msg}",
+        verdict=_verdict_for_metrics(
+            metrics,
+            moving_count=sum(1 for c in ana.lights if c.id.startswith("light_")),
+            ambient_count=sum(1 for c in ana.lights if c.id.startswith("amb_")),
         ),
+        analysis_frame=best_fi,
+        analysis_fps=PROBE_FPS,
+        analysis_time=timeline.time_at(best_fi),
     )
-
-
-def _empty_metrics(p: Params) -> dict[str, float]:
-    """Metric dict populated only with Params-derived fields (no render)."""
-    metrics = {k: 0.0 for k in METRIC_KEYS}
-    metrics["exposure"] = float(p.look.exposure)
-    metrics["gamma"] = float(p.look.gamma)
-    metrics["white_point"] = float(p.look.white_point)
-    return metrics
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +298,5 @@ def check(p: Params, animate) -> Verdict:
 
 
 def measure_all(p: Params, animate) -> dict[str, float]:
-    """Return every numeric metric the filter (and the overlay) uses.
-
-    Runs the full measurement pass — colour richness, point-light appearance,
-    luminance stats, saturation, clipping — and returns them as a flat
-    dict keyed by short labels suitable for the catalogue overlay.
-    """
+    """Return every numeric metric the filter and catalogue overlay use."""
     return _measure_and_verdict(p, animate).metrics

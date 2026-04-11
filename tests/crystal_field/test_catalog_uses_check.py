@@ -1,18 +1,12 @@
-"""Catalog now rejects entries that would have silently passed the old
-mean-luminance-only shortcut.
-
-The rewrite replaces catalog.py's ``_search_good_params`` with a plain
-retry loop that calls the full ``check.py`` pipeline (richness,
-point-light appearance, edge width, ratio, washed-out).  This test confirms that
-the catalog's acceptance path now uses those extra thresholds by
-constructing a synthetic Params that would pass the old mean-luminance
-window but fails one of the newer gates.
-"""
+"""Catalog retry scoring follows crystal_field's current rejection policy."""
 
 from __future__ import annotations
 
 from examples.python.families.crystal_field.check import (
+    METRIC_KEYS,
     MIN_CONTRAST_SPREAD,
+    PROBE_FPS,
+    measurement_context,
     _measure_and_verdict,
 )
 from examples.python.families.crystal_field.params import (
@@ -36,25 +30,16 @@ def test_failure_distance_is_zero_for_passing():
 
     # Fabricate a metrics dict that lies safely inside every threshold.
     good_metrics = {
-        "colorful_seconds": 5.0,
-        "richness": 0.4,
-        "mean": 0.35,
-        "contrast_spread": 0.40,
-        "shadow_floor": 0.05,
-        "highlight_ceiling": 0.45,
-        "highlight_peak": 0.55,
-        "clipped_channel_fraction": 0.0,
-        "mean_saturation": 0.3,
-        "moving_radius_ratio": 0.08,
-        "ambient_radius_ratio": 0.05,
-        "coverage_fraction": 0.0002,
-        "radius_ratio": 1.3,
-        "transition_width_ratio": 0.01,
-        "peak_contrast": 0.12,
-        "confidence": 0.6,
-        "exposure": -4.5,
-        "gamma": 1.8,
-        "white_point": 0.5,
+        "mean": 120.0,
+        "contrast_spread": 8.0,
+        "near_black_fraction": 0.03,
+        "moving_radius_min": 0.015,
+        "moving_radius_mean": 0.025,
+        "moving_radius_max": 0.035,
+        "ambient_radius_min": 0.010,
+        "ambient_radius_mean": 0.015,
+        "ambient_radius_max": 0.025,
+        "moving_to_ambient_radius_ratio": 1.67,
     }
     result = MeasurementResult(
         metrics=good_metrics,
@@ -72,25 +57,16 @@ def test_failure_distance_increases_with_washed_out():
     from examples.python.families.crystal_field.check import MeasurementResult
 
     washed_metrics = {
-        "colorful_seconds": 5.0,
-        "richness": 0.4,
-        "mean": 0.35,
+        "mean": 120.0,
         "contrast_spread": MIN_CONTRAST_SPREAD / 2,  # half the threshold
-        "shadow_floor": 0.20,
-        "highlight_ceiling": 0.32,
-        "highlight_peak": 0.34,
-        "clipped_channel_fraction": 0.0,
-        "mean_saturation": 0.3,
-        "moving_radius_ratio": 0.08,
-        "ambient_radius_ratio": 0.05,
-        "coverage_fraction": 0.0002,
-        "radius_ratio": 1.3,
-        "transition_width_ratio": 0.01,
-        "peak_contrast": 0.12,
-        "confidence": 0.6,
-        "exposure": -4.5,
-        "gamma": 1.8,
-        "white_point": 0.5,
+        "near_black_fraction": 0.03,
+        "moving_radius_min": 0.015,
+        "moving_radius_mean": 0.025,
+        "moving_radius_max": 0.035,
+        "ambient_radius_min": 0.010,
+        "ambient_radius_mean": 0.015,
+        "ambient_radius_max": 0.025,
+        "moving_to_ambient_radius_ratio": 1.67,
     }
     result = MeasurementResult(
         metrics=washed_metrics,
@@ -105,8 +81,7 @@ def test_measure_and_verdict_populates_all_overlay_keys():
 
     This protects against silent drops in ``measure_all`` — if the overlay
     expects a key and check.py stops producing it, the overlay would show
-    a blank line.  Here we use a fast synthetic Params with one ambient-only
-    scene to keep the test cheap.
+    a blank line.  Here we use a small synthetic Params to keep the test cheap.
     """
     grid = GridConfig(rows=3, cols=4, spacing=0.30, offset_rows=False, hole_fraction=0.0)
     shape = ShapeConfig(
@@ -139,24 +114,15 @@ def test_measure_and_verdict_populates_all_overlay_keys():
 
     animate = build(p)
     result = _measure_and_verdict(p, animate)
+    ctx = measurement_context(p, animate)
 
     # Every overlay key must be present, regardless of pass/fail.
-    required_keys = {
-        "colorful_seconds",
-        "mean",
-        "contrast_spread",
-        "highlight_peak",
-        "clipped_channel_fraction",
-        "mean_saturation",
-        "moving_radius_ratio",
-        "ambient_radius_ratio",
-        "radius_ratio",
-        "transition_width_ratio",
-        "peak_contrast",
-        "confidence",
-        "exposure",
-        "gamma",
-        "white_point",
-    }
+    required_keys = set(METRIC_KEYS)
     missing = required_keys - set(result.metrics.keys())
     assert not missing, f"measure_all missing keys: {missing}"
+    assert result.analysis_fps == PROBE_FPS
+    assert result.analysis_frame == ctx.frame
+    assert result.analysis_time == ctx.time
+    assert result.metrics["analysis_frame"] == float(ctx.frame)
+    assert result.metrics["analysis_fps"] == float(ctx.fps)
+    assert result.metrics["analysis_time"] == ctx.time

@@ -189,6 +189,19 @@ TEST(frame_luminance_solid_grey_cpu) {
     ASSERT_NEAR(a.luminance.clipped_channel_fraction, 0.0f, 1e-6f);
 }
 
+TEST(frame_luminance_near_black_white_defaults_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        7, 7, 7,
+        10, 10, 10,
+        245, 245, 245,
+        248, 248, 248,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.luminance.near_black_fraction, 0.5f, 1e-6f);
+    ASSERT_NEAR(a.luminance.near_white_fraction, 0.5f, 1e-6f);
+}
+
 TEST(frame_luminance_tiny_solid_grey_percentiles_cpu) {
     for (int size : {1, 4}) {
         auto buf = make_solid_rgb(size, size, 128, 128, 128);

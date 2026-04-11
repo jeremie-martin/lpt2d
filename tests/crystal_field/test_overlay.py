@@ -24,21 +24,17 @@ def _make_background(path: Path, size: tuple[int, int] = (640, 360)) -> None:
 
 def _sample_metrics() -> dict[str, float]:
     return {
-        "mean": 0.42,
-        "contrast_spread": 0.58,
-        "highlight_peak": 0.97,
-        "clipped_channel_fraction": 0.02,
-        "mean_saturation": 0.31,
-        "colorful_seconds": 3.5,
-        "moving_radius_ratio": 0.18,
-        "ambient_radius_ratio": 0.12,
-        "radius_ratio": 1.5,
-        "transition_width_ratio": 0.021,
-        "peak_contrast": 0.11,
-        "confidence": 0.72,
-        "exposure": -4.2,
-        "gamma": 1.7,
-        "white_point": 0.6,
+        "mean": 118.0,
+        "contrast_spread": 12.0,
+        "near_black_fraction": 0.025,
+        "analysis_time": 1.25,
+        "moving_radius_min": 0.019,
+        "moving_radius_mean": 0.026,
+        "moving_radius_max": 0.033,
+        "ambient_radius_min": 0.011,
+        "ambient_radius_mean": 0.016,
+        "ambient_radius_max": 0.021,
+        "moving_to_ambient_radius_ratio": 1.62,
     }
 
 

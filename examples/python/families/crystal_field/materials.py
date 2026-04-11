@@ -7,7 +7,7 @@ the visual reasoning.
 
 from __future__ import annotations
 
-from anim import Material, diffuse, glass, opaque_mirror
+from anim import Material, diffuse, glass, mirror
 
 from .params import WALL, WALL_ID, MaterialConfig
 
@@ -47,7 +47,7 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
         return mats
 
     if cfg.outcome == "brushed_metal":
-        # Solid metallic (metallic=1, roughness=0.6, transmission=0), high
+        # Transparent metallic (metallic=1, roughness=0.6, transmission=1), high
         # albedo, fill ∈ [0.066, 0.15].  Four color sub-cases, driven by the
         # shape of ``color_names``:
         #   []              no color at all — single uncolored material
@@ -57,15 +57,13 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
         # A ``None`` slot means "no color for this group, still brushed metal
         # with the same fill".  See analysis.md and sampling.py.
         if not cfg.color_names:
-            mats["crystal"] = opaque_mirror(cfg.albedo, roughness=0.6, fill=cfg.fill)
+            mats["crystal"] = mirror(cfg.albedo, roughness=0.6, fill=cfg.fill)
             return mats
         for i, name in enumerate(cfg.color_names):
-            # opaque_mirror(color=None, ...) resolves to neutral spectral
+            # mirror(color=None, ...) resolves to neutral spectral
             # coefficients, giving an uncolored brushed metal material with
             # the same fill as its colored neighbour.
-            mats[f"crystal_c{i}"] = opaque_mirror(
-                cfg.albedo, roughness=0.6, color=name, fill=cfg.fill
-            )
+            mats[f"crystal_c{i}"] = mirror(cfg.albedo, roughness=0.6, color=name, fill=cfg.fill)
         return mats
 
     raise ValueError(f"Unknown material outcome: {cfg.outcome}")

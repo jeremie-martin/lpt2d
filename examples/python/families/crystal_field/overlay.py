@@ -1,10 +1,10 @@
 """Draw metric overlays onto rendered catalog images.
 
-The catalog exists to give the user a visual-vs-numeric baseline — you
-look at each image and want to know *which numbers the filters saw when
-deciding whether to accept it*.  This module draws a small text block on
-the bottom-left of each PNG showing the measurements that ``check.py``
-computed for that frame.
+The catalog exists to give the user a visual-vs-numeric baseline: the
+render, the exported shot JSON, and this overlay all use the same frame
+selected by ``check.py`` for probe analysis.  The numbers are the core
+analysis fields exposed through the Python binding, plus the moving vs
+ambient light-radius aggregates used by the crystal_field rejection policy.
 
 The overlay is applied to the PNG in place (loaded, modified, saved).
 It is deliberately kept simple: one helper, no abstractions.
@@ -20,30 +20,29 @@ from PIL import Image, ImageDraw, ImageFont
 # Display order and format spec for each metric.  Only keys listed here are
 # rendered; extras in the metrics dict are silently dropped.
 _METRIC_ORDER: tuple[tuple[str, str, str], ...] = (
-    ("mean", "mean", "%.2f"),
-    ("contrast_spread", "spread", "%.2f"),
-    ("highlight_peak", "peak", "%.2f"),
-    ("clipped_channel_fraction", "clipped", "%.1f%%"),
-    ("mean_saturation", "sat", "%.2f"),
-    ("colorful_seconds", "color", "%.1fs"),
-    ("moving_radius_ratio", "moving_r", "%.1f%%"),
-    ("ambient_radius_ratio", "ambient_r", "%.1f%%"),
-    ("radius_ratio", "ratio", "%.2f"),
-    ("transition_width_ratio", "edge", "%.1f%%"),
-    ("peak_contrast", "contrast", "%.3f"),
-    ("confidence", "conf", "%.2f"),
-    ("exposure", "exp", "%.2f"),
-    ("gamma", "gam", "%.2f"),
-    ("white_point", "wp", "%.2f"),
+    ("analysis_time", "analysis_time", "%.2fs"),
+    ("mean", "brightness", "%.1f"),
+    ("contrast_spread", "contrast_spread", "%.1f"),
+    ("near_black_fraction", "near_black", "%.1f%%"),
+    ("moving_radius_min", "moving_min", "%.1f%%"),
+    ("moving_radius_mean", "moving_mean", "%.1f%%"),
+    ("moving_radius_max", "moving_max", "%.1f%%"),
+    ("ambient_radius_min", "ambient_min", "%.1f%%"),
+    ("ambient_radius_mean", "ambient_mean", "%.1f%%"),
+    ("ambient_radius_max", "ambient_max", "%.1f%%"),
+    ("moving_to_ambient_radius_ratio", "moving_to_ambient", "%.2f"),
 )
 
 
 def _format_metric(label: str, key: str, value: float, fmt: str) -> str:
     percent_keys = {
-        "clipped_channel_fraction",
-        "moving_radius_ratio",
-        "ambient_radius_ratio",
-        "transition_width_ratio",
+        "near_black_fraction",
+        "moving_radius_min",
+        "moving_radius_mean",
+        "moving_radius_max",
+        "ambient_radius_min",
+        "ambient_radius_mean",
+        "ambient_radius_max",
     }
     scaled = value * 100.0 if key in percent_keys else value
     return f"{label}: {fmt % scaled}"

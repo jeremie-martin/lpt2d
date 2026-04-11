@@ -48,8 +48,8 @@ struct LuminanceStats {
 
 LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
                                   int clipped, int width, int height,
-                                  int near_black_bin_max = 5,
-                                  int near_white_bin_min = 250);
+                                  int near_black_bin_max = 10,
+                                  int near_white_bin_min = 245);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Colour statistics
@@ -122,8 +122,8 @@ struct FrameAnalysisParams {
     bool analyze_lights = true;
     PointLightAppearanceParams lights = {};
     float saturation_threshold = 0.05f;
-    int near_black_bin_max = 5;
-    int near_white_bin_min = 250;
+    int near_black_bin_max = 10;
+    int near_white_bin_min = 245;
 };
 
 // CPU RGB8 analyzer over a top-left-origin final-frame buffer.

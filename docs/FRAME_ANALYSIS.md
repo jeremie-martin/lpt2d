@@ -77,8 +77,8 @@ highlights, and clipping in the final image.
 | `highlight_peak` | 99th-percentile brightness |
 | `contrast_std` | Standard deviation of luminance |
 | `contrast_spread` | `highlight_ceiling - shadow_floor` |
-| `near_black_fraction` | Fraction of the image at or below the near-black threshold |
-| `near_white_fraction` | Fraction of the image at or above the near-white threshold |
+| `near_black_fraction` | Fraction of the image at or below the near-black threshold; default luminance bin `10` |
+| `near_white_fraction` | Fraction of the image at or above the near-white threshold; default luminance bin `245` |
 | `clipped_channel_fraction` | Fraction of the image where any RGB channel is exactly 255 |
 
 Interpretation:
@@ -191,8 +191,8 @@ thresholds that define public semantic boundaries.
 | `analyze_luminance` | Populate `luminance` |
 | `analyze_color` | Populate `color` |
 | `analyze_lights` | Populate `lights` |
-| `near_black_bin_max` | Upper luminance bin counted as near black |
-| `near_white_bin_min` | Lower luminance bin counted as near white |
+| `near_black_bin_max` | Upper luminance bin counted as near black; default `10` |
+| `near_white_bin_min` | Lower luminance bin counted as near white; default `245` |
 | `saturation_threshold` | Chroma threshold used by color analysis |
 | `lights.search_radius_ratio` | Maximum search distance around each light, as a short-side fraction |
 | `lights.radius_signal_gamma` | Gamma used only for the internal grayscale light-radius signal; default `0.5` |
