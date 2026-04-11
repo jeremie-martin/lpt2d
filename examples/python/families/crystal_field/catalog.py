@@ -9,7 +9,7 @@ Catalog structure vs. general sampling path
 The catalog **fixes** the structural dimensions per entry (material preset,
 shape, grid size, wavelength range, n_lights) and **draws** the rest:
 ``build_seed``, full :class:`LookConfig` (including exposure, gamma,
-contrast, white_point, temperature, vignette, chromatic_aberration),
+contrast, white_point, temperature, highlights, shadows, chromatic_aberration),
 ``ambient.intensity``, and ``moving_intensity``.  For each entry the
 catalog runs a plain retry loop against the full ``check.py`` pipeline
 until a passing candidate is found or the attempt budget is exhausted.
@@ -42,12 +42,18 @@ from anim.family import Verdict
 
 from .check import (
     MAX_AMBIENT_RADIUS_RATIO,
+    BLACK_DIFFUSE_MAX_SHADOW_FRACTION,
+    GLASS_MAX_MEAN_LUMINANCE,
     MAX_MEAN_LUMINANCE,
     MAX_MOVING_RADIUS_RATIO,
     MAX_NEAR_BLACK_FRACTION,
     MAX_RADIUS_RATIO,
+    MAX_MEAN_SATURATION,
+    MAX_SHADOW_FLOOR,
+    MAX_SHADOW_FRACTION,
     MIN_AMBIENT_RADIUS_RATIO,
     MIN_CONTRAST_SPREAD,
+    MIN_MEAN_LUMINANCE,
     MIN_MOVING_RADIUS_RATIO,
     MIN_RADIUS_RATIO,
     METRIC_KEYS,
@@ -98,7 +104,6 @@ GRID_SIZES = {
 LIGHT_COLORS = {
     "white": (380.0, 780.0),
     "orange": (550.0, 700.0),
-    "yellow": (515.0, 700.0),
     "deep_orange": (570.0, 700.0),
 }
 
@@ -137,8 +142,8 @@ def _build_catalog_entries() -> list[dict]:
 
     Shape is no longer a matrix axis — it's part of the per-attempt
     randomness (same as material params, look dims, intensities).  With
-    5 outcomes × 3 grids × 4 light colors × 2 n_lights, the catalog
-    contains **120 entries**.
+    5 outcomes × 3 grids × 3 light colors × 2 n_lights, the catalog
+    contains **90 entries**.
     """
     entries = []
 
@@ -223,7 +228,7 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
 # ── Retry loop ───────────────────────────────────────────────────────────
 
 
-def _failure_distance(result: MeasurementResult) -> float:
+def _failure_distance(result: MeasurementResult, outcome: str | None = None) -> float:
     """Heuristic score: how far a failing result is from passing.
 
     Lower = closer.  Used to pick the best-effort fallback from amongst
@@ -233,14 +238,34 @@ def _failure_distance(result: MeasurementResult) -> float:
     m = result.metrics
     dist = 0.0
 
-    if m["mean"] > MAX_MEAN_LUMINANCE:
-        dist += (m["mean"] - MAX_MEAN_LUMINANCE) / 255.0
+    max_mean_luminance = (
+        GLASS_MAX_MEAN_LUMINANCE if outcome == "glass" else MAX_MEAN_LUMINANCE
+    )
+    max_shadow_fraction = (
+        BLACK_DIFFUSE_MAX_SHADOW_FRACTION
+        if outcome == "black_diffuse"
+        else MAX_SHADOW_FRACTION
+    )
+
+    if m["mean"] < MIN_MEAN_LUMINANCE:
+        dist += (MIN_MEAN_LUMINANCE - m["mean"]) / 255.0
+    if m["mean"] > max_mean_luminance:
+        dist += (m["mean"] - max_mean_luminance) / 255.0
+
+    if m["shadow_floor"] > MAX_SHADOW_FLOOR:
+        dist += (m["shadow_floor"] - MAX_SHADOW_FLOOR) / 255.0
 
     if m["contrast_spread"] < MIN_CONTRAST_SPREAD:
         dist += (MIN_CONTRAST_SPREAD - m["contrast_spread"]) / 255.0
 
     if m["near_black_fraction"] > MAX_NEAR_BLACK_FRACTION:
         dist += m["near_black_fraction"] - MAX_NEAR_BLACK_FRACTION
+
+    if m["shadow_fraction"] > max_shadow_fraction:
+        dist += m["shadow_fraction"] - max_shadow_fraction
+
+    if m["mean_saturation"] >= MAX_MEAN_SATURATION:
+        dist += m["mean_saturation"] - MAX_MEAN_SATURATION
 
     if m["moving_radius_min"] < MIN_MOVING_RADIUS_RATIO:
         dist += (MIN_MOVING_RADIUS_RATIO - m["moving_radius_min"]) * 100.0
@@ -282,7 +307,7 @@ def _find_good_params(
         if result.verdict.ok:
             return (p, result)
 
-        score = _failure_distance(result)
+        score = _failure_distance(result, outcome=e["outcome"])
         if score < best_score:
             best = (p, result)
             best_score = score
@@ -516,7 +541,7 @@ Red borders mark entries that failed <code>check.py</code>. Click any image for 
             parts.append(f"<th>{_html.escape(gn)}<br>{g.rows}×{g.cols}</th>")
         parts.append("</tr>")
 
-        for lc_name in ["white", "orange", "yellow", "deep_orange"]:
+        for lc_name in LIGHT_COLORS:
             for nl in [1, 2]:
                 parts.append(f"<tr><th>{_html.escape(lc_name)} {nl}L</th>")
                 for gn in ["small", "medium", "large"]:

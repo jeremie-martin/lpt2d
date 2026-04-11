@@ -37,7 +37,7 @@ walls bounce escaped light back into the field.
 4. **Light** — 1–3 moving lights at constant speed.  Speed decreases
    with more lights and with glass material.  When objects have no
    spectral color, 35% chance the moving light gets a warm color
-   (orange/yellow spectral range).  Ambient lights at corners are the
+   (orange/deep-orange spectral range).  Ambient lights at corners are the
    default (70%).
 
 ## Commands

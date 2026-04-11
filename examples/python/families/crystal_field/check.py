@@ -30,12 +30,18 @@ MIN_MOVING_RADIUS_RATIO = 0.010
 MAX_MOVING_RADIUS_RATIO = 0.042
 MIN_AMBIENT_RADIUS_RATIO = 0.008
 MAX_AMBIENT_RADIUS_RATIO = 0.042
-MIN_RADIUS_RATIO = 1.00
+MIN_RADIUS_RATIO = 1.33
 MAX_RADIUS_RATIO = 2.33
 
 MAX_NEAR_BLACK_FRACTION = 0.035
-MAX_MEAN_LUMINANCE = 150.0
-MIN_CONTRAST_SPREAD = 5.0
+MIN_MEAN_LUMINANCE = 60.0
+MAX_MEAN_LUMINANCE = 140.0
+GLASS_MAX_MEAN_LUMINANCE = 120.0
+MAX_SHADOW_FLOOR = 80.0
+MIN_CONTRAST_SPREAD = 50.0
+MAX_SHADOW_FRACTION = 0.20
+BLACK_DIFFUSE_MAX_SHADOW_FRACTION = 0.50
+MAX_MEAN_SATURATION = 0.66
 
 METRIC_KEYS: tuple[str, ...] = (
     "mean",
@@ -43,6 +49,7 @@ METRIC_KEYS: tuple[str, ...] = (
     "percentile_10",
     "median",
     "percentile_90",
+    "shadow_floor",
     "contrast_spread",
     "contrast_std",
     "histogram_entropy",
@@ -192,6 +199,7 @@ def metrics_from_analysis(analysis) -> dict[str, float]:
         "percentile_10": float(analysis.luminance.percentile_10),
         "median": float(analysis.luminance.median),
         "percentile_90": float(analysis.luminance.percentile_90),
+        "shadow_floor": float(analysis.luminance.shadow_floor),
         "contrast_spread": float(analysis.luminance.contrast_spread),
         "contrast_std": float(analysis.luminance.contrast_std),
         "histogram_entropy": float(analysis.luminance.histogram_entropy),
@@ -230,6 +238,7 @@ def _verdict_for_metrics(
     *,
     moving_count: int,
     ambient_count: int,
+    outcome: str | None = None,
 ) -> Verdict:
     """Apply the rejection thresholds to already-measured metrics."""
     moving_radius_mean = metrics["moving_radius_mean"]
@@ -241,7 +250,18 @@ def _verdict_for_metrics(
     radius_ratio = metrics["moving_to_ambient_radius_ratio"]
     near_black_fraction = metrics["near_black_fraction"]
     mean_brightness = metrics["mean"]
+    shadow_floor = metrics["shadow_floor"]
     contrast_spread = metrics["contrast_spread"]
+    shadow_fraction = metrics["shadow_fraction"]
+    mean_saturation = metrics["mean_saturation"]
+    max_mean_luminance = (
+        GLASS_MAX_MEAN_LUMINANCE if outcome == "glass" else MAX_MEAN_LUMINANCE
+    )
+    max_shadow_fraction = (
+        BLACK_DIFFUSE_MAX_SHADOW_FRACTION
+        if outcome == "black_diffuse"
+        else MAX_SHADOW_FRACTION
+    )
 
     prefix = (
         f"moving_mean={moving_radius_mean:.3f} "
@@ -273,15 +293,24 @@ def _verdict_for_metrics(
         )
     if near_black_fraction > MAX_NEAR_BLACK_FRACTION:
         return Verdict(False, f"{prefix} near_black={near_black_fraction:.1%} (too dark)")
-    if mean_brightness > MAX_MEAN_LUMINANCE:
+    if mean_brightness < MIN_MEAN_LUMINANCE:
+        return Verdict(False, f"{prefix} brightness={mean_brightness:.1f} (too dark)")
+    if mean_brightness > max_mean_luminance:
         return Verdict(False, f"{prefix} brightness={mean_brightness:.1f} (too bright)")
+    if shadow_floor > MAX_SHADOW_FLOOR:
+        return Verdict(False, f"{prefix} shadows={shadow_floor:.0f} (too bright)")
     if contrast_spread < MIN_CONTRAST_SPREAD:
         return Verdict(False, f"{prefix} contrast_spread={contrast_spread:.1f} (too low)")
+    if shadow_fraction > max_shadow_fraction:
+        return Verdict(False, f"{prefix} shadow_pixels={shadow_fraction:.1%} (too many)")
+    if mean_saturation >= MAX_MEAN_SATURATION:
+        return Verdict(False, f"{prefix} saturation={mean_saturation:.3f} (too high)")
 
     return Verdict(
         True,
         f"{prefix} near_black={near_black_fraction:.1%} "
-        f"brightness={mean_brightness:.1f} contrast_spread={contrast_spread:.1f}",
+        f"brightness={mean_brightness:.1f} shadows={shadow_floor:.0f} "
+        f"contrast_spread={contrast_spread:.1f}",
     )
 
 
@@ -312,6 +341,7 @@ def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
             metrics,
             moving_count=sum(1 for c in ana.lights if c.id.startswith("light_")),
             ambient_count=sum(1 for c in ana.lights if c.id.startswith("amb_")),
+            outcome=p.material.outcome,
         ),
         analysis_frame=best_fi,
         analysis_fps=PROBE_FPS,

@@ -12,8 +12,33 @@ from anim import Material, diffuse, glass, mirror
 from .params import WALL, WALL_ID, MaterialConfig
 
 
+def _wall_material(cfg: MaterialConfig) -> Material:
+    """Return the scene wall material, allowing brushed-metal wall overrides."""
+    metallic = cfg.wall_metallic if cfg.outcome == "brushed_metal" else WALL.metallic
+    return Material(
+        ior=WALL.ior,
+        roughness=WALL.roughness,
+        metallic=metallic,
+        transmission=WALL.transmission,
+        absorption=WALL.absorption,
+        cauchy_b=WALL.cauchy_b,
+        albedo=WALL.albedo,
+        emission=WALL.emission,
+        spectral_c0=WALL.spectral_c0,
+        spectral_c1=WALL.spectral_c1,
+        spectral_c2=WALL.spectral_c2,
+        fill=WALL.fill,
+    )
+
+
+def _brushed_material(cfg: MaterialConfig, color: str | None) -> Material:
+    mat = mirror(cfg.albedo, roughness=0.6, color=color, fill=cfg.fill)
+    mat.ior = cfg.ior
+    return mat
+
+
 def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
-    mats: dict[str, Material] = {WALL_ID: WALL}
+    mats: dict[str, Material] = {WALL_ID: _wall_material(cfg)}
 
     if cfg.outcome == "glass":
         # Refractive sphere.  Albedo is drawn in sampling for per-branch
@@ -57,13 +82,13 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
         # A ``None`` slot means "no color for this group, still brushed metal
         # with the same fill".  See analysis.md and sampling.py.
         if not cfg.color_names:
-            mats["crystal"] = mirror(cfg.albedo, roughness=0.6, fill=cfg.fill)
+            mats["crystal"] = _brushed_material(cfg, None)
             return mats
         for i, name in enumerate(cfg.color_names):
             # mirror(color=None, ...) resolves to neutral spectral
             # coefficients, giving an uncolored brushed metal material with
             # the same fill as its colored neighbour.
-            mats[f"crystal_c{i}"] = mirror(cfg.albedo, roughness=0.6, color=name, fill=cfg.fill)
+            mats[f"crystal_c{i}"] = _brushed_material(cfg, name)
         return mats
 
     raise ValueError(f"Unknown material outcome: {cfg.outcome}")

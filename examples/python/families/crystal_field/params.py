@@ -77,12 +77,12 @@ class MaterialConfig:
     - ``gray_diffuse``    : ``albedo``, ``fill``. ``color_names`` empty.
     - ``colored_diffuse`` : ``albedo``, ``fill``, ``color_names`` has exactly one
                             palette entry (strictly 1 color for now).
-    - ``brushed_metal``   : ``albedo``, ``fill``. ``color_names`` has 0, 1, or 2
-                            entries. Any slot may be ``None`` meaning
-                            "no color for this group, just fill" — this is
-                            how the "mixed" brushed-metal sub-case expresses
-                            one colored half and one uncolored half sharing
-                            the same fill value.
+    - ``brushed_metal``   : ``albedo``, ``fill``, ``ior``, ``wall_metallic``.
+                            ``color_names`` has 0, 1, or 2 entries. Any slot
+                            may be ``None`` meaning "no color for this group,
+                            just fill" — this is how the "mixed" brushed-metal
+                            sub-case expresses one colored half and one
+                            uncolored half sharing the same fill value.
 
     The same-fill-per-scene rule applies to every outcome: the ``fill`` value
     is drawn once for the scene and used for every material inside it,
@@ -92,10 +92,11 @@ class MaterialConfig:
     outcome: MaterialOutcome
     albedo: float  # always ∈ [0.7, 1.0] — defined inline per branch (not hoisted)
     fill: float
-    ior: float = 0.0  # glass only
+    ior: float = 0.0  # glass + brushed_metal
     cauchy_b: float = 0.0  # glass only
     absorption: float = 0.0  # glass only
     color_names: list[str | None] = field(default_factory=list)
+    wall_metallic: float = 1.0  # brushed_metal only; others keep the mirror wall fully metallic
 
 
 @dataclass
@@ -132,6 +133,8 @@ class LookConfig:
     contrast: float = 1.0
     white_point: float = 0.5
     temperature: float = 0.0
+    highlights: float = 0.0
+    shadows: float = 0.0
     vignette: float = 0.0
     vignette_radius: float = 0.7
     chromatic_aberration: float = 0.0

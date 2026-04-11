@@ -31,8 +31,11 @@ def test_failure_distance_is_zero_for_passing():
     # Fabricate a metrics dict that lies safely inside every threshold.
     good_metrics = {
         "mean": 120.0,
-        "contrast_spread": 8.0,
+        "shadow_floor": 50.0,
+        "contrast_spread": 80.0,
         "near_black_fraction": 0.03,
+        "shadow_fraction": 0.10,
+        "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.025,
         "moving_radius_max": 0.035,
@@ -58,8 +61,11 @@ def test_failure_distance_increases_with_washed_out():
 
     washed_metrics = {
         "mean": 120.0,
+        "shadow_floor": 50.0,
         "contrast_spread": MIN_CONTRAST_SPREAD / 2,  # half the threshold
         "near_black_fraction": 0.03,
+        "shadow_fraction": 0.10,
+        "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.025,
         "moving_radius_max": 0.035,

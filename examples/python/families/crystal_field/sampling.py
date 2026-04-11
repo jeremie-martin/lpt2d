@@ -16,10 +16,11 @@ The five peer outcomes:
 4. ``colored_diffuse`` — high-albedo diffuse, fill ∈ [0.12, 0.22], strictly 1 color
 5. ``brushed_metal``   — metallic+roughness, fill ∈ [0.066, 0.15], 0/1/2 colors
 
-Look dims (gamma, contrast, white_point, temperature, vignette, chromatic
-aberration) are drawn by ``_random_look`` alongside the structural params,
-with conditional suppression based on the already-drawn material and
-light colour.
+Look dims (gamma, contrast, white_point, temperature, highlights, shadows,
+chromatic aberration) are drawn by ``_random_look`` alongside the structural
+params, with conditional suppression based on the already-drawn material and
+light colour. Vignette is temporarily disabled because it corrupts the frame
+analysis thresholds.
 """
 
 from __future__ import annotations
@@ -202,6 +203,8 @@ def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
     """
     albedo = rng.uniform(0.7, 1.0)
     fill = rng.uniform(0.066, 0.15)
+    ior = 1.0 if rng.random() < 0.5 else rng.uniform(1.0, 1.4)
+    wall_metallic = rng.uniform(0.66, 1.0)
 
     sub = rng.choice(["no_color", "one_color", "mixed", "two_colors"])
     if sub == "no_color":
@@ -218,7 +221,9 @@ def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
         outcome="brushed_metal",
         albedo=albedo,
         fill=fill,
+        ior=ior,
         color_names=color_names,
+        wall_metallic=wall_metallic,
     )
 
 
@@ -227,9 +232,7 @@ def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
 # Warm spectral ranges for coloured moving lights.
 _WARM_SPECTRA = [
     (550.0, 700.0),  # orange
-    (515.0, 700.0),  # yellow-orange
     (570.0, 700.0),  # deep orange
-    (500.0, 620.0),  # warm green-yellow
 ]
 
 
@@ -305,13 +308,12 @@ def _random_look(
     else:
         temperature = rng.uniform(0.0, 0.55)
 
-    # Vignette: 50% off (strength 0, radius default), 50% subtle fade.
-    if rng.random() < 0.5:
-        vignette = 0.0
-        vignette_radius = 0.7
-    else:
-        vignette = rng.uniform(0.0, 0.2)
-        vignette_radius = rng.uniform(1.5, 1.8)
+    highlights = rng.uniform(-0.22, 0.22)
+    shadows = rng.uniform(-0.22, 0.22)
+
+    # Vignette is temporarily disabled because it biases frame-analysis metrics.
+    vignette = 0.0
+    vignette_radius = 0.7
 
     # Chromatic aberration: 50% off, 50% subtle — forbidden on glass.
     if rng.random() < 0.5 or material.outcome == "glass":
@@ -325,6 +327,8 @@ def _random_look(
         contrast=contrast,
         white_point=white_point,
         temperature=temperature,
+        highlights=highlights,
+        shadows=shadows,
         vignette=vignette,
         vignette_radius=vignette_radius,
         chromatic_aberration=chromatic_aberration,
