@@ -100,7 +100,10 @@ LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
     s.clipped_channel_fraction = static_cast<float>(clipped) / static_cast<float>(n);
 
     const auto target = [n](float pct) -> std::size_t {
-        return static_cast<std::size_t>(pct * static_cast<float>(n));
+        const double p = std::clamp(static_cast<double>(pct), 0.0, 1.0);
+        const auto rank = static_cast<std::size_t>(
+            std::ceil(p * static_cast<double>(n)));
+        return std::clamp<std::size_t>(rank, 1u, n);
     };
     const std::size_t shadow_target = target(0.05f);
     const std::size_t median_target = target(0.50f);

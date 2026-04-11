@@ -189,6 +189,18 @@ TEST(frame_luminance_solid_grey_cpu) {
     ASSERT_NEAR(a.luminance.clipped_channel_fraction, 0.0f, 1e-6f);
 }
 
+TEST(frame_luminance_tiny_solid_grey_percentiles_cpu) {
+    for (int size : {1, 4}) {
+        auto buf = make_solid_rgb(size, size, 128, 128, 128);
+        auto a = analyze_cpu(buf, size, size);
+
+        ASSERT_NEAR(a.luminance.shadow_floor, 128.0f, 1.0f);
+        ASSERT_NEAR(a.luminance.median, 128.0f, 1.0f);
+        ASSERT_NEAR(a.luminance.highlight_ceiling, 128.0f, 1.0f);
+        ASSERT_NEAR(a.luminance.highlight_peak, 128.0f, 1.0f);
+    }
+}
+
 TEST(frame_luminance_half_black_half_white_cpu) {
     auto buf = make_half_black_white(32, 32);
     auto a = analyze_cpu(buf, 32, 32);
