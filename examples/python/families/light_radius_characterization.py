@@ -279,18 +279,13 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     short_side = min(rr.width, rr.height)
 
     radius_color = (60, 255, 90, 255)
-    edge_color = (60, 255, 90, 120)
-    core_color = (70, 210, 255, 230)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
     radius_px = float(metrics["cpp_radius_ratio"]) * short_side
-    edge_px = float(metrics["cpp_transition_width_ratio"]) * short_side
-    if edge_px > 1.0:
-        _draw_stroked_ring(draw, cx, cy, max(0.0, radius_px - 0.5 * edge_px), edge_color, line_width)
-        _draw_stroked_ring(draw, cx, cy, radius_px + 0.5 * edge_px, edge_color, line_width)
+    # Draw exactly one circle: the official apparent-radius metric.
+    # Diagnostic core/edge metrics are printed below, but not drawn as rings.
     _draw_stroked_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3))
-    _draw_stroked_ring(draw, cx, cy, float(metrics["cpp_saturated_radius_ratio"]) * short_side, core_color, line_width)
     draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
 
     wave_min = float(metrics["wavelength_min"])
@@ -309,11 +304,11 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             radius_color,
         ),
         (
-            f"CYAN diagnostic saturated-core radius: {100*float(metrics['cpp_saturated_radius_ratio']):.2f}{ratio_unit}",
-            core_color,
+            f"Diagnostic core radius (not drawn): {100*float(metrics['cpp_saturated_radius_ratio']):.2f}{ratio_unit}",
+            white,
         ),
         (
-            f"Edge softness (80% to 20% falloff): {100*float(metrics['cpp_transition_width_ratio']):.2f}{ratio_unit}; "
+            f"Diagnostic edge softness (not drawn): {100*float(metrics['cpp_transition_width_ratio']):.2f}{ratio_unit}; "
             f"confidence={float(metrics['cpp_confidence']):.2f}",
             white,
         ),

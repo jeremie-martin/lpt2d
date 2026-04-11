@@ -954,7 +954,6 @@ int App::run(const AppConfig& config) {
                 const float sy = c.image_y * sy_scale;
                 const ImVec2 center(sx, sy);
                 const float r_screen = c.radius_ratio * short_side * r_scale;
-                const float sat_screen = c.saturated_radius_ratio * short_side * r_scale;
 
                 const bool is_moving = c.id.rfind("light_", 0) == 0;
                 const bool ok = (!is_moving) ||
@@ -966,11 +965,9 @@ int App::run(const AppConfig& config) {
                      c.confidence >= kMinConfidence);
                 const ImU32 col = ok ? IM_COL32(60, 220, 100, 220)
                                      : IM_COL32(230, 80, 80, 220);
-                const ImU32 col_sat = ok ? IM_COL32(60, 220, 100, 110)
-                                         : IM_COL32(230, 80, 80, 110);
+                // Draw exactly one perimeter: the official apparent-radius metric.
+                // Saturated-core and edge-width diagnostics stay in the Stats table.
                 dl->AddCircle(center, r_screen, col, 0, 1.5f * dpi_scale);
-                if (sat_screen > 0.0f)
-                    dl->AddCircle(center, sat_screen, col_sat, 0, 1.0f * dpi_scale);
                 dl->AddCircleFilled(center, 2.0f * dpi_scale, col);
                 char label[64];
                 std::snprintf(label, sizeof(label), "%s r%.1f%%",
