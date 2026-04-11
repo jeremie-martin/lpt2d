@@ -131,10 +131,7 @@ disk visible in the current final frame.
 | `image_x`, `image_y` | Projected light center in the analyzed camera image |
 | `visible` | Whether a measurable light appearance was found |
 | `radius_ratio` | Official apparent light-disk radius, normalized by image short side |
-| `radius_candidate_sector_consensus_ratio` | Temporary exploration candidate: radius with strongest angular-sector edge agreement |
-| `radius_candidate_knee_ratio` | Temporary exploration candidate: knee of the global radial signal profile |
-| `radius_candidate_robust_sector_edge_ratio` | Temporary exploration candidate: median of robust per-sector shaped-profile edge estimates, with knee fallback |
-| `radius_candidate_outer_shoulder_ratio` | Temporary exploration candidate: outer edge of a broad shoulder after a small bright core |
+| `radius_candidate_sector_consensus_ratio` | Temporary comparison candidate: radius with strongest angular-sector edge agreement |
 | `coverage_fraction` | Area of that disk as a fraction of the image |
 | `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
 | `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |
@@ -147,12 +144,11 @@ disk visible in the current final frame.
 `radius_ratio` is the main answer for "how big is the circle of light?" It
 should be the value used by tooling, overlays, and automated filters.
 
-The `radius_candidate_*` fields are temporary exploration outputs. They are
-exported so the GPU analyzer, C++ API, Python bindings, GUI, and characterization
-gallery can compare detector variants from the same final camera image. They
-are not intended to become permanent API surface. Once the detector is selected,
-these fields should be removed and the chosen method should populate
-`radius_ratio`.
+`radius_candidate_sector_consensus_ratio` is the only remaining comparison
+candidate. It is exported so the GPU analyzer, C++ API, Python bindings, GUI,
+and characterization gallery can compare the official radius with the strongest
+alternate result from the same final camera image. It is not intended to become
+permanent API surface.
 
 The light-radius characterization gallery includes stability sweeps for gamma,
 ray count, and resolution. These are meant to catch detector drift caused by
@@ -168,18 +164,11 @@ final image were converted to luminance and viewed with a low gamma", without
 changing the rendered image, the public post-processing settings, or the
 whole-frame luminance/color metrics.
 
-The robust sector-edge candidate then shapes only that internal radial signal.
-The shaping suppresses low-level halo tails before choosing per-sector
-boundaries.
-
-The outer-shoulder candidate targets two-scale profiles: a small very bright
-core followed by a broader, dimmer but still coherent disk. It is not
-color-specific; it looks for profile structure and may fall back toward the
-robust sector-edge behavior when no shoulder is evident.
-
-The radius candidates subtract a local background estimate in the same
-low-gamma radius-signal space before looking for the apparent light-disk
-boundary.
+The official radius and sector-consensus candidate subtract a local background
+estimate in the same low-gamma radius-signal space before looking for the
+apparent light-disk boundary. Older profile-knee, robust-sector-edge, and
+outer-shoulder detector experiments were pruned from active code after the
+low-gamma luminance characterization pass; see `docs/LIGHT_RADIUS_DETECTOR_HISTORY.md`.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light

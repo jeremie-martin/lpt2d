@@ -218,9 +218,6 @@ def _light_metrics(light) -> dict[str, float | int | str | bool]:
         "image_y": light.image_y,
         "radius_ratio": light.radius_ratio,
         "radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
-        "radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
-        "radius_candidate_robust_sector_edge_ratio": light.radius_candidate_robust_sector_edge_ratio,
-        "radius_candidate_outer_shoulder_ratio": light.radius_candidate_outer_shoulder_ratio,
         "saturated_radius_ratio": light.saturated_radius_ratio,
         "transition_width_ratio": light.transition_width_ratio,
         "coverage_fraction": light.coverage_fraction,
@@ -282,9 +279,6 @@ def _metrics_for_case(case: Case, rr, *, rays: int, batch: int) -> dict[str, flo
         "image_y": light.image_y,
         "cpp_radius_ratio": light.radius_ratio,
         "cpp_radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
-        "cpp_radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
-        "cpp_radius_candidate_robust_sector_edge_ratio": light.radius_candidate_robust_sector_edge_ratio,
-        "cpp_radius_candidate_outer_shoulder_ratio": light.radius_candidate_outer_shoulder_ratio,
         "cpp_saturated_radius_ratio": light.saturated_radius_ratio,
         "cpp_transition_width_ratio": light.transition_width_ratio,
         "cpp_coverage_fraction": light.coverage_fraction,
@@ -330,13 +324,6 @@ def _light_entries(metrics: dict[str, float | int | str]) -> list[dict[str, floa
             "radius_ratio": _metric_float(metrics, "cpp_radius_ratio"),
             "radius_candidate_sector_consensus_ratio": _metric_float(
                 metrics, "cpp_radius_candidate_sector_consensus_ratio"
-            ),
-            "radius_candidate_knee_ratio": _metric_float(metrics, "cpp_radius_candidate_knee_ratio"),
-            "radius_candidate_robust_sector_edge_ratio": _metric_float(
-                metrics, "cpp_radius_candidate_robust_sector_edge_ratio"
-            ),
-            "radius_candidate_outer_shoulder_ratio": _metric_float(
-                metrics, "cpp_radius_candidate_outer_shoulder_ratio"
             ),
         }
     ]
@@ -388,9 +375,6 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
 
     radius_color = (60, 255, 90, 255)
     sector_candidate_color = (70, 235, 255, 255)
-    knee_candidate_color = (255, 80, 230, 255)
-    robust_candidate_color = (255, 230, 40, 255)
-    shoulder_candidate_color = (255, 115, 80, 255)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
@@ -407,34 +391,7 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         cx = _metric_float(entry, "image_x")
         cy = _metric_float(entry, "image_y")
         radius_px = _metric_float(entry, "radius_ratio") * short_side
-        # Exploration mode: draw the official radius plus temporary GPU candidates.
-        _draw_dashed_ring(
-            draw,
-            cx,
-            cy,
-            _metric_float(entry, "radius_candidate_outer_shoulder_ratio") * short_side,
-            shoulder_candidate_color,
-            width=candidate_width,
-            phase=0.19,
-        )
-        _draw_dashed_ring(
-            draw,
-            cx,
-            cy,
-            _metric_float(entry, "radius_candidate_robust_sector_edge_ratio") * short_side,
-            robust_candidate_color,
-            width=candidate_width,
-            phase=0.15,
-        )
-        _draw_dashed_ring(
-            draw,
-            cx,
-            cy,
-            _metric_float(entry, "radius_candidate_knee_ratio") * short_side,
-            knee_candidate_color,
-            width=candidate_width,
-            phase=0.08,
-        )
+        # Draw the production radius plus the retained sector-consensus candidate.
         _draw_dashed_ring(
             draw,
             cx,
@@ -451,9 +408,6 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
 
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
     sector_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio")
-    knee_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_knee_ratio")
-    robust_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_robust_sector_edge_ratio")
-    shoulder_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_outer_shoulder_ratio")
     edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
     confidence = _metric_float(metrics, "cpp_confidence")
     mean = _metric_float(metrics, "mean")
@@ -494,18 +448,6 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             sector_candidate_color,
         ),
         (
-            f"MAGENTA candidate profile knee: {knee_candidate_percent:.2f}%",
-            knee_candidate_color,
-        ),
-        (
-            f"YELLOW candidate robust sector edge: {robust_candidate_percent:.2f}%",
-            robust_candidate_color,
-        ),
-        (
-            f"CORAL candidate outer shoulder: {shoulder_candidate_percent:.2f}%",
-            shoulder_candidate_color,
-        ),
-        (
             f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
             white,
         ),
@@ -539,10 +481,7 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
         metric = case_result.metrics
         sub1 = (
             f"official {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%; "
-            f"sector {100*_metric_float(metric, 'cpp_radius_candidate_sector_consensus_ratio'):.2f}%; "
-            f"knee {100*_metric_float(metric, 'cpp_radius_candidate_knee_ratio'):.2f}%; "
-            f"robust {100*_metric_float(metric, 'cpp_radius_candidate_robust_sector_edge_ratio'):.2f}%; "
-            f"shoulder {100*_metric_float(metric, 'cpp_radius_candidate_outer_shoulder_ratio'):.2f}%"
+            f"sector {100*_metric_float(metric, 'cpp_radius_candidate_sector_consensus_ratio'):.2f}%"
         )
         sub2 = (
             f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}; "
@@ -1029,9 +968,6 @@ def _format_radius_range(rows: list[dict[str, str]], key: str) -> str:
 RADIUS_STABILITY_COLUMNS = (
     ("Official radius", "cpp_radius_ratio"),
     ("Sector candidate", "cpp_radius_candidate_sector_consensus_ratio"),
-    ("Profile knee", "cpp_radius_candidate_knee_ratio"),
-    ("Robust sector edge", "cpp_radius_candidate_robust_sector_edge_ratio"),
-    ("Outer shoulder", "cpp_radius_candidate_outer_shoulder_ratio"),
 )
 
 
@@ -1255,9 +1191,6 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             overlay_caption = (
                 f"{cid} overlay: official {_pct(row, 'cpp_radius_ratio')}, "
                 f"sector candidate {_pct(row, 'cpp_radius_candidate_sector_consensus_ratio')}, "
-                f"knee candidate {_pct(row, 'cpp_radius_candidate_knee_ratio')}, "
-                f"robust sector-edge candidate {_pct(row, 'cpp_radius_candidate_robust_sector_edge_ratio')}, "
-                f"outer shoulder candidate {_pct(row, 'cpp_radius_candidate_outer_shoulder_ratio')}, "
                 f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
@@ -1284,9 +1217,6 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             for label_text, value in (
                 ("official radius", _pct(row, "cpp_radius_ratio")),
                 ("sector candidate", _pct(row, "cpp_radius_candidate_sector_consensus_ratio")),
-                ("knee candidate", _pct(row, "cpp_radius_candidate_knee_ratio")),
-                ("robust candidate", _pct(row, "cpp_radius_candidate_robust_sector_edge_ratio")),
-                ("outer shoulder", _pct(row, "cpp_radius_candidate_outer_shoulder_ratio")),
                 ("brightness", _num(row, "mean", 1)),
                 ("contrast", _num(row, "contrast_std", 1)),
                 ("near white", _pct(row, "near_white_fraction")),

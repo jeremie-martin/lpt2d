@@ -84,6 +84,10 @@ def test_render_frame_analyze_true_populates_luminance_color_lights():
     light = list(rr.analysis.lights)[0]
     assert light.id == "light_0"
     assert light.radius_ratio >= 0.0
+    assert light.radius_candidate_sector_consensus_ratio >= 0.0
+    assert not hasattr(light, "radius_candidate_knee_ratio")
+    assert not hasattr(light, "radius_candidate_robust_sector_edge_ratio")
+    assert not hasattr(light, "radius_candidate_outer_shoulder_ratio")
     assert light.coverage_fraction >= 0.0
 
 
