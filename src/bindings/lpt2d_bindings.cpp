@@ -705,6 +705,12 @@ NB_MODULE(_lpt2d, m) {
         .def_ro("image_y", &PointLightAppearance::image_y)
         .def_ro("visible", &PointLightAppearance::visible)
         .def_ro("radius_ratio", &PointLightAppearance::radius_ratio)
+        .def_ro("radius_candidate_edge_drop_ratio",
+                &PointLightAppearance::radius_candidate_edge_drop_ratio)
+        .def_ro("radius_candidate_half_signal_ratio",
+                &PointLightAppearance::radius_candidate_half_signal_ratio)
+        .def_ro("radius_candidate_soft_signal_ratio",
+                &PointLightAppearance::radius_candidate_soft_signal_ratio)
         .def_ro("coverage_fraction", &PointLightAppearance::coverage_fraction)
         .def_ro("saturated_radius_ratio", &PointLightAppearance::saturated_radius_ratio)
         .def_ro("transition_width_ratio", &PointLightAppearance::transition_width_ratio)

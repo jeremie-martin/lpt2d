@@ -600,10 +600,18 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
             const bool has_edge = edge_bin >= 0 && best_drop >= signal_peak_excess * 0.035f;
             const int radius_bin = has_edge ? edge_bin : r50;
+            const float edge_drop_px = has_edge
+                ? bin_radius_px(edge_bin, max_bins, search_radius_px)
+                : 0.0f;
+            const float half_signal_px = bin_radius_px(r50, max_bins, search_radius_px);
+            const float soft_signal_px = bin_radius_px(r20, max_bins, search_radius_px);
             const float radius_px = bin_radius_px(radius_bin, max_bins, search_radius_px);
 
             c.visible = radius_px > 0.0f;
             c.radius_ratio = radius_px / short_side;
+            c.radius_candidate_edge_drop_ratio = edge_drop_px / short_side;
+            c.radius_candidate_half_signal_ratio = half_signal_px / short_side;
+            c.radius_candidate_soft_signal_ratio = soft_signal_px / short_side;
             c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
                                           static_cast<float>(width * height));
             c.transition_width_ratio =
