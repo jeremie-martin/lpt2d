@@ -496,9 +496,9 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                     static_cast<float>(n_pixels);
             app.radius_ratio = std::sqrt(static_cast<float>(component_pixels) /
                                          PI) / short_side;
-            app.radius_candidate_edge_drop_ratio = app.radius_ratio;
-            app.radius_candidate_half_signal_ratio = app.radius_ratio;
-            app.radius_candidate_soft_signal_ratio = app.radius_ratio;
+            app.radius_candidate_sector_consensus_ratio = app.radius_ratio;
+            app.radius_candidate_knee_ratio = app.radius_ratio;
+            app.radius_candidate_energy_ratio = app.radius_ratio;
         }
 
         std::vector<float> radial_profile(static_cast<std::size_t>(search_radius) + 1u, 0.0f);

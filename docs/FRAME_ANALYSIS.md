@@ -131,9 +131,9 @@ disk visible in the current final frame.
 | `image_x`, `image_y` | Projected light center in the analyzed camera image |
 | `visible` | Whether a measurable light appearance was found |
 | `radius_ratio` | Official apparent light-disk radius, normalized by image short side |
-| `radius_candidate_edge_drop_ratio` | Temporary exploration candidate: strongest radial falloff |
-| `radius_candidate_half_signal_ratio` | Temporary exploration candidate: 50% signal threshold |
-| `radius_candidate_soft_signal_ratio` | Temporary exploration candidate: 20% signal threshold |
+| `radius_candidate_sector_consensus_ratio` | Temporary exploration candidate: radius with strongest angular-sector edge agreement |
+| `radius_candidate_knee_ratio` | Temporary exploration candidate: knee of the global radial signal profile |
+| `radius_candidate_energy_ratio` | Temporary exploration candidate: energy-equivalent disk radius |
 | `coverage_fraction` | Area of that disk as a fraction of the image |
 | `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
 | `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |

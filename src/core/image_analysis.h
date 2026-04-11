@@ -84,9 +84,9 @@ struct PointLightAppearance {
     bool visible = false;
     float radius_ratio = 0.0f;
     // TEMP: GPU radius candidates used while comparing detector variants.
-    float radius_candidate_edge_drop_ratio = 0.0f;
-    float radius_candidate_half_signal_ratio = 0.0f;
-    float radius_candidate_soft_signal_ratio = 0.0f;
+    float radius_candidate_sector_consensus_ratio = 0.0f;
+    float radius_candidate_knee_ratio = 0.0f;
+    float radius_candidate_energy_ratio = 0.0f;
     float coverage_fraction = 0.0f;
     float saturated_radius_ratio = 0.0f;
     float transition_width_ratio = 0.0f;
