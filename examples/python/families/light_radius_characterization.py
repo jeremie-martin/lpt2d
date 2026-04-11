@@ -7,6 +7,7 @@ This script renders controlled one-light scenes and writes:
 - per-case shot JSON
 - CSV/JSONL metrics
 - contact sheets grouped by sweep axis
+- optional JPEG web gallery with thumbnails and a simple lightbox
 
 Run:
 
@@ -15,14 +16,22 @@ Run:
 Fast smoke run:
 
     python -m examples.python.families.light_radius_characterization --limit 4
+
+Build only the JPEG web gallery from an existing render directory:
+
+    python -m examples.python.families.light_radius_characterization \
+        --web-only --out renders/light_radius_characterization \
+        --web-out renders/light_radius_characterization_web
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import html
 import json
 import math
+import shutil
 import sys
 import time
 from dataclasses import dataclass, field
@@ -584,8 +593,297 @@ def _write_metrics(outputs: list[RenderedCase], out_dir: Path) -> None:
             f.write(json.dumps(result.metrics, sort_keys=True) + "\n")
 
 
+def _save_jpeg(src_path: Path, dst_path: Path, *, quality: int, max_side: int | None = None) -> None:
+    image = Image.open(src_path).convert("RGB")
+    if max_side is not None and max(image.size) > max_side:
+        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+    image.save(dst_path, "JPEG", quality=quality, optimize=True, progressive=True)
+
+
+def _pct(row: dict[str, str], key: str) -> str:
+    return f"{100.0 * float(row[key]):.2f}%"
+
+
+def _num(row: dict[str, str], key: str, digits: int = 2) -> str:
+    return f"{float(row[key]):.{digits}f}"
+
+
+def _copy_existing_files(src_dir: Path, web_dir: Path) -> None:
+    for name in ("metrics.csv", "metrics.jsonl"):
+        source = src_dir / name
+        if source.exists():
+            shutil.copy2(source, web_dir / name)
+    shot_src = src_dir / "shots"
+    if shot_src.exists():
+        shot_dst = web_dir / "shots"
+        shot_dst.mkdir(exist_ok=True)
+        for path in sorted(shot_src.glob("*.json")):
+            shutil.copy2(path, shot_dst / path.name)
+
+
+def _web_gallery_index(rows: list[dict[str, str]], title: str, description: str) -> str:
+    groups: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        groups.setdefault(row["group"], []).append(row)
+
+    parts: list[str] = [
+        "<!doctype html>",
+        '<html lang="en">',
+        "<head>",
+        '<meta charset="utf-8">',
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+        f"<title>{html.escape(title)}</title>",
+        """<style>
+:root { color-scheme: dark; --bg:#10100f; --panel:#1a1916; --ink:#f2eee5; --muted:#aaa194; --line:#36322b; --accent:#8fd3ff; --good:#8dff9d; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 22px; background: var(--bg); color: var(--ink); font-family: ui-sans-serif, system-ui, sans-serif; }
+a { color: var(--accent); }
+header { max-width: 1180px; margin: 0 auto 22px; }
+h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 52px); letter-spacing: -0.04em; }
+h2 { margin: 34px auto 14px; max-width: 1180px; font-size: clamp(22px, 3vw, 34px); }
+h3 { margin: 0 0 8px; }
+.muted { color: var(--muted); }
+.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; background: #171613; text-decoration: none; }
+.grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.sheet-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.card-body { padding: 10px 12px 12px; }
+.case-title { font-weight: 700; overflow-wrap: anywhere; }
+.case-label { margin-top: 2px; font-size: 12px; color: var(--muted); min-height: 2.6em; }
+.metrics { margin-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 12px; }
+.metric { border: 1px solid #2c2924; border-radius: 8px; padding: 6px; background: #13120f; }
+.metric b { display: block; color: var(--good); font-size: 14px; }
+.thumb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
+button.thumb { appearance: none; border: 0; padding: 0; margin: 0; background: #050505; color: var(--ink); cursor: zoom-in; position: relative; text-align: left; }
+button.thumb img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+button.thumb.sheet img { aspect-ratio: 16 / 9; object-fit: contain; background: #050505; }
+button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px; border-radius: 999px; background: rgba(0,0,0,.72); font-size: 12px; }
+.group-title { max-width: 1180px; margin: 28px auto 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+.viewer[hidden] { display: none; }
+.viewer { position: fixed; inset: 0; z-index: 20; display: grid; grid-template-rows: auto 1fr auto; background: rgba(0,0,0,.94); }
+.viewer-bar { display: flex; align-items: center; gap: 8px; padding: 9px; border-bottom: 1px solid #333; background: #090909; }
+.viewer-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.viewer button { border: 1px solid #444; border-radius: 8px; background: #181818; color: var(--ink); padding: 8px 10px; font: inherit; }
+.stage { min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.stage img { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+.stage.zoomed { align-items: flex-start; justify-content: flex-start; }
+.caption { padding: 9px 12px; color: var(--muted); border-top: 1px solid #333; background: #090909; font-size: 13px; }
+.no-scroll { overflow: hidden; }
+@media (max-width: 640px) {
+  body { padding: 14px; }
+  .grid { grid-template-columns: 1fr; gap: 12px; }
+  .viewer-bar { gap: 5px; padding: 7px; }
+  .viewer button { padding: 7px 8px; }
+  .viewer-title { font-size: 12px; }
+}
+</style>""",
+        "</head>",
+        "<body>",
+        "<header>",
+        f"<h1>{html.escape(title)}</h1>",
+        f'<p class="muted">{html.escape(description)}</p>' if description else "",
+        '<p class="muted">Click any thumbnail to open the viewer. Use previous/next, arrow keys, swipe, or zoom controls. Web images are JPEG to keep upload size manageable.</p>',
+        '<nav class="links"><a class="pill" href="metrics.csv">metrics.csv</a><a class="pill" href="metrics.jsonl">metrics.jsonl</a><a class="pill" href="sheets/all.jpg">all contact sheet</a></nav>',
+        "</header>",
+        "<h2>Contact Sheets</h2>",
+        '<section class="grid sheet-grid">',
+    ]
+
+    sheet_names = ["all", *groups.keys()]
+    seen_sheets: set[str] = set()
+    for sheet in sheet_names:
+        if sheet in seen_sheets:
+            continue
+        seen_sheets.add(sheet)
+        caption = f"Contact sheet: {sheet}"
+        parts.append(
+            '<button class="thumb sheet" data-full="sheets/{0}.jpg" data-caption="{1}">'
+            '<img loading="lazy" src="thumbs/sheets_{0}.jpg" alt="{1}"><span>{1}</span></button>'.format(
+                html.escape(sheet), html.escape(caption)
+            )
+        )
+    parts.append("</section>")
+
+    parts.append("<h2>Cases</h2>")
+    for group, group_rows in groups.items():
+        parts.append(f'<div class="group-title">{html.escape(group)}</div>')
+        parts.append('<section class="grid">')
+        for row in group_rows:
+            cid = row["case_id"]
+            label = row["label"]
+            overlay_caption = (
+                f"{cid} overlay: radius {_pct(row, 'cpp_radius_ratio')}, "
+                f"core {_pct(row, 'cpp_saturated_radius_ratio')}, "
+                f"edge {_pct(row, 'cpp_transition_width_ratio')}"
+            )
+            raw_caption = f"{cid} raw render"
+            parts.append('<article class="card">')
+            parts.append('<div class="thumb-row">')
+            parts.append(
+                '<button class="thumb" data-full="overlays/{0}.jpg" data-caption="{1}">'
+                '<img loading="lazy" src="thumbs/overlays_{0}.jpg" alt="{1}"><span>Overlay</span></button>'.format(
+                    html.escape(cid), html.escape(overlay_caption)
+                )
+            )
+            parts.append(
+                '<button class="thumb" data-full="images/{0}.jpg" data-caption="{1}">'
+                '<img loading="lazy" src="thumbs/images_{0}.jpg" alt="{1}"><span>Raw</span></button>'.format(
+                    html.escape(cid), html.escape(raw_caption)
+                )
+            )
+            parts.append("</div>")
+            parts.append('<div class="card-body">')
+            parts.append(f'<div class="case-title">{html.escape(cid)}</div>')
+            parts.append(f'<div class="case-label">{html.escape(label)}</div>')
+            parts.append('<div class="metrics">')
+            for label_text, value in (
+                ("radius", _pct(row, "cpp_radius_ratio")),
+                ("core", _pct(row, "cpp_saturated_radius_ratio")),
+                ("edge", _pct(row, "cpp_transition_width_ratio")),
+                ("mean", f"{_num(row, 'mean', 1)}/255"),
+                ("clipped", _pct(row, "clipped_channel_fraction")),
+                ("conf", _num(row, "cpp_confidence", 2)),
+            ):
+                parts.append(
+                    f'<div class="metric"><span>{html.escape(label_text)}</span><b>{html.escape(value)}</b></div>'
+                )
+            parts.append("</div></div></article>")
+        parts.append("</section>")
+
+    parts.append(
+        """<div class="viewer" id="viewer" hidden>
+  <div class="viewer-bar">
+    <button type="button" id="prevBtn">Prev</button>
+    <button type="button" id="nextBtn">Next</button>
+    <button type="button" id="fitBtn">Fit</button>
+    <button type="button" id="zoomOutBtn">-</button>
+    <button type="button" id="zoomInBtn">+</button>
+    <div class="viewer-title" id="viewerTitle"></div>
+    <button type="button" id="closeBtn">Close</button>
+  </div>
+  <div class="stage" id="stage"><img id="viewerImg" alt=""></div>
+  <div class="caption" id="viewerCaption"></div>
+</div>
+<script>
+const thumbs = Array.from(document.querySelectorAll("[data-full]"));
+const items = thumbs.map((el) => ({ src: el.dataset.full, caption: el.dataset.caption || el.dataset.full }));
+const viewer = document.getElementById("viewer");
+const stage = document.getElementById("stage");
+const img = document.getElementById("viewerImg");
+const title = document.getElementById("viewerTitle");
+const caption = document.getElementById("viewerCaption");
+let current = 0;
+let zoom = 0;
+let touchX = null;
+
+function applyZoom() {
+  if (zoom <= 0) {
+    stage.classList.remove("zoomed");
+    img.style.width = "";
+    img.style.maxWidth = "100%";
+    img.style.maxHeight = "100%";
+    return;
+  }
+  stage.classList.add("zoomed");
+  img.style.maxWidth = "none";
+  img.style.maxHeight = "none";
+  img.style.width = `${Math.max(1, img.naturalWidth * zoom)}px`;
+}
+function show(index) {
+  current = (index + items.length) % items.length;
+  const item = items[current];
+  img.src = item.src;
+  img.alt = item.caption;
+  title.textContent = `${current + 1} / ${items.length}`;
+  caption.textContent = item.caption;
+  applyZoom();
+}
+function openViewer(index) {
+  zoom = 0;
+  viewer.hidden = false;
+  document.body.classList.add("no-scroll");
+  show(index);
+}
+function closeViewer() {
+  viewer.hidden = true;
+  document.body.classList.remove("no-scroll");
+}
+thumbs.forEach((el, index) => el.addEventListener("click", () => openViewer(index)));
+document.getElementById("prevBtn").addEventListener("click", () => show(current - 1));
+document.getElementById("nextBtn").addEventListener("click", () => show(current + 1));
+document.getElementById("closeBtn").addEventListener("click", closeViewer);
+document.getElementById("fitBtn").addEventListener("click", () => { zoom = 0; applyZoom(); });
+document.getElementById("zoomInBtn").addEventListener("click", () => { zoom = zoom <= 0 ? 1 : Math.min(4, zoom * 1.35); applyZoom(); });
+document.getElementById("zoomOutBtn").addEventListener("click", () => { zoom = zoom <= 0 ? 0 : Math.max(0.25, zoom / 1.35); applyZoom(); });
+img.addEventListener("load", applyZoom);
+viewer.addEventListener("click", (event) => { if (event.target === viewer) closeViewer(); });
+stage.addEventListener("touchstart", (event) => { touchX = event.changedTouches[0].clientX; }, { passive: true });
+stage.addEventListener("touchend", (event) => {
+  if (touchX === null) return;
+  const dx = event.changedTouches[0].clientX - touchX;
+  touchX = null;
+  if (Math.abs(dx) > 55) show(current + (dx < 0 ? 1 : -1));
+}, { passive: true });
+window.addEventListener("keydown", (event) => {
+  if (viewer.hidden) return;
+  if (event.key === "Escape") closeViewer();
+  if (event.key === "ArrowLeft") show(current - 1);
+  if (event.key === "ArrowRight") show(current + 1);
+});
+</script>"""
+    )
+    parts.append("</body></html>")
+    return "\n".join(part for part in parts if part)
+
+
+def _write_web_gallery(
+    src_dir: Path,
+    web_dir: Path,
+    *,
+    title: str,
+    description: str,
+    jpeg_quality: int,
+) -> None:
+    metrics_path = src_dir / "metrics.csv"
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"missing metrics file: {metrics_path}")
+
+    if web_dir.exists():
+        shutil.rmtree(web_dir)
+    for subdir in ("sheets", "overlays", "images", "thumbs"):
+        (web_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    quality = max(40, min(98, jpeg_quality))
+    for path in sorted((src_dir / "sheets").glob("*.png")):
+        _save_jpeg(path, web_dir / "sheets" / f"{path.stem}.jpg", quality=quality)
+        _save_jpeg(path, web_dir / "thumbs" / f"sheets_{path.stem}.jpg", quality=82, max_side=520)
+    for path in sorted((src_dir / "overlays").glob("*.png")):
+        _save_jpeg(path, web_dir / "overlays" / f"{path.stem}.jpg", quality=quality)
+        _save_jpeg(path, web_dir / "thumbs" / f"overlays_{path.stem}.jpg", quality=82, max_side=520)
+    for path in sorted((src_dir / "images").glob("*.png")):
+        _save_jpeg(path, web_dir / "images" / f"{path.stem}.jpg", quality=max(40, quality - 1))
+        _save_jpeg(path, web_dir / "thumbs" / f"images_{path.stem}.jpg", quality=82, max_side=520)
+
+    _copy_existing_files(src_dir, web_dir)
+    rows = list(csv.DictReader(metrics_path.open()))
+    (web_dir / "index.html").write_text(_web_gallery_index(rows, title, description))
+
+
 def run(args: argparse.Namespace) -> None:
     out_dir = Path(args.out)
+    web_out = Path(args.web_out) if args.web_out else out_dir.with_name(f"{out_dir.name}_web")
+    if args.web_only:
+        _write_web_gallery(
+            out_dir,
+            web_out,
+            title=args.web_title,
+            description=args.web_description,
+            jpeg_quality=args.jpeg_quality,
+        )
+        print(f"wrote JPEG web gallery to {web_out}")
+        return
+
     image_dir = out_dir / "images"
     overlay_dir = out_dir / "overlays"
     sheet_dir = out_dir / "sheets"
@@ -641,6 +939,15 @@ def run(args: argparse.Namespace) -> None:
     print(f"wrote {len(outputs)} cases to {out_dir}")
     print(f"metrics: {out_dir / 'metrics.csv'}")
     print(f"contact sheets: {sheet_dir}")
+    if args.web_out:
+        _write_web_gallery(
+            out_dir,
+            web_out,
+            title=args.web_title,
+            description=args.web_description,
+            jpeg_quality=args.jpeg_quality,
+        )
+        print(f"JPEG web gallery: {web_out}")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -660,6 +967,19 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--limit", type=int, help="render only the first N selected cases")
     parser.add_argument("--cols", type=int, default=4, help="contact sheet columns")
     parser.add_argument("--tile-width", type=int, default=460, help="contact sheet tile width in pixels")
+    parser.add_argument("--web-out", help="write a JPEG web gallery to this directory")
+    parser.add_argument("--web-only", action="store_true", help="build only the JPEG web gallery from --out")
+    parser.add_argument("--jpeg-quality", type=int, default=91, help="JPEG quality for web gallery images")
+    parser.add_argument(
+        "--web-title",
+        default="LPT2D Light Radius Characterization",
+        help="title for the JPEG web gallery",
+    )
+    parser.add_argument(
+        "--web-description",
+        default="Generated from the GPU frame analyzer. Radii are percentages of the image short side.",
+        help="short description for the JPEG web gallery",
+    )
     args = parser.parse_args(argv)
     run(args)
 
