@@ -29,21 +29,42 @@ uniform float uChromaticAberration;
 
 float toneMapReinhard(float v) { return v / (1.0 + v); }
 
+float sanitizeRadiance(float v) {
+    if (isnan(v) || v <= 0.0) return 0.0;
+    if (isinf(v)) return 1.0e10;
+    return min(v, 1.0e10);
+}
+
+vec3 sanitizeRadiance(vec3 v) {
+    return vec3(sanitizeRadiance(v.r),
+                sanitizeRadiance(v.g),
+                sanitizeRadiance(v.b));
+}
+
 float toneMapReinhardExt(float v, float wp) {
-    float w2 = wp * wp;
+    v = sanitizeRadiance(v);
+    float w2 = max(wp * wp, 1.0e-12);
+    if (v > 1.0) {
+        // Algebraically equivalent to the usual expression, but avoids
+        // v*v overflow for very bright mirror/caustic paths.
+        return (1.0 + v / w2) / (1.0 + 1.0 / v);
+    }
     return (v * (1.0 + v / w2)) / (1.0 + v);
 }
 
 float toneMapACES(float v) {
+    v = sanitizeRadiance(v);
     float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
     return clamp((v * (a * v + b)) / (v * (c * v + d) + e), 0.0, 1.0);
 }
 
 float toneMapLog(float v, float wp) {
-    return log(1.0 + v) / log(1.0 + wp);
+    v = sanitizeRadiance(v);
+    return log(1.0 + v) / log(1.0 + max(wp, 1.0e-6));
 }
 
 float toneMap(float v, int op, float wp) {
+    v = sanitizeRadiance(v);
     if (op == 1) return toneMapReinhard(v);
     if (op == 2) return toneMapReinhardExt(v, wp);
     if (op == 3) return toneMapACES(v);
@@ -65,11 +86,11 @@ void main() {
         hdr = texture(uFloatTexture, flippedCoord);
     }
 
-    vec3 color = hdr.rgb / uMaxVal * uExposureMult;
+    vec3 color = sanitizeRadiance(hdr.rgb / uMaxVal * uExposureMult);
 
     // Add fill color (shape interiors) — sampled from a separate RGB16F texture
     vec3 fillColor = texture(uFillTexture, flippedCoord).rgb;
-    color += fillColor;
+    color = sanitizeRadiance(color + fillColor);
 
     // Background replaces pixels with negligible light; threshold is in
     // post-exposure space so it works consistently across normalization modes.
@@ -88,6 +109,7 @@ void main() {
     // Tone mapping
     for (int c = 0; c < 3; c++)
         color[c] = toneMap(color[c], uToneMapOp, uWhitePoint);
+    color = sanitizeRadiance(color);
 
     // Contrast
     color = clamp((color - 0.5) * uContrast + 0.5, 0.0, 1.0);

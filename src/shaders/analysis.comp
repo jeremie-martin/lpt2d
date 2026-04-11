@@ -11,8 +11,8 @@
 //
 // The luminance and colour math mirrors the CPU RGB8 analyzer where possible
 // (same BT.709 integer weights and HSV formulas). Point-light bins keep RGB
-// radial/sector profiles so the CPU side can estimate apparent radius from a
-// colour-direction signal while still reporting BT.709 luminance fields.
+// radial/sector sums so the CPU side can derive both BT.709 luminance profiles
+// and saturated-core diagnostics from the final display image.
 //
 // Workgroup: 16x16 = 256 threads. The luminance and hue histograms are
 // tile-reduced in shared memory and committed to global with one atomicAdd
