@@ -3,10 +3,9 @@
 // GPU compute-shader frame analyser.
 //
 // Runs `src/shaders/analysis.comp` on an RGB8 texture (typically
-// `Renderer::display_texture_`) and produces a complete FrameAnalysis via
-// SSBO readback. This path is retained for low-level renderer diagnostics;
-// the public analysis contract is implemented by the CPU RGB8 analyzer in
-// `src/core/image_analysis.cpp`.
+// `Renderer::display_texture_`) and produces the public FrameAnalysis via
+// compact SSBO readback. The source texture is the final post-processed RGB8
+// image, so exposure/white point/contrast/gamma/tonemap are already baked in.
 //
 // Lifetime is tied to the owning Renderer / RenderSession: one instance per
 // GL context, created during `init()` after a current context is ready,
@@ -25,12 +24,14 @@ struct Bounds;
 
 class GpuImageAnalyzer {
 public:
-    // Radial-bin count for retained light-bin diagnostics. Must match MAX_BINS in
-    // src/shaders/analysis.comp. The light count is NOT capped — the
+    // Radial-bin and angular-sector budgets. Must match src/shaders/analysis.comp.
+    // The light count is NOT capped — the
     // Lights and CirclesResult SSBOs are dynamically resized on each
     // analyze() call so scenes with arbitrary numbers of point lights
     // all get one PointLightAppearance per input entry.
-    static constexpr int kMaxBins = 201;
+    static constexpr int kMaxBins = 320;
+    static constexpr int kNumSectors = 32;
+    static constexpr int kLightBinStride = 5;  // sumR, sumG, sumB, count, brightCount
 
     // Compile analysis.comp and allocate the 4 SSBOs. The caller MUST have
     // a current GL 4.3 Core context on the calling thread. Returns false
@@ -68,7 +69,7 @@ private:
     GLuint program_      = 0;
     GLuint lum_ssbo_     = 0;  // fixed-size: LumResult struct
     GLuint color_ssbo_   = 0;  // fixed-size: ColorResult struct
-    GLuint circles_ssbo_ = 0;  // dynamic:    uNLights * kMaxBins * 3 uints
+    GLuint circles_ssbo_ = 0;  // dynamic: uNLights * kMaxBins * kNumSectors * kLightBinStride
     GLuint lights_ssbo_  = 0;  // dynamic:    uNLights * vec2 (= 8 bytes each)
 
     // Byte capacity of the two dynamically-sized SSBOs. They grow on
@@ -90,6 +91,7 @@ private:
     GLint u_nlights_    = -1;
     GLint u_bright_     = -1;
     GLint u_max_bins_   = -1;
+    GLint u_search_radius_px_ = -1;
     GLint u_sat_        = -1;
     GLint u_src_        = -1;
 

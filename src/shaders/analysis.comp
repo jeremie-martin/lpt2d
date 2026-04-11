@@ -6,14 +6,13 @@
 // attachment) and produces:
 //   - a 256-bin BT.709 luminance histogram + clipped-pixel count
 //   - a 36-bin HSV hue histogram + mean saturation (over chromatic pixels)
-//   - a per-(light, radial-bin) Voronoi breakdown retained for renderer
-//     diagnostics; public point-light appearance comes from the CPU analyzer
+//   - a per-(light, radial-bin, angular-sector) breakdown used for the
+//     public point-light appearance metrics
 //
-// The math mirrors the CPU implementation in src/core/image_analysis.cpp
-// bit-for-bit where possible (same BT.709 integer weights, same HSV
-// formulas, same Voronoi rule). The CPU path on the other side of the
-// readback calls `finalize_luminance` and a short per-light loop to turn
-// these SSBOs into a FrameAnalysis struct.
+// The luminance and colour math mirrors the CPU RGB8 analyzer where possible
+// (same BT.709 integer weights and HSV formulas). Point-light bins keep RGB
+// radial/sector profiles so the CPU side can estimate apparent radius from a
+// colour-direction signal while still reporting BT.709 luminance fields.
 //
 // Workgroup: 16x16 = 256 threads. The luminance and hue histograms are
 // tile-reduced in shared memory and committed to global with one atomicAdd
@@ -25,15 +24,19 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
-const int MAX_BINS = 201;  // retained radial profile bin budget
+const int MAX_BINS = 320;
+const int NUM_SECTORS = 32;
+const int LIGHT_BIN_STRIDE = 5;  // sumR, sumG, sumB, count, brightCount
+const float PI = 3.14159265358979323846264;
 
 // ── Inputs ─────────────────────────────────────────────────────────────
 
 uniform sampler2D uSrc;              // display_texture_ (RGB8 post-tonemap)
 uniform ivec2 uResolution;
 uniform int   uNLights;              // runtime light count; 0 disables light binning
-uniform float uBrightThreshold;      // 0..1, on the 0..1 normalised luminance
+uniform float uBrightThreshold;      // 0..1 max-channel threshold for saturated-core diagnostics
 uniform int   uMaxRadiusBins;        // effective MAX_BINS for this call
+uniform float uSearchRadiusPx;       // pixel search radius represented by uMaxRadiusBins
 uniform float uSatThreshold;         // default 0.05, matches CPU path
 
 layout(std430, binding = 3) readonly buffer Lights {
@@ -69,12 +72,12 @@ layout(std430, binding = 1) buffer ColorResult {
 };
 
 layout(std430, binding = 2) buffer LightBinsResult {
-    // Runtime-sized: length = uNLights * MAX_BINS * 3, interleaved as
-    // [sum, cnt, bright] per (light, radius-bin). Flat layout lets the
+    // Runtime-sized: length = uNLights * MAX_BINS * NUM_SECTORS *
+    // LIGHT_BIN_STRIDE, interleaved as [sumR, sumG, sumB, count,
+    // brightCount] per (light, radius-bin, sector). Flat layout lets the
     // whole light-bin SSBO be a single unsized std430 array (the GLSL
     // spec only allows one unsized member per buffer, and it must be
-    // last). The CPU side glMapBufferRanges this as one contiguous
-    // uint32 blob.
+    // last). The CPU side reads this back as one contiguous uint32 blob.
     uint circle_bins[];
 };
 
@@ -171,21 +174,29 @@ void main() {
                 }
             }
             float d = sqrt(best_d2);
-            int di = int(round(d));
-            if (di >= uMaxRadiusBins) di = uMaxRadiusBins - 1;
-            if (di < 0) di = 0;
-            // Flat interleaved layout: [sum, cnt, bright] per bin,
-            // MAX_BINS bins per light, all lights back-to-back.
-            int base = (best_i * MAX_BINS + di) * 3;
-            atomicAdd(circle_bins[base + 0], lum);
-            atomicAdd(circle_bins[base + 1], 1u);
-            // Bright threshold in 0..1 space, compared to the 0..255 lum
-            // we just binned. Round to nearest (rather than truncate) to
-            // match the historical CPU convention — e.g. 0.92 threshold
-            // should land on lum >= 235, not 234.
-            uint bright_lum = uint(uBrightThreshold * 255.0 + 0.5);
-            if (lum >= bright_lum && d < float(uMaxRadiusBins - 1))
-                atomicAdd(circle_bins[base + 2], 1u);
+            if (d < uSearchRadiusPx && uMaxRadiusBins > 0) {
+                int di = int(floor((d / max(uSearchRadiusPx, 1.0)) * float(uMaxRadiusBins)));
+                if (di >= uMaxRadiusBins) di = uMaxRadiusBins - 1;
+                if (di < 0) di = 0;
+
+                vec2 delta_px = pix_pos - positions_px[best_i];
+                float angle = atan(delta_px.y, delta_px.x);
+                if (angle < 0.0) angle += 2.0 * PI;
+                int sector = int(floor(angle * float(NUM_SECTORS) / (2.0 * PI)));
+                if (sector >= NUM_SECTORS) sector = NUM_SECTORS - 1;
+                if (sector < 0) sector = 0;
+
+                int base = (((best_i * MAX_BINS + di) * NUM_SECTORS + sector) *
+                            LIGHT_BIN_STRIDE);
+                atomicAdd(circle_bins[base + 0], r);
+                atomicAdd(circle_bins[base + 1], g);
+                atomicAdd(circle_bins[base + 2], b);
+                atomicAdd(circle_bins[base + 3], 1u);
+
+                uint bright_channel = uint(uBrightThreshold * 255.0 + 0.5);
+                if (max(r, max(g, b)) >= bright_channel)
+                    atomicAdd(circle_bins[base + 4], 1u);
+            }
         }
     }
 

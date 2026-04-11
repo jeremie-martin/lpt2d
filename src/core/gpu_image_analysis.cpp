@@ -26,7 +26,8 @@ constexpr std::size_t kInitialLightsBytes =
     kInitialLightCount * 2u * sizeof(float);
 constexpr std::size_t kInitialCirclesBytes =
     kInitialLightCount * static_cast<std::size_t>(GpuImageAnalyzer::kMaxBins) *
-    3u * sizeof(uint32_t);
+    static_cast<std::size_t>(GpuImageAnalyzer::kNumSectors) *
+    static_cast<std::size_t>(GpuImageAnalyzer::kLightBinStride) * sizeof(uint32_t);
 
 inline std::size_t lights_bytes_for(int n_lights) {
     return static_cast<std::size_t>(std::max(n_lights, 1)) * 2u * sizeof(float);
@@ -34,7 +35,27 @@ inline std::size_t lights_bytes_for(int n_lights) {
 inline std::size_t circles_bytes_for(int n_lights) {
     return static_cast<std::size_t>(std::max(n_lights, 1)) *
            static_cast<std::size_t>(GpuImageAnalyzer::kMaxBins) *
-           3u * sizeof(uint32_t);
+           static_cast<std::size_t>(GpuImageAnalyzer::kNumSectors) *
+           static_cast<std::size_t>(GpuImageAnalyzer::kLightBinStride) * sizeof(uint32_t);
+}
+
+float clamp01(float v) {
+    return std::clamp(v, 0.0f, 1.0f);
+}
+
+float quantile_sorted(std::vector<float>& values, float q) {
+    if (values.empty()) return 0.0f;
+    std::sort(values.begin(), values.end());
+    const float clamped = clamp01(q);
+    const auto idx = static_cast<std::size_t>(
+        std::round(clamped * static_cast<float>(values.size() - 1u)));
+    return values[idx];
+}
+
+float bin_radius_px(int bin, int max_bins, float search_radius_px) {
+    if (max_bins <= 0) return 0.0f;
+    return (static_cast<float>(bin) + 0.5f) * search_radius_px /
+           static_cast<float>(max_bins);
 }
 
 }  // namespace
@@ -59,6 +80,7 @@ bool GpuImageAnalyzer::init() {
     u_nlights_    = glGetUniformLocation(program_, "uNLights");
     u_bright_     = glGetUniformLocation(program_, "uBrightThreshold");
     u_max_bins_   = glGetUniformLocation(program_, "uMaxRadiusBins");
+    u_search_radius_px_ = glGetUniformLocation(program_, "uSearchRadiusPx");
     u_sat_        = glGetUniformLocation(program_, "uSatThreshold");
 
     // Allocate the 4 SSBOs. Luminance and colour are fixed-size (one
@@ -141,7 +163,8 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
     const int search_radius = std::max(
         2, static_cast<int>(std::ceil(params.lights.search_radius_ratio *
                                       static_cast<float>(std::min(width, height)))));
-    const int max_bins = std::min(search_radius + 1, kMaxBins);
+    const int max_bins = std::min(std::max(search_radius + 1, 8), kMaxBins);
+    const float search_radius_px = static_cast<float>(search_radius);
 
     // Precompute pixel-space light centres in the TOP-LEFT convention
     // used by viewport_xform. The shader flips gid.y internally so
@@ -200,8 +223,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
     if (u_resolution_ >= 0) glUniform2i(u_resolution_, width, height);
     if (u_nlights_ >= 0)    glUniform1i(u_nlights_, n_lights_gpu);
-    if (u_bright_ >= 0)     glUniform1f(u_bright_, params.lights.legacy_bright_threshold);
+    if (u_bright_ >= 0)     glUniform1f(u_bright_, params.lights.saturated_core_threshold);
     if (u_max_bins_ >= 0)   glUniform1i(u_max_bins_, max_bins);
+    if (u_search_radius_px_ >= 0) glUniform1f(u_search_radius_px_, search_radius_px);
     if (u_sat_ >= 0)        glUniform1f(u_sat_, params.saturation_threshold);
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, lum_ssbo_);
@@ -219,9 +243,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
     // ── Readback ───────────────────────────────────────────────────────
     //
-    // Lum + colour are always < 1.5 KB. The circles buffer scales with
-    // n_lights_gpu (~2.4 KB per light at kMaxBins=201), but the call is
-    // skipped entirely when the caller opted out of circle analysis.
+    // Lum + colour are always < 1.5 KB. The light-bin buffer is compact
+    // compared with full-frame RGB readback and is skipped entirely when
+    // the caller opted out of point-light analysis.
 
     std::array<uint32_t, 256 + 2> lum_raw{};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, lum_ssbo_);
@@ -235,7 +259,9 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
     if (want_circles) {
         circles_raw_scratch_.resize(static_cast<std::size_t>(n_lights_gpu) *
-                                    static_cast<std::size_t>(kMaxBins) * 3u);
+                                    static_cast<std::size_t>(kMaxBins) *
+                                    static_cast<std::size_t>(kNumSectors) *
+                                    static_cast<std::size_t>(kLightBinStride));
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, circles_ssbo_);
         glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                            static_cast<GLsizeiptr>(circles_bytes_for(n_lights_gpu)),
@@ -290,7 +316,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         out.color = cs;
     }
 
-    // ── Circles finalize (per-light) ───────────────────────────────────
+    // ── Light appearance finalize (per-light) ──────────────────────────
     //
     // One PointLightAppearance per input light. When light binning is
     // disabled on the GPU side (want_circles == false) we still emit the
@@ -314,86 +340,293 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                 continue;
             }
 
-            // Flat interleaved layout: per-bin [sum, cnt, bright]
-            // triples, MAX_BINS bins per light.
+            // Flat interleaved layout per (bin, sector):
+            // [sumR, sumG, sumB, count, brightCount].
             const uint32_t* base =
                 circles_raw_scratch_.data() +
-                static_cast<std::size_t>(i) * kMaxBins * 3u;
+                static_cast<std::size_t>(i) * kMaxBins *
+                static_cast<std::size_t>(kNumSectors) *
+                static_cast<std::size_t>(kLightBinStride);
 
-            // Radial profile directly in 0..1 luminance scale so that
-            // downstream FWHM and sharpness are scale-correct. The old
-            // code built it in 0..255 first and only rescaled after
-            // computing sharpness, producing a ~255x overshoot that
-            // broke every sharpness threshold downstream.
-            std::vector<float> profile(static_cast<std::size_t>(max_bins), 0.0f);
+            const auto bin_index = [](int r, int sector) -> std::size_t {
+                return (static_cast<std::size_t>(r) *
+                        static_cast<std::size_t>(GpuImageAnalyzer::kNumSectors) +
+                        static_cast<std::size_t>(sector)) *
+                       static_cast<std::size_t>(GpuImageAnalyzer::kLightBinStride);
+            };
+
+            std::vector<float> mean_r(static_cast<std::size_t>(max_bins) * kNumSectors, 0.0f);
+            std::vector<float> mean_g(mean_r.size(), 0.0f);
+            std::vector<float> mean_b(mean_r.size(), 0.0f);
+            std::vector<uint32_t> counts(mean_r.size(), 0u);
             uint32_t total_bright = 0;
             for (int r = 0; r < max_bins; ++r) {
-                const uint32_t psum = base[r * 3 + 0];
-                const uint32_t pcnt = base[r * 3 + 1];
-                const uint32_t pbr  = base[r * 3 + 2];
-                total_bright += pbr;
-                if (pcnt > 0) {
-                    profile[r] = (static_cast<float>(psum) /
-                                  static_cast<float>(pcnt)) / 255.0f;
+                for (int s = 0; s < kNumSectors; ++s) {
+                    const std::size_t raw = bin_index(r, s);
+                    const uint32_t sr = base[raw + 0];
+                    const uint32_t sg = base[raw + 1];
+                    const uint32_t sb = base[raw + 2];
+                    const uint32_t pcnt = base[raw + 3];
+                    const uint32_t pbr = base[raw + 4];
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    counts[idx] = pcnt;
+                    total_bright += pbr;
+                    if (pcnt > 0) {
+                        const float inv = 1.0f / static_cast<float>(pcnt);
+                        mean_r[idx] = static_cast<float>(sr) * inv;
+                        mean_g[idx] = static_cast<float>(sg) * inv;
+                        mean_b[idx] = static_cast<float>(sb) * inv;
+                    }
                 }
             }
-            const int bright_pixels = static_cast<int>(total_bright);
-            c.visible = bright_pixels > 0;
-            c.coverage_fraction = static_cast<float>(bright_pixels) /
-                                  static_cast<float>(width * height);
 
-            float legacy_radius_px = 0.0f;
-            if (bright_pixels >= params.lights.legacy_min_bright_pixels &&
+            const int bright_pixels = static_cast<int>(total_bright);
+
+            float saturated_core_radius_px = 0.0f;
+            if (bright_pixels >= params.lights.min_saturated_core_pixels &&
                 total_bright > 0) {
                 const float pct = std::clamp(
-                    params.lights.legacy_radius_percentile / 100.0f, 0.0f, 1.0f);
+                    params.lights.saturated_core_percentile / 100.0f, 0.0f, 1.0f);
                 const uint32_t target = static_cast<uint32_t>(
                     std::floor(static_cast<float>(total_bright) * pct));
                 bool radius_set = false;
                 uint32_t cumul = 0;
                 for (int r = 0; r < max_bins; ++r) {
-                    cumul += base[r * 3 + 2];
+                    for (int s = 0; s < kNumSectors; ++s) {
+                        cumul += base[bin_index(r, s) + 4];
+                    }
                     if (cumul > target) {
-                        legacy_radius_px = static_cast<float>(r);
+                        saturated_core_radius_px = bin_radius_px(r, max_bins, search_radius_px);
                         radius_set = true;
                         break;
                     }
                 }
                 if (!radius_set) {
                     for (int r = max_bins - 1; r >= 0; --r) {
-                        if (base[r * 3 + 2] > 0) {
-                            legacy_radius_px = static_cast<float>(r);
+                        uint32_t bin_bright = 0;
+                        for (int s = 0; s < kNumSectors; ++s) {
+                            bin_bright += base[bin_index(r, s) + 4];
+                        }
+                        if (bin_bright > 0) {
+                            saturated_core_radius_px = bin_radius_px(r, max_bins, search_radius_px);
                             break;
                         }
                     }
                 }
             }
-            c.saturated_radius_ratio = legacy_radius_px / short_side;
+            c.saturated_radius_ratio = saturated_core_radius_px / short_side;
 
-            float peak = 0.0f;
-            for (int r = 0; r < max_bins; ++r) {
-                peak = std::max(peak, profile[r]);
-            }
-            c.peak_luminance = peak;
-            c.background_luminance = max_bins > 0 ? profile[max_bins - 1] : 0.0f;
-            c.peak_contrast = std::max(0.0f, c.peak_luminance - c.background_luminance);
-            c.radius_ratio = c.saturated_radius_ratio;
-            c.transition_width_ratio = 0.0f;
-            if (legacy_radius_px > 2.0f) {
-                const int r_lo = std::max(1, static_cast<int>(legacy_radius_px * 0.5f));
-                const int r_hi = std::min(max_bins - 2,
-                                           static_cast<int>(legacy_radius_px * 1.5f) + 1);
-                if (r_hi > r_lo) {
-                    const float sharpness = (profile[r_lo] - profile[r_hi]) /
-                                            static_cast<float>(r_hi - r_lo);
-                    c.transition_width_ratio = sharpness > 0.0f
-                        ? (1.0f / sharpness) / short_side
-                        : 0.0f;
+            const int outer_start = std::max(0, static_cast<int>(std::floor(max_bins * 0.85f)));
+            double bg_r_sum = 0.0;
+            double bg_g_sum = 0.0;
+            double bg_b_sum = 0.0;
+            double bg_count = 0.0;
+            for (int r = outer_start; r < max_bins; ++r) {
+                for (int s = 0; s < kNumSectors; ++s) {
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    const double count = static_cast<double>(counts[idx]);
+                    if (count <= 0.0) continue;
+                    bg_r_sum += static_cast<double>(mean_r[idx]) * count;
+                    bg_g_sum += static_cast<double>(mean_g[idx]) * count;
+                    bg_b_sum += static_cast<double>(mean_b[idx]) * count;
+                    bg_count += count;
                 }
             }
-            c.confidence = c.visible
-                ? std::clamp(c.peak_contrast / 0.15f, 0.0f, 1.0f)
-                : 0.0f;
+            const float bg_r = bg_count > 0.0 ? static_cast<float>(bg_r_sum / bg_count) : 0.0f;
+            const float bg_g = bg_count > 0.0 ? static_cast<float>(bg_g_sum / bg_count) : 0.0f;
+            const float bg_b = bg_count > 0.0 ? static_cast<float>(bg_b_sum / bg_count) : 0.0f;
+            c.background_luminance =
+                clamp01((0.2126f * bg_r + 0.7152f * bg_g + 0.0722f * bg_b) / 255.0f);
+
+            const int inner_end = std::max(
+                1, std::min(max_bins - 1,
+                            static_cast<int>(std::ceil(std::max(4.0f, 0.04f * search_radius_px) *
+                                                        static_cast<float>(max_bins) /
+                                                        search_radius_px))));
+            double inner_r_sum = 0.0;
+            double inner_g_sum = 0.0;
+            double inner_b_sum = 0.0;
+            double inner_count = 0.0;
+            for (int r = 0; r <= inner_end; ++r) {
+                for (int s = 0; s < kNumSectors; ++s) {
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    const double count = static_cast<double>(counts[idx]);
+                    if (count <= 0.0) continue;
+                    inner_r_sum += static_cast<double>(mean_r[idx]) * count;
+                    inner_g_sum += static_cast<double>(mean_g[idx]) * count;
+                    inner_b_sum += static_cast<double>(mean_b[idx]) * count;
+                    inner_count += count;
+                }
+            }
+
+            float dir_r = inner_count > 0.0 ? static_cast<float>(inner_r_sum / inner_count) - bg_r : 1.0f;
+            float dir_g = inner_count > 0.0 ? static_cast<float>(inner_g_sum / inner_count) - bg_g : 1.0f;
+            float dir_b = inner_count > 0.0 ? static_cast<float>(inner_b_sum / inner_count) - bg_b : 1.0f;
+            dir_r = std::max(0.0f, dir_r);
+            dir_g = std::max(0.0f, dir_g);
+            dir_b = std::max(0.0f, dir_b);
+            const float dir_sum = dir_r + dir_g + dir_b;
+            if (dir_sum <= 1.0e-3f) {
+                dir_r = 1.0f;
+                dir_g = 1.0f;
+                dir_b = 1.0f;
+            }
+            const float signal_norm = 255.0f * std::max(1.0e-6f, dir_r + dir_g + dir_b);
+            const float bg_signal = (bg_r * dir_r + bg_g * dir_g + bg_b * dir_b) / signal_norm;
+
+            std::vector<float> profile(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> profile_low(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> profile_high(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> luminance_profile(static_cast<std::size_t>(max_bins), 0.0f);
+            std::vector<float> sector_values;
+            std::vector<float> luminance_values;
+            sector_values.reserve(kNumSectors);
+            luminance_values.reserve(kNumSectors);
+            for (int r = 0; r < max_bins; ++r) {
+                sector_values.clear();
+                luminance_values.clear();
+                for (int s = 0; s < kNumSectors; ++s) {
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    if (counts[idx] == 0u) continue;
+                    const float signal =
+                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
+                        signal_norm;
+                    sector_values.push_back(std::max(0.0f, signal - bg_signal));
+                    luminance_values.push_back(
+                        clamp01((0.2126f * mean_r[idx] +
+                                 0.7152f * mean_g[idx] +
+                                 0.0722f * mean_b[idx]) / 255.0f));
+                }
+                if (!sector_values.empty()) {
+                    std::vector<float> tmp = sector_values;
+                    profile[static_cast<std::size_t>(r)] = quantile_sorted(tmp, 0.50f);
+                    tmp = sector_values;
+                    profile_low[static_cast<std::size_t>(r)] = quantile_sorted(tmp, 0.25f);
+                    tmp = sector_values;
+                    profile_high[static_cast<std::size_t>(r)] = quantile_sorted(tmp, 0.75f);
+                }
+                if (!luminance_values.empty()) {
+                    std::vector<float> tmp = luminance_values;
+                    luminance_profile[static_cast<std::size_t>(r)] =
+                        quantile_sorted(tmp, 0.50f);
+                }
+            }
+
+            std::vector<float> smooth(profile.size(), 0.0f);
+            std::vector<float> luminance_smooth(luminance_profile.size(), 0.0f);
+            for (int r = 0; r < max_bins; ++r) {
+                double sum = 0.0;
+                double lum_sum = 0.0;
+                double weight = 0.0;
+                for (int o = -2; o <= 2; ++o) {
+                    const int rr = r + o;
+                    if (rr < 0 || rr >= max_bins) continue;
+                    const double w = (o == 0) ? 3.0 : (std::abs(o) == 1 ? 2.0 : 1.0);
+                    sum += static_cast<double>(profile[static_cast<std::size_t>(rr)]) * w;
+                    lum_sum += static_cast<double>(
+                                   luminance_profile[static_cast<std::size_t>(rr)]) * w;
+                    weight += w;
+                }
+                smooth[static_cast<std::size_t>(r)] =
+                    weight > 0.0 ? static_cast<float>(sum / weight) : 0.0f;
+                luminance_smooth[static_cast<std::size_t>(r)] =
+                    weight > 0.0 ? static_cast<float>(lum_sum / weight) : 0.0f;
+            }
+
+            const int peak_search_end = std::max(
+                inner_end, std::min(max_bins - 1, static_cast<int>(std::ceil(0.12f * max_bins))));
+            int peak_bin = 0;
+            float signal_peak_excess = 0.0f;
+            float peak_luminance = c.background_luminance;
+            for (int r = 0; r <= peak_search_end; ++r) {
+                if (smooth[static_cast<std::size_t>(r)] > signal_peak_excess) {
+                    signal_peak_excess = smooth[static_cast<std::size_t>(r)];
+                    peak_bin = r;
+                }
+                peak_luminance =
+                    std::max(peak_luminance, luminance_smooth[static_cast<std::size_t>(r)]);
+            }
+
+            c.peak_luminance = clamp01(peak_luminance);
+            c.peak_contrast = std::max(0.0f, c.peak_luminance - c.background_luminance);
+            if (signal_peak_excess <= 0.015f) {
+                out.lights.push_back(std::move(c));
+                continue;
+            }
+
+            std::vector<float> envelope = smooth;
+            for (int r = peak_bin + 1; r < max_bins; ++r) {
+                const auto prev = envelope[static_cast<std::size_t>(r - 1)];
+                auto& cur = envelope[static_cast<std::size_t>(r)];
+                if (cur > prev) cur = prev;
+            }
+
+            const int min_edge_bin = std::min(
+                max_bins - 2,
+                std::max(peak_bin + 1,
+                         static_cast<int>(std::ceil(2.0f * static_cast<float>(max_bins) /
+                                                     search_radius_px))));
+            int edge_bin = -1;
+            float best_drop = 0.0f;
+            for (int r = min_edge_bin; r < max_bins - 2; ++r) {
+                const int lo = std::max(peak_bin, r - 2);
+                const int hi = std::min(max_bins - 1, r + 2);
+                const float drop = envelope[static_cast<std::size_t>(lo)] -
+                                   envelope[static_cast<std::size_t>(hi)];
+                if (drop > best_drop &&
+                    envelope[static_cast<std::size_t>(r)] > signal_peak_excess * 0.05f) {
+                    best_drop = drop;
+                    edge_bin = r;
+                }
+            }
+
+            const auto first_below = [&](float threshold) {
+                for (int r = peak_bin; r < max_bins; ++r) {
+                    if (envelope[static_cast<std::size_t>(r)] <= threshold) return r;
+                }
+                return max_bins - 1;
+            };
+            const int r80 = first_below(0.80f * signal_peak_excess);
+            const int r50 = first_below(0.50f * signal_peak_excess);
+            const int r20 = first_below(0.20f * signal_peak_excess);
+
+            const bool has_edge = edge_bin >= 0 && best_drop >= signal_peak_excess * 0.035f;
+            const int radius_bin = has_edge ? edge_bin : r50;
+            const float radius_px = bin_radius_px(radius_bin, max_bins, search_radius_px);
+
+            c.visible = radius_px > 0.0f;
+            c.radius_ratio = radius_px / short_side;
+            c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
+                                          static_cast<float>(width * height));
+            c.transition_width_ratio =
+                std::max(0.0f, bin_radius_px(r20, max_bins, search_radius_px) -
+                                   bin_radius_px(r80, max_bins, search_radius_px)) /
+                short_side;
+            c.touches_frame_edge =
+                c.image_x - radius_px <= 0.0f || c.image_x + radius_px >= static_cast<float>(width - 1) ||
+                c.image_y - radius_px <= 0.0f || c.image_y + radius_px >= static_cast<float>(height - 1) ||
+                radius_bin >= max_bins - 2;
+
+            const float contrast_score = clamp01((signal_peak_excess - 0.015f) / 0.18f);
+            const float edge_score = has_edge
+                ? clamp01(best_drop / std::max(signal_peak_excess * 0.08f, 1.0e-4f))
+                : 0.55f;
+            const float spread =
+                profile_high[static_cast<std::size_t>(radius_bin)] -
+                profile_low[static_cast<std::size_t>(radius_bin)];
+            const float sector_score =
+                clamp01(1.0f - spread / std::max(signal_peak_excess, 1.0e-4f));
+            const float truncation_score = c.touches_frame_edge ? 0.5f : 1.0f;
+            c.confidence = contrast_score * edge_score *
+                           std::max(0.25f, sector_score) * truncation_score;
 
             out.lights.push_back(std::move(c));
         }

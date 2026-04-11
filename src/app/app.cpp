@@ -88,7 +88,6 @@ struct AuthoredAnalysisTarget {
     uint64_t analysis_revision = 0;
     uint64_t mirrored_trace_generation = 0;
     bool last_used_display_fast_path = false;
-    std::vector<uint8_t> rgb_scratch;
 
     void mark_dirty() {
         scene_dirty = true;
@@ -102,7 +101,6 @@ struct AuthoredAnalysisTarget {
         scene_dirty = true;
         have_trace_config = false;
         mirrored_trace_generation = 0;
-        rgb_scratch.clear();
     }
 
     bool ensure_uploaded(EditorState& ed) {
@@ -206,13 +204,8 @@ struct AuthoredAnalysisTarget {
             }
         }
 
-        renderer.read_pixels(
-            rgb_scratch,
-            ed.shot.look.to_post_process(),
-            ed.shot.canvas.aspect(),
-            nullptr,
-            nullptr,
-            &out);
+        renderer.update_display(ed.shot.look.to_post_process(), ed.shot.canvas.aspect());
+        out = renderer.run_frame_analysis();
         return true;
     }
 };

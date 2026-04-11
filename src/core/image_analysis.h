@@ -1,6 +1,6 @@
 #pragma once
 
-// Frame-analysis data types and CPU-side RGB8 analyzer.
+// Frame-analysis data types and RGB8 analyzer.
 //
 // The public contract is intentionally about metric meaning, not about a
 // specific implementation strategy. All values are measured on the
@@ -95,9 +95,9 @@ struct PointLightAppearance {
 
 struct PointLightAppearanceParams {
     float search_radius_ratio = 0.25f;
-    float legacy_bright_threshold = 0.92f;
-    float legacy_radius_percentile = 90.0f;
-    int legacy_min_bright_pixels = 6;
+    float saturated_core_threshold = 0.92f;
+    float saturated_core_percentile = 90.0f;
+    int min_saturated_core_pixels = 6;
     float seed_fraction = 0.70f;
     float grow_fraction = 0.35f;
     int center_snap_px = 3;
@@ -123,7 +123,7 @@ struct FrameAnalysisParams {
     int near_white_bin_min = 250;
 };
 
-// CPU source-of-truth analyzer over a top-left-origin RGB8 buffer.
+// CPU RGB8 analyzer over a top-left-origin final-frame buffer.
 FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                  int width, int height,
                                  const Bounds& world_bounds,

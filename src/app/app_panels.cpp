@@ -1839,7 +1839,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         ImGui::Separator();
         ImGui::TextUnformatted("Light appearance");
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-            ImGui::SetTooltip("Per-light apparent bright structure measured in normalized camera-space units.\n"
+            ImGui::SetTooltip("Per-light apparent point-light disc measured in normalized camera-space units.\n"
                               "Each row is one PointLight in the scene.");
         if (ImGui::BeginTable("##lights", 6,
                               ImGuiTableFlags_SizingStretchProp |
@@ -1847,15 +1847,15 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                               ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Light");
             ImGui::TableSetupColumn("Radius %");
-            ImGui::TableSetupColumn("Sat %");
+            ImGui::TableSetupColumn("Core %");
             ImGui::TableSetupColumn("Edge %");
             ImGui::TableSetupColumn("Contrast");
             ImGui::TableSetupColumn("Conf.");
             ImGui::TableHeadersRow();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::SetTooltip(
-                    "Radius: equivalent connected-component radius as %% of the short image side.\n"
-                    "Sat: legacy bright-threshold radius as %% of the short image side.\n"
+                    "Radius: estimated apparent point-light disc radius as %% of the short image side.\n"
+                    "Core: diagnostic saturated-core radius as %% of the short image side.\n"
                     "Edge: transition width as %% of the short image side.\n"
                     "Contrast: peak minus background luminance.\n"
                     "Conf.: confidence score in [0, 1].");

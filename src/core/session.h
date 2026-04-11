@@ -36,11 +36,9 @@ public:
     // Render a complete frame from a Shot.
     // Resolves camera bounds, converts Look → PostProcess, traces rays, post-processes.
     //
-    // `analyze` controls whether the result carries the full FrameAnalysis
-    // (colour statistics + per-light circles, O(W·H·L)). When false, only
-    // the cheap luminance stats in `result.metrics` are populated. Video
-    // batch paths and still exports should leave it at the default so they
-    // don't pay for work they never consume.
+    // `analyze` controls whether the result carries full FrameAnalysis
+    // (colour statistics + per-light appearance). When false, only luminance
+    // stats in `result.metrics` are populated.
     RenderResult render_shot(const Shot& shot, int frame = 0, bool analyze = false);
 
     // Render with pre-resolved parameters (for animation loops).

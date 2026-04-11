@@ -61,9 +61,11 @@ public:
     // both the viewport and authored-camera analysis.
     void draw_trace_output_from(const Renderer& source);
 
-    // Post-processing and readback (unchanged)
+    // Post-process the current accumulation buffer into the final RGB8 display texture.
     void update_display(const PostProcess& pp, float display_aspect = 0.0f,
                         const VignetteFrame* vignette_frame = nullptr);
+    // Read final RGB pixels for image output. When analysis outputs are requested,
+    // metrics are produced from the GPU display texture before the pixel readback.
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f,
                      const VignetteFrame* vignette_frame = nullptr, FrameMetrics* out_metrics = nullptr,
                      FrameAnalysis* out_analysis = nullptr);

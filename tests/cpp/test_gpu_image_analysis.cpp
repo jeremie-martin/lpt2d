@@ -1,9 +1,7 @@
 // Frame-analysis tests.
 //
-// The authoritative frame-analysis contract now lives in the CPU RGB8
-// analyzer (`analyze_rgb8_frame`). The legacy GPU analyzer remains in the
-// tree for compatibility, so this file keeps a small smoke-test layer for it
-// while focusing most assertions on the CPU path that powers render readback.
+// `GpuImageAnalyzer` is the production path for rendered frames. The CPU RGB8
+// analyzer is still covered here as a deterministic reference utility.
 
 #include "test_harness.h"
 
@@ -11,6 +9,7 @@
 #include "headless.h"
 #include "image_analysis.h"
 #include "scene.h"
+#include "session.h"
 
 #include <GL/glew.h>
 
@@ -108,6 +107,30 @@ std::vector<std::uint8_t> make_disc(int w, int h, float cx, float cy,
                 buf[i + 0] = value;
                 buf[i + 1] = value;
                 buf[i + 2] = value;
+            }
+        }
+    }
+    return buf;
+}
+
+std::vector<std::uint8_t> make_disc_rgb(int w, int h, float cx, float cy,
+                                        float radius,
+                                        std::uint8_t r,
+                                        std::uint8_t g,
+                                        std::uint8_t b) {
+    std::vector<std::uint8_t> buf(static_cast<std::size_t>(w) *
+                                  static_cast<std::size_t>(h) * 3u, 0);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const float dx = static_cast<float>(x) - cx;
+            const float dy = static_cast<float>(y) - cy;
+            if (dx * dx + dy * dy <= radius * radius) {
+                const std::size_t i = (static_cast<std::size_t>(y) *
+                                       static_cast<std::size_t>(w) +
+                                       static_cast<std::size_t>(x)) * 3u;
+                buf[i + 0] = r;
+                buf[i + 1] = g;
+                buf[i + 2] = b;
             }
         }
     }
@@ -372,7 +395,90 @@ TEST(gpu_analyzer_smoke_light_contract) {
     ASSERT_NEAR(a.lights[0].image_x, 64.0f, 0.5f);
     ASSERT_NEAR(a.lights[0].image_y, 64.0f, 0.5f);
     ASSERT_TRUE(a.lights[0].visible);
-    ASSERT_TRUE(a.lights[0].radius_ratio > 0.0f);
-    ASSERT_TRUE(a.lights[0].peak_contrast > 0.0f);
+    ASSERT_NEAR(a.lights[0].radius_ratio, 20.0f / 128.0f, 0.035f);
+    ASSERT_NEAR(a.lights[0].saturated_radius_ratio, 20.0f / 128.0f, 0.035f);
+    ASSERT_NEAR(a.lights[0].coverage_fraction, expected_disc_coverage(20.0f, w, h), 0.025f);
+    ASSERT_TRUE(a.lights[0].peak_contrast > 0.9f);
+    ASSERT_TRUE(a.lights[0].transition_width_ratio <= 0.06f);
     ASSERT_TRUE(a.lights[0].confidence > 0.0f);
+}
+
+TEST(gpu_analyzer_colored_light_uses_channel_signal_not_luminance_only) {
+    GpuFixture f;
+    init_gpu_fixture(f);
+    REQUIRE_TRUE(f.ready);
+    const int w = 128;
+    const int h = 128;
+    auto buf = make_disc_rgb(w, h, 64.0f, 64.0f, 20.0f, 0, 255, 0);
+    TextureGuard tex(buf.data(), w, h);
+
+    const std::vector<LightRef> lights = {LightRef{"green_light", 0.0f, 0.0f}};
+    auto a = f.analyzer.analyze(tex.id, w, h, unit_bounds(), lights, {});
+
+    REQUIRE_TRUE(a.lights.size() == 1);
+    ASSERT_TRUE(a.lights[0].visible);
+    ASSERT_NEAR(a.lights[0].radius_ratio, 20.0f / 128.0f, 0.035f);
+    ASSERT_NEAR(a.lights[0].saturated_radius_ratio, 20.0f / 128.0f, 0.035f);
+    ASSERT_NEAR(a.lights[0].peak_luminance, 0.7152f, 0.05f);
+    ASSERT_TRUE(a.lights[0].confidence > 0.0f);
+}
+
+TEST(render_session_analysis_keeps_display_texture_y_convention) {
+    constexpr int w = 128;
+    constexpr int h = 128;
+
+    Scene scene;
+    Material fill;
+    fill.fill = 5.0f;
+    scene.materials["fill"] = fill;
+    scene.shapes.emplace_back(Circle{"disc", Vec2{0.0f, 0.5f}, 0.2f, "fill"});
+    scene.lights.emplace_back(PointLight{"light_0", Vec2{0.0f, 0.5f}, 1.0f});
+
+    Shot shot;
+    shot.scene = scene;
+    shot.camera.center = Vec2{0.0f, 0.0f};
+    shot.camera.width = 2.0f;
+    shot.canvas = Canvas{w, h};
+    shot.look.exposure = 0.0f;
+    shot.look.gamma = 1.0f;
+    shot.look.tonemap = ToneMap::None;
+    shot.look.normalize = NormalizeMode::Fixed;
+    shot.look.normalize_ref = 1.0f;
+    shot.trace.rays = 0;
+    shot.trace.batch = 1;
+    shot.trace.depth = 1;
+
+    RenderSession session(w, h);
+    RenderResult rr = session.render_shot(shot, 0, true);
+
+    double sum_x = 0.0;
+    double sum_y = 0.0;
+    int bright = 0;
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const std::size_t i =
+                (static_cast<std::size_t>(y) * static_cast<std::size_t>(w) +
+                 static_cast<std::size_t>(x)) * 3u;
+            const auto mx = std::max({rr.pixels[i + 0], rr.pixels[i + 1], rr.pixels[i + 2]});
+            if (mx > 100u) {
+                sum_x += static_cast<double>(x);
+                sum_y += static_cast<double>(y);
+                ++bright;
+            }
+        }
+    }
+
+    REQUIRE_TRUE(bright > 0);
+    const double image_cx = sum_x / static_cast<double>(bright);
+    const double image_cy = sum_y / static_cast<double>(bright);
+    REQUIRE_TRUE(rr.analysis.lights.size() == 1);
+    const auto& light = rr.analysis.lights[0];
+
+    ASSERT_NEAR(image_cx, 63.5, 1.0);
+    ASSERT_NEAR(image_cy, 31.5, 1.0);
+    ASSERT_NEAR(light.image_x, 64.0f, 0.5f);
+    ASSERT_NEAR(light.image_y, 32.0f, 0.5f);
+    ASSERT_TRUE(light.visible);
+    ASSERT_NEAR(light.radius_ratio, 0.10f, 0.03f);
+    ASSERT_TRUE(light.confidence > 0.0f);
 }
