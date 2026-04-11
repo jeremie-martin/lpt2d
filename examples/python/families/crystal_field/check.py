@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from collections.abc import Iterable, Iterator
+from dataclasses import asdict, dataclass
 
-from anim import Camera2D, Shot, Timeline, Verdict, render_frame
+from anim import Camera2D, Shot, Timeline, Verdict, iter_frame_variants, render_frame
 
 from .grid import build_grid, remove_holes
-from .params import DURATION, Params
+from .params import DURATION, LookConfig, Params
 
 # ---------------------------------------------------------------------------
 # Thresholds
@@ -82,6 +83,9 @@ class MeasurementResult:
     analysis_frame: int = 0
     analysis_fps: int = PROBE_FPS
     analysis_time: float = 0.0
+
+
+LookVariantInput = LookConfig | tuple[str, LookConfig]
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +237,31 @@ def metrics_from_analysis(analysis) -> dict[str, float]:
     return metrics
 
 
+def _measurement_result_from_analysis(
+    p: Params,
+    analysis,
+    timeline: Timeline,
+    best_fi: int,
+) -> MeasurementResult:
+    metrics = metrics_from_analysis(analysis)
+    metrics["analysis_frame"] = float(best_fi)
+    metrics["analysis_fps"] = float(PROBE_FPS)
+    metrics["analysis_time"] = timeline.time_at(best_fi)
+
+    return MeasurementResult(
+        metrics=metrics,
+        verdict=_verdict_for_metrics(
+            metrics,
+            moving_count=sum(1 for c in analysis.lights if c.id.startswith("light_")),
+            ambient_count=sum(1 for c in analysis.lights if c.id.startswith("amb_")),
+            outcome=p.material.outcome,
+        ),
+        analysis_frame=best_fi,
+        analysis_fps=PROBE_FPS,
+        analysis_time=timeline.time_at(best_fi),
+    )
+
+
 def _verdict_for_metrics(
     metrics: dict[str, float],
     *,
@@ -329,24 +358,57 @@ def _measure_and_verdict(p: Params, animate) -> MeasurementResult:
         settings=_make_measurement_shot(),
         analyze=True,
     )
-    ana = rr.analysis
-    metrics = metrics_from_analysis(ana)
-    metrics["analysis_frame"] = float(best_fi)
-    metrics["analysis_fps"] = float(PROBE_FPS)
-    metrics["analysis_time"] = timeline.time_at(best_fi)
+    return _measurement_result_from_analysis(p, rr.analysis, timeline, best_fi)
 
-    return MeasurementResult(
-        metrics=metrics,
-        verdict=_verdict_for_metrics(
-            metrics,
-            moving_count=sum(1 for c in ana.lights if c.id.startswith("light_")),
-            ambient_count=sum(1 for c in ana.lights if c.id.startswith("amb_")),
-            outcome=p.material.outcome,
+
+def _named_look_configs(look_variants: Iterable[LookVariantInput]) -> list[tuple[str, LookConfig]]:
+    named: list[tuple[str, LookConfig]] = []
+    for idx, variant in enumerate(look_variants):
+        if isinstance(variant, tuple):
+            named.append((variant[0], variant[1]))
+        else:
+            named.append((f"look_{idx:03d}", variant))
+    return named
+
+
+def _look_overrides(look: LookConfig) -> dict[str, float]:
+    return asdict(look)
+
+
+def measure_look_variants(
+    p: Params,
+    animate,
+    look_variants: Iterable[LookVariantInput],
+) -> Iterator[tuple[str, LookConfig, MeasurementResult]]:
+    """Measure many post-process looks over one traced crystal-field frame.
+
+    The clear analysis frame is selected once. The first look traces that
+    frame; every subsequent look uses Python post-process replay, so catalog
+    search can cheaply try many look variants before discarding a scene.
+    """
+    named_looks = _named_look_configs(look_variants)
+    if not named_looks:
+        return
+
+    timeline, best_fi = _selected_measurement_frame(p, animate)
+    replay_variants = [(name, _look_overrides(look)) for name, look in named_looks]
+
+    for variant, (name, look) in zip(
+        iter_frame_variants(
+            animate,
+            timeline,
+            frame=best_fi,
+            settings=_make_measurement_shot(),
+            variants=replay_variants,
+            analyze=True,
         ),
-        analysis_frame=best_fi,
-        analysis_fps=PROBE_FPS,
-        analysis_time=timeline.time_at(best_fi),
-    )
+        named_looks,
+    ):
+        yield (
+            name,
+            look,
+            _measurement_result_from_analysis(p, variant.result.analysis, timeline, best_fi),
+        )
 
 
 # ---------------------------------------------------------------------------

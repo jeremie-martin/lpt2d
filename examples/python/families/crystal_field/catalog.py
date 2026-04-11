@@ -11,8 +11,9 @@ shape, grid size, wavelength range, n_lights) and **draws** the rest:
 ``build_seed``, full :class:`LookConfig` (including exposure, gamma,
 contrast, white_point, temperature, highlights, shadows, chromatic_aberration),
 ``ambient.intensity``, and ``moving_intensity``.  For each entry the
-catalog runs a plain retry loop against the full ``check.py`` pipeline
-until a passing candidate is found or the attempt budget is exhausted.
+catalog runs a retry loop over structural candidates; each candidate traces
+the selected analysis frame once, then tries many random post-processing
+looks via replay before the scene is discarded.
 Failing entries are still saved (best-effort closest-to-passing) and
 tagged in the HTML gallery with a red border + verdict tooltip.
 
@@ -31,7 +32,7 @@ import math
 import random as _rng_mod
 import shutil
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from PIL import Image
@@ -61,7 +62,7 @@ from .check import (
     PROBE_RAYS,
     PROBE_W,
     MeasurementResult,
-    _measure_and_verdict,
+    measure_look_variants,
 )
 from .overlay import draw_metrics_overlay
 from .params import (
@@ -91,6 +92,7 @@ _SHOT = Shot.preset("production", width=1920, height=1080, rays=10_000_000, dept
 # when exporting the authored scene JSON.  render_frame still takes an
 # explicit camera= kwarg below and the values agree.
 _SHOT.camera = Camera2D(center=_CAM.center, width=_CAM.width)
+DEFAULT_LOOK_ATTEMPTS = 100
 
 
 # ── Axes ─────────────────────────────────────────────────────────────────
@@ -228,6 +230,22 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
 # ── Retry loop ───────────────────────────────────────────────────────────
 
 
+def _look_candidates(
+    p: Params,
+    rng: _rng_mod.Random,
+    count: int,
+):
+    """Yield post-process looks for one fixed structural scene.
+
+    The first look is the one sampled with the scene, preserving the old
+    one-look behavior when ``count == 1``. Remaining looks are fresh random
+    post-process draws that can be replayed over the same traced frame.
+    """
+    yield "look_000", p.look
+    for idx in range(1, max(1, count)):
+        yield f"look_{idx:03d}", _random_look(rng, p.material, p.light)
+
+
 def _failure_distance(result: MeasurementResult, outcome: str | None = None) -> float:
     """Heuristic score: how far a failing result is from passing.
 
@@ -290,8 +308,9 @@ def _find_good_params(
     e: dict,
     rng: _rng_mod.Random,
     max_attempts: int = 500,
+    look_attempts: int = DEFAULT_LOOK_ATTEMPTS,
 ) -> tuple[Params, MeasurementResult]:
-    """Draw brightness+look until ``check.py`` passes; fall back to best.
+    """Draw scene candidates, replay many looks, and return the first pass.
 
     Returns the (Params, MeasurementResult) pair.  If no attempt passed,
     returns the closest-to-passing one (``result.verdict.ok == False``).
@@ -302,15 +321,17 @@ def _find_good_params(
     for _ in range(max_attempts):
         p = _entry_sample(e, rng)
         animate = build(p)
-        result = _measure_and_verdict(p, animate)
+        looks = _look_candidates(p, rng, look_attempts)
 
-        if result.verdict.ok:
-            return (p, result)
+        for _name, look, result in measure_look_variants(p, animate, looks):
+            candidate = replace(p, look=look)
+            if result.verdict.ok:
+                return (candidate, result)
 
-        score = _failure_distance(result, outcome=e["outcome"])
-        if score < best_score:
-            best = (p, result)
-            best_score = score
+            score = _failure_distance(result, outcome=e["outcome"])
+            if score < best_score:
+                best = (candidate, result)
+                best_score = score
 
     assert best is not None  # max_attempts > 0
     return best
@@ -363,12 +384,22 @@ def run_catalog(argv: list[str] | None = None) -> None:
         "--max-attempts",
         type=int,
         default=500,
-        help="Max brightness+look attempts per entry (default: 500)",
+        help="Max structural scene attempts per entry (default: 500)",
+    )
+    parser.add_argument(
+        "--look-attempts",
+        type=int,
+        default=DEFAULT_LOOK_ATTEMPTS,
+        help="Post-process looks to replay per structural attempt (default: 100)",
     )
     args = parser.parse_args(argv)
 
     entries = _build_catalog_entries()
     print(f"Catalog: {len(entries)} combinations")
+    print(
+        f"Search budget: {args.max_attempts} structural attempts × "
+        f"{max(1, args.look_attempts)} looks"
+    )
 
     for outcome in _CATALOG_OUTCOMES:
         outcome_entries = [e for e in entries if e["outcome"] == outcome]
@@ -407,7 +438,12 @@ def run_catalog(argv: list[str] | None = None) -> None:
                 continue
 
             entry_rng = _rng_mod.Random(f"{args.seed}:{key}")
-            p, result = _find_good_params(e, entry_rng, max_attempts=args.max_attempts)
+            p, result = _find_good_params(
+                e,
+                entry_rng,
+                max_attempts=args.max_attempts,
+                look_attempts=max(1, args.look_attempts),
+            )
             verdicts[key] = result.verdict
 
             animate = build(p)

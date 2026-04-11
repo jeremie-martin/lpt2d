@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import random
+
 from examples.python.families.crystal_field.check import (
     METRIC_KEYS,
     MIN_CONTRAST_SPREAD,
@@ -80,6 +82,116 @@ def test_failure_distance_increases_with_washed_out():
     )
     # Distance should reflect the spread shortfall.
     assert _failure_distance(result) > 0.0
+
+
+def _synthetic_metrics(**overrides: float) -> dict[str, float]:
+    metrics = {
+        "mean": 100.0,
+        "shadow_floor": 50.0,
+        "contrast_spread": 80.0,
+        "near_black_fraction": 0.03,
+        "shadow_fraction": 0.10,
+        "mean_saturation": 0.40,
+        "moving_radius_min": 0.015,
+        "moving_radius_mean": 0.024,
+        "moving_radius_max": 0.035,
+        "ambient_radius_min": 0.010,
+        "ambient_radius_mean": 0.014,
+        "ambient_radius_max": 0.025,
+        "moving_to_ambient_radius_ratio": 1.71,
+    }
+    metrics.update(overrides)
+    return metrics
+
+
+def _synthetic_params() -> Params:
+    grid = GridConfig(rows=3, cols=4, spacing=0.30, offset_rows=False, hole_fraction=0.0)
+    shape = ShapeConfig(
+        kind="circle",
+        size=0.06,
+        n_sides=0,
+        corner_radius=0.0,
+        rotation=None,
+    )
+    material = MaterialConfig(
+        outcome="black_diffuse",
+        albedo=0.85,
+        fill=0.0,
+        color_names=[],
+    )
+    light = LightConfig(
+        n_lights=1,
+        path_style="channel",
+        n_waypoints=8,
+        ambient=AmbientConfig(style="corners", intensity=0.3),
+        speed=0.12,
+        moving_intensity=0.6,
+        wavelength_min=380.0,
+        wavelength_max=780.0,
+    )
+    return Params(
+        grid=grid,
+        shape=shape,
+        material=material,
+        light=light,
+        look=LookConfig(exposure=-4.5),
+        build_seed=42,
+    )
+
+
+def test_find_good_params_replays_look_variants_before_resampling_scene(monkeypatch):
+    """One structural candidate should try multiple looks before being discarded."""
+    from anim.family import Verdict
+    from examples.python.families.crystal_field import catalog
+    from examples.python.families.crystal_field.check import MeasurementResult
+
+    p = _synthetic_params()
+    entry_calls = 0
+    seen_looks: list[LookConfig] = []
+
+    def fake_entry_sample(_entry, _rng):
+        nonlocal entry_calls
+        entry_calls += 1
+        return p
+
+    def fake_build(_params):
+        return object()
+
+    def fake_measure_look_variants(_params, _animate, looks):
+        materialized = list(looks)
+        seen_looks.extend(look for _name, look in materialized)
+        assert len(materialized) == 3
+        yield (
+            materialized[0][0],
+            materialized[0][1],
+            MeasurementResult(
+                metrics=_synthetic_metrics(mean=20.0),
+                verdict=Verdict(False, "too dark"),
+            ),
+        )
+        yield (
+            materialized[1][0],
+            materialized[1][1],
+            MeasurementResult(
+                metrics=_synthetic_metrics(),
+                verdict=Verdict(True, "pass"),
+            ),
+        )
+
+    monkeypatch.setattr(catalog, "_entry_sample", fake_entry_sample)
+    monkeypatch.setattr(catalog, "build", fake_build)
+    monkeypatch.setattr(catalog, "measure_look_variants", fake_measure_look_variants)
+
+    found, result = catalog._find_good_params(
+        {"outcome": "black_diffuse"},
+        random.Random(0),
+        max_attempts=5,
+        look_attempts=3,
+    )
+
+    assert result.verdict.ok
+    assert entry_calls == 1
+    assert found.look == seen_looks[1]
 
 
 def test_measure_and_verdict_populates_all_overlay_keys():

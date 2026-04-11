@@ -73,13 +73,21 @@ Variants are rejected only by the current light-radius and luminance gates:
 
 - Moving light radius: 1.0% to 4.2% of the short image side.
 - Ambient light radius: 0.8% to 4.2% of the short image side.
-- Mean moving radius divided by mean ambient radius: 1.0 to 2.33.
+- Mean moving radius divided by mean ambient radius: 1.33 to 2.33.
 - Near-black fraction: below 3.5%.
-- Brightness: below 150 on the 0-255 luminance scale.
-- Contrast spread: above 5 on the 0-255 luminance scale.
+- Brightness: 60 to 140 on the 0-255 luminance scale (glass max: 120).
+- Shadow floor: at most 80 on the 0-255 luminance scale.
+- Contrast spread: at least 50 on the 0-255 luminance scale.
+- Shadow pixels: at most 20% (black diffuse max: 50%).
+- Mean saturation: below 0.66.
 
 `check.py` first selects the frame where moving lights are furthest from
 object centres, then computes all gates from the core `FrameAnalysis`
 binding for that frame.  Catalog PNGs and authored `.shot.json` exports
 use that same selected frame, and each catalog entry also writes a
 `.metrics.json` sidecar with the selected frame and canonical metric names.
+
+Catalog search now separates structure from post-processing.  For each
+structural scene candidate it traces the selected analysis frame once, then
+replays up to 100 random post-processing looks over that retained frame.  If
+none of those looks passes, only then does the catalog sample a new scene.
