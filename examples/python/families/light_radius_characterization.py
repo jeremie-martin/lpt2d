@@ -3,7 +3,7 @@
 This script renders controlled one-light scenes and writes:
 
 - raw PNGs
-- overlay PNGs with the official analyzer radius and diagnostic core radius
+- overlay PNGs with the official analyzer radius
 - per-case shot JSON
 - CSV/JSONL metrics
 - contact sheets grouped by sweep axis
@@ -202,6 +202,11 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "width": rr.width,
         "height": rr.height,
         "mean": lum.mean,
+        "median": lum.median,
+        "shadow_floor": lum.shadow_floor,
+        "highlight_ceiling": lum.highlight_ceiling,
+        "highlight_peak": lum.highlight_peak,
+        "contrast_std": lum.contrast_std,
         "contrast_spread": lum.contrast_spread,
         "near_black_fraction": lum.near_black_fraction,
         "near_white_fraction": lum.near_white_fraction,
@@ -229,6 +234,14 @@ def _line_color(line: LabelLine) -> tuple[int, int, int, int]:
     return line[1] if isinstance(line, tuple) else (255, 255, 255, 255)
 
 
+def _metric_float(metrics: dict[str, float | int | str], key: str, default: float = 0.0) -> float:
+    value = metrics.get(key, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _draw_label_block(draw: ImageDraw.ImageDraw, lines: list[LabelLine], width: int, height: int) -> None:
     font = _font(max(11, width // 72))
     padding = max(8, width // 180)
@@ -242,33 +255,29 @@ def _draw_label_block(draw: ImageDraw.ImageDraw, lines: list[LabelLine], width: 
         y += line_h
 
 
-def _draw_ring(
-    draw: ImageDraw.ImageDraw,
-    cx: float,
-    cy: float,
-    radius_px: float,
-    color: tuple[int, int, int, int],
-    width: int = 2,
-) -> None:
-    if radius_px <= 0.0:
-        return
-    draw.ellipse(
-        (cx - radius_px, cy - radius_px, cx + radius_px, cy + radius_px),
-        outline=color,
-        width=width,
-    )
-
-
-def _draw_stroked_ring(
+def _draw_dashed_ring(
     draw: ImageDraw.ImageDraw,
     cx: float,
     cy: float,
     radius_px: float,
     color: tuple[int, int, int, int],
     width: int,
+    segments: int = 96,
+    duty: float = 0.58,
 ) -> None:
-    _draw_ring(draw, cx, cy, radius_px, (0, 0, 0, 255), width=max(width + 4, 6))
-    _draw_ring(draw, cx, cy, radius_px, color, width=width)
+    if radius_px <= 0.0:
+        return
+    segments = max(24, segments)
+    step = math.tau / segments
+    dash = max(0.1, min(0.9, duty)) * step
+    points_per_dash = 4
+    for i in range(0, segments, 2):
+        a0 = i * step
+        pts = []
+        for j in range(points_per_dash + 1):
+            a = a0 + dash * (j / points_per_dash)
+            pts.append((cx + math.cos(a) * radius_px, cy + math.sin(a) * radius_px))
+        draw.line(pts, fill=color, width=width, joint="curve")
 
 
 def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) -> None:
@@ -283,36 +292,39 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
 
     line_width = max(2, rr.width // 640)
     radius_px = float(metrics["cpp_radius_ratio"]) * short_side
-    # Draw exactly one circle: the official apparent-radius metric.
-    # Diagnostic core/edge metrics are printed below, but not drawn as rings.
-    _draw_stroked_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3))
+    # Draw exactly one perimeter: the official apparent-radius metric.
+    _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3))
     draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
 
-    wave_min = float(metrics["wavelength_min"])
-    wave_max = float(metrics["wavelength_max"])
-    color_name = "white" if wave_min <= 380.0 and wave_max >= 780.0 else f"{wave_min:g}-{wave_max:g} nm"
-    ratio_unit = "% of image short side"
+    radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
+    edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
+    confidence = _metric_float(metrics, "cpp_confidence")
+    mean = _metric_float(metrics, "mean")
+    contrast_std = _metric_float(metrics, "contrast_std")
+    shadows = _metric_float(metrics, "shadow_floor")
+    highlights = _metric_float(metrics, "highlight_ceiling")
+    peak = _metric_float(metrics, "highlight_peak")
+    contrast_spread = _metric_float(metrics, "contrast_spread")
+    near_black = 100.0 * _metric_float(metrics, "near_black_fraction")
+    near_white = 100.0 * _metric_float(metrics, "near_white_fraction")
+    clipped = 100.0 * _metric_float(metrics, "clipped_channel_fraction")
     lines: list[LabelLine] = [
         f"Case: {metrics['case_id']} ({metrics['label']})",
         f"Scene: wall={metrics['wall']}; nearby object={metrics['perturbation']}",
-        f"Light: intensity={float(metrics['light_intensity']):.3g}; color={color_name}",
+        f"Light intensity: {float(metrics['light_intensity']):.3g}",
         f"Look: exposure={float(metrics['exposure']):.3g}; white point={float(metrics['white_point']):.3g}; "
         f"contrast={float(metrics['contrast']):.3g}; gamma={float(metrics['gamma']):.3g}",
-        f"All radii below are normalized: {ratio_unit}, not pixels.",
         (
-            f"GREEN official measured radius: {100*float(metrics['cpp_radius_ratio']):.2f}{ratio_unit}",
+            f"Dashed green circle: measured light radius {radius_percent:.2f}% of image short side",
             radius_color,
         ),
         (
-            f"Diagnostic core radius (not drawn): {100*float(metrics['cpp_saturated_radius_ratio']):.2f}{ratio_unit}",
+            f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
             white,
         ),
-        (
-            f"Diagnostic edge softness (not drawn): {100*float(metrics['cpp_transition_width_ratio']):.2f}{ratio_unit}; "
-            f"confidence={float(metrics['cpp_confidence']):.2f}",
-            white,
-        ),
-        f"Image brightness: mean={float(metrics['mean']):.1f}/255; near-white={100*float(metrics['near_white_fraction']):.2f}%; clipped-channel={100*float(metrics['clipped_channel_fraction']):.2f}%",
+        f"Brightness: {mean:.1f}; contrast: {contrast_std:.1f}",
+        f"Shadows: {shadows:.0f}; highlights: {highlights:.0f}; peak: {peak:.0f}; range: {contrast_spread:.0f}",
+        f"Near black: {near_black:.2f}%; near white: {near_white:.2f}%; clipped channels: {clipped:.2f}%",
     ]
     _draw_label_block(draw, lines, rr.width, rr.height)
     image.convert("RGB").save(out_path)
@@ -339,12 +351,15 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
         caption = case_result.case.label
         metric = case_result.metrics
         sub1 = (
-            f"measured radius {100*float(metric['cpp_radius_ratio']):.2f}% of short side; "
-            f"edge softness {100*float(metric['cpp_transition_width_ratio']):.2f}%"
+            f"radius {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}% of short side; "
+            f"confidence {_metric_float(metric, 'cpp_confidence'):.2f}; "
+            f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}"
         )
         sub2 = (
-            f"I={float(metric['light_intensity']):.3g}; exposure={float(metric['exposure']):.3g}; "
-            f"white point={float(metric['white_point']):.3g}; color={float(metric['wavelength_min']):g}-{float(metric['wavelength_max']):g} nm"
+            f"exposure={float(metric['exposure']):.3g}; white point={float(metric['white_point']):.3g}; "
+            f"shadows {_metric_float(metric, 'shadow_floor'):.0f}; "
+            f"highlights {_metric_float(metric, 'highlight_ceiling'):.0f}; "
+            f"near white {100*_metric_float(metric, 'near_white_fraction'):.2f}%"
         )
         draw.rectangle((x, y + tile_height, x + tile_width, y + tile_height + caption_h), fill=(0, 0, 0))
         draw.text((x + 6, y + tile_height + 4), caption[:42], fill=(255, 255, 255), font=font)
@@ -596,11 +611,17 @@ def _save_jpeg(src_path: Path, dst_path: Path, *, quality: int, max_side: int | 
 
 
 def _pct(row: dict[str, str], key: str) -> str:
-    return f"{100.0 * float(row[key]):.2f}%"
+    try:
+        return f"{100.0 * float(row[key]):.2f}%"
+    except (KeyError, TypeError, ValueError):
+        return "n/a"
 
 
 def _num(row: dict[str, str], key: str, digits: int = 2) -> str:
-    return f"{float(row[key]):.{digits}f}"
+    try:
+        return f"{float(row[key]):.{digits}f}"
+    except (KeyError, TypeError, ValueError):
+        return "n/a"
 
 
 def _copy_existing_files(src_dir: Path, web_dir: Path) -> None:
@@ -716,9 +737,9 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             cid = row["case_id"]
             label = row["label"]
             overlay_caption = (
-                f"{cid} overlay: radius {_pct(row, 'cpp_radius_ratio')}, "
-                f"core {_pct(row, 'cpp_saturated_radius_ratio')}, "
-                f"edge {_pct(row, 'cpp_transition_width_ratio')}"
+                f"{cid} overlay: dashed green radius {_pct(row, 'cpp_radius_ratio')}, "
+                f"edge softness {_pct(row, 'cpp_transition_width_ratio')}, "
+                f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
             parts.append('<div class="thumb-row{}">'.format(" with-raw" if include_raw_gallery else ""))
@@ -743,11 +764,12 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             parts.append('<div class="metrics">')
             for label_text, value in (
                 ("radius", _pct(row, "cpp_radius_ratio")),
-                ("core", _pct(row, "cpp_saturated_radius_ratio")),
-                ("edge", _pct(row, "cpp_transition_width_ratio")),
-                ("mean", f"{_num(row, 'mean', 1)}/255"),
-                ("clipped", _pct(row, "clipped_channel_fraction")),
-                ("conf", _num(row, "cpp_confidence", 2)),
+                ("brightness", _num(row, "mean", 1)),
+                ("contrast", _num(row, "contrast_std", 1)),
+                ("shadows", _num(row, "shadow_floor", 0)),
+                ("highlights", _num(row, "highlight_ceiling", 0)),
+                ("near white", _pct(row, "near_white_fraction")),
+                ("confidence", _num(row, "cpp_confidence", 2)),
             ):
                 parts.append(
                     f'<div class="metric"><span>{html.escape(label_text)}</span><b>{html.escape(value)}</b></div>'

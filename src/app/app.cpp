@@ -947,6 +947,26 @@ int App::run(const AppConfig& config) {
             constexpr float kMaxTransitionWidthRatio = 12.0f / 360.0f;
             constexpr float kMinPeakContrast = 0.08f;
             constexpr float kMinConfidence = 0.35f;
+            auto add_dashed_circle = [&](const ImVec2& center,
+                                         float radius,
+                                         ImU32 color,
+                                         float thickness) {
+                if (radius <= 0.0f) return;
+                constexpr int kSegments = 96;
+                constexpr float kPi = 3.14159265358979323846f;
+                constexpr float kDuty = 0.58f;
+                const float step = 2.0f * kPi / static_cast<float>(kSegments);
+                const float dash = step * kDuty;
+                for (int i = 0; i < kSegments; i += 2) {
+                    const float a0 = static_cast<float>(i) * step;
+                    const float a1 = a0 + dash;
+                    dl->AddLine(ImVec2(center.x + std::cos(a0) * radius,
+                                       center.y + std::sin(a0) * radius),
+                                ImVec2(center.x + std::cos(a1) * radius,
+                                       center.y + std::sin(a1) * radius),
+                                color, thickness);
+                }
+            };
 
             for (const auto& c : live_metrics.lights) {
                 if (!c.visible || c.radius_ratio <= 0.0f) continue;
@@ -967,7 +987,7 @@ int App::run(const AppConfig& config) {
                                      : IM_COL32(230, 80, 80, 220);
                 // Draw exactly one perimeter: the official apparent-radius metric.
                 // Saturated-core and edge-width diagnostics stay in the Stats table.
-                dl->AddCircle(center, r_screen, col, 0, 1.5f * dpi_scale);
+                add_dashed_circle(center, r_screen, col, 1.5f * dpi_scale);
                 dl->AddCircleFilled(center, 2.0f * dpi_scale, col);
                 char label[64];
                 std::snprintf(label, sizeof(label), "%s r%.1f%%",

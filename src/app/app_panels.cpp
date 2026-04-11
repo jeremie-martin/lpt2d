@@ -1760,7 +1760,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     ImGui::SameLine();
     ImGui::Checkbox("Light overlay", &panel.show_light_overlay);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-        ImGui::SetTooltip("Draw measured point-light appearance rings on top of the viewport.");
+        ImGui::SetTooltip("Draw the measured point-light radius on top of the viewport.");
 
     ImGui::Separator();
 

@@ -64,7 +64,7 @@ struct PanelState {
     bool show_shortcuts_help = false;
     bool show_stats_panel = true;     // floating Stats window, togglable via 'S' hotkey
     bool live_analysis = true;        // when show_stats_panel is up, update authored-camera analysis
-    bool show_light_overlay = false; // draw measured point-light appearance rings on top of viewport
+    bool show_light_overlay = false; // draw measured point-light radius on top of viewport
     ContextMenuTarget context_menu;
     int active_tab = 0;               // 0 = Edit, 1 = Look
     bool tab_switch_requested = false; // set by keyboard shortcut, consumed by draw

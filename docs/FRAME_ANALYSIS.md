@@ -1,43 +1,50 @@
 # Frame Analysis
 
-Frame analysis is the numeric summary of the final rendered image. It exists to
-answer three questions about a frame without eyeballing the pixels:
+Frame analysis is the numeric description of the final camera image. It is the
+data layer used by scripts, the Python API, and the GUI Stats panel to answer
+questions such as:
 
-1. How bright is it?
-2. How colorful is it?
-3. What visible bright structure does each authored `PointLight` produce?
+- Is the image too dark, too bright, clipped, or washed out?
+- How much contrast and color does the final image have?
+- How large and sharp is the visible disk produced by each authored point light?
 
-The public API is `rr.analysis` in Python and `FrameAnalysis` in C++.
+The public API is `FrameAnalysis` in C++ and `rr.analysis` in Python.
 
-## Image Semantics
+## Image Contract
 
-All metrics are measured on the final post-tonemap RGB8 image, not on HDR
-buffers.
+All metrics describe the rendered camera image after tone mapping and
+post-processing. They do not describe HDR transport buffers, material state,
+scene geometry, or the editor viewport.
 
-- Luminance values use BT.709 on the `0..255` scale.
-- Histogram bins are raw counts that sum to `width * height`.
-- Length-like light metrics are normalized by `min(width, height)`.
-- Area-like light metrics are fractions of the full image area.
+Production analysis is GPU-first: the renderer analyzes the final RGB8 display
+texture with compact GPU reductions and reads back summary data. The live and
+scripted renderer contract does not rely on full-frame CPU readback analysis.
 
-That normalization is intentional: a light radius of `0.05` means "5% of the
-short image side", regardless of probe resolution.
+The GUI must preserve camera semantics:
 
-## Current Paths
+- Stats values come from the authored camera, not from the visible viewport.
+- If the viewport is zoomed, panned, resized, or cropped, the numbers must not
+  change just because the viewport changed.
+- The light overlay is only drawn when the visible viewport matches the authored
+  camera closely enough for the camera-space measurements to line up visually.
 
-- Python/headless render paths analyze the authored camera at the shot canvas
-  size.
-- GUI Stats analyzes the authored camera too, but caps the live probe resolution
-  when the editor viewport does not match the authored camera. Public GUI
-  metrics are normalized ratios/fractions; `luminance.width` and
-  `luminance.height` report the actual probe dimensions used for raw histogram
-  counts and overlay scaling.
-- Live renderer analysis is GPU-first. The compute shader reads the final
-  post-processed RGB8 display texture and reads back compact histogram and
-  per-light radial/sector bins, not the whole RGB frame.
-- `rr.metrics` is the luminance-only alias view of `rr.analysis.luminance`.
-- When the GUI editor viewport diverges from the authored camera, the live
-  light overlay is hidden because overlay geometry would no longer line up
-  with the visible viewport. The Stats numbers remain authored-camera numbers.
+## Units
+
+Frame analysis should be resolution independent wherever the value is meant to
+be compared across images.
+
+| Kind | Unit |
+|---|---|
+| Luminance values | BT.709 luminance on the final `0..255` RGB8 scale |
+| Percentiles | Luminance bin values on the same `0..255` scale |
+| Occupancy values | Fraction of the full image area in `[0, 1]` |
+| Light radius and edge width | Fraction of `min(width, height)` |
+| Light coverage | Fraction of the full image area |
+| Light center | Image coordinates in the analyzed camera image |
+| Histograms | Raw bin counts; use fractions for resolution-independent filters |
+
+Example: `radius_ratio = 0.05` means the measured radius is 5% of the image
+short side. It does not mean 5 pixels.
 
 ## Python Example
 
@@ -45,143 +52,138 @@ short image side", regardless of probe resolution.
 from anim.renderer import render_frame
 
 rr = render_frame(animate, timeline, settings=shot, analyze=True)
-a = rr.analysis
+analysis = rr.analysis
 
-print(a.luminance.mean, a.luminance.contrast_spread)
-print(a.color.richness, a.color.colored_fraction)
-for light in a.lights:
+print(analysis.luminance.mean, analysis.luminance.contrast_spread)
+print(analysis.color.richness, analysis.color.colored_fraction)
+
+for light in analysis.lights:
     print(light.id, light.radius_ratio, light.transition_width_ratio, light.confidence)
 ```
 
 ## Luminance
 
-`FrameAnalysis.luminance` describes whole-frame brightness and contrast.
+`FrameAnalysis.luminance` describes whole-frame brightness, contrast, shadows,
+highlights, and clipping in the final image.
 
 | Field | Meaning |
 |---|---|
-| `mean` | Mean frame luminance on the `0..255` scale |
-| `median` | 50th-percentile luminance |
-| `shadow_floor` | 5th-percentile luminance |
-| `highlight_ceiling` | 95th-percentile luminance |
-| `highlight_peak` | 99th-percentile luminance |
-| `contrast_std` | Luminance standard deviation |
+| `width`, `height` | Dimensions of the image actually analyzed |
+| `histogram` | 256-bin luminance histogram; counts sum to `width * height` |
+| `mean` | Average brightness |
+| `median` | 50th-percentile brightness |
+| `shadow_floor` | 5th-percentile brightness |
+| `highlight_ceiling` | 95th-percentile brightness |
+| `highlight_peak` | 99th-percentile brightness |
+| `contrast_std` | Standard deviation of luminance |
 | `contrast_spread` | `highlight_ceiling - shadow_floor` |
-| `near_black_fraction` | Fraction of pixels with luminance `<= near_black_bin_max` (default `5`) |
-| `near_white_fraction` | Fraction of pixels with luminance `>= near_white_bin_min` (default `250`) |
-| `clipped_channel_fraction` | Fraction of pixels where any RGB channel is `255` |
-| `histogram` | 256-bin luminance histogram |
-| `width`, `height` | Image dimensions used for the analysis |
+| `near_black_fraction` | Fraction of the image at or below the near-black threshold |
+| `near_white_fraction` | Fraction of the image at or above the near-white threshold |
+| `clipped_channel_fraction` | Fraction of the image where any RGB channel is exactly 255 |
 
-### Reading It
+Interpretation:
 
-- Washed-out frames usually have low `contrast_spread`.
-- Shadow-heavy frames have high `near_black_fraction`.
-- Aggressively blown highlights show up in `near_white_fraction` and
-  `clipped_channel_fraction`.
-- `clipped_channel_fraction` is not the same as "white pixels": it catches any
-  per-channel saturation.
+- `mean` is the broad brightness estimate.
+- `contrast_std` is sensitive to global variation across the frame.
+- `contrast_spread` ignores extreme outliers and is useful for washed-out or
+  flat-image checks.
+- `shadow_floor` and `near_black_fraction` describe dark occupancy.
+- `highlight_ceiling`, `highlight_peak`, `near_white_fraction`, and
+  `clipped_channel_fraction` describe bright occupancy and saturation.
+- `clipped_channel_fraction` is not the same as white-pixel fraction; it counts
+  any pixel with at least one saturated RGB channel.
 
-### Histogram-Derived Occupancy
-
-The histogram already contains enough information to compute cumulative dark or
-bright occupancy ratios in Python:
-
-```python
-hist = rr.metrics.histogram
-n = rr.metrics.width * rr.metrics.height
-
-near_black_fraction = sum(hist[:6]) / n
-near_white_fraction = sum(hist[250:]) / n
-```
+Scripts should prefer fractions and percentiles over raw histogram counts unless
+they intentionally need resolution-dependent information.
 
 ## Color
 
-`FrameAnalysis.color` summarizes chromatic content over pixels above the
-saturation threshold.
+`FrameAnalysis.color` summarizes chromatic content in the final image.
 
 | Field | Meaning |
 |---|---|
-| `mean_saturation` | Mean HSV saturation of chromatic pixels |
-| `hue_entropy` | Shannon entropy of the 36-bin hue histogram |
-| `colored_fraction` | Fraction of pixels above the chroma threshold |
-| `richness` | `hue_entropy * mean_saturation * colored_fraction` |
+| `mean_saturation` | Average HSV saturation of pixels above the chroma threshold |
+| `hue_entropy` | Shannon entropy of the hue histogram |
+| `colored_fraction` | Fraction of the image considered chromatic |
+| `richness` | Combined colorfulness score: entropy, saturation, and area |
 | `n_colored` | Raw count of chromatic pixels |
 | `hue_histogram` | 36-bin hue histogram |
 
-`richness` is the single-number "is this frame actually colorful?" summary.
+`richness` is a compact "does this frame contain meaningful color variety?"
+score. Use the component fields when a decision needs to distinguish "small but
+very saturated" from "large but mildly colored".
 
 ## Point-Light Appearance
 
 `FrameAnalysis.lights` contains one `PointLightAppearance` per authored
-`PointLight`.
+`PointLight`. These values describe the visible light disk in the final image,
+not the physical light object in isolation.
 
-These measurements are intentionally sensitive to anything that changes the
-visible light disc in the final image: exposure, white point, contrast,
-reflections, occlusion, bloom, and surrounding geometry. They are not meant to
-be invariant to those choices; they are meant to describe the final appearance
-robustly.
+This sensitivity is intentional. Exposure, white point, contrast, gamma,
+reflections, occlusion, bloom-like post-processing, nearby objects, and the
+background can all change the apparent disk. The analysis should report the
+disk visible in the current final frame.
 
 | Field | Meaning |
 |---|---|
-| `id` | Source `PointLight` id |
+| `id` | Authored point-light id |
 | `world_x`, `world_y` | Light position in world coordinates |
-| `image_x`, `image_y` | Projected image-space center in pixels |
-| `visible` | Whether the authored point light has a measurable appearance |
-| `radius_ratio` | Estimated apparent radius of the point-light disc, normalized by short side |
-| `coverage_fraction` | Area of the estimated circular disc as a fraction of the whole image |
-| `saturated_radius_ratio` | Diagnostic bright-core radius from a high max-channel threshold |
-| `transition_width_ratio` | Estimated edge/falloff width normalized by short side |
-| `peak_luminance` | Peak luminance at the light structure |
-| `background_luminance` | Estimated local background luminance |
+| `image_x`, `image_y` | Projected light center in the analyzed camera image |
+| `visible` | Whether a measurable light appearance was found |
+| `radius_ratio` | Official apparent light-disk radius, normalized by image short side |
+| `coverage_fraction` | Area of that disk as a fraction of the image |
+| `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
+| `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |
+| `peak_luminance` | Brightest measured luminance associated with the light |
+| `background_luminance` | Estimated local background near the light |
 | `peak_contrast` | `peak_luminance - background_luminance` |
-| `touches_frame_edge` | Whether the measured bright structure hits the image boundary |
+| `touches_frame_edge` | Whether the estimated disk is truncated by the frame boundary |
 | `confidence` | Heuristic confidence in `[0, 1]` |
 
-### Interpretation
+`radius_ratio` is the main answer for "how big is the circle of light?" It
+should be the value used by tooling, overlays, and automated filters.
 
-- `radius_ratio` is the "how big is the light disc?" answer.
-- `saturated_radius_ratio` is a diagnostic for saturated or near-saturated
-  cores. It is useful for debugging, but it is not the general light radius.
-- Small `transition_width_ratio` means a sharper edge.
-- Large `peak_contrast` means the light stands out strongly from local
-  background.
-- Low `confidence` usually means weak contrast, weak/ambiguous edge strength,
-  inconsistent radius across angular sectors, contamination, or truncation at
-  the frame/search boundary.
+`saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
+clipping, but it is not the general apparent radius because many valid light
+disks are soft, colored, or not fully saturated.
 
-### Common Cases
+`transition_width_ratio` describes edge sharpness. Lower values mean a crisper
+boundary; higher values mean a soft halo or gradual falloff.
 
-- `visible = false`, `radius_ratio = 0`: the light is not visually resolved in
-  this frame.
-- `touches_frame_edge = true`: size is truncated by the frame boundary.
-- Large `radius_ratio` with large `transition_width_ratio`: broad soft halo.
-- Large `radius_ratio` with small `transition_width_ratio`: big but crisp disc.
+Low `confidence` means the radius should be treated cautiously. Common causes
+include weak contrast, a very soft edge, contamination from nearby geometry,
+occlusion, an off-frame light disk, or inconsistent evidence around the light.
 
-## FrameAnalysisParams
+## Parameters
 
-`FrameAnalysisParams` controls which parts of the analysis run and the default
-thresholds used by the analyzer.
+`FrameAnalysisParams` controls which metric groups are computed and the few
+thresholds that define public semantic boundaries.
 
 | Field | Meaning |
 |---|---|
 | `analyze_luminance` | Populate `luminance` |
 | `analyze_color` | Populate `color` |
 | `analyze_lights` | Populate `lights` |
-| `lights.search_radius_ratio` | Search radius for each light, as a fraction of short side |
-| `lights.saturated_core_threshold` | Max-channel threshold for diagnostic `saturated_radius_ratio` |
-| `lights.saturated_core_percentile` | Percentile for diagnostic `saturated_radius_ratio` |
-| `lights.min_saturated_core_pixels` | Minimum sample count for diagnostic `saturated_radius_ratio` |
-| `lights.seed_fraction` | CPU RGB8 analyzer threshold for connected-component seeding |
-| `lights.grow_fraction` | CPU RGB8 analyzer threshold for connected-component growth |
-| `lights.center_snap_px` | CPU RGB8 analyzer seed snap radius around the projected light center |
-| `saturation_threshold` | Color-analysis chroma threshold |
-| `near_black_bin_max` | Upper histogram bin for `near_black_fraction` |
-| `near_white_bin_min` | Lower histogram bin for `near_white_fraction` |
+| `near_black_bin_max` | Upper luminance bin counted as near black |
+| `near_white_bin_min` | Lower luminance bin counted as near white |
+| `saturation_threshold` | Chroma threshold used by color analysis |
+| `lights.search_radius_ratio` | Maximum search distance around each light, as a short-side fraction |
+| `lights.saturated_core_threshold` | Threshold for the diagnostic saturated-core radius |
+| `lights.saturated_core_percentile` | Percentile used for the diagnostic saturated-core radius |
+| `lights.min_saturated_core_pixels` | Minimum evidence for the diagnostic saturated core |
 
-## Summary
+Most callers should not tune these values casually. The default parameters are
+part of the meaning of the API, especially for scripts that compare results
+across many scenes.
 
-- Use `luminance` for exposure and washed-out detection.
-- Use `color` for chromatic richness.
-- Use `lights` for per-light apparent radius, edge softness, contrast, and
-  confidence.
-- Prefer normalized ratios over raw pixels when writing filters.
+## Practical Use
+
+- Use `luminance.mean`, `contrast_std`, `contrast_spread`, shadows, highlights,
+  peak, near-black, near-white, and clipped-channel fractions for exposure and
+  washed-out checks.
+- Use `color.richness` and its component fields for colorfulness checks.
+- Use `lights[*].radius_ratio` for the apparent size of point-light disks.
+- Use `lights[*].transition_width_ratio` and `confidence` to decide whether a
+  radius measurement is sharp and trustworthy.
+- Avoid raw pixels for thresholds unless the operation is intentionally tied to
+  a specific image resolution.
