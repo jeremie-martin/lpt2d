@@ -8,6 +8,7 @@ CPU frame-analysis core. These tests cover the end-to-end binding surface.
 from __future__ import annotations
 
 import _lpt2d
+import pytest
 from anim.types import (
     Canvas,
     Circle,
@@ -93,3 +94,10 @@ def test_luminance_stats_default_constructible():
     assert s.median == 0.0
     assert s.width == 0
     assert s.height == 0
+
+
+def test_point_light_params_expose_radius_signal_gamma():
+    params = _lpt2d.PointLightAppearanceParams()
+    assert params.radius_signal_gamma == pytest.approx(0.5)
+    params.radius_signal_gamma = 0.3
+    assert params.radius_signal_gamma == pytest.approx(0.3)

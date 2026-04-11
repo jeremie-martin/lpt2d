@@ -728,6 +728,7 @@ NB_MODULE(_lpt2d, m) {
             new (self) PointLightAppearanceParams{};
         })
         .def_rw("search_radius_ratio", &PointLightAppearanceParams::search_radius_ratio)
+        .def_rw("radius_signal_gamma", &PointLightAppearanceParams::radius_signal_gamma)
         .def_rw("saturated_core_threshold", &PointLightAppearanceParams::saturated_core_threshold)
         .def_rw("saturated_core_percentile", &PointLightAppearanceParams::saturated_core_percentile)
         .def_rw("min_saturated_core_pixels", &PointLightAppearanceParams::min_saturated_core_pixels)
