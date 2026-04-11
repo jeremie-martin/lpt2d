@@ -34,6 +34,19 @@ rsync -az --delete renders/<gallery>_web/ \
 
 Then verify the page through the HTTP URL supplied by the user for that server.
 
+## Operational Notes
+
+- If an upload succeeds but the HTTP URL returns 404, check the running server
+  process current directory on `vps`; the served root can differ from a
+  conventional `public/` directory.
+- Verify at least the page and one representative image with `curl -I` after
+  uploading.
+- Treat the web gallery as a derived artifact. Regenerate and re-upload it when
+  the template changes instead of hand-editing files on the server.
+- Keep gallery pages purpose-specific. The template can expose a focused
+  thumbnail/lightbox sequence and still keep supporting files available as
+  secondary links.
+
 ## Light-Radius Characterization
 
 The light-radius characterization script can build the JPEG gallery directly:
@@ -53,4 +66,3 @@ PYTHONPATH=build python -m examples.python.families.light_radius_characterizatio
   --out renders/lpt2d_light_radius_gpu_1080p_10m_YYYYMMDD \
   --web-out renders/lpt2d_light_radius_gpu_1080p_10m_YYYYMMDD_web
 ```
-
