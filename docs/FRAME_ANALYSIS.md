@@ -154,6 +154,12 @@ are not intended to become permanent API surface. Once the detector is selected,
 these fields should be removed and the chosen method should populate
 `radius_ratio`.
 
+The light-radius characterization gallery includes stability sweeps for gamma,
+ray count, and resolution. These are meant to catch detector drift caused by
+post-processing, stochastic noise, or image-size changes. All radius values in
+those tables are normalized by the image short side, so resolution changes
+should ideally produce very small drift for the same apparent image.
+
 The robust sector-edge candidate intentionally shapes only the internal radial
 signal used for detection. It still analyzes the real final RGB8 camera image;
 the shaping suppresses low-level halo tails before choosing per-sector
