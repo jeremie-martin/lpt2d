@@ -215,9 +215,9 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "image_x": light.image_x,
         "image_y": light.image_y,
         "cpp_radius_ratio": light.radius_ratio,
-        "cpp_radius_candidate_edge_drop_ratio": light.radius_candidate_edge_drop_ratio,
-        "cpp_radius_candidate_half_signal_ratio": light.radius_candidate_half_signal_ratio,
-        "cpp_radius_candidate_soft_signal_ratio": light.radius_candidate_soft_signal_ratio,
+        "cpp_radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
+        "cpp_radius_candidate_knee_ratio": light.radius_candidate_knee_ratio,
+        "cpp_radius_candidate_energy_ratio": light.radius_candidate_energy_ratio,
         "cpp_saturated_radius_ratio": light.saturated_radius_ratio,
         "cpp_transition_width_ratio": light.transition_width_ratio,
         "cpp_coverage_fraction": light.coverage_fraction,
@@ -292,9 +292,9 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     short_side = min(rr.width, rr.height)
 
     radius_color = (60, 255, 90, 255)
-    edge_candidate_color = (70, 235, 255, 255)
-    half_candidate_color = (255, 80, 230, 255)
-    soft_candidate_color = (255, 170, 50, 255)
+    sector_candidate_color = (70, 235, 255, 255)
+    knee_candidate_color = (255, 80, 230, 255)
+    energy_candidate_color = (255, 170, 50, 255)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
@@ -305,8 +305,8 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         draw,
         cx,
         cy,
-        _metric_float(metrics, "cpp_radius_candidate_soft_signal_ratio") * short_side,
-        soft_candidate_color,
+        _metric_float(metrics, "cpp_radius_candidate_energy_ratio") * short_side,
+        energy_candidate_color,
         width=candidate_width,
         phase=0.15,
     )
@@ -314,8 +314,8 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         draw,
         cx,
         cy,
-        _metric_float(metrics, "cpp_radius_candidate_half_signal_ratio") * short_side,
-        half_candidate_color,
+        _metric_float(metrics, "cpp_radius_candidate_knee_ratio") * short_side,
+        knee_candidate_color,
         width=candidate_width,
         phase=0.08,
     )
@@ -323,8 +323,8 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         draw,
         cx,
         cy,
-        _metric_float(metrics, "cpp_radius_candidate_edge_drop_ratio") * short_side,
-        edge_candidate_color,
+        _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio") * short_side,
+        sector_candidate_color,
         width=candidate_width,
         phase=0.0,
     )
@@ -332,9 +332,9 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
 
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
-    edge_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_edge_drop_ratio")
-    half_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_half_signal_ratio")
-    soft_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_soft_signal_ratio")
+    sector_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio")
+    knee_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_knee_ratio")
+    energy_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_energy_ratio")
     edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
     confidence = _metric_float(metrics, "cpp_confidence")
     mean = _metric_float(metrics, "mean")
@@ -357,16 +357,16 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             radius_color,
         ),
         (
-            f"CYAN candidate edge drop: {edge_candidate_percent:.2f}%",
-            edge_candidate_color,
+            f"CYAN candidate sector consensus: {sector_candidate_percent:.2f}%",
+            sector_candidate_color,
         ),
         (
-            f"MAGENTA candidate half signal: {half_candidate_percent:.2f}%",
-            half_candidate_color,
+            f"MAGENTA candidate profile knee: {knee_candidate_percent:.2f}%",
+            knee_candidate_color,
         ),
         (
-            f"ORANGE candidate soft signal: {soft_candidate_percent:.2f}%",
-            soft_candidate_color,
+            f"ORANGE candidate energy equivalent: {energy_candidate_percent:.2f}%",
+            energy_candidate_color,
         ),
         (
             f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
@@ -402,9 +402,9 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
         metric = case_result.metrics
         sub1 = (
             f"official {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%; "
-            f"edge {100*_metric_float(metric, 'cpp_radius_candidate_edge_drop_ratio'):.2f}%; "
-            f"half {100*_metric_float(metric, 'cpp_radius_candidate_half_signal_ratio'):.2f}%; "
-            f"soft {100*_metric_float(metric, 'cpp_radius_candidate_soft_signal_ratio'):.2f}%"
+            f"sector {100*_metric_float(metric, 'cpp_radius_candidate_sector_consensus_ratio'):.2f}%; "
+            f"knee {100*_metric_float(metric, 'cpp_radius_candidate_knee_ratio'):.2f}%; "
+            f"energy {100*_metric_float(metric, 'cpp_radius_candidate_energy_ratio'):.2f}%"
         )
         sub2 = (
             f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}; "
@@ -788,9 +788,9 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             label = row["label"]
             overlay_caption = (
                 f"{cid} overlay: official {_pct(row, 'cpp_radius_ratio')}, "
-                f"edge candidate {_pct(row, 'cpp_radius_candidate_edge_drop_ratio')}, "
-                f"half candidate {_pct(row, 'cpp_radius_candidate_half_signal_ratio')}, "
-                f"soft candidate {_pct(row, 'cpp_radius_candidate_soft_signal_ratio')}, "
+                f"sector candidate {_pct(row, 'cpp_radius_candidate_sector_consensus_ratio')}, "
+                f"knee candidate {_pct(row, 'cpp_radius_candidate_knee_ratio')}, "
+                f"energy candidate {_pct(row, 'cpp_radius_candidate_energy_ratio')}, "
                 f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
@@ -816,9 +816,9 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             parts.append('<div class="metrics">')
             for label_text, value in (
                 ("official radius", _pct(row, "cpp_radius_ratio")),
-                ("edge candidate", _pct(row, "cpp_radius_candidate_edge_drop_ratio")),
-                ("half candidate", _pct(row, "cpp_radius_candidate_half_signal_ratio")),
-                ("soft candidate", _pct(row, "cpp_radius_candidate_soft_signal_ratio")),
+                ("sector candidate", _pct(row, "cpp_radius_candidate_sector_consensus_ratio")),
+                ("knee candidate", _pct(row, "cpp_radius_candidate_knee_ratio")),
+                ("energy candidate", _pct(row, "cpp_radius_candidate_energy_ratio")),
                 ("brightness", _num(row, "mean", 1)),
                 ("contrast", _num(row, "contrast_std", 1)),
                 ("near white", _pct(row, "near_white_fraction")),

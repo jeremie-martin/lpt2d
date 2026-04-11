@@ -58,6 +58,93 @@ float bin_radius_px(int bin, int max_bins, float search_radius_px) {
            static_cast<float>(max_bins);
 }
 
+std::vector<float> smooth_profile(const std::vector<float>& profile) {
+    std::vector<float> smooth(profile.size(), 0.0f);
+    const int n = static_cast<int>(profile.size());
+    for (int r = 0; r < n; ++r) {
+        double sum = 0.0;
+        double weight = 0.0;
+        for (int o = -2; o <= 2; ++o) {
+            const int rr = r + o;
+            if (rr < 0 || rr >= n) continue;
+            const double w = (o == 0) ? 3.0 : (std::abs(o) == 1 ? 2.0 : 1.0);
+            sum += static_cast<double>(profile[static_cast<std::size_t>(rr)]) * w;
+            weight += w;
+        }
+        smooth[static_cast<std::size_t>(r)] =
+            weight > 0.0 ? static_cast<float>(sum / weight) : 0.0f;
+    }
+    return smooth;
+}
+
+void enforce_nonincreasing_after_peak(std::vector<float>& profile, int peak_bin) {
+    const int n = static_cast<int>(profile.size());
+    for (int r = peak_bin + 1; r < n; ++r) {
+        const auto prev = profile[static_cast<std::size_t>(r - 1)];
+        auto& cur = profile[static_cast<std::size_t>(r)];
+        if (cur > prev) cur = prev;
+    }
+}
+
+int first_below(const std::vector<float>& profile, int start_bin, float threshold) {
+    const int n = static_cast<int>(profile.size());
+    for (int r = std::max(0, start_bin); r < n; ++r) {
+        if (profile[static_cast<std::size_t>(r)] <= threshold) return r;
+    }
+    return std::max(0, n - 1);
+}
+
+int strongest_edge_bin(const std::vector<float>& envelope,
+                       int peak_bin,
+                       int min_edge_bin,
+                       float peak_excess,
+                       float* out_best_drop) {
+    const int n = static_cast<int>(envelope.size());
+    int edge_bin = -1;
+    float best_drop = 0.0f;
+    for (int r = min_edge_bin; r < n - 2; ++r) {
+        const int lo = std::max(peak_bin, r - 2);
+        const int hi = std::min(n - 1, r + 2);
+        const float drop = envelope[static_cast<std::size_t>(lo)] -
+                           envelope[static_cast<std::size_t>(hi)];
+        if (drop > best_drop &&
+            envelope[static_cast<std::size_t>(r)] > peak_excess * 0.05f) {
+            best_drop = drop;
+            edge_bin = r;
+        }
+    }
+    if (out_best_drop != nullptr) *out_best_drop = best_drop;
+    return edge_bin;
+}
+
+int knee_bin(const std::vector<float>& envelope,
+             int peak_bin,
+             int min_edge_bin,
+             float peak_excess) {
+    if (peak_excess <= 0.0f) return min_edge_bin;
+    const int n = static_cast<int>(envelope.size());
+    int end_bin = first_below(envelope, min_edge_bin, peak_excess * 0.05f);
+    end_bin = std::min(n - 1, std::max(end_bin, min_edge_bin + 2));
+    if (end_bin <= peak_bin + 1) return min_edge_bin;
+
+    const float y0 = clamp01(envelope[static_cast<std::size_t>(peak_bin)] / peak_excess);
+    const float y1 = clamp01(envelope[static_cast<std::size_t>(end_bin)] / peak_excess);
+    int best_bin = min_edge_bin;
+    float best_distance = -1.0f;
+    for (int r = min_edge_bin; r <= end_bin; ++r) {
+        const float t = static_cast<float>(r - peak_bin) /
+                        static_cast<float>(std::max(1, end_bin - peak_bin));
+        const float y = clamp01(envelope[static_cast<std::size_t>(r)] / peak_excess);
+        const float line_y = y0 + (y1 - y0) * t;
+        const float distance = y - line_y;
+        if (distance > best_distance) {
+            best_distance = distance;
+            best_bin = r;
+        }
+    }
+    return best_distance > 0.015f ? best_bin : first_below(envelope, peak_bin, peak_excess * 0.50f);
+}
+
 }  // namespace
 
 // ─── Init / shutdown ───────────────────────────────────────────────────
@@ -520,26 +607,8 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                 }
             }
 
-            std::vector<float> smooth(profile.size(), 0.0f);
-            std::vector<float> luminance_smooth(luminance_profile.size(), 0.0f);
-            for (int r = 0; r < max_bins; ++r) {
-                double sum = 0.0;
-                double lum_sum = 0.0;
-                double weight = 0.0;
-                for (int o = -2; o <= 2; ++o) {
-                    const int rr = r + o;
-                    if (rr < 0 || rr >= max_bins) continue;
-                    const double w = (o == 0) ? 3.0 : (std::abs(o) == 1 ? 2.0 : 1.0);
-                    sum += static_cast<double>(profile[static_cast<std::size_t>(rr)]) * w;
-                    lum_sum += static_cast<double>(
-                                   luminance_profile[static_cast<std::size_t>(rr)]) * w;
-                    weight += w;
-                }
-                smooth[static_cast<std::size_t>(r)] =
-                    weight > 0.0 ? static_cast<float>(sum / weight) : 0.0f;
-                luminance_smooth[static_cast<std::size_t>(r)] =
-                    weight > 0.0 ? static_cast<float>(lum_sum / weight) : 0.0f;
-            }
+            std::vector<float> smooth = smooth_profile(profile);
+            std::vector<float> luminance_smooth = smooth_profile(luminance_profile);
 
             const int peak_search_end = std::max(
                 inner_end, std::min(max_bins - 1, static_cast<int>(std::ceil(0.12f * max_bins))));
@@ -563,55 +632,140 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             }
 
             std::vector<float> envelope = smooth;
-            for (int r = peak_bin + 1; r < max_bins; ++r) {
-                const auto prev = envelope[static_cast<std::size_t>(r - 1)];
-                auto& cur = envelope[static_cast<std::size_t>(r)];
-                if (cur > prev) cur = prev;
-            }
+            enforce_nonincreasing_after_peak(envelope, peak_bin);
 
             const int min_edge_bin = std::min(
                 max_bins - 2,
                 std::max(peak_bin + 1,
                          static_cast<int>(std::ceil(2.0f * static_cast<float>(max_bins) /
                                                      search_radius_px))));
-            int edge_bin = -1;
             float best_drop = 0.0f;
-            for (int r = min_edge_bin; r < max_bins - 2; ++r) {
-                const int lo = std::max(peak_bin, r - 2);
-                const int hi = std::min(max_bins - 1, r + 2);
-                const float drop = envelope[static_cast<std::size_t>(lo)] -
-                                   envelope[static_cast<std::size_t>(hi)];
-                if (drop > best_drop &&
-                    envelope[static_cast<std::size_t>(r)] > signal_peak_excess * 0.05f) {
-                    best_drop = drop;
-                    edge_bin = r;
-                }
-            }
+            const int edge_bin = strongest_edge_bin(envelope, peak_bin, min_edge_bin,
+                                                    signal_peak_excess, &best_drop);
 
-            const auto first_below = [&](float threshold) {
-                for (int r = peak_bin; r < max_bins; ++r) {
-                    if (envelope[static_cast<std::size_t>(r)] <= threshold) return r;
-                }
-                return max_bins - 1;
-            };
-            const int r80 = first_below(0.80f * signal_peak_excess);
-            const int r50 = first_below(0.50f * signal_peak_excess);
-            const int r20 = first_below(0.20f * signal_peak_excess);
+            const int r80 = first_below(envelope, peak_bin, 0.80f * signal_peak_excess);
+            const int r50 = first_below(envelope, peak_bin, 0.50f * signal_peak_excess);
+            const int r20 = first_below(envelope, peak_bin, 0.20f * signal_peak_excess);
 
             const bool has_edge = edge_bin >= 0 && best_drop >= signal_peak_excess * 0.035f;
             const int radius_bin = has_edge ? edge_bin : r50;
-            const float edge_drop_px = has_edge
-                ? bin_radius_px(edge_bin, max_bins, search_radius_px)
-                : 0.0f;
-            const float half_signal_px = bin_radius_px(r50, max_bins, search_radius_px);
-            const float soft_signal_px = bin_radius_px(r20, max_bins, search_radius_px);
             const float radius_px = bin_radius_px(radius_bin, max_bins, search_radius_px);
+
+            const int knee_candidate_bin =
+                knee_bin(envelope, peak_bin, min_edge_bin, signal_peak_excess);
+            const float knee_px = bin_radius_px(knee_candidate_bin, max_bins, search_radius_px);
+
+            double energy_area_px = 0.0;
+            for (int r = 0; r < max_bins; ++r) {
+                for (int s = 0; s < kNumSectors; ++s) {
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    if (counts[idx] == 0u) continue;
+                    const float signal =
+                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
+                        signal_norm;
+                    const float excess = std::max(0.0f, signal - bg_signal);
+                    const float normalized = excess / std::max(signal_peak_excess, 1.0e-6f);
+                    const float weight = clamp01((normalized - 0.03f) / 0.97f);
+                    energy_area_px += static_cast<double>(weight) *
+                                      static_cast<double>(counts[idx]);
+                }
+            }
+            const float energy_px = std::min(
+                search_radius_px,
+                std::sqrt(static_cast<float>(std::max(0.0, energy_area_px)) / PI));
+
+            std::vector<float> sector_envelopes(
+                static_cast<std::size_t>(kNumSectors) * static_cast<std::size_t>(max_bins),
+                0.0f);
+            std::vector<float> sector_peaks(static_cast<std::size_t>(kNumSectors), 0.0f);
+            std::vector<int> sector_peak_bins(static_cast<std::size_t>(kNumSectors), 0);
+            int valid_sectors = 0;
+            std::vector<float> sector_profile(static_cast<std::size_t>(max_bins), 0.0f);
+            for (int s = 0; s < kNumSectors; ++s) {
+                std::fill(sector_profile.begin(), sector_profile.end(), 0.0f);
+                for (int r = 0; r < max_bins; ++r) {
+                    const std::size_t idx = static_cast<std::size_t>(r) *
+                                            static_cast<std::size_t>(kNumSectors) +
+                                            static_cast<std::size_t>(s);
+                    if (counts[idx] == 0u) continue;
+                    const float signal =
+                        (mean_r[idx] * dir_r + mean_g[idx] * dir_g + mean_b[idx] * dir_b) /
+                        signal_norm;
+                    sector_profile[static_cast<std::size_t>(r)] =
+                        std::max(0.0f, signal - bg_signal);
+                }
+                std::vector<float> sector_smooth = smooth_profile(sector_profile);
+                int sector_peak_bin = 0;
+                float sector_peak_excess = 0.0f;
+                for (int r = 0; r <= peak_search_end; ++r) {
+                    if (sector_smooth[static_cast<std::size_t>(r)] > sector_peak_excess) {
+                        sector_peak_excess = sector_smooth[static_cast<std::size_t>(r)];
+                        sector_peak_bin = r;
+                    }
+                }
+                if (sector_peak_excess < std::max(0.015f, signal_peak_excess * 0.18f)) {
+                    continue;
+                }
+                enforce_nonincreasing_after_peak(sector_smooth, sector_peak_bin);
+                sector_peaks[static_cast<std::size_t>(s)] = sector_peak_excess;
+                sector_peak_bins[static_cast<std::size_t>(s)] = sector_peak_bin;
+                ++valid_sectors;
+                for (int r = 0; r < max_bins; ++r) {
+                    sector_envelopes[static_cast<std::size_t>(s) *
+                                         static_cast<std::size_t>(max_bins) +
+                                     static_cast<std::size_t>(r)] =
+                        sector_smooth[static_cast<std::size_t>(r)];
+                }
+            }
+            float sector_consensus_px = radius_px;
+            const int min_valid_sectors = std::max(6, kNumSectors / 4);
+            if (valid_sectors >= min_valid_sectors) {
+                std::vector<float> sector_drops;
+                sector_drops.reserve(kNumSectors);
+                int sector_consensus_bin = -1;
+                float best_sector_score = 0.0f;
+                for (int r = min_edge_bin; r < max_bins - 2; ++r) {
+                    sector_drops.clear();
+                    for (int s = 0; s < kNumSectors; ++s) {
+                        const float sector_peak = sector_peaks[static_cast<std::size_t>(s)];
+                        if (sector_peak <= 0.0f) continue;
+                        const int sector_peak_bin = sector_peak_bins[static_cast<std::size_t>(s)];
+                        const int lo = std::max(sector_peak_bin, r - 2);
+                        const int hi = std::min(max_bins - 1, r + 2);
+                        const auto base_idx =
+                            static_cast<std::size_t>(s) * static_cast<std::size_t>(max_bins);
+                        const float mid = sector_envelopes[base_idx + static_cast<std::size_t>(r)];
+                        const float drop =
+                            sector_envelopes[base_idx + static_cast<std::size_t>(lo)] -
+                            sector_envelopes[base_idx + static_cast<std::size_t>(hi)];
+                        if (drop > 0.0f && mid > sector_peak * 0.05f) {
+                            sector_drops.push_back(drop);
+                        }
+                    }
+                    if (sector_drops.size() <
+                        static_cast<std::size_t>(std::max(4, valid_sectors / 3))) {
+                        continue;
+                    }
+                    const float score = quantile_sorted(sector_drops, 0.50f);
+                    if (score > best_sector_score) {
+                        best_sector_score = score;
+                        sector_consensus_bin = r;
+                    }
+                }
+                if (sector_consensus_bin >= 0 &&
+                    best_sector_score >= signal_peak_excess * 0.02f) {
+                    sector_consensus_px =
+                        bin_radius_px(sector_consensus_bin, max_bins, search_radius_px);
+                }
+            }
 
             c.visible = radius_px > 0.0f;
             c.radius_ratio = radius_px / short_side;
-            c.radius_candidate_edge_drop_ratio = edge_drop_px / short_side;
-            c.radius_candidate_half_signal_ratio = half_signal_px / short_side;
-            c.radius_candidate_soft_signal_ratio = soft_signal_px / short_side;
+            c.radius_candidate_sector_consensus_ratio = sector_consensus_px / short_side;
+            c.radius_candidate_knee_ratio = knee_px / short_side;
+            c.radius_candidate_energy_ratio = energy_px / short_side;
             c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
                                           static_cast<float>(width * height));
             c.transition_width_ratio =
