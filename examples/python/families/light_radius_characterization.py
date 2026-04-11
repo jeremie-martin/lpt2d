@@ -215,6 +215,9 @@ def _metrics_for_case(case: Case, rr) -> dict[str, float | int | str]:
         "image_x": light.image_x,
         "image_y": light.image_y,
         "cpp_radius_ratio": light.radius_ratio,
+        "cpp_radius_candidate_edge_drop_ratio": light.radius_candidate_edge_drop_ratio,
+        "cpp_radius_candidate_half_signal_ratio": light.radius_candidate_half_signal_ratio,
+        "cpp_radius_candidate_soft_signal_ratio": light.radius_candidate_soft_signal_ratio,
         "cpp_saturated_radius_ratio": light.saturated_radius_ratio,
         "cpp_transition_width_ratio": light.transition_width_ratio,
         "cpp_coverage_fraction": light.coverage_fraction,
@@ -264,6 +267,7 @@ def _draw_dashed_ring(
     width: int,
     segments: int = 96,
     duty: float = 0.58,
+    phase: float = 0.0,
 ) -> None:
     if radius_px <= 0.0:
         return
@@ -272,7 +276,7 @@ def _draw_dashed_ring(
     dash = max(0.1, min(0.9, duty)) * step
     points_per_dash = 4
     for i in range(0, segments, 2):
-        a0 = i * step
+        a0 = phase + i * step
         pts = []
         for j in range(points_per_dash + 1):
             a = a0 + dash * (j / points_per_dash)
@@ -288,15 +292,49 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     short_side = min(rr.width, rr.height)
 
     radius_color = (60, 255, 90, 255)
+    edge_candidate_color = (70, 235, 255, 255)
+    half_candidate_color = (255, 80, 230, 255)
+    soft_candidate_color = (255, 170, 50, 255)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
     radius_px = float(metrics["cpp_radius_ratio"]) * short_side
-    # Draw exactly one perimeter: the official apparent-radius metric.
-    _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3))
+    candidate_width = max(line_width, 2)
+    # Exploration mode: draw the official radius plus temporary GPU candidates.
+    _draw_dashed_ring(
+        draw,
+        cx,
+        cy,
+        _metric_float(metrics, "cpp_radius_candidate_soft_signal_ratio") * short_side,
+        soft_candidate_color,
+        width=candidate_width,
+        phase=0.15,
+    )
+    _draw_dashed_ring(
+        draw,
+        cx,
+        cy,
+        _metric_float(metrics, "cpp_radius_candidate_half_signal_ratio") * short_side,
+        half_candidate_color,
+        width=candidate_width,
+        phase=0.08,
+    )
+    _draw_dashed_ring(
+        draw,
+        cx,
+        cy,
+        _metric_float(metrics, "cpp_radius_candidate_edge_drop_ratio") * short_side,
+        edge_candidate_color,
+        width=candidate_width,
+        phase=0.0,
+    )
+    _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3), phase=0.22)
     draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
 
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
+    edge_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_edge_drop_ratio")
+    half_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_half_signal_ratio")
+    soft_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_soft_signal_ratio")
     edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
     confidence = _metric_float(metrics, "cpp_confidence")
     mean = _metric_float(metrics, "mean")
@@ -315,8 +353,20 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         f"Look: exposure={float(metrics['exposure']):.3g}; white point={float(metrics['white_point']):.3g}; "
         f"contrast={float(metrics['contrast']):.3g}; gamma={float(metrics['gamma']):.3g}",
         (
-            f"Dashed green circle: measured light radius {radius_percent:.2f}% of image short side",
+            f"GREEN official radius: {radius_percent:.2f}% of image short side",
             radius_color,
+        ),
+        (
+            f"CYAN candidate edge drop: {edge_candidate_percent:.2f}%",
+            edge_candidate_color,
+        ),
+        (
+            f"MAGENTA candidate half signal: {half_candidate_percent:.2f}%",
+            half_candidate_color,
+        ),
+        (
+            f"ORANGE candidate soft signal: {soft_candidate_percent:.2f}%",
+            soft_candidate_color,
         ),
         (
             f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
@@ -351,15 +401,15 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
         caption = case_result.case.label
         metric = case_result.metrics
         sub1 = (
-            f"radius {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}% of short side; "
-            f"confidence {_metric_float(metric, 'cpp_confidence'):.2f}; "
-            f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}"
+            f"official {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%; "
+            f"edge {100*_metric_float(metric, 'cpp_radius_candidate_edge_drop_ratio'):.2f}%; "
+            f"half {100*_metric_float(metric, 'cpp_radius_candidate_half_signal_ratio'):.2f}%; "
+            f"soft {100*_metric_float(metric, 'cpp_radius_candidate_soft_signal_ratio'):.2f}%"
         )
         sub2 = (
-            f"exposure={float(metric['exposure']):.3g}; white point={float(metric['white_point']):.3g}; "
-            f"shadows {_metric_float(metric, 'shadow_floor'):.0f}; "
-            f"highlights {_metric_float(metric, 'highlight_ceiling'):.0f}; "
-            f"near white {100*_metric_float(metric, 'near_white_fraction'):.2f}%"
+            f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}; "
+            f"near white {100*_metric_float(metric, 'near_white_fraction'):.2f}%; "
+            f"confidence {_metric_float(metric, 'cpp_confidence'):.2f}"
         )
         draw.rectangle((x, y + tile_height, x + tile_width, y + tile_height + caption_h), fill=(0, 0, 0))
         draw.text((x + 6, y + tile_height + 4), caption[:42], fill=(255, 255, 255), font=font)
@@ -737,8 +787,10 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             cid = row["case_id"]
             label = row["label"]
             overlay_caption = (
-                f"{cid} overlay: dashed green radius {_pct(row, 'cpp_radius_ratio')}, "
-                f"edge softness {_pct(row, 'cpp_transition_width_ratio')}, "
+                f"{cid} overlay: official {_pct(row, 'cpp_radius_ratio')}, "
+                f"edge candidate {_pct(row, 'cpp_radius_candidate_edge_drop_ratio')}, "
+                f"half candidate {_pct(row, 'cpp_radius_candidate_half_signal_ratio')}, "
+                f"soft candidate {_pct(row, 'cpp_radius_candidate_soft_signal_ratio')}, "
                 f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
@@ -763,11 +815,12 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             parts.append(f'<div class="case-label">{html.escape(label)}</div>')
             parts.append('<div class="metrics">')
             for label_text, value in (
-                ("radius", _pct(row, "cpp_radius_ratio")),
+                ("official radius", _pct(row, "cpp_radius_ratio")),
+                ("edge candidate", _pct(row, "cpp_radius_candidate_edge_drop_ratio")),
+                ("half candidate", _pct(row, "cpp_radius_candidate_half_signal_ratio")),
+                ("soft candidate", _pct(row, "cpp_radius_candidate_soft_signal_ratio")),
                 ("brightness", _num(row, "mean", 1)),
                 ("contrast", _num(row, "contrast_std", 1)),
-                ("shadows", _num(row, "shadow_floor", 0)),
-                ("highlights", _num(row, "highlight_ceiling", 0)),
                 ("near white", _pct(row, "near_white_fraction")),
                 ("confidence", _num(row, "cpp_confidence", 2)),
             ):

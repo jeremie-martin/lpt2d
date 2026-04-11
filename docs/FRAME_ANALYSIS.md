@@ -131,6 +131,9 @@ disk visible in the current final frame.
 | `image_x`, `image_y` | Projected light center in the analyzed camera image |
 | `visible` | Whether a measurable light appearance was found |
 | `radius_ratio` | Official apparent light-disk radius, normalized by image short side |
+| `radius_candidate_edge_drop_ratio` | Temporary exploration candidate: strongest radial falloff |
+| `radius_candidate_half_signal_ratio` | Temporary exploration candidate: 50% signal threshold |
+| `radius_candidate_soft_signal_ratio` | Temporary exploration candidate: 20% signal threshold |
 | `coverage_fraction` | Area of that disk as a fraction of the image |
 | `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
 | `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |
@@ -142,6 +145,13 @@ disk visible in the current final frame.
 
 `radius_ratio` is the main answer for "how big is the circle of light?" It
 should be the value used by tooling, overlays, and automated filters.
+
+The `radius_candidate_*` fields are temporary exploration outputs. They are
+exported so the GPU analyzer, C++ API, Python bindings, GUI, and characterization
+gallery can compare detector variants from the same final camera image. They
+are not intended to become permanent API surface. Once the detector is selected,
+these fields should be removed and the chosen method should populate
+`radius_ratio`.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light

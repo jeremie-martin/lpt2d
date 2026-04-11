@@ -1841,12 +1841,15 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
             ImGui::SetTooltip("Per-light apparent point-light disc measured in normalized camera-space units.\n"
                               "Each row is one PointLight in the scene.");
-        if (ImGui::BeginTable("##lights", 6,
+        if (ImGui::BeginTable("##lights", 9,
                               ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Light");
             ImGui::TableSetupColumn("Radius %");
+            ImGui::TableSetupColumn("Edge cand. %");
+            ImGui::TableSetupColumn("Half cand. %");
+            ImGui::TableSetupColumn("Soft cand. %");
             ImGui::TableSetupColumn("Core %");
             ImGui::TableSetupColumn("Edge %");
             ImGui::TableSetupColumn("Contrast");
@@ -1855,6 +1858,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::SetTooltip(
                     "Radius: estimated apparent point-light disc radius as %% of the short image side.\n"
+                    "Edge/Half/Soft cand.: temporary GPU radius candidates for detector comparison.\n"
                     "Core: diagnostic saturated-core radius as %% of the short image side.\n"
                     "Edge: transition width as %% of the short image side.\n"
                     "Contrast: peak minus background luminance.\n"
@@ -1871,12 +1875,18 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%.2f", c.radius_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%.2f", c.saturated_radius_ratio * 100.0f);
+                ImGui::Text("%.2f", c.radius_candidate_edge_drop_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%.2f", c.transition_width_ratio * 100.0f);
+                ImGui::Text("%.2f", c.radius_candidate_half_signal_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(4);
-                ImGui::Text("%.3f", c.peak_contrast);
+                ImGui::Text("%.2f", c.radius_candidate_soft_signal_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(5);
+                ImGui::Text("%.2f", c.saturated_radius_ratio * 100.0f);
+                ImGui::TableSetColumnIndex(6);
+                ImGui::Text("%.2f", c.transition_width_ratio * 100.0f);
+                ImGui::TableSetColumnIndex(7);
+                ImGui::Text("%.3f", c.peak_contrast);
+                ImGui::TableSetColumnIndex(8);
                 ImGui::Text("%.2f", c.confidence);
             }
             ImGui::EndTable();
