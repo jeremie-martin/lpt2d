@@ -38,6 +38,7 @@ from .params import (
     Params,
     RotationConfig,
     ShapeConfig,
+    range_spectrum,
 )
 
 # ── Grid ─────────────────────────────────────────────────────────────────
@@ -278,8 +279,7 @@ def _random_light(
         ambient=ambient,
         speed=speed,
         moving_intensity=moving_intensity,
-        wavelength_min=wl_min,
-        wavelength_max=wl_max,
+        spectrum=range_spectrum(wl_min, wl_max),
     )
 
 
@@ -303,7 +303,14 @@ def _random_look(
     white_point = rng.uniform(0.3, 1.0)
 
     # Temperature: 50% off, 50% uniform(0.0, 0.55) — but forbidden on warm light.
-    if rng.random() < 0.5 or light.wavelength_min >= 500.0:
+    warm_light = (
+        light.spectrum.type == "range"
+        and light.spectrum.wavelength_min >= 500.0
+    ) or (
+        light.spectrum.type == "color"
+        and light.spectrum.linear_rgb != [1.0, 1.0, 1.0]
+    )
+    if rng.random() < 0.5 or warm_light:
         temperature = 0.0
     else:
         temperature = rng.uniform(0.0, 0.55)

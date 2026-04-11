@@ -97,8 +97,12 @@ struct GPULight {
     float source_radius;  // projector aperture radius, 0 for point/segment
     float wavelength_min; // nm, default 380
     float wavelength_max; // nm, default 780
+    uint32_t spectrum_type; // LightSpectrumType: 0=range, 1=color
+    float spectral_c0;
+    float spectral_c1;
+    float spectral_c2;
 };
-static_assert(sizeof(GPULight) == 56);
+static_assert(sizeof(GPULight) == 72);
 
 struct GPUArc {
     float center[2];
@@ -666,13 +670,13 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
 
     for (const auto& light : all_lights) {
         GPULight gl{};
+        LightSpectrum spectrum;
         std::visit(overloaded{
             [&](const PointLight& l) {
                 gl.type = 0;
                 gl.intensity = l.intensity;
                 gl.pos_a[0] = l.position.x; gl.pos_a[1] = l.position.y;
-                gl.wavelength_min = l.wavelength_min;
-                gl.wavelength_max = l.wavelength_max;
+                spectrum = effective_light_spectrum(l);
                 light_refs_.push_back(LightRef{l.id, l.position.x, l.position.y});
             },
             [&](const SegmentLight& l) {
@@ -680,8 +684,7 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.intensity = l.intensity;
                 gl.pos_a[0] = l.a.x; gl.pos_a[1] = l.a.y;
                 gl.pos_b[0] = l.b.x; gl.pos_b[1] = l.b.y;
-                gl.wavelength_min = l.wavelength_min;
-                gl.wavelength_max = l.wavelength_max;
+                spectrum = effective_light_spectrum(l);
             },
             [&](const ProjectorLight& l) {
                 gl.type = 2;
@@ -694,10 +697,15 @@ void Renderer::upload_scene(const Scene& scene, const Bounds& bounds) {
                 gl.dir[0] = d.x; gl.dir[1] = d.y;
                 gl.spread = l.spread * 0.5f; // store half-angle
                 gl.source_radius = l.source_radius;
-                gl.wavelength_min = l.wavelength_min;
-                gl.wavelength_max = l.wavelength_max;
+                spectrum = effective_light_spectrum(l);
             },
         }, light);
+        gl.wavelength_min = spectrum.wavelength_min;
+        gl.wavelength_max = spectrum.wavelength_max;
+        gl.spectrum_type = static_cast<uint32_t>(spectrum.type);
+        gl.spectral_c0 = spectrum.spectral_c0;
+        gl.spectral_c1 = spectrum.spectral_c1;
+        gl.spectral_c2 = spectrum.spectral_c2;
         total += gl.intensity;
         cum_weights.push_back(total);
         gpu_lights.push_back(gl);

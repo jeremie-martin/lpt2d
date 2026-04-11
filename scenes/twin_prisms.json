@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "twin_prisms",
   "camera": {
     "bounds": [
@@ -146,10 +146,14 @@
       "source_radius": 0.0,
       "spread": 0.019999999552965164,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     }
   ],
   "groups": [

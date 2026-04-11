@@ -111,7 +111,13 @@ def run_stats(argv: list[str] | None = None) -> None:
         if p.light.ambient.style != "none":
             amb_intensities.append(p.light.ambient.intensity)
 
-        if p.light.wavelength_max - p.light.wavelength_min < 300:
+        if (
+            p.light.spectrum.type == "range"
+            and p.light.spectrum.wavelength_max - p.light.spectrum.wavelength_min < 300
+        ) or (
+            p.light.spectrum.type == "color"
+            and p.light.spectrum.linear_rgb != [1.0, 1.0, 1.0]
+        ):
             colored_light += 1
 
         if p.grid.rows <= 5 and p.grid.cols <= 7:

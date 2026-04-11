@@ -42,22 +42,22 @@ from anim.examples_support import _authored_shot
 from anim.family import Verdict
 
 from .check import (
-    MAX_AMBIENT_RADIUS_RATIO,
     BLACK_DIFFUSE_MAX_SHADOW_FRACTION,
     GLASS_MAX_MEAN_LUMINANCE,
+    MAX_AMBIENT_RADIUS_RATIO,
     MAX_MEAN_LUMINANCE,
+    MAX_MEAN_SATURATION,
     MAX_MOVING_RADIUS_RATIO,
     MAX_NEAR_BLACK_FRACTION,
     MAX_RADIUS_RATIO,
-    MAX_MEAN_SATURATION,
     MAX_SHADOW_FLOOR,
     MAX_SHADOW_FRACTION,
+    METRIC_KEYS,
     MIN_AMBIENT_RADIUS_RATIO,
     MIN_CONTRAST_SPREAD,
     MIN_MEAN_LUMINANCE,
     MIN_MOVING_RADIUS_RATIO,
     MIN_RADIUS_RATIO,
-    METRIC_KEYS,
     PROBE_H,
     PROBE_RAYS,
     PROBE_W,
@@ -71,6 +71,7 @@ from .params import (
     GridConfig,
     LightConfig,
     Params,
+    range_spectrum,
 )
 from .sampling import (
     _black_diffuse_material,
@@ -208,8 +209,7 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
         ambient=ambient,
         speed=0.12,
         moving_intensity=rng.uniform(0.15, 1.5),
-        wavelength_min=e["wl_min"],
-        wavelength_max=e["wl_max"],
+        spectrum=range_spectrum(e["wl_min"], e["wl_max"]),
     )
 
     # Look drawn with material/light-aware suppression (same as sampling.py).

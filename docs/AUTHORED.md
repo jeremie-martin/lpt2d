@@ -1,12 +1,14 @@
 # Authored Format
 
-This repo treats authored shot JSON as a strict `version: 11` format.
+This repo treats authored shot JSON as a strict `version: 12` format.
 
 ## Policy
 
-- Python and C++ loaders reject authored JSON whose `version` is not `11`.
-- The repo does not keep fallback readers or compatibility branches for older
-  authored shot versions.
+- Python and C++ writers always emit authored JSON as `version: 12`.
+- As a temporary migration exception, Python and C++ loaders also accept
+  `version: 11` authored shots and upgrade legacy light `wavelength_min` /
+  `wavelength_max` fields into v12 `spectrum` objects in memory.
+- Versions older than `11` are rejected.
 - Format changes should land as explicit repo-wide migrations across scenes,
   tests, examples, and docs.
 
@@ -23,6 +25,26 @@ normalized authored model:
   `materials`, `shapes`, `lights`, and `groups` blocks
 - `look`, `trace`, and material objects store their full canonical field sets
 - authored `trace` includes `seed_mode`
+
+## Light Spectra
+
+Authored v12 lights use a `spectrum` object instead of top-level wavelength
+fields:
+
+- `{"type": "range", "wavelength_min": 550.0, "wavelength_max": 700.0}`
+  preserves the old uniform wavelength-band behavior exactly.
+- `{"type": "color", "linear_rgb": [1.0, 0.4, 0.0], "white_mix": 0.25}`
+  fits the same sigmoid spectral model used by material colors, then samples
+  real wavelengths across the visible range.
+
+The CLI can convert range spectra to fitted color spectra with:
+
+```bash
+./build/lpt2d-cli --scene old.json --convert-light-spectrum range-to-color --save-shot converted.json
+```
+
+That conversion preserves the old range's linear RGB vector as closely as the
+three-coefficient model allows by scaling the light intensity.
 
 ## Polygon Fields
 

@@ -48,6 +48,7 @@ from .params import (
     Params,
     RotationConfig,
     ShapeConfig,
+    range_spectrum,
 )
 from .scene import build
 
@@ -100,8 +101,7 @@ def _base_light(wl_min: float = 380.0, wl_max: float = 780.0) -> LightConfig:
         ambient=AmbientConfig(style="corners", intensity=0.25),
         speed=0.12,
         moving_intensity=0.8,
-        wavelength_min=wl_min,
-        wavelength_max=wl_max,
+        spectrum=range_spectrum(wl_min, wl_max),
     )
 
 

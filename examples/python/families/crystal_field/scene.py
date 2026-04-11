@@ -9,6 +9,7 @@ from anim import (
     Circle,
     Frame,
     FrameContext,
+    LightSpectrum,
     Look,
     PointLight,
     Polygon,
@@ -20,7 +21,7 @@ from anim import (
 from .channels import build_channel_graph
 from .grid import build_grid, remove_holes
 from .materials import assign_material_ids, build_materials
-from .params import DURATION, WALL_ID, Params
+from .params import DURATION, WALL_ID, LightSpectrumConfig, Params
 from .paths import build_light_path, path_to_tracks
 from .shapes import build_object
 
@@ -31,6 +32,13 @@ def grid_bounds(
     xs = [p[0] for p in positions]
     ys = [p[1] for p in positions]
     return (min(xs) - margin, min(ys) - margin, max(xs) + margin, max(ys) + margin)
+
+
+def resolve_light_spectrum(config: LightSpectrumConfig):
+    if config.type == "color":
+        rgb = config.linear_rgb
+        return LightSpectrum.color(rgb[0], rgb[1], rgb[2], white_mix=config.white_mix)
+    return LightSpectrum.range(config.wavelength_min, config.wavelength_max)
 
 
 def build(p: Params):
@@ -83,7 +91,12 @@ def build(p: Params):
             )
 
     # Moving light intensity: base from params, boosted for narrow-band spectra.
-    spectrum_width = p.light.wavelength_max - p.light.wavelength_min
+    light_spectrum = resolve_light_spectrum(p.light.spectrum)
+    spectrum_width = (
+        p.light.spectrum.wavelength_max - p.light.spectrum.wavelength_min
+        if p.light.spectrum.type == "range"
+        else 400.0
+    )
     spectral_boost = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
     intensity = p.light.moving_intensity * spectral_boost
 
@@ -100,8 +113,7 @@ def build(p: Params):
                     id=f"light_{li}",
                     position=[lx, ly],
                     intensity=intensity,
-                    wavelength_min=p.light.wavelength_min,
-                    wavelength_max=p.light.wavelength_max,
+                    spectrum=light_spectrum,
                 )
             )
 

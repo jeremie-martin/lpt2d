@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "solid_surface_gallery",
   "camera": {
     "bounds": [
@@ -456,8 +456,11 @@
         -0.4020330309867859
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "projector_light_0",
@@ -473,10 +476,14 @@
       "source_radius": 0.029999999329447746,
       "spread": 0.10000000149011612,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 1.0,
-      "wavelength_min": 543.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 543.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "point_light_1",
@@ -486,8 +493,11 @@
         -0.5282532572746277
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "projector_light_1",
@@ -503,10 +513,14 @@
       "source_radius": 0.009325258433818817,
       "spread": 0.031084194779396057,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 1.0789999961853027,
-      "wavelength_min": 643.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 643.0,
+        "wavelength_max": 780.0
+      }
     }
   ],
   "groups": [
@@ -541,8 +555,8 @@
               -0.14499999582767487
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "room_prism_transmissive_surface"
+          "material_id": "room_prism_transmissive_surface",
+          "corner_radius": 0.009999999776482582
         }
       ],
       "lights": []
@@ -592,8 +606,8 @@
               -0.1599999964237213
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "wheel"
+          "material_id": "wheel",
+          "corner_radius": 0.009999999776482582
         },
         {
           "id": "wheel_spoke_1_body",
@@ -616,8 +630,8 @@
               -0.08272969722747803
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "wheel"
+          "material_id": "wheel",
+          "corner_radius": 0.009999999776482582
         },
         {
           "id": "wheel_spoke_2_body",
@@ -640,8 +654,8 @@
               0.1088702380657196
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "wheel"
+          "material_id": "wheel",
+          "corner_radius": 0.009999999776482582
         },
         {
           "id": "wheel_spoke_3_body",
@@ -664,8 +678,8 @@
               0.1500152051448822
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "wheel"
+          "material_id": "wheel",
+          "corner_radius": 0.009999999776482582
         },
         {
           "id": "wheel_spoke_4_body",
@@ -688,8 +702,8 @@
               -0.01615574024617672
             ]
           ],
-          "corner_radius": 0.009999999776482582,
-          "material_id": "wheel"
+          "material_id": "wheel",
+          "corner_radius": 0.009999999776482582
         }
       ],
       "lights": []
@@ -733,8 +747,8 @@
               0.07416407763957977
             ]
           ],
-          "corner_radius": 0.05000000074505806,
-          "material_id": "pentagon_mirror"
+          "material_id": "pentagon_mirror",
+          "corner_radius": 0.05000000074505806
         }
       ],
       "lights": []

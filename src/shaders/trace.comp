@@ -36,6 +36,10 @@ struct GPULight {
     float source_radius;
     float wavelength_min;
     float wavelength_max;
+    uint spectrum_type; // 0=range, 1=color
+    float spectral_c0;
+    float spectral_c1;
+    float spectral_c2;
 };
 
 struct LineSeg {
@@ -462,9 +466,17 @@ void main() {
         rd = rotate_2d(dir, spread);
     }
 
-    float wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
+    float wavelength;
+    float light_response = 1.0;
+    if (lt.spectrum_type == 1u) {
+        wavelength = 380.0 + rand01() * 400.0;
+        light_response = spectral_response(wavelength, lt.spectral_c0, lt.spectral_c1, lt.spectral_c2);
+    } else {
+        wavelength = lt.wavelength_min + rand01() * (lt.wavelength_max - lt.wavelength_min);
+    }
     vec3 rgb = wavelength_rgb(wavelength);
-    vec4 color = vec4(rgb * uIntensity * total_w, uIntensity * total_w);
+    vec4 color = vec4(rgb * light_response * uIntensity * total_w,
+                      light_response * uIntensity * total_w);
 
     // Trace
     float current_absorption = 0.0;

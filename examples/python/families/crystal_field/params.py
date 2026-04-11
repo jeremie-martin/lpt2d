@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Literal
 
 from anim import Material
@@ -108,6 +108,36 @@ class AmbientConfig:
 
 
 @dataclass
+class LightSpectrumConfig:
+    """Serializable light spectrum intent for moving lights."""
+
+    type: str = "range"  # "range" or "color"
+    wavelength_min: float = 380.0
+    wavelength_max: float = 780.0
+    linear_rgb: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
+    white_mix: float = 0.0
+
+
+def range_spectrum(wavelength_min: float, wavelength_max: float) -> LightSpectrumConfig:
+    return LightSpectrumConfig(
+        type="range",
+        wavelength_min=wavelength_min,
+        wavelength_max=wavelength_max,
+    )
+
+
+def color_spectrum(
+    linear_rgb: tuple[float, float, float] | list[float],
+    white_mix: float = 0.0,
+) -> LightSpectrumConfig:
+    return LightSpectrumConfig(
+        type="color",
+        linear_rgb=[float(linear_rgb[0]), float(linear_rgb[1]), float(linear_rgb[2])],
+        white_mix=white_mix,
+    )
+
+
+@dataclass
 class LightConfig:
     n_lights: int
     path_style: str  # "waypoints", "random_walk", "vertical_drift", "drift", "channel"
@@ -115,8 +145,14 @@ class LightConfig:
     ambient: AmbientConfig  # fixed background illumination
     speed: float  # world units per second (drift and channel styles)
     moving_intensity: float = 1.0  # base intensity for moving lights
-    wavelength_min: float = 380.0  # moving-light spectral range (nm)
-    wavelength_max: float = 780.0  # 380-780 = white (full spectrum)
+    spectrum: LightSpectrumConfig = field(default_factory=LightSpectrumConfig)
+    # Deprecated replay compatibility. Old params JSONs carry these fields.
+    wavelength_min: InitVar[float | None] = None
+    wavelength_max: InitVar[float | None] = None
+
+    def __post_init__(self, wavelength_min: float | None, wavelength_max: float | None) -> None:
+        if wavelength_min is not None and wavelength_max is not None:
+            self.spectrum = range_spectrum(wavelength_min, wavelength_max)
 
 
 @dataclass

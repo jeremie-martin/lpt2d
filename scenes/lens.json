@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "lens_gallery",
   "camera": {
     "bounds": [
@@ -146,10 +146,14 @@
       "source_radius": 0.0,
       "spread": 0.04500000178813934,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 0.8500000238418579,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "beam_upper_mid",
@@ -165,10 +169,14 @@
       "source_radius": 0.0,
       "spread": 0.04500000178813934,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 0.8500000238418579,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "beam_lower_mid",
@@ -184,10 +192,14 @@
       "source_radius": 0.0,
       "spread": 0.04500000178813934,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 0.8500000238418579,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "beam_bottom",
@@ -203,10 +215,14 @@
       "source_radius": 0.0,
       "spread": 0.04500000178813934,
       "profile": "uniform",
+      "source": "line",
       "softness": 0.0,
       "intensity": 0.8500000238418579,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     }
   ],
   "groups": [

@@ -94,6 +94,20 @@ static ProjectorSource parse_projector_source_arg(nb::object obj) {
     return nb::cast<ProjectorSource>(obj);
 }
 
+static LightSpectrumType parse_light_spectrum_type_arg(nb::object obj) {
+    if (nb::isinstance<nb::str>(obj)) {
+        auto s = nb::cast<std::string>(obj);
+        if (auto type = parse_light_spectrum_type(s)) return *type;
+        throw nb::value_error(("invalid light spectrum type: " + s).c_str());
+    }
+    return nb::cast<LightSpectrumType>(obj);
+}
+
+static LightSpectrum parse_light_spectrum_arg(nb::object obj, float wl_min, float wl_max) {
+    if (obj.is_none()) return light_spectrum_range(wl_min, wl_max);
+    return nb::cast<LightSpectrum>(obj);
+}
+
 static PolygonJoinMode parse_polygon_join_mode_arg(nb::object obj) {
     if (nb::isinstance<nb::str>(obj)) {
         auto s = nb::cast<std::string>(obj);
@@ -343,44 +357,106 @@ NB_MODULE(_lpt2d, m) {
         .def_prop_rw("material_id", &shape_material_id<Path>, &set_shape_material_id<Path>);
 
     // ── Light types ──────────────────────────────────────────────
+    nb::enum_<LightSpectrumType>(m, "LightSpectrumType")
+        .value("range", LightSpectrumType::Range)
+        .value("color", LightSpectrumType::Color);
+
+    nb::class_<LightSpectrum>(m, "LightSpectrum")
+        .def("__init__", [](LightSpectrum* s) { new (s) LightSpectrum{}; })
+        .def_static("range", [](float wl_min, float wl_max) {
+            return light_spectrum_range(wl_min, wl_max);
+        }, "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
+        .def_static("color", [](float r, float g, float b, float white_mix) {
+            return light_spectrum_color(r, g, b, white_mix);
+        }, "r"_a, "g"_a, "b"_a, "white_mix"_a = 0.0f)
+        .def_static("from_coeffs", [](float c0, float c1, float c2) {
+            return light_spectrum_from_coeffs(c0, c1, c2);
+        }, "spectral_c0"_a, "spectral_c1"_a, "spectral_c2"_a)
+        .def_static("from_range_as_color", [](float wl_min, float wl_max) {
+            auto converted = range_to_color_spectrum(wl_min, wl_max);
+            return nb::make_tuple(converted.spectrum, converted.intensity_scale);
+        }, "wavelength_min"_a, "wavelength_max"_a)
+        .def_prop_rw("type",
+            [](const LightSpectrum& s) { return light_spectrum_type_to_string(s.type); },
+            [](LightSpectrum& s, nb::object obj) { s.type = parse_light_spectrum_type_arg(obj); })
+        .def_rw("wavelength_min", &LightSpectrum::wavelength_min)
+        .def_rw("wavelength_max", &LightSpectrum::wavelength_max)
+        .def_rw("spectral_c0", &LightSpectrum::spectral_c0)
+        .def_rw("spectral_c1", &LightSpectrum::spectral_c1)
+        .def_rw("spectral_c2", &LightSpectrum::spectral_c2)
+        .def_rw("linear_r", &LightSpectrum::linear_r)
+        .def_rw("linear_g", &LightSpectrum::linear_g)
+        .def_rw("linear_b", &LightSpectrum::linear_b)
+        .def_rw("white_mix", &LightSpectrum::white_mix);
+
     nb::class_<PointLight>(m, "PointLight")
         .def("__init__", [](PointLight* l, std::string id, Vec2 position, float intensity,
-                            float wl_min, float wl_max) {
+                            float wl_min, float wl_max, nb::object spectrum_obj) {
             new (l) PointLight{std::move(id), position, intensity, wl_min, wl_max};
+            set_light_spectrum(*l, parse_light_spectrum_arg(spectrum_obj, wl_min, wl_max));
         }, "id"_a = "", "position"_a = Vec2{}, "intensity"_a = 1.0f,
-           "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
+           "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f, "spectrum"_a = nb::none())
         .def_rw("id", &PointLight::id)
         .def_rw("position", &PointLight::position)
         .def_rw("intensity", &PointLight::intensity)
-        .def_rw("wavelength_min", &PointLight::wavelength_min)
-        .def_rw("wavelength_max", &PointLight::wavelength_max);
+        .def_prop_rw("spectrum",
+            [](const PointLight& l) { return effective_light_spectrum(l); },
+            [](PointLight& l, LightSpectrum s) { set_light_spectrum(l, s); })
+        .def_prop_rw("wavelength_min",
+            [](const PointLight& l) { return effective_light_spectrum(l).wavelength_min; },
+            [](PointLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(value, s.wavelength_max));
+            })
+        .def_prop_rw("wavelength_max",
+            [](const PointLight& l) { return effective_light_spectrum(l).wavelength_max; },
+            [](PointLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(s.wavelength_min, value));
+            });
 
     nb::class_<SegmentLight>(m, "SegmentLight")
         .def("__init__", [](SegmentLight* l, std::string id, Vec2 a, Vec2 b,
-                            float intensity, float wl_min, float wl_max) {
+                            float intensity, float wl_min, float wl_max, nb::object spectrum_obj) {
             new (l) SegmentLight{std::move(id), a, b, intensity, wl_min, wl_max};
+            set_light_spectrum(*l, parse_light_spectrum_arg(spectrum_obj, wl_min, wl_max));
         }, "id"_a = "", "a"_a = Vec2{}, "b"_a = Vec2{},
-           "intensity"_a = 1.0f, "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
+           "intensity"_a = 1.0f, "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f,
+           "spectrum"_a = nb::none())
         .def_rw("id", &SegmentLight::id)
         .def_rw("a", &SegmentLight::a)
         .def_rw("b", &SegmentLight::b)
         .def_rw("intensity", &SegmentLight::intensity)
-        .def_rw("wavelength_min", &SegmentLight::wavelength_min)
-        .def_rw("wavelength_max", &SegmentLight::wavelength_max);
+        .def_prop_rw("spectrum",
+            [](const SegmentLight& l) { return effective_light_spectrum(l); },
+            [](SegmentLight& l, LightSpectrum s) { set_light_spectrum(l, s); })
+        .def_prop_rw("wavelength_min",
+            [](const SegmentLight& l) { return effective_light_spectrum(l).wavelength_min; },
+            [](SegmentLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(value, s.wavelength_max));
+            })
+        .def_prop_rw("wavelength_max",
+            [](const SegmentLight& l) { return effective_light_spectrum(l).wavelength_max; },
+            [](SegmentLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(s.wavelength_min, value));
+            });
 
     nb::class_<ProjectorLight>(m, "ProjectorLight")
         .def("__init__", [](ProjectorLight* l, std::string id, Vec2 position, Vec2 direction,
                             float source_radius, float spread, nb::object profile_obj,
                             nb::object source_obj, float softness, float intensity,
-                            float wl_min, float wl_max) {
+                            float wl_min, float wl_max, nb::object spectrum_obj) {
             new (l) ProjectorLight{std::move(id), position, direction, source_radius, spread,
                                    parse_projector_profile_arg(profile_obj),
                                    parse_projector_source_arg(source_obj),
                                    softness, intensity, wl_min, wl_max};
+            set_light_spectrum(*l, parse_light_spectrum_arg(spectrum_obj, wl_min, wl_max));
         }, "id"_a = "", "position"_a = Vec2{}, "direction"_a = Vec2{1.0f, 0.0f},
            "source_radius"_a = 0.03f, "spread"_a = 0.1f, "profile"_a = nb::cast("uniform"),
            "source"_a = nb::cast("line"), "softness"_a = 0.0f, "intensity"_a = 1.0f,
-           "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f)
+           "wavelength_min"_a = 380.0f, "wavelength_max"_a = 780.0f, "spectrum"_a = nb::none())
         .def_rw("id", &ProjectorLight::id)
         .def_rw("position", &ProjectorLight::position)
         .def_rw("direction", &ProjectorLight::direction)
@@ -394,8 +470,21 @@ NB_MODULE(_lpt2d, m) {
             [](ProjectorLight& l, nb::object obj) { l.source = parse_projector_source_arg(obj); })
         .def_rw("softness", &ProjectorLight::softness)
         .def_rw("intensity", &ProjectorLight::intensity)
-        .def_rw("wavelength_min", &ProjectorLight::wavelength_min)
-        .def_rw("wavelength_max", &ProjectorLight::wavelength_max);
+        .def_prop_rw("spectrum",
+            [](const ProjectorLight& l) { return effective_light_spectrum(l); },
+            [](ProjectorLight& l, LightSpectrum s) { set_light_spectrum(l, s); })
+        .def_prop_rw("wavelength_min",
+            [](const ProjectorLight& l) { return effective_light_spectrum(l).wavelength_min; },
+            [](ProjectorLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(value, s.wavelength_max));
+            })
+        .def_prop_rw("wavelength_max",
+            [](const ProjectorLight& l) { return effective_light_spectrum(l).wavelength_max; },
+            [](ProjectorLight& l, float value) {
+                LightSpectrum s = effective_light_spectrum(l);
+                set_light_spectrum(l, light_spectrum_range(s.wavelength_min, value));
+            });
 
     // ── Transform2D & Group ──────────────────────────────────────
     nb::class_<Transform2D>(m, "Transform2D")

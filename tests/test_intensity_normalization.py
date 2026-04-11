@@ -106,9 +106,9 @@ def _render(
     """Render one frame via RenderSession and return parsed metadata (+ optional pixels)."""
     scene_dict = json.loads(scene_json)
 
-    # If the input is already a full shot (version 11 with canvas/look/trace),
+    # If the input is already a full shot (version 11/12 with canvas/look/trace),
     # use it directly but override canvas, look, and trace with our test parameters.
-    if scene_dict.get("version") == 11 and "canvas" in scene_dict:
+    if scene_dict.get("version") in (11, 12) and "canvas" in scene_dict:
         shot_dict = scene_dict
         shot_dict["canvas"] = {"width": width, "height": height}
         shot_dict["look"] = {

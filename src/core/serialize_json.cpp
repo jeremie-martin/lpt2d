@@ -1,5 +1,6 @@
 #include "serialize.h"
 
+#include "color.h"
 #include "geometry.h"
 #include "scene.h"
 
@@ -26,7 +27,7 @@
 namespace {
 
 using Json = nlohmann::ordered_json;
-constexpr int SHOT_JSON_VERSION = 11;
+constexpr int SHOT_JSON_VERSION = 12;
 
 [[noreturn]] void fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
@@ -382,44 +383,99 @@ Json write_shape(const Shape& shape) {
     }, shape);
 }
 
-Light read_light(const Json& json, std::string_view context) {
+LightSpectrum read_light_spectrum(const Json& json, std::string_view context) {
+    expect_object(json, context);
+    const std::string type = read_required_string(json, "type", context);
+    if (type == "range") {
+        reject_unknown_keys(json, {"type", "wavelength_min", "wavelength_max"}, context);
+        LightSpectrum spectrum = light_spectrum_range(
+            read_required_float(json, "wavelength_min", context),
+            read_required_float(json, "wavelength_max", context));
+        if (spectrum.wavelength_min > spectrum.wavelength_max)
+            spectrum.wavelength_max = spectrum.wavelength_min;
+        return spectrum;
+    }
+    if (type == "color") {
+        reject_unknown_keys(json, {"type", "linear_rgb", "white_mix"}, context);
+        const auto rgb = read_rgb(require_key(json, "linear_rgb", context),
+                                  std::string(context) + ".linear_rgb");
+        return light_spectrum_color(rgb[0], rgb[1], rgb[2],
+                                    read_required_float(json, "white_mix", context));
+    }
+    fail(std::string(context) + ".type must be one of range, color");
+}
+
+Json write_light_spectrum(const LightSpectrum& spectrum) {
+    if (spectrum.type == LightSpectrumType::Color) {
+        return Json{{"type", "color"},
+                    {"linear_rgb", Json::array({spectrum.linear_r, spectrum.linear_g, spectrum.linear_b})},
+                    {"white_mix", spectrum.white_mix}};
+    }
+    return Json{{"type", "range"},
+                {"wavelength_min", spectrum.wavelength_min},
+                {"wavelength_max", spectrum.wavelength_max}};
+}
+
+Light read_light(const Json& json, std::string_view context, int version) {
     const std::string type = read_required_string(json, "type", context);
     const std::string id = read_required_string(json, "id", context);
     if (id.empty()) fail("light ids must be non-empty");
     if (type == "point") {
-        reject_unknown_keys(json, {"id", "type", "position", "intensity", "wavelength_min", "wavelength_max"}, context);
+        reject_unknown_keys(json, version == 11
+                            ? std::initializer_list<std::string_view>{"id", "type", "position", "intensity", "wavelength_min", "wavelength_max"}
+                            : std::initializer_list<std::string_view>{"id", "type", "position", "intensity", "spectrum"}, context);
         PointLight light{id, {}, 1.0f, 380.0f, 780.0f};
-                light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
-                light.intensity = read_required_float(json, "intensity", context);
-                light.wavelength_min = read_required_float(json, "wavelength_min", context);
-                light.wavelength_max = read_required_float(json, "wavelength_max", context);
+        light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
+        light.intensity = read_required_float(json, "intensity", context);
+        if (version == 11) {
+            set_light_spectrum(light, light_spectrum_range(read_required_float(json, "wavelength_min", context),
+                                                           read_required_float(json, "wavelength_max", context)));
+        } else {
+            set_light_spectrum(light, read_light_spectrum(require_key(json, "spectrum", context),
+                                                          std::string(context) + ".spectrum"));
+        }
         return light;
     }
     if (type == "segment") {
-        reject_unknown_keys(json, {"id", "type", "a", "b", "intensity", "wavelength_min", "wavelength_max"}, context);
+        reject_unknown_keys(json, version == 11
+                            ? std::initializer_list<std::string_view>{"id", "type", "a", "b", "intensity", "wavelength_min", "wavelength_max"}
+                            : std::initializer_list<std::string_view>{"id", "type", "a", "b", "intensity", "spectrum"}, context);
         SegmentLight light{id, {}, {}, 1.0f, 380.0f, 780.0f};
-                light.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
-                light.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
-                light.intensity = read_required_float(json, "intensity", context);
-                light.wavelength_min = read_required_float(json, "wavelength_min", context);
-                light.wavelength_max = read_required_float(json, "wavelength_max", context);
+        light.a = read_vec2(require_key(json, "a", context), std::string(context) + ".a");
+        light.b = read_vec2(require_key(json, "b", context), std::string(context) + ".b");
+        light.intensity = read_required_float(json, "intensity", context);
+        if (version == 11) {
+            set_light_spectrum(light, light_spectrum_range(read_required_float(json, "wavelength_min", context),
+                                                           read_required_float(json, "wavelength_max", context)));
+        } else {
+            set_light_spectrum(light, read_light_spectrum(require_key(json, "spectrum", context),
+                                                          std::string(context) + ".spectrum"));
+        }
         return light;
     }
     if (type == "projector") {
-        reject_unknown_keys(json, {"id", "type", "position", "direction", "source_radius", "spread",
-                                   "profile", "source", "softness", "intensity", "wavelength_min", "wavelength_max"}, context);
+        reject_unknown_keys(json, version == 11
+                            ? std::initializer_list<std::string_view>{"id", "type", "position", "direction", "source_radius", "spread",
+                                                                       "profile", "source", "softness", "intensity", "wavelength_min", "wavelength_max"}
+                            : std::initializer_list<std::string_view>{"id", "type", "position", "direction", "source_radius", "spread",
+                                                                       "profile", "source", "softness", "intensity", "spectrum"}, context);
         ProjectorLight light{id, {}, {1.0f, 0.0f}, 0.03f, 0.1f, ProjectorProfile::Uniform, ProjectorSource::Line, 0.0f, 1.0f, 380.0f, 780.0f};
-                light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
-                light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
-                light.source_radius = read_required_float(json, "source_radius", context);
-                light.spread = read_required_float(json, "spread", context);
-                light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
+        light.position = read_vec2(require_key(json, "position", context), std::string(context) + ".position");
+        light.direction = read_vec2(require_key(json, "direction", context), std::string(context) + ".direction");
+        light.source_radius = read_required_float(json, "source_radius", context);
+        light.spread = read_required_float(json, "spread", context);
+        light.profile = read_projector_profile(require_key(json, "profile", context), std::string(context) + ".profile");
         if (json.contains("source"))
             light.source = read_projector_source(require_key(json, "source", context), std::string(context) + ".source");
-                light.softness = read_required_float(json, "softness", context);
-                light.intensity = read_required_float(json, "intensity", context);
-                light.wavelength_min = read_required_float(json, "wavelength_min", context);
-                light.wavelength_max = read_required_float(json, "wavelength_max", context);
+        light.softness = read_required_float(json, "softness", context);
+        light.intensity = read_required_float(json, "intensity", context);
+        if (version == 11) {
+            set_light_spectrum(light, light_spectrum_range(read_required_float(json, "wavelength_min", context),
+                                                           read_required_float(json, "wavelength_max", context)));
+        } else {
+            set_light_spectrum(light, read_light_spectrum(require_key(json, "spectrum", context),
+                                                          std::string(context) + ".spectrum"));
+        }
         light.direction = light.direction.length_sq() > 1e-6f ? light.direction.normalized() : Vec2{1, 0};
         light.source_radius = std::max(light.source_radius, 0.0f);
         light.spread = std::clamp(light.spread, 0.0f, PI);
@@ -433,19 +489,17 @@ Json write_light(const Light& light) {
     return std::visit(overloaded{
         [](const PointLight& value) { return Json{{"id", value.id}, {"type", "point"}, {"position", vec2_json(value.position)},
                                                   {"intensity", value.intensity},
-                                                  {"wavelength_min", value.wavelength_min},
-                                                  {"wavelength_max", value.wavelength_max}}; },
+                                                  {"spectrum", write_light_spectrum(effective_light_spectrum(value))}}; },
         [](const SegmentLight& value) { return Json{{"id", value.id}, {"type", "segment"}, {"a", vec2_json(value.a)},
                                                     {"b", vec2_json(value.b)}, {"intensity", value.intensity},
-                                                    {"wavelength_min", value.wavelength_min},
-                                                    {"wavelength_max", value.wavelength_max}}; },
+                                                    {"spectrum", write_light_spectrum(effective_light_spectrum(value))}}; },
         [](const ProjectorLight& value) {
             return Json{{"id", value.id}, {"type", "projector"}, {"position", vec2_json(value.position)},
                         {"direction", vec2_json(value.direction)}, {"source_radius", value.source_radius},
                         {"spread", value.spread}, {"profile", projector_profile_to_string(value.profile)},
                         {"source", projector_source_to_string(value.source)},
                         {"softness", value.softness}, {"intensity", value.intensity},
-                        {"wavelength_min", value.wavelength_min}, {"wavelength_max", value.wavelength_max}};
+                        {"spectrum", write_light_spectrum(effective_light_spectrum(value))}};
         },
     }, light);
 }
@@ -463,7 +517,7 @@ Json write_transform(const Transform2D& transform) {
 }
 
 Group read_group(const Json& json, const std::map<std::string, Material>& materials,
-                 std::string_view context) {
+                 std::string_view context, int version) {
     reject_unknown_keys(json, {"id", "transform", "shapes", "lights"}, context);
     Group group;
     group.id = read_required_string(json, "id", context);
@@ -476,7 +530,8 @@ Group read_group(const Json& json, const std::map<std::string, Material>& materi
     expect_array(require_key(json, "lights", context), std::string(context) + ".lights");
     for (size_t i = 0; i < json["lights"].size(); ++i)
         group.lights.push_back(read_light(json["lights"][i],
-                                          std::string(context) + ".lights[" + std::to_string(i) + "]"));
+                                          std::string(context) + ".lights[" + std::to_string(i) + "]",
+                                          version));
     return group;
 }
 
@@ -593,7 +648,7 @@ Json write_trace(const TraceDefaults& trace) {
                 {"seed_mode", seed_mode_to_string(trace.seed_mode)}};
 }
 
-Scene read_scene(const Json& root) {
+Scene read_scene(const Json& root, int version) {
     Scene scene;
     const Json& materials = require_key(root, "materials", "shot");
     expect_object(materials, "materials");
@@ -611,13 +666,13 @@ Scene read_scene(const Json& root) {
     const Json& lights = require_key(root, "lights", "shot");
     expect_array(lights, "lights");
     for (size_t i = 0; i < lights.size(); ++i)
-        scene.lights.push_back(read_light(lights[i], "lights[" + std::to_string(i) + "]"));
+        scene.lights.push_back(read_light(lights[i], "lights[" + std::to_string(i) + "]", version));
 
     const Json& groups = require_key(root, "groups", "shot");
     expect_array(groups, "groups");
     for (size_t i = 0; i < groups.size(); ++i)
         scene.groups.push_back(read_group(groups[i], scene.materials,
-                                          "groups[" + std::to_string(i) + "]"));
+                                          "groups[" + std::to_string(i) + "]", version));
 
     std::string error;
     if (!validate_scene(scene, &error)) fail("Invalid scene: " + error);
@@ -648,22 +703,22 @@ int read_version(const Json& root) {
     if (!version || (!version->is_number_integer() && !version->is_number_unsigned()))
         fail("Unsupported shot version");
     const int value = version->get<int>();
-    if (value != SHOT_JSON_VERSION)
-        fail("Unsupported shot version (expected " + std::to_string(SHOT_JSON_VERSION) + ")");
+    if (value != 11 && value != SHOT_JSON_VERSION)
+        fail("Unsupported shot version (expected 11 or " + std::to_string(SHOT_JSON_VERSION) + ")");
     return value;
 }
 
 Shot read_authored_shot(const Json& root) {
     reject_unknown_keys(root, {"version", "name", "camera", "canvas", "look", "trace",
                                "materials", "shapes", "lights", "groups"}, "shot");
-    (void)read_version(root);
+    int version = read_version(root);
     Shot shot;
     shot.name = read_required_string(root, "name", "shot");
     shot.camera = read_camera(require_key(root, "camera", "shot"), "camera");
     shot.canvas = read_canvas(require_key(root, "canvas", "shot"), "canvas");
     shot.look = read_look(require_key(root, "look", "shot"), "look");
     shot.trace = read_trace(require_key(root, "trace", "shot"), "trace");
-    shot.scene = read_scene(root);
+    shot.scene = read_scene(root, version);
     return shot;
 }
 

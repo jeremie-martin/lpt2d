@@ -62,6 +62,111 @@ Vec3 spectral_to_rgb(float c0, float c1, float c2) {
     return {sr * scale, sg * scale, sb * scale};
 }
 
+static float inverse_sigmoid(float y) {
+    y = std::clamp(y, 1e-4f, 1.0f - 1e-4f);
+    float a = 2.0f * y - 1.0f;
+    return a / std::sqrt(std::max(1.0f - a * a, 1e-8f));
+}
+
+static void avoid_light_white_sentinel(LightSpectrum& spectrum) {
+    if (spectrum.spectral_c0 != 0.0f ||
+        spectrum.spectral_c1 != 0.0f ||
+        spectrum.spectral_c2 != 0.0f)
+        return;
+
+    // Light spectra use all-zero coefficients as the authored full-white
+    // sentinel in the shader. Exact mid-gray also inverts to all zero, so give
+    // it a tiny symmetric wavelength tilt that evaluates as neutral gray but
+    // bypasses the sentinel branch.
+    spectrum.spectral_c1 = 1e-6f;
+    spectrum.spectral_c2 = -1e-6f;
+}
+
+LightSpectrum light_spectrum_color(float r, float g, float b, float white_mix) {
+    LightSpectrum spectrum;
+    spectrum.type = LightSpectrumType::Color;
+    spectrum.linear_r = std::clamp(r, 0.0f, 1.0f);
+    spectrum.linear_g = std::clamp(g, 0.0f, 1.0f);
+    spectrum.linear_b = std::clamp(b, 0.0f, 1.0f);
+    spectrum.white_mix = std::clamp(white_mix, 0.0f, 1.0f);
+
+    float target_r = spectrum.linear_r + (1.0f - spectrum.linear_r) * spectrum.white_mix;
+    float target_g = spectrum.linear_g + (1.0f - spectrum.linear_g) * spectrum.white_mix;
+    float target_b = spectrum.linear_b + (1.0f - spectrum.linear_b) * spectrum.white_mix;
+
+    float range = std::max({target_r, target_g, target_b}) - std::min({target_r, target_g, target_b});
+    if (range < 1e-5f) {
+        if (target_r >= 1.0f - 1e-5f) {
+            spectrum.spectral_c0 = spectrum.spectral_c1 = spectrum.spectral_c2 = 0.0f;
+        } else {
+            spectrum.spectral_c0 = inverse_sigmoid(target_r);
+            spectrum.spectral_c1 = 0.0f;
+            spectrum.spectral_c2 = 0.0f;
+            avoid_light_white_sentinel(spectrum);
+        }
+        return spectrum;
+    }
+
+    auto sc = rgb_to_spectral(target_r, target_g, target_b);
+    spectrum.spectral_c0 = sc.c0;
+    spectrum.spectral_c1 = sc.c1;
+    spectrum.spectral_c2 = sc.c2;
+    avoid_light_white_sentinel(spectrum);
+    return spectrum;
+}
+
+LightSpectrum light_spectrum_from_coeffs(float c0, float c1, float c2) {
+    LightSpectrum spectrum;
+    spectrum.type = LightSpectrumType::Color;
+    spectrum.spectral_c0 = c0;
+    spectrum.spectral_c1 = c1;
+    spectrum.spectral_c2 = c2;
+    Vec3 rgb = spectral_to_rgb(c0, c1, c2);
+    float m = std::max({rgb.r, rgb.g, rgb.b, 1e-6f});
+    spectrum.linear_r = std::clamp(rgb.r / m, 0.0f, 1.0f);
+    spectrum.linear_g = std::clamp(rgb.g / m, 0.0f, 1.0f);
+    spectrum.linear_b = std::clamp(rgb.b / m, 0.0f, 1.0f);
+    spectrum.white_mix = 0.0f;
+    return spectrum;
+}
+
+RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max) {
+    if (wl_min > wl_max) std::swap(wl_min, wl_max);
+    wl_min = std::clamp(wl_min, 380.0f, 780.0f);
+    wl_max = std::clamp(wl_max, 380.0f, 780.0f);
+
+    float r = 0.0f, g = 0.0f, b = 0.0f;
+    int n = 0;
+    if (std::abs(wl_max - wl_min) < 1e-6f) {
+        Vec3 rgb = wavelength_to_rgb(wl_min);
+        r = rgb.r; g = rgb.g; b = rgb.b;
+        n = 1;
+    } else {
+        int start = (int)std::floor(wl_min);
+        int end = (int)std::ceil(wl_max);
+        for (int nm_i = start; nm_i <= end; ++nm_i) {
+            float nm = std::clamp((float)nm_i, wl_min, wl_max);
+            Vec3 rgb = wavelength_to_rgb(nm);
+            r += rgb.r; g += rgb.g; b += rgb.b;
+            ++n;
+        }
+    }
+
+    Vec3 averaged{r / std::max(n, 1), g / std::max(n, 1), b / std::max(n, 1)};
+    float m = std::max({averaged.r, averaged.g, averaged.b, 1e-6f});
+    LightSpectrum spectrum = light_spectrum_color(averaged.r / m, averaged.g / m, averaged.b / m, 0.0f);
+    Vec3 fitted = spectral_to_rgb(spectrum.spectral_c0, spectrum.spectral_c1, spectrum.spectral_c2);
+
+    float denom = fitted.r * fitted.r + fitted.g * fitted.g + fitted.b * fitted.b;
+    float scale = m;
+    if (denom > 1e-8f) {
+        scale = (averaged.r * fitted.r + averaged.g * fitted.g + averaged.b * fitted.b) / denom;
+    }
+    if (!std::isfinite(scale) || scale < 0.0f) scale = m;
+
+    return {spectrum, scale, averaged, fitted};
+}
+
 // ─── Inverse: RGB → spectral coefficients (Gauss-Newton) ──────────────
 
 // Solve 3×3 system Ax = b via Cramer's rule

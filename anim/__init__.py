@@ -80,8 +80,10 @@ from .types import FrameMetrics as FrameMetrics
 from .types import FrameReport as FrameReport
 from .types import Group as Group
 from .types import LightRef as LightRef
-from .types import LuminanceStats as LuminanceStats
+from .types import LightSpectrum as LightSpectrum
+from .types import LightSpectrumType as LightSpectrumType
 from .types import Look as Look
+from .types import LuminanceStats as LuminanceStats
 from .types import Material as Material
 from .types import Path as Path
 from .types import PointLight as PointLight
@@ -126,6 +128,8 @@ __all__ = [
     "FrameReport",
     "Group",
     "LightRef",
+    "LightSpectrum",
+    "LightSpectrumType",
     "LuminanceStats",
     "Key",
     "Look",

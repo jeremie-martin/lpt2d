@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "three_spheres",
   "camera": {
     "bounds": [
@@ -48,13 +48,13 @@
     "seed_mode": "deterministic"
   },
   "materials": {
-    "sphere_glass": {
-      "ior": 1.5,
+    "lens_glass": {
+      "ior": 1.7999999523162842,
       "roughness": 0.0,
       "metallic": 0.0,
       "transmission": 1.0,
-      "absorption": 0.5,
-      "cauchy_b": 20000.0,
+      "absorption": 0.20000000298023224,
+      "cauchy_b": 40000.0,
       "albedo": 1.0,
       "emission": 0.0,
       "spectral_c0": 0.0,
@@ -90,13 +90,13 @@
       "spectral_c2": 4.0,
       "fill": 1.0
     },
-    "lens_glass": {
-      "ior": 1.7999999523162842,
+    "sphere_glass": {
+      "ior": 1.5,
       "roughness": 0.0,
       "metallic": 0.0,
       "transmission": 1.0,
-      "absorption": 0.20000000298023224,
-      "cauchy_b": 40000.0,
+      "absorption": 0.5,
+      "cauchy_b": 20000.0,
       "albedo": 1.0,
       "emission": 0.0,
       "spectral_c0": 0.0,
@@ -172,7 +172,7 @@
       "type": "arc",
       "center": [
         0.0,
-        0.449999988079071
+        0.44999998807907104
       ],
       "radius": 0.15000000596046448,
       "angle_start": 0.5235987901687622,
@@ -241,8 +241,11 @@
         0.5
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "source_segment",
@@ -256,8 +259,11 @@
         -0.6000000238418579
       ],
       "intensity": 0.800000011920929,
-      "wavelength_min": 500.0,
-      "wavelength_max": 600.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 500.0,
+        "wavelength_max": 600.0
+      }
     }
   ],
   "groups": []

@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "mirror_box",
   "camera": {
     "bounds": [
@@ -198,8 +198,11 @@
         -0.3499999940395355
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "source_upper_right",
@@ -209,8 +212,11 @@
         0.3499999940395355
       ],
       "intensity": 0.699999988079071,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     }
   ],
   "groups": []

@@ -1,4 +1,5 @@
 #include "export.h"
+#include "color.h"
 #include "scene.h"
 #include "scenes.h"
 #include "serialize.h"
@@ -71,6 +72,8 @@ static void print_usage() {
               << "  --scene <name-or-path>   Built-in name or path to .json file (default: three_spheres)\n"
               << "  --output <path>          Output PNG (default: output.png)\n"
               << "  --save-shot <path>       Save the resolved shot JSON via the C++ serializer and exit\n"
+              << "  --convert-light-spectrum range-to-color\n"
+              << "                           Convert range light spectra to fitted color spectra before save/render\n"
               << "  --width <int>            Width (overrides shot canvas)\n"
               << "  --height <int>           Height (overrides shot canvas)\n"
               << "  --rays <int>             Total rays (overrides shot trace)\n"
@@ -133,12 +136,46 @@ static Shot resolve_shot(const std::string& arg) {
     std::exit(1);
 }
 
+static void convert_light_range_to_color(Light& light) {
+    std::visit(overloaded{
+        [](PointLight& l) {
+            LightSpectrum spectrum = effective_light_spectrum(l);
+            if (spectrum.type != LightSpectrumType::Range) return;
+            auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+            l.intensity *= converted.intensity_scale;
+            set_light_spectrum(l, converted.spectrum);
+        },
+        [](SegmentLight& l) {
+            LightSpectrum spectrum = effective_light_spectrum(l);
+            if (spectrum.type != LightSpectrumType::Range) return;
+            auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+            l.intensity *= converted.intensity_scale;
+            set_light_spectrum(l, converted.spectrum);
+        },
+        [](ProjectorLight& l) {
+            LightSpectrum spectrum = effective_light_spectrum(l);
+            if (spectrum.type != LightSpectrumType::Range) return;
+            auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+            l.intensity *= converted.intensity_scale;
+            set_light_spectrum(l, converted.spectrum);
+        },
+    }, light);
+}
+
+static void convert_scene_ranges_to_color(Scene& scene) {
+    for (Light& light : scene.lights) convert_light_range_to_color(light);
+    for (Group& group : scene.groups)
+        for (Light& light : group.lights)
+            convert_light_range_to_color(light);
+}
+
 
 int main(int argc, char** argv) {
     std::string scene_name = "three_spheres";
     std::string output = "output.png";
     std::string save_shot_path;
     bool fast_mode = false;
+    bool convert_ranges_to_color = false;
     int frame = 0;
 
     CliOverrides overrides;
@@ -150,6 +187,15 @@ int main(int argc, char** argv) {
             output = argv[++i];
         else if (std::strcmp(argv[i], "--save-shot") == 0 && i + 1 < argc)
             save_shot_path = argv[++i];
+        else if (std::strcmp(argv[i], "--convert-light-spectrum") == 0 && i + 1 < argc) {
+            const char* value = argv[++i];
+            if (std::strcmp(value, "range-to-color") == 0)
+                convert_ranges_to_color = true;
+            else {
+                std::cerr << "Invalid light spectrum conversion: " << value << "\n";
+                return 1;
+            }
+        }
         else if (std::strcmp(argv[i], "--width") == 0 && i + 1 < argc)
             overrides.width = std::atoi(argv[++i]);
         else if (std::strcmp(argv[i], "--height") == 0 && i + 1 < argc)
@@ -248,6 +294,8 @@ int main(int argc, char** argv) {
     // Load shot and apply CLI overrides
     Shot shot = resolve_shot(scene_name);
     overrides.apply_to(shot);
+    if (convert_ranges_to_color)
+        convert_scene_ranges_to_color(shot.scene);
 
     if (!save_shot_path.empty()) {
         normalize_scene(shot.scene);

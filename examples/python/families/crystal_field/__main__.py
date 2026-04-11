@@ -1,8 +1,8 @@
 """Allow ``python -m examples.python.families.crystal_field`` to run the CLI.
 
 Supports the standard Family subcommands (search, survey, render) plus
-``stats``, ``catalog``, ``catalog_videos``, ``catalog_shots``, and
-``characterize``.
+``stats``, ``catalog``, ``catalog_videos``, ``catalog_shots``,
+``characterize``, and ``spectrum_compare``.
 """
 
 from __future__ import annotations
@@ -31,6 +31,10 @@ elif cmd == "characterize":
     from .characterize import run_characterize
 
     run_characterize(sys.argv[2:])
+elif cmd == "spectrum_compare":
+    from .spectrum_compare import run_spectrum_compare
+
+    run_spectrum_compare(sys.argv[2:])
 else:
     from . import FAMILY
 

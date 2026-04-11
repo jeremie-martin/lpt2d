@@ -1,5 +1,6 @@
 #include "app_panels.h"
 
+#include "color.h"
 #include "geometry.h"
 #include "renderer.h"
 #include "scene.h"
@@ -113,6 +114,92 @@ bool apply_material_to_selection(EditorState& ed, std::string_view material_id) 
             }
         }
     }
+    return changed;
+}
+
+ImVec4 spectrum_preview_color(const LightSpectrum& spectrum) {
+    if (spectrum.type == LightSpectrumType::Color) {
+        float r = spectrum.linear_r + (1.0f - spectrum.linear_r) * spectrum.white_mix;
+        float g = spectrum.linear_g + (1.0f - spectrum.linear_g) * spectrum.white_mix;
+        float b = spectrum.linear_b + (1.0f - spectrum.linear_b) * spectrum.white_mix;
+        return ImVec4(r, g, b, 1.0f);
+    }
+    auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+    return ImVec4(converted.spectrum.linear_r, converted.spectrum.linear_g,
+                  converted.spectrum.linear_b, 1.0f);
+}
+
+bool edit_light_spectrum_fields(LightSpectrum& spectrum, float& intensity) {
+    bool changed = false;
+    ImVec4 preview = spectrum_preview_color(spectrum);
+    ImGui::ColorButton("Preview", preview, ImGuiColorEditFlags_NoPicker, ImVec2(28, 18));
+    ImGui::SameLine();
+    ImGui::TextUnformatted(spectrum.type == LightSpectrumType::Color ? "Spectral color" : "Range spectrum");
+
+    if (spectrum.type == LightSpectrumType::Color) {
+        float col[3] = {spectrum.linear_r, spectrum.linear_g, spectrum.linear_b};
+        float white_mix = spectrum.white_mix;
+        bool color_changed = ImGui::ColorEdit3("Light color", col, ImGuiColorEditFlags_Float);
+        color_changed |= ImGui::SliderFloat("White mix", &white_mix, 0.0f, 1.0f);
+        if (color_changed) {
+            spectrum = light_spectrum_color(col[0], col[1], col[2], white_mix);
+            changed = true;
+        }
+        if (ImGui::CollapsingHeader("Range spectrum")) {
+            float wl_min = 380.0f;
+            float wl_max = 780.0f;
+            bool range_changed = ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
+            range_changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
+            if (wl_min > wl_max) wl_max = wl_min;
+            if (range_changed) {
+                spectrum = light_spectrum_range(wl_min, wl_max);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+    if (ImGui::Button("Convert range to color")) {
+        spectrum = converted.spectrum;
+        intensity *= converted.intensity_scale;
+        changed = true;
+    }
+    ImGui::SameLine();
+    ImGui::Text("scale %.3f", converted.intensity_scale);
+
+    if (ImGui::CollapsingHeader("Range spectrum", ImGuiTreeNodeFlags_DefaultOpen)) {
+        float wl_min = spectrum.wavelength_min;
+        float wl_max = spectrum.wavelength_max;
+        bool range_changed = ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
+        range_changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
+        if (wl_min > wl_max) wl_max = wl_min;
+        if (range_changed) {
+            spectrum = light_spectrum_range(wl_min, wl_max);
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+bool edit_light_spectrum(PointLight& light) {
+    LightSpectrum spectrum = effective_light_spectrum(light);
+    bool changed = edit_light_spectrum_fields(spectrum, light.intensity);
+    if (changed) set_light_spectrum(light, spectrum);
+    return changed;
+}
+
+bool edit_light_spectrum(SegmentLight& light) {
+    LightSpectrum spectrum = effective_light_spectrum(light);
+    bool changed = edit_light_spectrum_fields(spectrum, light.intensity);
+    if (changed) set_light_spectrum(light, spectrum);
+    return changed;
+}
+
+bool edit_light_spectrum(ProjectorLight& light) {
+    LightSpectrum spectrum = effective_light_spectrum(light);
+    bool changed = edit_light_spectrum_fields(spectrum, light.intensity);
+    if (changed) set_light_spectrum(light, spectrum);
     return changed;
 }
 
@@ -360,6 +447,7 @@ static void draw_section_scene(PanelContext& ctx) {
             PointLight light;
             light.position = {0.0f, 0.0f};
             light.intensity = 1.0f;
+            set_light_spectrum(light, light_spectrum_color(1.0f, 1.0f, 1.0f));
             ed.shot.scene.lights.push_back(light);
             ed.shot.camera.bounds = Bounds{{-kDefaultRoomHalfWidth, -kDefaultRoomHalfHeight},
                                            {kDefaultRoomHalfWidth, kDefaultRoomHalfHeight}};
@@ -1218,22 +1306,17 @@ static void draw_section_properties(PanelContext& ctx) {
                 rename_selection_ref(ed, sid, new_id);
             });
             ImGui::Separator();
-            auto edit_wavelength = [&](float& wl_min, float& wl_max) {
-                changed |= ImGui::SliderFloat("Lambda min", &wl_min, 380.0f, 780.0f, "%.0f nm");
-                changed |= ImGui::SliderFloat("Lambda max", &wl_max, 380.0f, 780.0f, "%.0f nm");
-                if (wl_min > wl_max) wl_max = wl_min;
-            };
             std::visit(overloaded{
                 [&](PointLight& l) {
                     changed |= ImGui::DragFloat2("Position", &l.position.x, 0.01f);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
-                    edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    changed |= edit_light_spectrum(l);
                 },
                 [&](SegmentLight& l) {
                     changed |= ImGui::DragFloat2("Point A", &l.a.x, 0.01f);
                     changed |= ImGui::DragFloat2("Point B", &l.b.x, 0.01f);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
-                    edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    changed |= edit_light_spectrum(l);
                 },
                 [&](ProjectorLight& l) {
                     const char* presets[] = {"(apply)", "Beam", "Spot", "Laser", "Parallel", "Bulb"};
@@ -1263,7 +1346,7 @@ static void draw_section_properties(PanelContext& ctx) {
                     if (l.profile == ProjectorProfile::Uniform) ImGui::EndDisabled();
                     sanitize_projector_light(l);
                     changed |= ImGui::SliderFloat("Intensity", &l.intensity, 0.01f, 5.0f);
-                    edit_wavelength(l.wavelength_min, l.wavelength_max);
+                    changed |= edit_light_spectrum(l);
                 },
             }, light);
         }

@@ -371,20 +371,74 @@ using Shape = std::variant<Circle, Segment, Arc, Bezier, Polygon, Ellipse, Path>
 
 // --- Lights ---
 
+enum class LightSpectrumType : int {
+    Range,
+    Color,
+};
+
+inline std::optional<LightSpectrumType> parse_light_spectrum_type(const std::string& s) {
+    if (s == "range") return LightSpectrumType::Range;
+    if (s == "color") return LightSpectrumType::Color;
+    return std::nullopt;
+}
+
+inline const char* light_spectrum_type_to_string(LightSpectrumType type) {
+    switch (type) {
+        case LightSpectrumType::Range: return "range";
+        case LightSpectrumType::Color: return "color";
+    }
+    return "range";
+}
+
+struct LightSpectrum {
+    LightSpectrumType type = LightSpectrumType::Range;
+    float wavelength_min = 380.0f;
+    float wavelength_max = 780.0f;
+    float spectral_c0 = 0.0f;
+    float spectral_c1 = 0.0f;
+    float spectral_c2 = 0.0f;
+    float linear_r = 1.0f;
+    float linear_g = 1.0f;
+    float linear_b = 1.0f;
+    float white_mix = 0.0f;
+
+    bool operator==(const LightSpectrum&) const = default;
+};
+
+inline LightSpectrum light_spectrum_range(float wl_min = 380.0f, float wl_max = 780.0f) {
+    LightSpectrum s;
+    s.type = LightSpectrumType::Range;
+    s.wavelength_min = wl_min;
+    s.wavelength_max = wl_max;
+    return s;
+}
+
+inline bool is_default_range_spectrum(const LightSpectrum& s) {
+    return s.type == LightSpectrumType::Range &&
+           s.wavelength_min == 380.0f &&
+           s.wavelength_max == 780.0f;
+}
+
 struct PointLight {
     std::string id;
     Vec2 position;
     float intensity = 1.0f;
+    // Deprecated compatibility storage. Canonical authored data uses
+    // `spectrum`; these fields preserve old C++/Python construction patterns.
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
+    LightSpectrum spectrum = {};
 };
 
 struct SegmentLight {
     std::string id;
     Vec2 a, b;
     float intensity = 1.0f;
+    // Deprecated compatibility storage. Canonical authored data uses
+    // `spectrum`; these fields preserve old C++/Python construction patterns.
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
+    LightSpectrum spectrum = {};
 };
 
 enum class ProjectorProfile : int {
@@ -438,8 +492,11 @@ struct ProjectorLight {
     ProjectorSource source = ProjectorSource::Line; // ray origin shape: line aperture or circle boundary
     float softness = 0.0f;            // normalized [0, 1], ignored for uniform profile
     float intensity = 1.0f;           // total emitted power
+    // Deprecated compatibility storage. Canonical authored data uses
+    // `spectrum`; these fields preserve old C++/Python construction patterns.
     float wavelength_min = 380.0f;
     float wavelength_max = 780.0f;
+    LightSpectrum spectrum = {};
 };
 
 inline void sanitize_projector_light(ProjectorLight& light) {
@@ -447,6 +504,57 @@ inline void sanitize_projector_light(ProjectorLight& light) {
     light.source_radius = std::max(light.source_radius, 0.0f);
     light.spread = std::clamp(light.spread, 0.0f, PI);
     light.softness = std::clamp(light.softness, 0.0f, 1.0f);
+}
+
+inline void set_light_spectrum(PointLight& light, LightSpectrum spectrum) {
+    if (spectrum.type == LightSpectrumType::Range) {
+        if (spectrum.wavelength_min > spectrum.wavelength_max)
+            spectrum.wavelength_max = spectrum.wavelength_min;
+        light.wavelength_min = spectrum.wavelength_min;
+        light.wavelength_max = spectrum.wavelength_max;
+    }
+    light.spectrum = spectrum;
+}
+
+inline void set_light_spectrum(SegmentLight& light, LightSpectrum spectrum) {
+    if (spectrum.type == LightSpectrumType::Range) {
+        if (spectrum.wavelength_min > spectrum.wavelength_max)
+            spectrum.wavelength_max = spectrum.wavelength_min;
+        light.wavelength_min = spectrum.wavelength_min;
+        light.wavelength_max = spectrum.wavelength_max;
+    }
+    light.spectrum = spectrum;
+}
+
+inline void set_light_spectrum(ProjectorLight& light, LightSpectrum spectrum) {
+    if (spectrum.type == LightSpectrumType::Range) {
+        if (spectrum.wavelength_min > spectrum.wavelength_max)
+            spectrum.wavelength_max = spectrum.wavelength_min;
+        light.wavelength_min = spectrum.wavelength_min;
+        light.wavelength_max = spectrum.wavelength_max;
+    }
+    light.spectrum = spectrum;
+}
+
+inline LightSpectrum effective_light_spectrum(const PointLight& light) {
+    if (is_default_range_spectrum(light.spectrum) &&
+        (light.wavelength_min != 380.0f || light.wavelength_max != 780.0f))
+        return light_spectrum_range(light.wavelength_min, light.wavelength_max);
+    return light.spectrum;
+}
+
+inline LightSpectrum effective_light_spectrum(const SegmentLight& light) {
+    if (is_default_range_spectrum(light.spectrum) &&
+        (light.wavelength_min != 380.0f || light.wavelength_max != 780.0f))
+        return light_spectrum_range(light.wavelength_min, light.wavelength_max);
+    return light.spectrum;
+}
+
+inline LightSpectrum effective_light_spectrum(const ProjectorLight& light) {
+    if (is_default_range_spectrum(light.spectrum) &&
+        (light.wavelength_min != 380.0f || light.wavelength_max != 780.0f))
+        return light_spectrum_range(light.wavelength_min, light.wavelength_max);
+    return light.spectrum;
 }
 
 using Light = std::variant<PointLight, SegmentLight, ProjectorLight>;

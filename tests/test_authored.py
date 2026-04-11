@@ -72,7 +72,7 @@ def _write_json(path: Path, data: dict) -> None:
 def _make_valid_shot_json(**overrides) -> dict:
     """Return a minimal valid authored shot JSON dict."""
     base = {
-        "version": 11,
+        "version": 12,
         "name": "test",
         "camera": {},
         "canvas": {"width": 1920, "height": 1080},
@@ -260,10 +260,44 @@ def test_authored_rejects_older_shot_version(tmp_path):
         Shot.load(path)
 
 
+def test_authored_loads_v11_range_light_and_saves_v12_spectrum(tmp_path):
+    path = tmp_path / "legacy_v11.json"
+    saved_path = tmp_path / "saved_v12.json"
+    data = _make_valid_shot_json(
+        version=11,
+        lights=[
+            {
+                "id": "legacy_orange",
+                "type": "point",
+                "position": [0.0, 0.0],
+                "intensity": 1.0,
+                "wavelength_min": 550.0,
+                "wavelength_max": 700.0,
+            }
+        ],
+    )
+    _write_json(path, data)
+
+    shot = Shot.load(path)
+    light = shot.scene.require_light("legacy_orange")
+    assert light.spectrum.type == "range"
+    assert light.spectrum.wavelength_min == pytest.approx(550.0)
+    assert light.spectrum.wavelength_max == pytest.approx(700.0)
+
+    shot.save(saved_path)
+    saved = json.loads(saved_path.read_text())
+    assert saved["version"] == 12
+    assert saved["lights"][0]["spectrum"] == {
+        "type": "range",
+        "wavelength_min": 550.0,
+        "wavelength_max": 700.0,
+    }
+
+
 def test_authored_rejects_sparse_json_missing_explicit_blocks(tmp_path):
     path = tmp_path / "sparse.json"
     sparse = {
-        "version": 11,
+        "version": 12,
         "name": "sparse",
         "materials": {},
         "shapes": [],
@@ -312,14 +346,14 @@ def test_authored_json_is_fully_explicit_for_defaults(tmp_path):
     assert data["groups"] == []
 
 
-def test_evaluation_manifest_scenes_load_as_v11_authored_shots():
+def test_evaluation_manifest_scenes_load_as_v12_authored_shots():
     manifest = json.loads(EVALUATION_SCENE_MANIFEST.read_text())
     scene_dir = EVALUATION_SCENE_MANIFEST.parent
 
     for entry in manifest["scenes"]:
         path = scene_dir / entry["file"]
         data = json.loads(path.read_text())
-        assert data["version"] == 11, f"{path} must declare version 11"
+        assert data["version"] == 12, f"{path} must declare version 12"
 
         shot = Shot.load(path)
 
@@ -372,7 +406,7 @@ def test_cpp_cli_rejects_older_shot_version(tmp_path):
     )
 
     assert result.returncode != 0
-    assert "Unsupported shot version (expected 11)" in result.stderr
+    assert "Unsupported shot version (expected 11 or 12)" in result.stderr
     assert not output.exists()
 
 

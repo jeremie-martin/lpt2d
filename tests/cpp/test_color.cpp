@@ -5,6 +5,17 @@
 #include <algorithm>
 #include <cmath>
 
+static float shader_light_response(float nm, const LightSpectrum& spectrum) {
+    if (spectrum.spectral_c0 == 0.0f &&
+        spectrum.spectral_c1 == 0.0f &&
+        spectrum.spectral_c2 == 0.0f)
+        return 1.0f;
+
+    float t = (nm - 380.0f) / 400.0f;
+    float x = spectrum.spectral_c0 + spectrum.spectral_c1 * t + spectrum.spectral_c2 * t * t;
+    return 0.5f + x / (2.0f * std::sqrt(1.0f + x * x));
+}
+
 // --- wavelength_to_rgb ---
 
 TEST(wavelength_green_peak) {
@@ -77,6 +88,42 @@ TEST(spectral_to_rgb_neutral_white) {
     ASSERT_NEAR(rgb.r, 1.0f, 1e-6f);
     ASSERT_NEAR(rgb.g, 1.0f, 1e-6f);
     ASSERT_NEAR(rgb.b, 1.0f, 1e-6f);
+}
+
+TEST(range_to_color_spectrum_orange_is_reddish_and_scales_energy) {
+    auto converted = range_to_color_spectrum(550.0f, 700.0f);
+    ASSERT_EQ(converted.spectrum.type, LightSpectrumType::Color);
+    ASSERT_NEAR(converted.spectrum.linear_r, 1.0f, 1e-6f);
+    ASSERT_TRUE(converted.spectrum.linear_g > 0.35f);
+    ASSERT_TRUE(converted.spectrum.linear_g < 0.45f);
+    ASSERT_TRUE(converted.spectrum.linear_b < 0.01f);
+    ASSERT_TRUE(converted.intensity_scale > 1.0f);
+}
+
+TEST(light_spectrum_color_mid_gray_avoids_white_sentinel) {
+    LightSpectrum gray = light_spectrum_color(0.5f, 0.5f, 0.5f);
+    ASSERT_EQ(gray.type, LightSpectrumType::Color);
+    ASSERT_FALSE(gray.spectral_c0 == 0.0f &&
+                 gray.spectral_c1 == 0.0f &&
+                 gray.spectral_c2 == 0.0f);
+    ASSERT_NEAR(shader_light_response(380.0f, gray), 0.5f, 1e-5f);
+    ASSERT_NEAR(shader_light_response(580.0f, gray), 0.5f, 1e-5f);
+    ASSERT_NEAR(shader_light_response(780.0f, gray), 0.5f, 1e-5f);
+
+    LightSpectrum mixed_black = light_spectrum_color(0.0f, 0.0f, 0.0f, 0.5f);
+    ASSERT_FALSE(mixed_black.spectral_c0 == 0.0f &&
+                 mixed_black.spectral_c1 == 0.0f &&
+                 mixed_black.spectral_c2 == 0.0f);
+    ASSERT_NEAR(shader_light_response(580.0f, mixed_black), 0.5f, 1e-5f);
+}
+
+TEST(light_spectrum_color_white_keeps_white_sentinel) {
+    LightSpectrum white = light_spectrum_color(1.0f, 1.0f, 1.0f);
+    ASSERT_EQ(white.type, LightSpectrumType::Color);
+    ASSERT_TRUE(white.spectral_c0 == 0.0f &&
+                white.spectral_c1 == 0.0f &&
+                white.spectral_c2 == 0.0f);
+    ASSERT_NEAR(shader_light_response(580.0f, white), 1.0f, 1e-6f);
 }
 
 // --- rgb_to_spectral / spectral_to_rgb roundtrip ---

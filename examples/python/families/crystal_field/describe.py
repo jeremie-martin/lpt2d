@@ -19,8 +19,14 @@ def describe(p: Params) -> str:
     light_desc = f"lights={p.light.n_lights}({p.light.path_style})"
     if p.light.path_style in ("drift", "channel"):
         light_desc += f" v={p.light.speed:.2f}"
-    if p.light.wavelength_max - p.light.wavelength_min < 300:
-        light_desc += f" wl={p.light.wavelength_min:.0f}-{p.light.wavelength_max:.0f}"
+    if p.light.spectrum.type == "range":
+        wl_min = p.light.spectrum.wavelength_min
+        wl_max = p.light.spectrum.wavelength_max
+        if wl_max - wl_min < 300:
+            light_desc += f" wl={wl_min:.0f}-{wl_max:.0f}"
+    else:
+        rgb = p.light.spectrum.linear_rgb
+        light_desc += f" rgb={rgb[0]:.2f},{rgb[1]:.2f},{rgb[2]:.2f}"
     # Count only non-None entries: brushed-metal's "mixed" sub-case has
     # color_names=[name, None] and semantically carries one color, not two.
     n_colors = sum(1 for c in p.material.color_names if c is not None)
