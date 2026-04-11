@@ -75,7 +75,7 @@ Variants are rejected only by the current light-radius and luminance gates:
 - Ambient light radius: 0.8% to 4.2% of the short image side.
 - Mean moving radius divided by mean ambient radius: 1.33 to 2.33.
 - Near-black fraction: below 3.5%.
-- Brightness: 60 to 140 on the 0-255 luminance scale (glass max: 120).
+- Brightness: 60 to 140 on the 0-255 luminance scale (glass max: 80).
 - Shadow floor: at most 80 on the 0-255 luminance scale.
 - Contrast spread: at least 50 on the 0-255 luminance scale.
 - Shadow pixels: at most 20% (black diffuse max: 50%).
