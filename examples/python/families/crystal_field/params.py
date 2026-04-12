@@ -55,7 +55,7 @@ class RotationConfig:
 @dataclass
 class ShapeConfig:
     kind: str  # "circle" or "polygon"
-    size: float  # radius (circle) or circumscribed radius (polygon)
+    size: float  # radius; for polygons, distance from object center to each vertex
     n_sides: int  # ignored for circle; 3=triangle, 4=square, 5=pentagon, 6=hex
     corner_radius: float  # fillet on polygon corners; 0 = sharp
     rotation: RotationConfig | None  # None = no rotation (or circle)

@@ -106,7 +106,7 @@ and sampler-policy refactor notes.
 | IOR | outcome-specific | Glass derives IOR from dispersion; brushed metal samples 1.0 or [1.0, 1.4] |
 | Spacing | 0.20–0.32 | Controls object density; biased toward the low, packed end |
 | Spacing pack bias | 1.4 | 1.0 is uniform; higher values prefer tighter spacing within the same range |
-| Polygon size factor | 0.28–0.43 | Multiplied by spacing; sparse grids bias small draws upward within this range |
+| Polygon size factor | 0.30–0.45 | Multiplied by grid spacing; mildly biased upward, with sparse grids pushing small draws further upward inside this range |
 | Diffuse transmission | 0.00–0.05 | Gray and colored diffuse only |
 | Diffuse absorption | 0.75–1.25 | Gray and colored diffuse only |
 | Brushed-metal color saturation | 0.10–0.40 | HSV saturation for colored brushed-metal object slots |
@@ -129,7 +129,7 @@ Variants are rejected only by the current light-radius and luminance gates:
 - Mean moving radius divided by mean ambient radius: 1.33 to 2.33.
 - Near-black fraction: below 3.5%.
 - Brightness: 60 to 140 on the 0-255 luminance scale (glass max: 80).
-- Shadow floor: at most 80 on the 0-255 luminance scale.
+- Shadow floor: p05 luminance between 0.06 and 80/255, except black diffuse has no p05 gate.
 - Contrast spread: at least 50 on the 0-255 luminance scale.
 - Shadow pixels: at most 20% (black diffuse max: 50%).
 - Mean saturation: below 0.66.

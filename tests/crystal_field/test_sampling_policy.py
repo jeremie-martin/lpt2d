@@ -23,6 +23,7 @@ from examples.python.families.crystal_field.sampling import (
     DEFAULT_SAMPLER_POLICY,
     OUTCOMES,
     SampleOverrides,
+    _biased_uniform_high,
     _biased_uniform_low,
     _brushed_metal_material,
     _colored_diffuse_material,
@@ -103,10 +104,24 @@ def test_spacing_pack_bias_prefers_lower_spacing_without_changing_range():
     assert sum(packed) / len(packed) < sum(uniform) / len(uniform)
 
 
+def test_polygon_size_bias_prefers_larger_factors_without_changing_range():
+    bounds = (0.30, 0.45)
+    uniform_rng = random.Random(12)
+    larger_rng = random.Random(12)
+
+    uniform = [_biased_uniform_high(uniform_rng, bounds, 1.0) for _ in range(200)]
+    larger = [_biased_uniform_high(larger_rng, bounds, 1.2) for _ in range(200)]
+
+    assert all(bounds[0] <= size <= bounds[1] for size in larger)
+    assert all(larger_size >= uniform_size for larger_size, uniform_size in zip(larger, uniform, strict=True))
+    assert sum(larger) / len(larger) > sum(uniform) / len(uniform)
+
+
 def test_sparse_polygon_grids_bias_size_factor_upward_without_changing_max():
     policy = replace(
         DEFAULT_SAMPLER_POLICY.shape,
-        polygon_size_factor=(0.28, 0.43),
+        polygon_size_factor=(0.30, 0.45),
+        polygon_size_bias=1.0,
         polygon_sides=((4, 1.0),),
         corner_radius_factor=(0.0, 0.0),
         rotation_probability=0.0,

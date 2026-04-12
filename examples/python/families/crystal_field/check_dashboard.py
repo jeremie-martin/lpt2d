@@ -77,7 +77,7 @@ def _check_order() -> list[dict[str, str]]:
         _constraint("Tone", "near_black_fraction", f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}", "near_black", "Rejects frames with too much crushed black."),
         _constraint("Tone", "mean_luma", f">= {_num(CHECK.MIN_MEAN_LUMA)}", "mean_luma", "Rejects frames that are too dark."),
         _constraint("Tone", "mean_luma", "outcome dependent", "mean_luma", "Rejects frames that are too bright; glass has a stricter ceiling."),
-        _constraint("Tone", "p05_luma", f"<= {_num(CHECK.MAX_P05_LUMA)}", "p05_luma", "Rejects raised dark values that wash out the image."),
+        _constraint("Tone", "p05_luma", "outcome dependent", "p05_luma", "Rejects overly crushed or raised lower-tail luminance; black diffuse is exempt."),
         _constraint("Tone", "interdecile_luma_range", f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}", "interdecile_luma_range", "Requires enough robust luminance spread."),
         _constraint("Tone", "local_contrast", f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}", "local_contrast", "Rejects frames without enough spatial edge contrast."),
         _constraint("Wash-out", "bright_neutral_fraction", f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}", "bright_neutral", "Rejects large bright low-saturation regions."),
@@ -97,7 +97,7 @@ def _global_constraints() -> list[dict[str, str]]:
         _constraint("Tone", "near_black_fraction", f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}", "near_black", "Global crushed-black ceiling."),
         _constraint("Tone", "mean_luma", f">= {_num(CHECK.MIN_MEAN_LUMA)}", "mean_luma", "Global lower brightness bound."),
         _constraint("Tone", "mean_luma", f"<= {_num(CHECK.MAX_MEAN_LUMA)} by default", "mean_luma", "Upper brightness bound unless overridden by outcome."),
-        _constraint("Tone", "p05_luma", f"<= {_num(CHECK.MAX_P05_LUMA)}", "p05_luma", "Global lower-tail luminance ceiling."),
+        _constraint("Tone", "p05_luma", f"{_num(CHECK.MIN_P05_LUMA)} to {_num(CHECK.MAX_P05_LUMA)} by default", "p05_luma", "Lower-tail luminance band unless overridden by outcome."),
         _constraint("Tone", "interdecile_luma_range", f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}", "interdecile_luma_range", "Global robust contrast requirement."),
         _constraint("Tone", "local_contrast", f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}", "local_contrast", "Global spatial contrast requirement."),
         _constraint("Wash-out", "bright_neutral_fraction", f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}", "bright_neutral", "Global bright-neutral ceiling."),
@@ -114,6 +114,13 @@ def _overrides() -> list[dict[str, str]]:
             "effective_rule": f"<= {_num(CHECK.GLASS_MAX_MEAN_LUMA)}",
             "effect": "stricter brightness ceiling",
         },
+        {
+            "outcome": "black_diffuse",
+            "metric": "p05_luma",
+            "default_rule": f"{_num(CHECK.MIN_P05_LUMA)} to {_num(CHECK.MAX_P05_LUMA)}",
+            "effective_rule": "not gated",
+            "effect": "no lower-tail luminance constraint",
+        },
     ]
 
 
@@ -125,6 +132,10 @@ def _effective_outcomes() -> list[dict[str, str]]:
         override_notes = []
         if outcome == "glass":
             override_notes.append("mean ceiling")
+        p05_rule = f"{_num(CHECK.MIN_P05_LUMA)} to {_num(CHECK.MAX_P05_LUMA)}"
+        if outcome == "black_diffuse":
+            p05_rule = "not gated"
+            override_notes.append("p05 exempt")
         rows.append(
             {
                 "outcome": outcome,
@@ -134,7 +145,7 @@ def _effective_outcomes() -> list[dict[str, str]]:
                 "radius_ratio": f"{_num(CHECK.MIN_RADIUS_RATIO)} to {_num(CHECK.MAX_RADIUS_RATIO)}",
                 "mean_luma": f"{_num(CHECK.MIN_MEAN_LUMA)} to {_num(max_mean)}",
                 "near_black": f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}",
-                "p05_luma": f"<= {_num(CHECK.MAX_P05_LUMA)}",
+                "p05_luma": p05_rule,
                 "interdecile_range": f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}",
                 "local_contrast": f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}",
                 "bright_neutral": f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}",

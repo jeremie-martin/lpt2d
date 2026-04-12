@@ -6,8 +6,8 @@ import pytest
 
 from examples.python.families.crystal_field.check import (
     GLASS_MAX_MEAN_LUMA,
-    MAX_BRIGHT_NEUTRAL_FRACTION,
     MAX_AMBIENT_RADIUS_RATIO,
+    MAX_BRIGHT_NEUTRAL_FRACTION,
     MAX_MEAN_LUMA,
     MAX_MEAN_SATURATION,
     MAX_MOVING_RADIUS_RATIO,
@@ -19,6 +19,7 @@ from examples.python.families.crystal_field.check import (
     MIN_LOCAL_CONTRAST,
     MIN_MEAN_LUMA,
     MIN_MOVING_RADIUS_RATIO,
+    MIN_P05_LUMA,
     MIN_RADIUS_RATIO,
     _verdict_for_metrics,
 )
@@ -80,6 +81,7 @@ def test_passing_metrics_are_accepted():
         ({"near_black_fraction": MAX_NEAR_BLACK_FRACTION + 0.001}, "near_black"),
         ({"mean_luma": MIN_MEAN_LUMA - 0.001}, "mean_luma"),
         ({"mean_luma": MAX_MEAN_LUMA + 0.001}, "mean_luma"),
+        ({"p05_luma": MIN_P05_LUMA - 0.001}, "p05_luma"),
         ({"p05_luma": MAX_P05_LUMA + 0.001}, "p05_luma"),
         (
             {"interdecile_luma_range": MIN_INTERDECILE_LUMA_RANGE - 0.001},
@@ -111,6 +113,16 @@ def test_glass_uses_lower_brightness_ceiling():
 
     assert not verdict.ok
     assert "mean_luma" in verdict.summary
+
+
+@pytest.mark.parametrize("p05_luma", [MIN_P05_LUMA - 0.001, MAX_P05_LUMA + 0.001])
+def test_black_diffuse_has_no_p05_luma_constraint(p05_luma: float):
+    metrics = _passing_metrics()
+    metrics["p05_luma"] = p05_luma
+
+    verdict = _verdict(metrics, outcome="black_diffuse")
+
+    assert verdict.ok
 
 
 def test_missing_moving_lights_are_rejected():

@@ -213,6 +213,7 @@ The main measured quantities are:
 Some thresholds depend on material outcome:
 
 - glass has a lower maximum mean luminance;
+- black diffuse has no p05 luminance constraint;
 - black diffuse allows more shadow pixels.
 
 The current checker deliberately does not use older color-colorfulness,

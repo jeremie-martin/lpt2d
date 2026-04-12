@@ -81,10 +81,11 @@ class GridPolicy:
 @dataclass(frozen=True)
 class ShapePolicy:
     glass_size_factor: FloatRange = (0.25, 0.38)
-    polygon_size_factor: FloatRange = (0.28, 0.43)
+    polygon_size_factor: FloatRange = (0.30, 0.45)
+    polygon_size_bias: float = 2.0
     polygon_sides: WeightedChoices[int] = ((3, 0.53), (4, 1.0), (5, 1.0), (6, 1.0))
     corner_radius_factor: FloatRange = (0.1, 0.3)
-    rotation_probability: float = 0.65
+    rotation_probability: float = 0.7
     rotation_jitter_probability: float = 0.4
     rotation_jitter_min: float = 0.06
 
@@ -191,6 +192,11 @@ def _uniform(rng: random.Random, bounds: FloatRange) -> float:
 
 def _biased_uniform_low(rng: random.Random, bounds: FloatRange, bias: float) -> float:
     t = rng.random() ** max(bias, 1e-6)
+    return bounds[0] + (bounds[1] - bounds[0]) * t
+
+
+def _biased_uniform_high(rng: random.Random, bounds: FloatRange, bias: float) -> float:
+    t = 1.0 - rng.random() ** max(bias, 1e-6)
     return bounds[0] + (bounds[1] - bounds[0]) * t
 
 
@@ -320,7 +326,11 @@ def _polygon_shape(
     """Non-glass outcomes (black / gray / colored diffuse + brushed metal): rounded polygons."""
     policy = policy or DEFAULT_SAMPLER_POLICY.shape
     n_sides = _weighted_choice(rng, policy.polygon_sides)
-    size_factor = _uniform(rng, policy.polygon_size_factor)
+    size_factor = _biased_uniform_high(
+        rng,
+        policy.polygon_size_factor,
+        policy.polygon_size_bias,
+    )
     if planned_count is not None:
         # Sparse diffuse fields look weak when polygons are tiny. Keep the same
         # maximum size, but gently pull small sparse-grid draws toward it.

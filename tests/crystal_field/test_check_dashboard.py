@@ -20,6 +20,10 @@ def test_constraint_dashboard_model_matches_current_overrides():
     assert outcomes["black_diffuse"]["bright_neutral"] == (
         f"<= {100 * CHECK.MAX_BRIGHT_NEUTRAL_FRACTION:.1f}%"
     )
+    assert outcomes["black_diffuse"]["p05_luma"] == "not gated"
+    assert outcomes["gray_diffuse"]["p05_luma"] == (
+        f"{CHECK.MIN_P05_LUMA:.3f} to {CHECK.MAX_P05_LUMA:.3f}"
+    )
 
 
 def test_constraint_dashboard_records_gate_order():

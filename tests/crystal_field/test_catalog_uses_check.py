@@ -8,6 +8,7 @@ from datetime import datetime
 from examples.python.families.crystal_field.check import (
     METRIC_KEYS,
     MIN_INTERDECILE_LUMA_RANGE,
+    MIN_P05_LUMA,
     PROBE_FPS,
     _measure_and_verdict,
     measurement_context,
@@ -139,6 +140,22 @@ def test_failure_distance_increases_with_low_interdecile_range():
     )
     # Distance should reflect the robust-range shortfall.
     assert _failure_distance(result) > 0.0
+
+
+def test_failure_distance_uses_p05_floor_except_for_black_diffuse():
+    from anim.family import Verdict
+    from examples.python.families.crystal_field.catalog import (
+        _failure_distance,
+    )
+    from examples.python.families.crystal_field.check import MeasurementResult
+
+    result = MeasurementResult(
+        metrics=_synthetic_metrics(p05_luma=MIN_P05_LUMA - 0.01),
+        verdict=Verdict(False, "shadows too dark"),
+    )
+
+    assert _failure_distance(result, outcome="gray_diffuse") > 0.0
+    assert _failure_distance(result, outcome="black_diffuse") == 0.0
 
 
 def _synthetic_metrics(**overrides: float) -> dict[str, float]:

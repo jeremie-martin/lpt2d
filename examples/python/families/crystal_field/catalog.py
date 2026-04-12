@@ -62,6 +62,7 @@ from .check import (
     MIN_LOCAL_CONTRAST,
     MIN_MEAN_LUMA,
     MIN_MOVING_RADIUS_RATIO,
+    MIN_P05_LUMA,
     MIN_RADIUS_RATIO,
     PROBE_H,
     PROBE_RAYS,
@@ -211,8 +212,11 @@ def _failure_distance(result: MeasurementResult, outcome: str | None = None) -> 
     if m["mean_luma"] > max_mean_luma:
         dist += m["mean_luma"] - max_mean_luma
 
-    if m["p05_luma"] > MAX_P05_LUMA:
-        dist += m["p05_luma"] - MAX_P05_LUMA
+    if outcome != "black_diffuse":
+        if m["p05_luma"] < MIN_P05_LUMA:
+            dist += MIN_P05_LUMA - m["p05_luma"]
+        if m["p05_luma"] > MAX_P05_LUMA:
+            dist += m["p05_luma"] - MAX_P05_LUMA
 
     if m["interdecile_luma_range"] < MIN_INTERDECILE_LUMA_RANGE:
         dist += MIN_INTERDECILE_LUMA_RANGE - m["interdecile_luma_range"]

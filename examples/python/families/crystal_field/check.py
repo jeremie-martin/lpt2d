@@ -38,6 +38,7 @@ MAX_NEAR_BLACK_FRACTION = 0.035
 MIN_MEAN_LUMA = 60.0 / 255.0
 MAX_MEAN_LUMA = 140.0 / 255.0
 GLASS_MAX_MEAN_LUMA = 80.0 / 255.0
+MIN_P05_LUMA = 0.06
 MAX_P05_LUMA = 80.0 / 255.0
 MIN_INTERDECILE_LUMA_RANGE = 50.0 / 255.0
 MIN_LOCAL_CONTRAST = 0.015
@@ -283,6 +284,7 @@ def _verdict_for_metrics(
     bright_neutral_fraction = metrics["bright_neutral_fraction"]
     mean_saturation = metrics["mean_saturation"]
     max_mean_luminance = GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
+    has_p05_luma_constraint = outcome != "black_diffuse"
 
     prefix = (
         f"moving_mean={moving_radius_mean:.3f} "
@@ -318,7 +320,9 @@ def _verdict_for_metrics(
         return Verdict(False, f"{prefix} mean_luma={mean_luma:.3f} (too dark)")
     if mean_luma > max_mean_luminance:
         return Verdict(False, f"{prefix} mean_luma={mean_luma:.3f} (too bright)")
-    if p05_luma > MAX_P05_LUMA:
+    if has_p05_luma_constraint and p05_luma < MIN_P05_LUMA:
+        return Verdict(False, f"{prefix} p05_luma={p05_luma:.3f} (shadows too dark)")
+    if has_p05_luma_constraint and p05_luma > MAX_P05_LUMA:
         return Verdict(False, f"{prefix} p05_luma={p05_luma:.3f} (shadows too bright)")
     if interdecile_luma_range < MIN_INTERDECILE_LUMA_RANGE:
         return Verdict(
