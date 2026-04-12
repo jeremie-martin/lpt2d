@@ -40,7 +40,9 @@ __pycache__/
 /benchmarks/
 /baselines/
 /brightness_experiment_shots.py
+/circle_brightness_matching.py
 /owo/
+/relationship_study.py
 /runs/
 
 # Local editor / profiling artifacts
