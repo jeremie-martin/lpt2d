@@ -253,6 +253,10 @@ NB_MODULE(_lpt2d, m) {
             result.append(nb::make_tuple(e->name, e->r, e->g, e->b));
         return result;
     });
+    m.def("wavelength_to_rgb", [](float nm) -> nb::tuple {
+        Vec3 rgb = wavelength_to_rgb(nm);
+        return nb::make_tuple(rgb.r, rgb.g, rgb.b);
+    }, "nm"_a);
 
     // ── Shape types ──────────────────────────────────────────────
 
@@ -372,10 +376,10 @@ NB_MODULE(_lpt2d, m) {
         .def_static("from_coeffs", [](float c0, float c1, float c2) {
             return light_spectrum_from_coeffs(c0, c1, c2);
         }, "spectral_c0"_a, "spectral_c1"_a, "spectral_c2"_a)
-        .def_static("from_range_as_color", [](float wl_min, float wl_max) {
-            auto converted = range_to_color_spectrum(wl_min, wl_max);
+        .def_static("from_range_as_color", [](float wl_min, float wl_max, float headroom) {
+            auto converted = range_to_color_spectrum(wl_min, wl_max, headroom);
             return nb::make_tuple(converted.spectrum, converted.intensity_scale);
-        }, "wavelength_min"_a, "wavelength_max"_a)
+        }, "wavelength_min"_a, "wavelength_max"_a, "headroom"_a = 1.0f)
         .def_prop_rw("type",
             [](const LightSpectrum& s) { return light_spectrum_type_to_string(s.type); },
             [](LightSpectrum& s, nb::object obj) { s.type = parse_light_spectrum_type_arg(obj); })

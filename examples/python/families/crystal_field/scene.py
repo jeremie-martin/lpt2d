@@ -41,6 +41,48 @@ def resolve_light_spectrum(config: LightSpectrumConfig):
     return LightSpectrum.range(config.wavelength_min, config.wavelength_max)
 
 
+def _band_mean_luminance(wl_min: float, wl_max: float) -> float:
+    """Mean perceived luminance per photon for a uniform spectral band."""
+    from _lpt2d import wavelength_to_rgb
+
+    total = 0.0
+    n = 0
+    for nm_i in range(int(wl_min), int(wl_max) + 1):
+        r, g, b = wavelength_to_rgb(float(nm_i))
+        total += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        n += 1
+    return total / max(n, 1)
+
+
+_WHITE_MEAN_LUMINANCE = _band_mean_luminance(380.0, 780.0)
+
+
+def spectral_boost(wl_min: float, wl_max: float) -> float:
+    """Luminance-weighted intensity boost for a narrow spectral band.
+
+    Scales intensity so that a uniform [wl_min, wl_max] range produces the
+    same perceived luminance as full-spectrum white at unit intensity.
+    """
+    band_lum = _band_mean_luminance(wl_min, wl_max)
+    if band_lum < 1e-8:
+        return 1.0
+    return _WHITE_MEAN_LUMINANCE / band_lum
+
+
+def ambient_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    if config.type != "color":
+        return 1.0
+    r, g, b = config.linear_rgb
+    r = r + (1.0 - r) * config.white_mix
+    g = g + (1.0 - g) * config.white_mix
+    b = b + (1.0 - b) * config.white_mix
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # Colored ambient lights are sampled as white-equivalent intent. We do not
+    # cap this yet because white-mixed ambient lights are intentionally mild;
+    # revisit a cap if custom very-dark ambient colors become unstable.
+    return 1.0 / max(luminance, 1e-4)
+
+
 def build(p: Params):
     """Build an animate(ctx) -> Frame callable from params."""
     rng = random.Random(p.build_seed)
@@ -79,26 +121,36 @@ def build(p: Params):
     # Fixed ambient lights
     ambient_lights: list[PointLight] = []
     amb = p.light.ambient
+    ambient_spectrum = resolve_light_spectrum(amb.spectrum)
+    ambient_intensity = amb.intensity * ambient_intensity_multiplier(amb.spectrum)
     if amb.style == "corners":
         for i, (ax, ay) in enumerate([(-1.4, 0.75), (1.4, 0.75), (-1.4, -0.75), (1.4, -0.75)]):
             ambient_lights.append(
-                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+                PointLight(
+                    id=f"amb_{i}",
+                    position=[ax, ay],
+                    intensity=ambient_intensity,
+                    spectrum=ambient_spectrum,
+                )
             )
     elif amb.style == "sides":
         for i, (ax, ay) in enumerate([(-1.4, 0.0), (1.4, 0.0)]):
             ambient_lights.append(
-                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+                PointLight(
+                    id=f"amb_{i}",
+                    position=[ax, ay],
+                    intensity=ambient_intensity,
+                    spectrum=ambient_spectrum,
+                )
             )
 
     # Moving light intensity: base from params, boosted for narrow-band spectra.
     light_spectrum = resolve_light_spectrum(p.light.spectrum)
-    spectrum_width = (
-        p.light.spectrum.wavelength_max - p.light.spectrum.wavelength_min
-        if p.light.spectrum.type == "range"
-        else 400.0
-    )
-    spectral_boost = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
-    intensity = p.light.moving_intensity * spectral_boost
+    if p.light.spectrum.type == "range":
+        boost = spectral_boost(p.light.spectrum.wavelength_min, p.light.spectrum.wavelength_max)
+    else:
+        boost = 1.0
+    intensity = p.light.moving_intensity * boost
 
     look_kwargs = asdict(p.look)
     frame_look = Look().with_overrides(**look_kwargs)
