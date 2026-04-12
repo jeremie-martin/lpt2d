@@ -30,8 +30,9 @@ from examples.python.families.crystal_field.sampling import (
 def test_catalog_light_colors_exclude_yellow():
     assert list(LIGHT_COLORS) == ["white", "orange", "deep_orange"]
     entries = _build_catalog_entries()
-    assert len(entries) == 90
+    assert len(entries) == 72
     assert all(e["light_color"] != "yellow" for e in entries)
+    assert all(e["outcome"] != "glass" for e in entries)
 
 
 def test_general_warm_spectra_exclude_yellow_ranges():

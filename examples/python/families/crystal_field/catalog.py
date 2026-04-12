@@ -78,6 +78,7 @@ from .params import (
     range_spectrum,
 )
 from .sampling import (
+    OUTCOMES,
     _black_diffuse_material,
     _brushed_metal_material,
     _colored_diffuse_material,
@@ -120,10 +121,10 @@ LIGHT_COLORS = {
 
 # ── Outcome → material sampler ───────────────────────────────────────────
 #
-# Each catalog entry fixes only the ``outcome`` (one of the 5 peers) and a
-# thin structural scaffolding (grid, light topology, wavelengths,
-# n_lights).  Everything else — **including the shape** — is drawn fresh
-# per attempt via the same per-branch sampling functions as the general
+# Each catalog entry fixes only the ``outcome`` (currently the active non-glass
+# sampler outcomes) and a thin structural scaffolding (grid, light topology,
+# wavelengths, n_lights).  Everything else — **including the shape** — is drawn
+# fresh per attempt via the same per-branch sampling functions as the general
 # path.  No hardcoded material constants inside catalog.py, and no
 # shape-in-the-matrix multiplier.
 
@@ -135,13 +136,7 @@ _OUTCOME_MATERIAL_SAMPLERS = {
     "brushed_metal": _brushed_metal_material,
 }
 
-_CATALOG_OUTCOMES: tuple[str, ...] = (
-    "glass",
-    "black_diffuse",
-    "gray_diffuse",
-    "colored_diffuse",
-    "brushed_metal",
-)
+_CATALOG_OUTCOMES: tuple[str, ...] = tuple(OUTCOMES)
 
 
 # ── Catalog definition ───────────────────────────────────────────────────
@@ -152,8 +147,8 @@ def _build_catalog_entries() -> list[dict]:
 
     Shape is no longer a matrix axis — it's part of the per-attempt
     randomness (same as material params, look dims, intensities).  With
-    5 outcomes × 3 grids × 3 light colors × 2 n_lights, the catalog
-    contains **90 entries**.
+    4 active non-glass outcomes × 3 grids × 3 light colors × 2 n_lights,
+    the catalog contains **72 entries**.
     """
     entries = []
 
