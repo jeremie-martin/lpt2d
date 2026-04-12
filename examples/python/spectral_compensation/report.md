@@ -1,224 +1,232 @@
-# Spectral Compensation: Matching Brightness and Circle Size Across Light Colors
+# Spectral Compensation Study
 
-## Scope
+## Question
 
-When a crystal-field scene uses a narrow-band spectral light (e.g. orange
-550-700nm) instead of full-spectrum white (380-780nm), two things change:
+For crystal-field scenes with warm narrow-band moving lights, can we choose a
+small fixed post-process correction from the light color alone?
 
-1. **Brightness** — fewer wavelengths means less total energy, so the scene
-   gets dimmer unless we compensate.
-2. **Circle size** — narrow-band light produces more coherent caustics,
-   changing the apparent size of the light circle in the render.
+The target is simple:
 
-This study characterizes how the renderer's post-process controls (exposure,
-gamma) affect brightness and circle size, and derives correction formulas
-that match both to the white baseline.
+- preserve final-frame brightness relative to the white-light version;
+- preserve apparent moving-light circle size relative to the white-light
+  version;
+- do this without knowing the scene geometry, material, grid size, or number of
+  lights.
 
-## Three-stage compensation
+The model is intentionally only two numbers per light band:
 
-### Stage 1: Luminance-weighted intensity boost
-
-The `spectral_boost()` function in `scene.py` integrates the CIE 1931
-luminance curve over the spectral band and scales the light's intensity so
-that the perceived energy matches full-spectrum white.
-
+```python
+exposure += exposure_delta
+gamma *= gamma_multiplier
 ```
+
+## Metrics
+
+The study uses renderer-facing appearance metrics, not raw radiometric energy.
+
+- Brightness: `FrameAnalysis.luminance.mean`, final RGB8 BT.709 mean luminance.
+- Circle size: mean `FrameAnalysis.lights[*].radius_ratio` over moving lights.
+- Error: ratios are always measured against the same scene rendered with white
+  moving light.
+
+This matters because the radius detector operates on the final displayed image.
+Exposure and gamma can therefore change the measured apparent radius, even
+though gamma is "just" a post-process transform.
+
+## Data
+
+Input shots:
+
+```text
+renders/lpt2d_crystal_field_catalog_replay_20260411/**/white*.shot.json
+```
+
+Coverage:
+
+- 30 catalog shots;
+- 5 material groups: glass, gray_diffuse, black_diffuse, brushed_metal,
+  colored_diffuse;
+- 3 grid sizes: small, medium, large;
+- 1-light and 2-light variants.
+
+The current result file is:
+
+```text
+renders/brightness_experiment_shots/fixed_compensation_study.json
+```
+
+This is a calibration result on the 30-shot catalog, not an independent
+holdout validation.
+
+## Method
+
+The source-of-truth script is:
+
+```bash
+python examples/python/spectral_compensation/fixed_compensation_study.py
+```
+
+For each warm band and scene it does this:
+
+1. Render the white baseline.
+2. Render the same shot with only the moving light recolored to the warm band
+   and luminance-boosted.
+3. Sweep exposure using `RenderSession.postprocess()` and find the per-scene
+   exposure offset that best matches the white moving-light radius.
+4. At the median exposure offset, find each scene's gamma multiplier needed to
+   match white brightness.
+5. Run a small direct grid around those median exposure/gamma centers.
+6. Choose the fixed pair that minimizes:
+
+```text
+p90(abs(log(brightness_ratio)) + abs(log(radius_ratio)))
+  + 0.25 * mean(abs(log(brightness_ratio)) + abs(log(radius_ratio)))
+```
+
+The direct grid is important. Earlier relationship fits assumed that gamma did
+not affect radius. That is approximately true in many scenes, but it is false
+for some large/high-fill scenes where the radius detector changes component.
+
+## Stage 1: Spectral Boost
+
+Before exposure/gamma compensation, the moving light intensity is scaled by
+the mean renderer luminance of the spectral band:
+
+```python
 boost = white_mean_luminance / band_mean_luminance
 ```
 
-This uses the actual `wavelength_to_rgb()` from the C++ spectrum module (now
-exposed to Python) with Rec.709 luminance weights (0.2126, 0.7152, 0.0722).
+This uses `_lpt2d.wavelength_to_rgb()` and BT.709 weights
+`0.2126, 0.7152, 0.0722`.
 
-**Result** (measured across 30 catalog shots, 5 material types):
+Result after boost, before exposure/gamma correction:
 
-| Band | Boost | Brightness vs white |
-|------|-------|-------------------|
-| orange 550-700nm | 0.787 | 100.3% mean, 2.6% stdev |
-| deep orange 570-700nm | 1.052 | 99.5% mean, 3.3% stdev |
+| Band | Boost | Brightness mean | Mean abs brightness error | P90 abs brightness error |
+|---|---:|---:|---:|---:|
+| orange 550-700nm | 0.787 | 1.003x | 1.4% | 3.4% |
+| deep orange 570-700nm | 1.052 | 0.995x | 2.3% | 5.9% |
 
-Brightness is matched within 3%. The old formula (`400/width`) was 35-79%
-too bright for these bands.
+Conclusion: the luminance boost is doing the right job for brightness.
 
-### Color impact on circle size (after stage 1)
+## Color Impact On Radius
 
-After the luminance boost matches brightness, the circle radius is
-consistently smaller than white. Measured across all 30 catalog shots:
+After brightness is matched by spectral boost, warm bands still shrink the
+measured moving-light radius.
 
-| Band | R (radius ratio) | Stdev | Range |
-|------|-----------------|-------|-------|
-| orange 550-700nm | 0.736 | 0.154 | 0.19 - 1.00 |
-| deep orange 570-700nm | 0.464 | 0.125 | 0.11 - 0.72 |
+| Band | Radius mean | Radius median | Mean abs radius error | P90 abs radius error | Max abs radius error |
+|---|---:|---:|---:|---:|---:|
+| orange 550-700nm | 0.736x | 0.763x | 26.4% | 44.0% | 80.9% |
+| deep orange 570-700nm | 0.464x | 0.475x | 53.6% | 68.5% | 88.5% |
 
-Per-material breakdown:
+This is the real compensation problem. Brightness is mostly solved by boost;
+radius is not.
 
-| Material | Orange R | Deep orange R |
-|----------|---------|--------------|
-| glass | 0.817 ± 0.043 | 0.544 ± 0.042 |
-| brushed_metal | 0.745 ± 0.099 | 0.467 ± 0.069 |
-| colored_diffuse | 0.766 ± 0.290 | 0.510 ± 0.206 |
-| black_diffuse | 0.685 ± 0.145 | 0.426 ± 0.118 |
-| gray_diffuse | 0.667 ± 0.058 | 0.372 ± 0.073 |
+## Per-Scene Upper Bound
 
-Glass has the most stable circle sizes (lowest stdev). Gray diffuse shows
-the most shrinkage. Colored diffuse has the highest variance due to
-material-color/light-color interaction.
+If scene-specific tuning were allowed, the script can usually match both
+targets well. This is not the final model, but it tells us whether the controls
+have enough range.
 
-The narrower the band, the smaller the circle: the light refracts more
-coherently, concentrating the caustic pattern rather than smearing it
-across wavelengths.
+| Band | Median scene exposure delta | Median scene gamma multiplier | Mean abs final brightness error | Mean abs final radius error | P90 abs final radius error |
+|---|---:|---:|---:|---:|---:|
+| orange | +0.250 | 0.825 | ~0.0% | 6.0% | 10.7% |
+| deep orange | +0.775 | 0.531 | 1.7% | 5.0% | 6.5% |
 
-### Stage 2: Exposure correction for circle size
+The large max outliers remain important:
 
-Increasing exposure grows the visible circle because more of the light's
-spatial falloff exceeds the detection threshold. This can restore the
-circle size to match the white baseline.
+- orange max radius error: 70.7%;
+- deep orange max brightness error: 42.1%;
+- deep orange max radius error: 70.7%.
 
-### Stage 3: Gamma correction for brightness
+Those are not formula noise; they indicate scenes where the detector/control
+response is discontinuous or the required gamma falls near the search floor.
 
-Exposure changes brightness as a side effect. Gamma adjusts brightness
-without affecting circle size, so it can undo the brightness shift from
-stage 2.
+## Fixed Corrections
 
-## Measured relationships
-
-All relationships were measured across 30 crystal-field catalog shots
-spanning 5 material types (glass, gray_diffuse, black_diffuse,
-brushed_metal, colored_diffuse) and 3 grid sizes (small, medium, large),
-with both 1-light and 2-light variants.
-
-### Exposure to brightness
-
-```
-brightness_ratio = 1.624 ^ delta_exposure
-```
-
-- R-squared: 0.997
-- Mean prediction error: 1.7%
-- Per-scene coefficient of variation: 11.1%
-
-A +1.0 exposure step multiplies brightness by ~1.62x. The relationship is
-exponential (linear in log space) and highly consistent across scenes.
-
-### Exposure to circle radius
-
-```
-radius_ratio = 3.353 ^ delta_exposure
-```
-
-- R-squared: 0.976
-- Mean prediction error: 15.3%
-- Per-scene coefficient of variation: 18.0%
-
-A +1.0 exposure step multiplies the circle radius by ~3.35x. More variance
-than the brightness relationship because circle detection is noisier,
-especially at high exposure where circles saturate.
-
-### Gamma to brightness
-
-```
-brightness_ratio = gamma_multiplier ^ 0.832
-```
-
-- R-squared: 0.979
-- Mean prediction error: 3.7%
-- Per-scene coefficient of variation: 15.1%
-
-Multiplying gamma by 1.5x increases brightness by 1.5^0.832 = 1.39x. The
-relationship follows a power law.
-
-### Gamma to circle size
-
-Gamma does not affect circle size. Across all 30 scenes and 12 gamma
-values, the moving-light radius ratio stays at 1.00 (stdev < 0.01 for
-gamma multipliers below 1.0). This is expected: gamma is a post-tonemap
-pixel-value transform that redistributes brightness without changing where
-light falls spatially.
-
-## Correction recipe
-
-Given:
-- R = circle radius ratio (orange / white), measured after stage 1
-- B = brightness ratio (orange / white), measured after stage 1
-
-Step 1: compute exposure offset to restore circle size:
-
-```
-delta_exposure = ln(1/R) / ln(3.353) = ln(1/R) / 1.210
-```
-
-Step 2: predict brightness change from that exposure shift:
-
-```
-brightness_after_exposure = B * 1.624 ^ delta_exposure
-```
-
-Step 3: compute gamma multiplier to restore brightness:
-
-```
-gamma_multiplier = (1 / brightness_after_exposure) ^ (1 / 0.832)
-```
-
-### Worked examples
-
-| Band | R | delta_exp | gamma_mult | Predicted brightness | Predicted radius |
-|------|---|-----------|------------|---------------------|-----------------|
-| orange 550-700 | 0.75 | +0.24 | 0.871 | 1.000 | 1.000 |
-| deep orange 570-700 | 0.50 | +0.57 | 0.716 | 1.000 | 1.000 |
-
-### Validation (binary-search ground truth)
-
-The recipe was validated against brute-force binary search across 10 scenes
-and 2 bands (20 combinations). The search independently found the optimal
-exposure and gamma by rendering at each candidate and measuring:
-
-| Metric | Mean error | Max error |
-|--------|-----------|-----------|
-| Brightness | 2.5% | 50.7%* |
-| Circle radius | 2.3% | 23.3% |
-
-*The 50.7% outlier occurred when the required gamma fell below 0.4 (the
-search floor). Excluding that case, mean brightness error is 0.0%.
-
-## Constants
-
-The three constants that define the compensation model:
+The calibrated fixed corrections from the direct joint grid are:
 
 ```python
-EXPOSURE_BRIGHTNESS_BASE = 1.624   # brightness_ratio = base ^ delta_exp
-EXPOSURE_RADIUS_BASE     = 3.353   # radius_ratio = base ^ delta_exp
-GAMMA_BRIGHTNESS_EXP     = 0.832   # brightness_ratio = gamma_mult ^ exp
+ORANGE_EXPOSURE_DELTA = 0.200
+ORANGE_GAMMA_MULTIPLIER = 0.829
+
+DEEP_ORANGE_EXPOSURE_DELTA = 0.725
+DEEP_ORANGE_GAMMA_MULTIPLIER = 0.450
 ```
 
-## Limitations
+Result across the 30-shot calibration catalog:
 
-- The exposure-to-radius relationship has 18% per-scene CV. Scenes with
-  very small or very large circles deviate more from the mean model.
-- At high exposure offsets (above +1.0), circles can saturate and the
-  detector loses accuracy.
-- The gamma floor at ~0.4 limits correction for deep orange where gamma
-  needs to drop substantially (from e.g. 1.17 to 0.40).
-- Colored-diffuse materials show slightly higher variance because the
-  material's spectral color interacts with the light's spectrum.
+| Band | Fixed correction | Mean abs brightness error | P90 abs brightness error | Max abs brightness error | Mean abs radius error | P90 abs radius error | Max abs radius error |
+|---|---|---:|---:|---:|---:|---:|---:|
+| orange | `+0.200`, `gamma * 0.829` | 4.0% | 8.0% | 12.8% | 12.3% | 22.0% | 75.8% |
+| deep orange | `+0.725`, `gamma * 0.450` | 12.5% | 24.7% | 37.0% | 20.9% | 39.5% | 80.3% |
 
-## Scripts
+Interpretation:
 
-- `color_impact_study.py` — measures brightness and circle radius for orange
-  and deep orange (with luminance boost) across all 30 catalog shots.
-  Produces the R and B values that feed into the correction recipe.
-- `relationship_study.py` — sweeps exposure and gamma across all 30 catalog
-  shots, fits the three power-law models, reports per-scene consistency.
-- `circle_brightness_matching.py` — validates the recipe by binary-searching
-  for the optimal exposure+gamma pair per scene/band.
-- `render_hq_variants.py` — renders HQ comparison images (white, orange,
-  deep orange) with shot JSONs saved alongside.
+- Orange has a useful fixed correction. It is not perfect, but it improves the
+  radius error substantially while keeping brightness reasonably close.
+- Deep orange is much less universal. A fixed correction improves radius a lot
+  compared with no correction, but the brightness/radius tradeoff remains
+  scene-dependent.
 
-Run from the repo root:
+## Worst Cases
 
-```bash
-python examples/python/spectral_compensation/color_impact_study.py
-python examples/python/spectral_compensation/relationship_study.py
-python examples/python/spectral_compensation/circle_brightness_matching.py
-python examples/python/spectral_compensation/render_hq_variants.py
+The hardest repeated outlier is:
+
+```text
+colored_diffuse/white_large_2light
 ```
 
-Results are written to `renders/brightness_experiment_shots/`.
+For orange:
+
+- base radius ratio: 0.191x;
+- fixed-corrected radius ratio: 0.242x;
+- fixed-corrected brightness ratio: 0.887x.
+
+For deep orange:
+
+- base radius ratio: 0.115x;
+- fixed-corrected radius ratio: 0.197x;
+- fixed-corrected brightness ratio: 0.630x.
+
+This scene cannot be treated as a small perturbation around the average model.
+It should be tracked separately when deciding whether the fixed compensation is
+acceptable for production sampling.
+
+## What The Older Scripts Mean Now
+
+- `color_impact_study.py` measures the uncorrected warm-band brightness/radius
+  impact after spectral boost.
+- `relationship_study.py` is a diagnostic response sweep. It is useful for
+  understanding trends, but its global power-law constants should not be used
+  as the final source of truth.
+- `circle_brightness_matching.py` demonstrates per-scene search. It proves a
+  scene-specific correction can often be found, but it does not validate a
+  scene-independent formula by itself.
+- `fixed_compensation_study.py` directly answers the current question and is
+  the script to rerun when changing the renderer, analyzer, catalog, or bands.
+- `render_hq_variants.py` produces visual comparisons.
+
+## Practical Conclusion
+
+Use a fixed correction only as a calibrated heuristic:
+
+```python
+if band == "orange":
+    exposure += 0.200
+    gamma *= 0.829
+elif band == "deep_orange":
+    exposure += 0.725
+    gamma *= 0.450
+```
+
+These values are better supported than the earlier formula-derived constants,
+because they are selected against the actual fixed-color-only objective. They
+are still not universal physical laws. The correct confidence statement is:
+
+- brightness boost is reliable;
+- orange fixed compensation is reasonably good on the current catalog;
+- deep-orange fixed compensation is a rough compromise;
+- hard outliers remain and should be measured, not hidden.
+
+The next clean improvement would be to rerun the same script on a fresh
+independent catalog and compare the fixed-error summaries.
