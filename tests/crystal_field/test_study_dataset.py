@@ -168,12 +168,55 @@ def test_analyze_command_writes_summary_tables(tmp_path):
     assert (out / "groups.csv").exists()
     assert (out / "failure_reasons.csv").exists()
     assert (out / "feature_stats.csv").exists()
+    assert (out / "spectrum_metric_stats.csv").exists()
     assert (out / "reason_groups.csv").exists()
     assert (out / "feature_deltas.csv").exists()
     assert (out / "numeric_bins.csv").exists()
     assert (out / "conditional_numeric_bins.csv").exists()
     assert (out / "numeric_interactions.csv").exists()
     assert (out / "index.html").exists()
+
+
+def test_spectrum_metric_stats_show_metric_shift_by_light_color():
+    white = study._measured_record(
+        seed=0,
+        trial=0,
+        p=_params("black_diffuse"),
+        result=_result(True, "synthetic pass"),
+        elapsed_ms=1.0,
+    )
+    orange = study._measured_record(
+        seed=0,
+        trial=1,
+        p=_params("black_diffuse"),
+        result=_result(False, "synthetic fail"),
+        elapsed_ms=1.0,
+    )
+    orange["tags"]["moving_spectrum"] = "range_550_700"
+    orange["metrics"]["mean"] = 120.0
+    white["metrics"]["mean"] = 80.0
+
+    rows = study._spectrum_metric_stat_rows([white, orange])
+
+    white_mean = next(
+        row
+        for row in rows
+        if row["group"] == "tags.moving_spectrum"
+        and row["value"] == "white_range"
+        and row["feature"] == "metric_mean"
+        and row["cohort"] == "all"
+    )
+    orange_mean = next(
+        row
+        for row in rows
+        if row["group"] == "tags.moving_spectrum"
+        and row["value"] == "range_550_700"
+        and row["feature"] == "metric_mean"
+        and row["cohort"] == "all"
+    )
+
+    assert white_mean["median"] == 80.0
+    assert orange_mean["median"] == 120.0
 
 
 def test_conditional_numeric_bins_are_grouped_by_scenario():

@@ -142,6 +142,44 @@ def test_random_look_policy_controls_optional_effect_probabilities():
     assert all(look.chromatic_aberration == 0.0 for look in looks)
 
 
+def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_without_clamping():
+    material = MaterialConfig(outcome="gray_diffuse", albedo=0.8, fill=0.16)
+    policy = replace(
+        DEFAULT_SAMPLER_POLICY.look,
+        exposure=(-5.0, -5.0),
+        gamma=(0.8, 0.8),
+        contrast=(1.0, 1.0),
+        white_point=(0.5, 0.5),
+        temperature_enabled_probability=0.0,
+        highlights=(0.0, 0.0),
+        shadows=(0.0, 0.0),
+        chromatic_aberration_enabled_probability=0.0,
+    )
+
+    def sampled_look(wavelength_min: float, wavelength_max: float):
+        light = LightConfig(
+            n_lights=1,
+            path_style="channel",
+            n_waypoints=8,
+            ambient=AmbientConfig(style="corners", intensity=0.3),
+            speed=0.12,
+            moving_intensity=0.8,
+            spectrum=range_spectrum(wavelength_min, wavelength_max),
+        )
+        return _random_look(random.Random(7), material, light, policy=policy)
+
+    white = sampled_look(380.0, 780.0)
+    orange = sampled_look(550.0, 700.0)
+    deep_orange = sampled_look(570.0, 700.0)
+
+    assert white.exposure == pytest.approx(-5.0)
+    assert white.gamma == pytest.approx(0.8)
+    assert orange.exposure == pytest.approx(-4.75)
+    assert orange.gamma == pytest.approx(0.688)
+    assert deep_orange.exposure == pytest.approx(-4.36)
+    assert deep_orange.gamma == pytest.approx(0.56)
+
+
 def test_brushed_metal_sampler_sets_wall_metallic_and_object_ior_ranges():
     rng = random.Random(11)
     materials = [_brushed_metal_material(rng) for _ in range(100)]

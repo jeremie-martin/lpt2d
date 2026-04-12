@@ -99,6 +99,22 @@ INTERACTION_FEATURES = (
     "light_speed",
 )
 
+SPECTRUM_METRIC_FEATURES = (
+    "metric_mean",
+    "metric_median",
+    "metric_percentile_10",
+    "metric_percentile_90",
+    "metric_contrast_spread",
+    "metric_shadow_fraction",
+    "metric_near_black_fraction",
+    "metric_near_white_fraction",
+    "metric_mean_saturation",
+    "metric_colored_fraction",
+    "metric_moving_radius_mean",
+    "metric_ambient_radius_mean",
+    "metric_moving_to_ambient_radius_ratio",
+)
+
 
 # ---------------------------------------------------------------------------
 # Feature extraction
@@ -811,6 +827,37 @@ def _feature_stat_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def _spectrum_metric_stat_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    group_keys = ("tags.moving_spectrum", "tags.ambient_spectrum")
+    buckets: dict[tuple[str, str, str, str], list[float]] = defaultdict(list)
+
+    for record in records:
+        status = str(record.get("status", "unknown"))
+        cohort = "accepted" if status == "accepted" else "not_accepted"
+        values = _numeric_feature_source(record)
+        for group in group_keys:
+            value = _group_value(record, group)
+            for feature in SPECTRUM_METRIC_FEATURES:
+                number = _as_number(values.get(feature))
+                if number is None:
+                    continue
+                buckets[(group, value, feature, "all")].append(number)
+                buckets[(group, value, feature, cohort)].append(number)
+
+    rows: list[dict[str, Any]] = []
+    for (group, value, feature, cohort), values in sorted(buckets.items()):
+        rows.append(
+            {
+                "group": group,
+                "value": value,
+                "feature": feature,
+                "cohort": cohort,
+                **_numeric_stats(values),
+            }
+        )
+    return rows
+
+
 def _reason_group_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     group_keys = [
         "tags.outcome",
@@ -1181,6 +1228,7 @@ def _analyze_records(records: list[dict[str, Any]]) -> dict[str, Any]:
         "failure_reasons": dict(failure_reasons.most_common()),
         "groups": group_rows,
         "feature_stats": _feature_stat_rows(records),
+        "spectrum_metric_stats": _spectrum_metric_stat_rows(records),
         "reason_groups": _reason_group_rows(records),
         "feature_deltas": _feature_delta_rows(records),
         "numeric_bins": _numeric_bin_rows(records),
@@ -1268,6 +1316,17 @@ tr:hover td {{ background:#171717; }}
 </div>
 
 <section class="section">
+  <h2>Spectrum Impact</h2>
+  <p class="muted">Pass rate and probe-metric shifts by moving or ambient light spectrum. This is the direct view for white, orange, deep orange, and complementary RGB ambient.</p>
+  <div class="controls">
+    <label>Spectrum <select id="spectrumGroupSelect"></select></label>
+    <label>Metric <select id="spectrumMetricSelect"></select></label>
+  </div>
+  <div id="spectrumChart" class="chart"></div>
+  <div id="spectrumTable" class="tablewrap"></div>
+</section>
+
+<section class="section">
   <h2>Feature Bins</h2>
   <p class="muted">Bins are near equal-count quantiles inside the selected condition. Exact duplicate values stay in one bin. The plot uses the parameter range on the x-axis, gray bars for sample count, and the blue line for <code>P(pass | bin)</code>.</p>
   <div class="controls">
@@ -1322,6 +1381,7 @@ const bins = summary.numeric_bins || [];
 const conditionalBins = summary.conditional_numeric_bins || [];
 const interactions = summary.numeric_interactions || [];
 const stats = summary.feature_stats || [];
+const spectrumStats = summary.spectrum_metric_stats || [];
 const deltas = summary.feature_deltas || [];
 
 const $ = (id) => document.getElementById(id);
@@ -1420,6 +1480,43 @@ function renderReasons() {{
   $('reasonTable').innerHTML = table(
     ['Reason', 'Count', 'Share Of Rejections'],
     rows.map((row) => [esc(row.reason), fmtInt(row.count), fmtPct(row.share)])
+  );
+}}
+
+function spectrumStat(group, value, feature, cohort) {{
+  return spectrumStats.find((row) => row.group === group && row.value === value && row.feature === feature && row.cohort === cohort);
+}}
+
+function renderSpectrumImpact() {{
+  const group = $('spectrumGroupSelect').value;
+  const feature = $('spectrumMetricSelect').value;
+  const passRows = groups
+    .filter((row) => row.group === group)
+    .sort((a, b) => Number(b.pass_rate) - Number(a.pass_rate));
+  $('spectrumChart').innerHTML = chart(
+    passRows,
+    'pass_rate',
+    'value',
+    (v, row) => `${{fmtPct(v)}} (${{fmtInt(row.accepted)}}/${{fmtInt(row.total)}})`
+  );
+  $('spectrumTable').innerHTML = table(
+    ['Spectrum', 'Total', 'Accepted', 'P(pass)', 'Lift', 'Metric Median', 'Metric P10-P90', 'Accepted Median', 'Rejected Median'],
+    passRows.map((row) => {{
+      const all = spectrumStat(group, row.value, feature, 'all') || {{}};
+      const accepted = spectrumStat(group, row.value, feature, 'accepted') || {{}};
+      const notAccepted = spectrumStat(group, row.value, feature, 'not_accepted') || {{}};
+      return [
+        esc(row.value),
+        fmtInt(row.total),
+        fmtInt(row.accepted),
+        fmtPct(row.pass_rate),
+        fmtNum(Number(row.pass_rate || 0) / baseline),
+        fmtNum(all.median),
+        `${{fmtNum(all.p10)}} - ${{fmtNum(all.p90)}}`,
+        fmtNum(accepted.median),
+        fmtNum(notAccepted.median),
+      ];
+    }})
   );
 }}
 
@@ -1688,6 +1785,21 @@ function init() {{
   $('reasonValueSelect').innerHTML = '<option value="all">all</option>';
   $('reasonValueSelect').disabled = true;
 
+  const spectrumGroups = uniq(spectrumStats.map((row) => row.group));
+  setOptions(
+    $('spectrumGroupSelect'),
+    spectrumGroups,
+    spectrumGroups.includes('tags.moving_spectrum') ? 'tags.moving_spectrum' : spectrumGroups[0]
+  );
+  const spectrumMetrics = uniq(spectrumStats.map((row) => row.feature));
+  setOptions(
+    $('spectrumMetricSelect'),
+    spectrumMetrics,
+    spectrumMetrics.includes('metric_mean') ? 'metric_mean' : spectrumMetrics[0]
+  );
+  $('spectrumGroupSelect').addEventListener('change', renderSpectrumImpact);
+  $('spectrumMetricSelect').addEventListener('change', renderSpectrumImpact);
+
   const binFeatures = uniq(scopedBins.map((row) => row.feature));
   setOptions($('binFeatureSelect'), binFeatures, binFeatures.includes('look_exposure') ? 'look_exposure' : binFeatures[0]);
   $('binFeatureSelect').addEventListener('change', renderBins);
@@ -1718,6 +1830,7 @@ function init() {{
   $('deltaSearch').addEventListener('input', renderDeltas);
   renderGroups();
   renderReasons();
+  renderSpectrumImpact();
   renderBins();
   updateInteractionYOptions();
   updateStatOutcomes();
@@ -1768,6 +1881,25 @@ def run_analyze(argv: list[str] | None = None) -> None:
         [
             "scope",
             "outcome",
+            "feature",
+            "cohort",
+            "count",
+            "mean",
+            "min",
+            "p10",
+            "p25",
+            "median",
+            "p75",
+            "p90",
+            "max",
+        ],
+    )
+    _write_csv(
+        out / "spectrum_metric_stats.csv",
+        summary["spectrum_metric_stats"],
+        [
+            "group",
+            "value",
             "feature",
             "cohort",
             "count",

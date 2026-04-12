@@ -1695,8 +1695,6 @@ static void draw_section_display(PanelContext& ctx) {
             ImGui::SameLine();
             if (ImGui::Button(ctx.compare_ab.showing_a ? "Show B (live)" : "Show A")) {
                 ctx.compare_ab.showing_a = !ctx.compare_ab.showing_a;
-                if (!ctx.compare_ab.showing_a)
-                    ctx.reload(false);
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear A/B")) {

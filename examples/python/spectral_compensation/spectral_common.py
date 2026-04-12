@@ -39,6 +39,8 @@ STUDY_BANDS: tuple[Band, ...] = (
 class Measurement:
     mean: float
     median: float
+    mean_saturation: float
+    shadow_fraction: float
     moving_radius: float
     ambient_radius: float
     moving_confidence: float
@@ -100,6 +102,12 @@ def moving_lights(analysis) -> list:
     return [c for c in analysis.lights if c.id.startswith("light_")]
 
 
+def apply_moving_intensity_multiplier(shot: _lpt2d.Shot, multiplier: float) -> None:
+    for light in shot.scene.lights:
+        if light.id.startswith("light_"):
+            light.intensity = light.intensity * multiplier
+
+
 def ambient_lights(analysis) -> list:
     return [c for c in analysis.lights if c.id.startswith("amb_")]
 
@@ -115,6 +123,8 @@ def measure_result(rr: _lpt2d.RenderResult) -> Measurement:
     return Measurement(
         mean=float(rr.analysis.luminance.mean),
         median=float(rr.analysis.luminance.median),
+        mean_saturation=float(rr.analysis.color.mean_saturation),
+        shadow_fraction=float(rr.analysis.luminance.shadow_fraction),
         moving_radius=mean_or_zero(float(c.radius_ratio) for c in moving),
         ambient_radius=mean_or_zero(float(c.radius_ratio) for c in ambient),
         moving_confidence=mean_or_zero(float(c.confidence) for c in moving),
@@ -142,14 +152,30 @@ def postprocess_measure(
     return measure_result(session.postprocess(pp, analyze=True))
 
 
-def load_probe_shot(path: Path | str, rays: int = PROBE_RAYS) -> _lpt2d.Shot:
+def load_probe_shot(
+    path: Path | str,
+    rays: int = PROBE_RAYS,
+    *,
+    moving_intensity_multiplier: float = 1.0,
+) -> _lpt2d.Shot:
     shot = _lpt2d.load_shot(str(path))
     shot.trace.rays = rays
+    apply_moving_intensity_multiplier(shot, moving_intensity_multiplier)
     return shot
 
 
-def load_band_shot(path: Path | str, band: Band, rays: int = PROBE_RAYS) -> _lpt2d.Shot:
-    shot = load_probe_shot(path, rays)
+def load_band_shot(
+    path: Path | str,
+    band: Band,
+    rays: int = PROBE_RAYS,
+    *,
+    moving_intensity_multiplier: float = 1.0,
+) -> _lpt2d.Shot:
+    shot = load_probe_shot(
+        path,
+        rays,
+        moving_intensity_multiplier=moving_intensity_multiplier,
+    )
     boost = spectral_boost(band)
     for light in shot.scene.lights:
         if light.id.startswith("light_"):

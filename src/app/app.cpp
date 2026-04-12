@@ -1993,8 +1993,6 @@ int App::run(const AppConfig& config) {
                 // A/B look toggle: ` (grave accent)
                 if (ImGui::IsKeyPressed(ImGuiKey_GraveAccent) && compare_ab.active) {
                     compare_ab.showing_a = !compare_ab.showing_a;
-                    if (!compare_ab.showing_a)
-                        reload(false);
                 }
 
                 // Save/Load
