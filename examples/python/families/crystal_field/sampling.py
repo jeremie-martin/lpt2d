@@ -18,8 +18,9 @@ branches remain normal Python functions because their rules are local and
 outcome-specific. Look dims (gamma, contrast, white_point, temperature,
 highlights, shadows, chromatic aberration) are drawn by ``_random_look``
 alongside the structural params, with conditional suppression based on the
-already-drawn material and light colour. Vignette is temporarily disabled
-because it corrupts the frame analysis thresholds.
+already-drawn material and light colour. Saturation is sampled directly as
+a replayable color-strength dial. Vignette is temporarily disabled because
+it corrupts the frame analysis thresholds.
 """
 
 from __future__ import annotations
@@ -65,6 +66,7 @@ WeightedChoices = tuple[tuple[T, float], ...]
 @dataclass(frozen=True)
 class GridPolicy:
     spacing: FloatRange = (0.20, 0.32)
+    spacing_pack_bias: float = 1.4
     rows_mean: float = 5.0
     rows_sigma: float = 1.2
     rows_min: int = 3
@@ -78,7 +80,7 @@ class GridPolicy:
 @dataclass(frozen=True)
 class ShapePolicy:
     glass_size_factor: FloatRange = (0.25, 0.38)
-    polygon_size_factor: FloatRange = (0.25, 0.40)
+    polygon_size_factor: FloatRange = (0.28, 0.43)
     polygon_sides: tuple[int, ...] = (3, 4, 5, 6)
     corner_radius_factor: FloatRange = (0.12, 0.35)
     rotation_probability: float = 0.65
@@ -124,6 +126,7 @@ class LookPolicy:
     gamma: FloatRange = (1.2, 2.2)
     contrast: FloatRange = (1.00, 1.10)
     white_point: FloatRange = (0.4, 0.6)
+    saturation: FloatRange = (1.0, 2.2)
     temperature_enabled_probability: float = 0.50
     temperature: FloatRange = (0.0, 0.5)
     highlights: FloatRange = (-0.22, 0.22)
@@ -166,8 +169,17 @@ def _uniform(rng: random.Random, bounds: FloatRange) -> float:
     return rng.uniform(bounds[0], bounds[1])
 
 
+def _biased_uniform_low(rng: random.Random, bounds: FloatRange, bias: float) -> float:
+    t = rng.random() ** max(bias, 1e-6)
+    return bounds[0] + (bounds[1] - bounds[0]) * t
+
+
 def _randint(rng: random.Random, bounds: IntRange) -> int:
     return rng.randint(bounds[0], bounds[1])
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
 
 
 def _weighted_choice(rng: random.Random, choices: WeightedChoices[T]) -> T:
@@ -211,7 +223,7 @@ def _random_grid(
     policy: GridPolicy | None = None,
 ) -> GridConfig:
     policy = policy or DEFAULT_SAMPLER_POLICY.grid
-    spacing = _uniform(rng, policy.spacing)
+    spacing = _biased_uniform_low(rng, policy.spacing, policy.spacing_pack_bias)
 
     # Rows: Gaussian-like centered on 5, min 3, max 8.
     rows = max(
@@ -237,6 +249,10 @@ def _random_grid(
     )
 
 
+def _planned_grid_count(grid: GridConfig) -> float:
+    return grid.rows * grid.cols * (1.0 - grid.hole_fraction)
+
+
 # ── Shape ────────────────────────────────────────────────────────────────
 
 
@@ -254,12 +270,19 @@ def _glass_shape(
 def _polygon_shape(
     rng: random.Random,
     spacing: float,
+    planned_count: float | None = None,
     policy: ShapePolicy | None = None,
 ) -> ShapeConfig:
     """Non-glass outcomes (black / gray / colored diffuse + brushed metal): rounded polygons."""
     policy = policy or DEFAULT_SAMPLER_POLICY.shape
     n_sides = rng.choice(policy.polygon_sides)
-    size = spacing * _uniform(rng, policy.polygon_size_factor)
+    size_factor = _uniform(rng, policy.polygon_size_factor)
+    if planned_count is not None:
+        # Sparse diffuse fields look weak when polygons are tiny. Keep the same
+        # maximum size, but gently pull small sparse-grid draws toward it.
+        sparse_bias = _clamp01((36.0 - planned_count) / 24.0)
+        size_factor += (policy.polygon_size_factor[1] - size_factor) * 0.45 * sparse_bias
+    size = spacing * size_factor
     corner_radius = size * _uniform(rng, policy.corner_radius_factor)
 
     rotation: RotationConfig | None = None
@@ -591,12 +614,14 @@ def _random_look(
         bounds=policy.chromatic_aberration,
         force_disabled=material.outcome == "glass",
     )
+    saturation = _uniform(rng, policy.saturation)
 
     return LookConfig(
         exposure=exposure,
         gamma=gamma,
         contrast=contrast,
         white_point=white_point,
+        saturation=saturation,
         temperature=temperature,
         highlights=highlights,
         shadows=shadows,
@@ -640,7 +665,12 @@ def sample(
     if outcome == "glass":
         shape = _glass_shape(rng, grid.spacing, policy.shape)
     else:
-        shape = _polygon_shape(rng, grid.spacing, policy.shape)
+        shape = _polygon_shape(
+            rng,
+            grid.spacing,
+            planned_count=_planned_grid_count(grid),
+            policy=policy.shape,
+        )
     material = _MATERIAL_SAMPLERS[outcome](rng)
 
     has_object_color = any(name is not None for name in material.color_names)

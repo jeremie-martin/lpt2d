@@ -169,6 +169,7 @@ class LookConfig:
     gamma: float = 2.0
     contrast: float = 1.0
     white_point: float = 0.5
+    saturation: float = 1.0
     temperature: float = 0.0
     highlights: float = 0.0
     shadows: float = 0.0

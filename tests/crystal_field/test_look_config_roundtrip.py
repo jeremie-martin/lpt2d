@@ -62,6 +62,7 @@ def _params_with_populated_look() -> Params:
         gamma=1.7,
         contrast=1.03,
         white_point=0.6,
+        saturation=1.8,
         temperature=0.15,
         highlights=0.17,
         shadows=-0.12,
@@ -113,6 +114,7 @@ def test_look_config_flows_into_anim_look():
     assert abs(look.gamma - p.look.gamma) < 1e-6
     assert abs(look.contrast - p.look.contrast) < 1e-6
     assert abs(look.white_point - p.look.white_point) < 1e-6
+    assert abs(look.saturation - p.look.saturation) < 1e-6
     assert abs(look.temperature - p.look.temperature) < 1e-6
     assert abs(look.highlights - p.look.highlights) < 1e-6
     assert abs(look.shadows - p.look.shadows) < 1e-6

@@ -85,6 +85,7 @@ from .sampling import (
     _glass_material,
     _glass_shape,
     _gray_diffuse_material,
+    _planned_grid_count,
     _polygon_shape,
     _random_look,
     ambient_for_moving_spectrum,
@@ -192,7 +193,7 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     if e["outcome"] == "glass":
         shape = _glass_shape(rng, grid.spacing)
     else:
-        shape = _polygon_shape(rng, grid.spacing)
+        shape = _polygon_shape(rng, grid.spacing, planned_count=_planned_grid_count(grid))
 
     # Material: drawn fresh per attempt via the matching per-outcome function.
     material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)

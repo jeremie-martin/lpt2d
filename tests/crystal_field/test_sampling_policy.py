@@ -20,7 +20,9 @@ from examples.python.families.crystal_field.params import (
 from examples.python.families.crystal_field.sampling import (
     DEFAULT_SAMPLER_POLICY,
     OUTCOMES,
+    _biased_uniform_low,
     _brushed_metal_material,
+    _polygon_shape,
     _random_look,
     ambient_for_moving_spectrum,
     sample,
@@ -64,6 +66,46 @@ def test_sampler_policy_can_force_a_targeted_outcome():
 
     assert p.material.outcome == "glass"
     assert p.shape.kind == "circle"
+
+
+def test_spacing_pack_bias_prefers_lower_spacing_without_changing_range():
+    bounds = (0.20, 0.32)
+    uniform_rng = random.Random(12)
+    packed_rng = random.Random(12)
+
+    uniform = [_biased_uniform_low(uniform_rng, bounds, 1.0) for _ in range(200)]
+    packed = [_biased_uniform_low(packed_rng, bounds, 1.4) for _ in range(200)]
+
+    assert all(bounds[0] <= spacing <= bounds[1] for spacing in packed)
+    assert all(packed_spacing <= uniform_spacing for packed_spacing, uniform_spacing in zip(packed, uniform, strict=True))
+    assert sum(packed) / len(packed) < sum(uniform) / len(uniform)
+
+
+def test_sparse_polygon_grids_bias_size_factor_upward_without_changing_max():
+    policy = replace(
+        DEFAULT_SAMPLER_POLICY.shape,
+        polygon_size_factor=(0.28, 0.43),
+        polygon_sides=(4,),
+        corner_radius_factor=(0.0, 0.0),
+        rotation_probability=0.0,
+    )
+    sparse_rng = random.Random(12)
+    dense_rng = random.Random(12)
+
+    sparse = [
+        _polygon_shape(sparse_rng, 1.0, planned_count=12.0, policy=policy).size
+        for _ in range(40)
+    ]
+    dense = [
+        _polygon_shape(dense_rng, 1.0, planned_count=36.0, policy=policy).size
+        for _ in range(40)
+    ]
+
+    assert all(
+        sparse_size > dense_size
+        for sparse_size, dense_size in zip(sparse, dense, strict=True)
+    )
+    assert max(sparse) <= policy.polygon_size_factor[1]
 
 
 def test_complementary_ambient_is_blueish_for_orange_ranges():
@@ -110,9 +152,11 @@ def test_random_look_samples_highlights_shadows_and_disables_vignette():
     looks = [_random_look(rng, material, light) for _ in range(100)]
 
     assert all(look.vignette == 0.0 for look in looks)
-    assert all(look.vignette_radius == 0.7 for look in looks)
+    assert all(look.vignette_radius == DEFAULT_SAMPLER_POLICY.look.vignette_radius for look in looks)
+    assert all(1.0 <= look.saturation <= 2.2 for look in looks)
     assert all(-0.22 <= look.highlights <= 0.22 for look in looks)
     assert all(-0.22 <= look.shadows <= 0.22 for look in looks)
+    assert any(look.saturation > 1.0 for look in looks)
     assert any(abs(look.highlights) > 1e-6 for look in looks)
     assert any(abs(look.shadows) > 1e-6 for look in looks)
 
@@ -150,6 +194,7 @@ def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_without_c
         gamma=(0.8, 0.8),
         contrast=(1.0, 1.0),
         white_point=(0.5, 0.5),
+        saturation=(1.4, 1.4),
         temperature_enabled_probability=0.0,
         highlights=(0.0, 0.0),
         shadows=(0.0, 0.0),
@@ -174,9 +219,10 @@ def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_without_c
 
     assert white.exposure == pytest.approx(-5.0)
     assert white.gamma == pytest.approx(0.8)
-    assert orange.exposure == pytest.approx(-4.75)
-    assert orange.gamma == pytest.approx(0.688)
-    assert deep_orange.exposure == pytest.approx(-4.36)
+    assert white.saturation == pytest.approx(1.4)
+    assert orange.exposure == pytest.approx(-4.76)
+    assert orange.gamma == pytest.approx(0.68)
+    assert deep_orange.exposure == pytest.approx(-4.29)
     assert deep_orange.gamma == pytest.approx(0.56)
 
 

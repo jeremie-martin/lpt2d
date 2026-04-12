@@ -29,12 +29,15 @@ walls bounce escaped light back into the field.
 
 `sample(rng)` builds a `Params` through a layered decision tree:
 
-1. **Grid** — spacing is sampled in [0.20, 0.32] and drives the number
-   of rows/columns that fit inside the mirror box.
+1. **Grid** — spacing is sampled in [0.20, 0.32] with a mild bias toward
+   the low, packed end and drives the number of rows/columns that fit
+   inside the mirror box.
 2. **Shape** — active free-sampler scenes use rounded polygons with
    optional shared rotation and per-object jitter. Glass circle support is
    still present for targeted tools, but glass is temporarily excluded from
-   the active free sampler.
+   the active free sampler. Sparse polygon grids gently bias the sampled
+   size factor upward, keeping the same maximum size while avoiding tiny
+   polygons in low-object-count diffuse scenes.
 3. **Material** — one of four active peer outcomes is sampled with equal
    probability: black diffuse, gray diffuse, colored diffuse, or brushed
    metal.
@@ -99,7 +102,9 @@ and sampler-policy refactor notes.
 | Parameter | Range | Notes |
 |-----------|-------|-------|
 | IOR | outcome-specific | Glass derives IOR from dispersion; brushed metal samples 1.0 or [1.0, 1.4] |
-| Spacing | 0.20–0.32 | Controls object density |
+| Spacing | 0.20–0.32 | Controls object density; biased toward the low, packed end |
+| Spacing pack bias | 1.4 | 1.0 is uniform; higher values prefer tighter spacing within the same range |
+| Polygon size factor | 0.28–0.43 | Multiplied by spacing; sparse grids bias small draws upward within this range |
 | Speed | 0.08–0.20 u/s | Max is 0.20 for one light, 0.14 for multi-light |
 | Ambient intensity | 0.05–1.2 | Per corner/side white-equivalent light |
 | Ambient white mix | 0.25–0.75 | Only for complementary colored ambient |
