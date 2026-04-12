@@ -24,7 +24,11 @@ from examples.python.families.crystal_field.params import (
     ShapeConfig,
     color_spectrum,
 )
-from examples.python.families.crystal_field.scene import ambient_intensity_multiplier, build
+from examples.python.families.crystal_field.scene import (
+    ambient_intensity_multiplier,
+    build,
+    rendered_light_intensity,
+)
 
 
 def _params_with_populated_look() -> Params:
@@ -138,5 +142,26 @@ def test_colored_ambient_flows_into_scene_with_luminance_compensation():
     assert expected_intensity == pytest.approx(ambient.intensity / 0.5361, rel=1e-4)
     assert {light.spectrum.type for light in ambient_lights} == {"color"}
     assert {round(light.intensity, 6) for light in ambient_lights} == {
+        round(expected_intensity, 6)
+    }
+
+
+def test_colored_moving_light_flows_into_scene_with_luminance_compensation():
+    p = _params_with_populated_look()
+    moving_spectrum = color_spectrum((0.0, 0.0, 1.0), white_mix=0.5)
+    p = replace(p, light=replace(p.light, spectrum=moving_spectrum))
+
+    animate = build(p)
+    frame = animate(Timeline(1.0, fps=1).context_at(0))
+    moving_lights = [light for light in frame.scene.lights if light.id.startswith("light_")]
+    expected_intensity = rendered_light_intensity(
+        p.light.moving_intensity,
+        moving_spectrum,
+    )
+
+    assert len(moving_lights) == 1
+    assert expected_intensity == pytest.approx(p.light.moving_intensity / 0.5361, rel=1e-4)
+    assert {light.spectrum.type for light in moving_lights} == {"color"}
+    assert {round(light.intensity, 6) for light in moving_lights} == {
         round(expected_intensity, 6)
     }

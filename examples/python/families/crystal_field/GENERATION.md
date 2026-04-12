@@ -56,9 +56,10 @@ For achromatic scenes, warm moving-light ranges are sampled often:
 
 Full visible range `380-780 nm` remains the white moving-light case.
 
-At scene-build time, narrow moving-light ranges receive a spectral boost
-based on range width. This compensates for the fact that a narrow range
-emits fewer sampled wavelengths than a full white range.
+Moving-light intensity is stored as white-equivalent intent. At scene-build
+time, range and RGB spectra receive the same spectrum compensation used by
+ambient lights, so the rendered `PointLight.intensity` is explicit and
+comparable across light colors.
 
 ## 3. Ambient Lights
 
@@ -80,20 +81,22 @@ complementary ambient color for the whole scene:
 2. Rotate the hue by 180 degrees.
 3. Add one scene-level random hue jitter in `[-18 degrees, +18 degrees]`.
 4. Use full HSV saturation and value for the base ambient color.
-5. Sample `white_mix` in `[0.25, 0.75]`.
+5. Sample `white_mix` in `[0.35, 0.85]`.
 6. Store that RGB color plus white mix directly in `Params`.
 
 All ambient lights in a scene share this color. Per-light color variation
 is intentionally left for later exploration.
 
-## 4. White-Equivalent Ambient Intensity
+## 4. White-Equivalent Light Intensity
 
-Ambient intensity is authored as a white-equivalent value. In other words,
-`ambient.intensity = 0.3` means "roughly as bright as a white ambient light
-with intensity 0.3," even if the ambient spectrum is blue or cyan.
+Moving and ambient intensities are authored as white-equivalent values. In
+other words, `ambient.intensity = 0.3` means "roughly as bright as a white
+ambient light with intensity 0.3," even if the ambient spectrum is blue or
+cyan. The same contract applies to `moving_intensity`.
 
-For color spectra, the scene builder computes the effective RGB after
-white mix:
+For range spectra, the scene builder computes a luminance-weighted boost
+relative to full-range white. For color spectra, it computes the effective
+RGB after white mix:
 
 ```text
 effective_rgb = rgb + (1 - rgb) * white_mix
@@ -105,10 +108,10 @@ Then it estimates linear Rec.709 luminance:
 luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
 ```
 
-The rendered ambient intensity is:
+The rendered point-light intensity is:
 
 ```text
-rendered_intensity = ambient.intensity / max(luminance, 1e-4)
+rendered_intensity = authored_intensity * spectrum_intensity_multiplier(spectrum)
 ```
 
 This is not a guarantee that every post-processed image will have exactly
@@ -118,6 +121,17 @@ from a single scalar. The contract is narrower and more useful: for the
 white-mixed ambient colors used here, the physical input energy is scaled
 so the colored ambient light lands close to the luminance of its white
 equivalent.
+
+The sampler chooses `moving_intensity` before `ambient.intensity`. After it
+knows both spectra, it caps the ambient draw so:
+
+```text
+rendered_ambient_intensity <= rendered_moving_intensity
+```
+
+If a custom policy ever makes that cap fall below the ambient lower bound,
+the cap wins; keeping ambient below the moving light is the stronger
+contract.
 
 Validation currently covers three levels:
 

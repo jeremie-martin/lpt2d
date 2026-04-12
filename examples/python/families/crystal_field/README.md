@@ -37,7 +37,8 @@ walls bounce escaped light back into the field.
    still present for targeted tools, but glass is temporarily excluded from
    the active free sampler. Sparse polygon grids gently bias the sampled
    size factor upward, keeping the same maximum size while avoiding tiny
-   polygons in low-object-count diffuse scenes.
+   polygons in low-object-count diffuse scenes. Triangles remain possible,
+   but are sampled less often than four-, five-, and six-sided polygons.
 3. **Material** — one of four active peer outcomes is sampled with equal
    probability: black diffuse, gray diffuse, colored diffuse, or brushed
    metal.
@@ -48,12 +49,11 @@ walls bounce escaped light back into the field.
    and white mix; per-light ambient variation is left for future
    exploration.
 
-Ambient intensity is sampled as a white-equivalent value.  If the ambient
-light is colored, `scene.py` computes the effective RGB after white mix,
-estimates Rec.709 linear luminance, and divides the authored ambient
-intensity by that luminance.  This keeps colored ambient lights close to
-the rendered brightness of the old white ambient light while preserving
-the hue.
+Moving and ambient intensities are sampled as white-equivalent values.
+`scene.py` converts them to render-time point-light intensities through one
+shared spectrum compensation helper. The sampler picks moving intensity
+first, builds the ambient spectrum, then caps the ambient draw so its
+rendered intensity cannot exceed the rendered moving-light intensity.
 
 ## Commands
 
@@ -105,15 +105,18 @@ and sampler-policy refactor notes.
 | Spacing | 0.20–0.32 | Controls object density; biased toward the low, packed end |
 | Spacing pack bias | 1.4 | 1.0 is uniform; higher values prefer tighter spacing within the same range |
 | Polygon size factor | 0.28–0.43 | Multiplied by spacing; sparse grids bias small draws upward within this range |
+| Diffuse transmission | 0.00–0.05 | Gray and colored diffuse only |
+| Diffuse absorption | 0.75–1.25 | Gray and colored diffuse only |
+| Brushed-metal color saturation | 0.10–0.40 | HSV saturation for colored brushed-metal object slots |
 | Speed | 0.08–0.20 u/s | Max is 0.20 for one light, 0.14 for multi-light |
-| Ambient intensity | 0.05–1.2 | Per corner/side white-equivalent light |
-| Ambient white mix | 0.25–0.75 | Only for complementary colored ambient |
-| Moving intensity | 0.15–1.5 | Narrow range spectra also get a render-time spectral boost |
-| Exposure | -8.0 to -2.0 | Log scale brightness |
-| Gamma | 0.8 to 2.2 | Tonemap curve |
+| Ambient intensity | 0.25–1.0, capped by moving light | Per corner/side white-equivalent light; cap is applied after spectrum compensation |
+| Ambient white mix | 0.35–0.85 | Only for complementary colored ambient |
+| Moving intensity | 0.75–1.75 | White-equivalent per moving light; range/RGB spectra get render-time compensation |
+| Exposure | -6.5 to -4.5 | Log scale brightness; warm ranges get small offsets |
+| Gamma | 1.2 to 2.2 | Tonemap curve; warm ranges get small multipliers |
 | Contrast | 1.00 to 1.10 | Subtle post-process contrast boost |
-| White point | 0.25 to 1.5 | Tonemap shoulder / brightness control |
-| Corner radius | 12–35% of size | Always applied to polygons |
+| White point | 0.4 to 0.6 | Tonemap shoulder / brightness control |
+| Corner radius | 10–30% of size | Always applied to polygons |
 
 ## Rejection Criteria
 

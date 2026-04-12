@@ -49,6 +49,7 @@ from .params import (
     color_spectrum,
     range_spectrum,
 )
+from .scene import ambient_intensity_multiplier, rendered_light_intensity
 
 T = TypeVar("T")
 FloatRange = tuple[float, float]
@@ -81,8 +82,8 @@ class GridPolicy:
 class ShapePolicy:
     glass_size_factor: FloatRange = (0.25, 0.38)
     polygon_size_factor: FloatRange = (0.28, 0.43)
-    polygon_sides: tuple[int, ...] = (3, 4, 5, 6)
-    corner_radius_factor: FloatRange = (0.12, 0.35)
+    polygon_sides: WeightedChoices[int] = ((3, 0.5), (4, 1.0), (5, 1.0), (6, 1.0))
+    corner_radius_factor: FloatRange = (0.1, 0.3)
     rotation_probability: float = 0.65
     rotation_jitter_probability: float = 0.35
     rotation_jitter_min: float = 0.05
@@ -201,11 +202,35 @@ def _optional_uniform(
     return _uniform(rng, bounds)
 
 
+def _muted_hsv_rgb(rng: random.Random) -> list[float]:
+    rgb = colorsys.hsv_to_rgb(rng.random(), rng.uniform(0.1, 0.4), 1.0)
+    return [float(rgb[0]), float(rgb[1]), float(rgb[2])]
+
+
 def sample_ambient_intensity(
     rng: random.Random,
     policy: AmbientPolicy | None = None,
+    *,
+    moving_intensity: float | None = None,
+    moving_spectrum: LightSpectrumConfig | None = None,
+    ambient_spectrum: LightSpectrumConfig | None = None,
 ) -> float:
-    return _uniform(rng, (policy or DEFAULT_SAMPLER_POLICY.light.ambient).intensity)
+    policy = policy or DEFAULT_SAMPLER_POLICY.light.ambient
+    low, high = policy.intensity
+    if moving_intensity is not None:
+        if moving_spectrum is None or ambient_spectrum is None:
+            raise ValueError(
+                "moving_spectrum and ambient_spectrum are required when "
+                "capping ambient intensity from moving_intensity"
+            )
+        max_authored_ambient = rendered_light_intensity(
+            moving_intensity,
+            moving_spectrum,
+        ) / ambient_intensity_multiplier(ambient_spectrum)
+        high = min(high, max(0.0, max_authored_ambient))
+    if high <= low:
+        return high
+    return _uniform(rng, (low, high))
 
 
 def sample_moving_intensity(
@@ -275,7 +300,7 @@ def _polygon_shape(
 ) -> ShapeConfig:
     """Non-glass outcomes (black / gray / colored diffuse + brushed metal): rounded polygons."""
     policy = policy or DEFAULT_SAMPLER_POLICY.shape
-    n_sides = rng.choice(policy.polygon_sides)
+    n_sides = _weighted_choice(rng, policy.polygon_sides)
     size_factor = _uniform(rng, policy.polygon_size_factor)
     if planned_count is not None:
         # Sparse diffuse fields look weak when polygons are tiny. Keep the same
@@ -383,6 +408,8 @@ def _gray_diffuse_material(rng: random.Random) -> MaterialConfig:
         outcome="gray_diffuse",
         albedo=rng.uniform(0.7, 1.0),
         fill=rng.uniform(0.15, 0.3),
+        transmission=rng.uniform(0.0, 0.05),
+        absorption=rng.uniform(0.75, 1.25),
         color_names=[],
     )
 
@@ -398,6 +425,8 @@ def _colored_diffuse_material(rng: random.Random) -> MaterialConfig:
         outcome="colored_diffuse",
         albedo=rng.uniform(0.7, 1.0),
         fill=rng.uniform(0.12, 0.22),
+        transmission=rng.uniform(0.0, 0.05),
+        absorption=rng.uniform(0.75, 1.25),
         color_names=[rng.choice(PALETTE)],
     )
 
@@ -425,14 +454,13 @@ def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
 
     sub = rng.choice(["no_color", "one_color", "mixed", "two_colors"])
     if sub == "no_color":
-        color_names: list[str | None] = []
+        color_names: list[list[float] | None] = []
     elif sub == "one_color":
-        color_names = [rng.choice(PALETTE)]
+        color_names = [_muted_hsv_rgb(rng)]
     elif sub == "mixed":
-        color_names = [rng.choice(PALETTE), None]
+        color_names = [_muted_hsv_rgb(rng), None]
     else:  # "two_colors"
-        a, b = rng.sample(PALETTE, 2)
-        color_names = [a, b]
+        color_names = [_muted_hsv_rgb(rng), _muted_hsv_rgb(rng)]
 
     return MaterialConfig(
         outcome="brushed_metal",
@@ -503,6 +531,26 @@ def ambient_for_moving_spectrum(
     )
 
 
+def sample_ambient_for_moving_light(
+    rng: random.Random,
+    *,
+    style: str,
+    moving_intensity: float,
+    moving_spectrum: LightSpectrumConfig,
+    policy: AmbientPolicy | None = None,
+) -> AmbientConfig:
+    policy = policy or DEFAULT_SAMPLER_POLICY.light.ambient
+    spectrum = _complementary_ambient_spectrum(rng, moving_spectrum, policy=policy)
+    intensity = sample_ambient_intensity(
+        rng,
+        policy,
+        moving_intensity=moving_intensity,
+        moving_spectrum=moving_spectrum,
+        ambient_spectrum=spectrum,
+    )
+    return AmbientConfig(style=style, intensity=intensity, spectrum=spectrum)
+
+
 def _random_light(
     rng: random.Random,
     is_glass: bool,
@@ -536,11 +584,10 @@ def _random_light(
     spectrum = range_spectrum(wl_min, wl_max)
 
     amb_style = _weighted_choice(rng, policy.ambient.style_weights)
-    amb_intensity = sample_ambient_intensity(rng, policy.ambient)
-    ambient = ambient_for_moving_spectrum(
+    ambient = sample_ambient_for_moving_light(
         rng,
         style=amb_style,
-        intensity=amb_intensity,
+        moving_intensity=moving_intensity,
         moving_spectrum=spectrum,
         policy=policy.ambient,
     )

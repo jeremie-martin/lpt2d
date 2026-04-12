@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import InitVar, dataclass, field
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from anim import Material
 
@@ -20,6 +20,7 @@ MaterialOutcome = Literal[
     "colored_diffuse",
     "brushed_metal",
 ]
+MaterialColor: TypeAlias = str | list[float] | tuple[float, float, float] | None
 
 # ---------------------------------------------------------------------------
 # Scene constants
@@ -74,9 +75,10 @@ class MaterialConfig:
                             ``ior``, ``cauchy_b``, ``absorption``, ``fill``.
                             ``color_names`` is always empty.
     - ``black_diffuse``   : ``albedo``, ``fill`` (= 0.0). ``color_names`` empty.
-    - ``gray_diffuse``    : ``albedo``, ``fill``. ``color_names`` empty.
-    - ``colored_diffuse`` : ``albedo``, ``fill``, ``color_names`` has exactly one
-                            palette entry (strictly 1 color for now).
+    - ``gray_diffuse``    : ``albedo``, ``fill``, ``transmission``, ``absorption``.
+                            ``color_names`` empty.
+    - ``colored_diffuse`` : ``albedo``, ``fill``, ``transmission``, ``absorption``,
+                            ``color_names`` has exactly one palette entry.
     - ``brushed_metal``   : ``albedo``, ``fill``, ``ior``, ``wall_metallic``.
                             ``color_names`` has 0, 1, or 2 entries. Any slot
                             may be ``None`` meaning "no color for this group,
@@ -92,10 +94,11 @@ class MaterialConfig:
     outcome: MaterialOutcome
     albedo: float  # always ∈ [0.7, 1.0] — defined inline per branch (not hoisted)
     fill: float
+    transmission: float = 0.0  # gray_diffuse + colored_diffuse
     ior: float = 0.0  # glass + brushed_metal
     cauchy_b: float = 0.0  # glass only
-    absorption: float = 0.0  # glass only
-    color_names: list[str | None] = field(default_factory=list)
+    absorption: float = 0.0  # glass + gray_diffuse + colored_diffuse
+    color_names: list[MaterialColor] = field(default_factory=list)
     wall_metallic: float = 1.0  # brushed_metal only; others keep the mirror wall fully metallic
 
 
@@ -145,7 +148,7 @@ class LightConfig:
     n_waypoints: int  # segment count for waypoints / steps for random walk
     ambient: AmbientConfig  # fixed background illumination
     speed: float  # world units per second (drift and channel styles)
-    moving_intensity: float = 1.0  # base intensity for moving lights
+    moving_intensity: float = 1.0  # per-light white-equivalent moving-light intensity
     spectrum: LightSpectrumConfig = field(default_factory=LightSpectrumConfig)
     # Deprecated replay compatibility. Old params JSONs carry these fields.
     wavelength_min: InitVar[float | None] = None

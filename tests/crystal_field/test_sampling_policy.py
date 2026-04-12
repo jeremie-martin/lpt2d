@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import colorsys
 import random
 from dataclasses import replace
 
@@ -22,11 +23,15 @@ from examples.python.families.crystal_field.sampling import (
     OUTCOMES,
     _biased_uniform_low,
     _brushed_metal_material,
+    _colored_diffuse_material,
+    _gray_diffuse_material,
     _polygon_shape,
     _random_look,
     ambient_for_moving_spectrum,
     sample,
+    sample_ambient_for_moving_light,
 )
+from examples.python.families.crystal_field.scene import rendered_light_intensity
 
 
 def test_catalog_light_colors_exclude_yellow():
@@ -85,7 +90,7 @@ def test_sparse_polygon_grids_bias_size_factor_upward_without_changing_max():
     policy = replace(
         DEFAULT_SAMPLER_POLICY.shape,
         polygon_size_factor=(0.28, 0.43),
-        polygon_sides=(4,),
+        polygon_sides=((4, 1.0),),
         corner_radius_factor=(0.0, 0.0),
         rotation_probability=0.0,
     )
@@ -108,6 +113,24 @@ def test_sparse_polygon_grids_bias_size_factor_upward_without_changing_max():
     assert max(sparse) <= policy.polygon_size_factor[1]
 
 
+def test_triangle_shapes_are_less_likely_than_other_polygons():
+    rng = random.Random(17)
+    policy = replace(
+        DEFAULT_SAMPLER_POLICY.shape,
+        corner_radius_factor=(0.0, 0.0),
+        rotation_probability=0.0,
+    )
+    counts = {3: 0, 4: 0, 5: 0, 6: 0}
+
+    for _ in range(2000):
+        shape = _polygon_shape(rng, 1.0, planned_count=36.0, policy=policy)
+        counts[shape.n_sides] += 1
+
+    assert counts[3] < counts[4]
+    assert counts[3] < counts[5]
+    assert counts[3] < counts[6]
+
+
 def test_complementary_ambient_is_blueish_for_orange_ranges():
     ambient = ambient_for_moving_spectrum(
         random.Random(3),
@@ -119,7 +142,7 @@ def test_complementary_ambient_is_blueish_for_orange_ranges():
     assert ambient.spectrum.type == "color"
     assert ambient.spectrum.linear_rgb[0] == pytest.approx(0.0)
     assert ambient.spectrum.linear_rgb[2] == pytest.approx(1.0)
-    assert 0.25 <= ambient.spectrum.white_mix <= 0.75
+    assert 0.35 <= ambient.spectrum.white_mix <= 0.85
 
 
 def test_full_range_light_keeps_white_ambient():
@@ -133,6 +156,39 @@ def test_full_range_light_keeps_white_ambient():
     assert ambient.spectrum.type == "range"
     assert ambient.spectrum.wavelength_min == 380.0
     assert ambient.spectrum.wavelength_max == 780.0
+
+
+def test_sampled_ambient_rendered_intensity_is_capped_by_moving_light():
+    rng = random.Random(23)
+    moving_spectrum = range_spectrum(550.0, 700.0)
+    ambient = sample_ambient_for_moving_light(
+        rng,
+        style="corners",
+        moving_intensity=0.75,
+        moving_spectrum=moving_spectrum,
+    )
+
+    ambient_rendered = rendered_light_intensity(ambient.intensity, ambient.spectrum)
+    moving_rendered = rendered_light_intensity(0.75, moving_spectrum)
+
+    assert ambient_rendered <= moving_rendered + 1e-12
+
+
+def test_free_sampler_never_makes_rendered_ambient_stronger_than_moving_light():
+    rng = random.Random(29)
+
+    for _ in range(300):
+        p = sample(rng)
+        ambient_rendered = rendered_light_intensity(
+            p.light.ambient.intensity,
+            p.light.ambient.spectrum,
+        )
+        moving_rendered = rendered_light_intensity(
+            p.light.moving_intensity,
+            p.light.spectrum,
+        )
+
+        assert ambient_rendered <= moving_rendered + 1e-12
 
 
 def test_random_look_samples_highlights_shadows_and_disables_vignette():
@@ -234,6 +290,32 @@ def test_brushed_metal_sampler_sets_wall_metallic_and_object_ior_ranges():
     assert all(1.0 <= m.ior <= 1.4 for m in materials)
     assert any(m.ior == 1.0 for m in materials)
     assert any(m.ior > 1.0 for m in materials)
+
+
+def test_brushed_metal_colored_objects_use_muted_hsv_saturation():
+    rng = random.Random(13)
+    colors = [
+        color
+        for _ in range(200)
+        for color in _brushed_metal_material(rng).color_names
+        if color is not None
+    ]
+
+    assert colors
+    for color in colors:
+        assert isinstance(color, list)
+        _hue, saturation, _value = colorsys.rgb_to_hsv(color[0], color[1], color[2])
+        assert 0.1 <= saturation <= 0.4
+
+
+def test_diffuse_samplers_set_subtle_transmission_and_absorption_ranges():
+    rng = random.Random(19)
+    gray = [_gray_diffuse_material(rng) for _ in range(100)]
+    colored = [_colored_diffuse_material(rng) for _ in range(100)]
+
+    assert all(0.0 <= m.transmission <= 0.05 for m in [*gray, *colored])
+    assert all(0.75 <= m.absorption <= 1.25 for m in [*gray, *colored])
+    assert any(m.transmission > 0.0 for m in [*gray, *colored])
 
 
 def test_brushed_metal_materials_apply_wall_metallic_and_object_ior():

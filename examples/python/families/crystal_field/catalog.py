@@ -88,8 +88,7 @@ from .sampling import (
     _planned_grid_count,
     _polygon_shape,
     _random_look,
-    ambient_for_moving_spectrum,
-    sample_ambient_intensity,
+    sample_ambient_for_moving_light,
     sample_moving_intensity,
 )
 from .scene import build
@@ -201,10 +200,11 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     spectrum = range_spectrum(e["wl_min"], e["wl_max"])
 
     # Light topology fixed per entry; intensities drawn per attempt.
-    ambient = ambient_for_moving_spectrum(
+    moving_intensity = sample_moving_intensity(rng)
+    ambient = sample_ambient_for_moving_light(
         rng,
         style="corners",
-        intensity=sample_ambient_intensity(rng),
+        moving_intensity=moving_intensity,
         moving_spectrum=spectrum,
     )
     light = LightConfig(
@@ -213,7 +213,7 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
         n_waypoints=8,
         ambient=ambient,
         speed=0.12,
-        moving_intensity=sample_moving_intensity(rng),
+        moving_intensity=moving_intensity,
         spectrum=spectrum,
     )
 

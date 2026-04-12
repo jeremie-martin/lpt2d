@@ -69,18 +69,43 @@ def spectral_boost(wl_min: float, wl_max: float) -> float:
     return _WHITE_MEAN_LUMINANCE / band_lum
 
 
-def ambient_intensity_multiplier(config: LightSpectrumConfig) -> float:
-    if config.type != "color":
-        return 1.0
+def _effective_color_rgb(config: LightSpectrumConfig) -> tuple[float, float, float]:
     r, g, b = config.linear_rgb
     r = r + (1.0 - r) * config.white_mix
     g = g + (1.0 - g) * config.white_mix
     b = b + (1.0 - b) * config.white_mix
-    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    # Colored ambient lights are sampled as white-equivalent intent. We do not
-    # cap this yet because white-mixed ambient lights are intentionally mild;
-    # revisit a cap if custom very-dark ambient colors become unstable.
+    return r, g, b
+
+
+def _linear_luminance(rgb: tuple[float, float, float]) -> float:
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+
+
+def spectrum_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    """Render-time multiplier for white-equivalent light intensity.
+
+    ``Params`` stores light intensities as white-equivalent authored intent.
+    Scene assembly applies this multiplier before constructing ``PointLight``
+    so range and RGB spectra retain comparable luminance.
+    """
+    if config.type == "range":
+        return spectral_boost(config.wavelength_min, config.wavelength_max)
+
+    luminance = _linear_luminance(_effective_color_rgb(config))
     return 1.0 / max(luminance, 1e-4)
+
+
+def rendered_light_intensity(intensity: float, spectrum: LightSpectrumConfig) -> float:
+    """Actual ``PointLight.intensity`` after spectrum compensation."""
+    return intensity * spectrum_intensity_multiplier(spectrum)
+
+
+def moving_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    return spectrum_intensity_multiplier(config)
+
+
+def ambient_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    return spectrum_intensity_multiplier(config)
 
 
 def build(p: Params):
@@ -122,7 +147,7 @@ def build(p: Params):
     ambient_lights: list[PointLight] = []
     amb = p.light.ambient
     ambient_spectrum = resolve_light_spectrum(amb.spectrum)
-    ambient_intensity = amb.intensity * ambient_intensity_multiplier(amb.spectrum)
+    ambient_intensity = rendered_light_intensity(amb.intensity, amb.spectrum)
     if amb.style == "corners":
         for i, (ax, ay) in enumerate([(-1.4, 0.75), (1.4, 0.75), (-1.4, -0.75), (1.4, -0.75)]):
             ambient_lights.append(
@@ -144,13 +169,10 @@ def build(p: Params):
                 )
             )
 
-    # Moving light intensity: base from params, boosted for narrow-band spectra.
+    # Moving light intensity: authored as white-equivalent intent, then
+    # compensated for the selected spectrum before rendering.
     light_spectrum = resolve_light_spectrum(p.light.spectrum)
-    if p.light.spectrum.type == "range":
-        boost = spectral_boost(p.light.spectrum.wavelength_min, p.light.spectrum.wavelength_max)
-    else:
-        boost = 1.0
-    intensity = p.light.moving_intensity * boost
+    intensity = rendered_light_intensity(p.light.moving_intensity, p.light.spectrum)
 
     look_kwargs = asdict(p.look)
     frame_look = Look().with_overrides(**look_kwargs)

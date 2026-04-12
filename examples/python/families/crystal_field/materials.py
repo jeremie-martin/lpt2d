@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from anim import Material, diffuse, glass, mirror
 
-from .params import WALL, WALL_ID, MaterialConfig
+from .params import WALL, WALL_ID, MaterialColor, MaterialConfig
+
+
+def _color_arg(color: MaterialColor) -> str | tuple[float, float, float] | None:
+    if isinstance(color, list):
+        return (float(color[0]), float(color[1]), float(color[2]))
+    return color
 
 
 def _wall_material(cfg: MaterialConfig) -> Material:
@@ -31,8 +37,15 @@ def _wall_material(cfg: MaterialConfig) -> Material:
     )
 
 
-def _brushed_material(cfg: MaterialConfig, color: str | None) -> Material:
-    mat = mirror(cfg.albedo, roughness=0.6, color=color, fill=cfg.fill)
+def _diffuse_material(cfg: MaterialConfig, color: MaterialColor = None) -> Material:
+    mat = diffuse(cfg.albedo, color=_color_arg(color), fill=cfg.fill)
+    mat.transmission = cfg.transmission
+    mat.absorption = cfg.absorption
+    return mat
+
+
+def _brushed_material(cfg: MaterialConfig, color: MaterialColor) -> Material:
+    mat = mirror(cfg.albedo, roughness=0.6, color=_color_arg(color), fill=cfg.fill)
     mat.ior = cfg.ior
     return mat
 
@@ -59,16 +72,17 @@ def build_materials(cfg: MaterialConfig) -> dict[str, Material]:
         return mats
 
     if cfg.outcome == "gray_diffuse":
-        # High albedo + fill ∈ [0.12, 0.22] (drawn by sampling) + no color →
+        # High albedo + visible fill + subtle transmission/absorption →
         # a neutral shade of gray.
-        mats["crystal"] = diffuse(cfg.albedo, fill=cfg.fill)
+        mats["crystal"] = _diffuse_material(cfg)
         return mats
 
     if cfg.outcome == "colored_diffuse":
-        # Exactly one palette color, high albedo, fill ∈ [0.12, 0.22].
+        # Exactly one palette color, high albedo, fill ∈ [0.12, 0.22],
+        # and subtle transmission/absorption.
         # Strictly one color for now — see analysis.md.
         assert len(cfg.color_names) == 1 and cfg.color_names[0] is not None
-        mats["crystal_c0"] = diffuse(cfg.albedo, color=cfg.color_names[0], fill=cfg.fill)
+        mats["crystal_c0"] = _diffuse_material(cfg, color=cfg.color_names[0])
         return mats
 
     if cfg.outcome == "brushed_metal":

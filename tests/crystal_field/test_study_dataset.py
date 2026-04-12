@@ -102,6 +102,9 @@ def test_measured_record_extracts_tags_features_and_reason():
     assert rec["features"]["look_exposure"] == -5.0
     assert rec["features"]["look_saturation"] == 1.0
     assert rec["features"]["object_count"] == 12
+    assert rec["features"]["moving_rendered_intensity"] == 0.7
+    assert rec["features"]["ambient_rendered_intensity"] == 0.3
+    assert rec["features"]["ambient_to_moving_rendered_intensity"] == 0.3 / 0.7
     assert rec["verdict"]["reason"] == "mean_luma_high"
     assert rec["probe"]["width"] == study.PROBE_W
     assert rec["params"]["material"]["outcome"] == "glass"
@@ -117,6 +120,7 @@ def test_measured_features_count_only_real_material_colors():
     assert features["material_color_count"] == 1
     assert features["look_saturation"] == p.look.saturation
     assert "look_saturation" in study.INTERACTION_FEATURES
+    assert "ambient_to_moving_rendered_intensity" in study.INTERACTION_FEATURES
     assert tags["material_color_mode"] == "mixed"
 
 

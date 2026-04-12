@@ -73,10 +73,10 @@ _SHOT = Shot.preset("draft", width=_WIDTH, height=_HEIGHT, rays=_RAYS, depth=12)
 def _base_look() -> LookConfig:
     """Neutral defaults — every swept dim starts from the middle of its range."""
     return LookConfig(
-        exposure=-4.5,
-        gamma=1.6,
+        exposure=-5.5,
+        gamma=1.7,
         contrast=1.025,
-        white_point=0.65,
+        white_point=0.5,
         temperature=0.0,
         vignette=0.0,
         vignette_radius=0.7,
@@ -209,13 +209,13 @@ BASE_SCENES: dict[str, Params] = {
 
 # (name, low, high, steps) — ranges match the sampler's distributions.
 SWEEPS: list[tuple[str, float, float, int]] = [
-    ("exposure", -8.0, -2.0, 7),
-    ("gamma", 0.8, 2.2, 7),
-    ("white_point", 0.25, 1.5, 7),
+    ("exposure", -6.5, -4.5, 7),
+    ("gamma", 1.2, 2.2, 7),
+    ("white_point", 0.4, 0.6, 7),
     ("contrast", 1.00, 1.10, 7),
-    ("amb_intensity", 0.05, 1.2, 7),
-    ("mov_intensity", 0.15, 1.5, 7),
-    ("temperature", 0.0, 0.55, 7),
+    ("amb_intensity", 0.25, 1.0, 7),
+    ("mov_intensity", 0.75, 1.75, 7),
+    ("temperature", 0.0, 0.5, 7),
 ]
 
 

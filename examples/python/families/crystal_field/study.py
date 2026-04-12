@@ -46,7 +46,7 @@ from .check import (
 from .grid import build_grid, remove_holes
 from .params import LightSpectrumConfig, Params
 from .sampling import sample
-from .scene import build
+from .scene import build, rendered_light_intensity
 
 SCHEMA_VERSION = 2
 RECORD_KIND = "measured_probe"
@@ -91,6 +91,9 @@ INTERACTION_FEATURES = (
     "look_shadows",
     "ambient_intensity",
     "moving_intensity",
+    "ambient_rendered_intensity",
+    "moving_rendered_intensity",
+    "ambient_to_moving_rendered_intensity",
     "ambient_white_mix",
     "ambient_rgb_luminance",
     "moving_rgb_luminance",
@@ -198,6 +201,19 @@ def _material_color_mode(p: Params) -> str:
 def _flat_features(p: Params) -> dict[str, Any]:
     moving_rgb = _effective_rgb(p.light.spectrum)
     ambient_rgb = _effective_rgb(p.light.ambient.spectrum)
+    moving_rendered_intensity = rendered_light_intensity(
+        p.light.moving_intensity,
+        p.light.spectrum,
+    )
+    ambient_rendered_intensity = rendered_light_intensity(
+        p.light.ambient.intensity,
+        p.light.ambient.spectrum,
+    )
+    ambient_to_moving_rendered_intensity = (
+        ambient_rendered_intensity / moving_rendered_intensity
+        if moving_rendered_intensity > 0
+        else 0.0
+    )
     rotation = p.shape.rotation
 
     features: dict[str, Any] = {
@@ -230,6 +246,7 @@ def _flat_features(p: Params) -> dict[str, Any]:
         "light_n_waypoints": p.light.n_waypoints,
         "light_speed": p.light.speed,
         "moving_intensity": p.light.moving_intensity,
+        "moving_rendered_intensity": moving_rendered_intensity,
         "moving_spectrum_type": p.light.spectrum.type,
         "moving_spectrum_label": _spectrum_label(p.light.spectrum),
         "moving_wavelength_min": p.light.spectrum.wavelength_min,
@@ -244,6 +261,8 @@ def _flat_features(p: Params) -> dict[str, Any]:
         "moving_rgb_luminance": _linear_luminance(moving_rgb),
         "ambient_style": p.light.ambient.style,
         "ambient_intensity": p.light.ambient.intensity,
+        "ambient_rendered_intensity": ambient_rendered_intensity,
+        "ambient_to_moving_rendered_intensity": ambient_to_moving_rendered_intensity,
         "ambient_spectrum_type": p.light.ambient.spectrum.type,
         "ambient_spectrum_label": _spectrum_label(p.light.ambient.spectrum),
         "ambient_wavelength_min": p.light.ambient.spectrum.wavelength_min,
