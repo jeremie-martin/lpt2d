@@ -79,7 +79,7 @@ filters. The same value is exposed as `RenderResult.metrics`.
 | `rms_contrast` | Standard deviation of normalized luma |
 | `interdecile_luma_range` | `p90_luma - p10_luma`; robust contrast spread |
 | `interdecile_luma_contrast` | `(p90_luma - p10_luma) / (p90_luma + p10_luma + eps)` |
-| `local_contrast` | Mean Sobel luma gradient scaled by image short side and clamped to `[0, 1]` |
+| `local_contrast` | Mean Sobel luma gradient on a coarse averaged grid, scaled by grid short side and clamped to `[0, 1]` |
 | `mean_saturation` | Average HSV saturation over all pixels |
 | `p95_saturation` | 95th-percentile HSV saturation |
 | `colorfulness` | Normalized opponent-channel colorfulness |
@@ -92,9 +92,9 @@ Interpretation:
   bright regions.
 - `interdecile_luma_range` is the preferred robust contrast spread for flat or
   washed-out image checks.
-- `local_contrast` captures spatial edge contrast, so it can distinguish a
-  smooth gradient from a frame with similar global luma spread but sharper
-  structure.
+- `local_contrast` captures low-frequency spatial edge contrast, so it can
+  distinguish a smooth gradient from a frame with similar global luma spread but
+  sharper structure without treating per-pixel render noise as structure.
 - `bright_neutral_fraction` is a direct washed-out signal: bright pixels with
   low saturation.
 - `clipped_channel_fraction` is not the same as white-pixel fraction; it counts

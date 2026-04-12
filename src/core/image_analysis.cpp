@@ -13,9 +13,9 @@
 namespace {
 
 constexpr float kColorfulnessNormalizingMax = 1.8f;
-// Average Sobel magnitude is multiplied by image short side so geometric edges
-// remain comparable across resolutions. A scale of 64 maps one full-frame hard
-// black/white step to about 0.125 instead of saturating the metric.
+// Coarse-grid Sobel magnitude is multiplied by grid short side so geometric
+// edges remain comparable across resolutions. A scale of 64 maps one full-frame
+// hard black/white step to about 0.125 instead of saturating the metric.
 constexpr float kLocalContrastGradientScale = 64.0f;
 
 inline int bt709_luminance_u8(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
@@ -36,6 +36,10 @@ float quantile_in_place(std::vector<float>& values, float pct) {
     std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(idx),
                      values.end());
     return values[idx];
+}
+
+int local_luma_cell_index(int x, int y) {
+    return y * kLocalLumaGridMaxSide + x;
 }
 
 template <std::size_t N>
@@ -106,6 +110,61 @@ int first_radius_below(const std::vector<float>& profile, float threshold) {
 
 }  // namespace
 
+LocalLumaGridSize local_luma_grid_size(int width, int height) {
+    if (width <= 0 || height <= 0) return {};
+
+    const int image_short = std::max(1, std::min(width, height));
+    const int grid_short = std::min(image_short, kLocalLumaGridShortSide);
+
+    if (width >= height) {
+        const int grid_width = std::clamp(
+            static_cast<int>(std::lround(static_cast<double>(width) *
+                                         static_cast<double>(grid_short) /
+                                         static_cast<double>(height))),
+            1, std::min(width, kLocalLumaGridMaxSide));
+        return {grid_width, grid_short};
+    }
+
+    const int grid_height = std::clamp(
+        static_cast<int>(std::lround(static_cast<double>(height) *
+                                     static_cast<double>(grid_short) /
+                                     static_cast<double>(width))),
+        1, std::min(height, kLocalLumaGridMaxSide));
+    return {grid_short, grid_height};
+}
+
+double local_luma_grid_gradient_sum(std::span<const float> luma,
+                                    LocalLumaGridSize grid) {
+    if (grid.width <= 0 || grid.height <= 0 ||
+        luma.size() < static_cast<std::size_t>(kLocalLumaGridCells)) {
+        return 0.0;
+    }
+
+    const auto lum_at = [&](int x, int y) -> float {
+        const int cx = std::clamp(x, 0, grid.width - 1);
+        const int cy = std::clamp(y, 0, grid.height - 1);
+        return luma[static_cast<std::size_t>(local_luma_cell_index(cx, cy))];
+    };
+
+    double sum = 0.0;
+    for (int y = 0; y < grid.height; ++y) {
+        for (int x = 0; x < grid.width; ++x) {
+            const float tl = lum_at(x - 1, y - 1);
+            const float tc = lum_at(x,     y - 1);
+            const float tr = lum_at(x + 1, y - 1);
+            const float ml = lum_at(x - 1, y);
+            const float mr = lum_at(x + 1, y);
+            const float bl = lum_at(x - 1, y + 1);
+            const float bc = lum_at(x,     y + 1);
+            const float br = lum_at(x + 1, y + 1);
+            const float gx = -tl - 2.0f * ml - bl + tr + 2.0f * mr + br;
+            const float gy = -tl - 2.0f * tc - tr + bl + 2.0f * bc + br;
+            sum += static_cast<double>(std::sqrt(gx * gx + gy * gy));
+        }
+    }
+    return sum;
+}
+
 void finalize_image_stats(const ImageAnalysisInputs& inputs,
                           const ImageAnalysisThresholds& thresholds,
                           ImageStats& image,
@@ -171,10 +230,23 @@ void finalize_image_stats(const ImageAnalysisInputs& inputs,
     image.interdecile_luma_contrast =
         image.interdecile_luma_range /
         std::max(debug.p90_luma + debug.p10_luma, 1.0e-6f);
-    const float short_side = static_cast<float>(std::max(1, std::min(inputs.width, inputs.height)));
-    image.local_contrast = clamp01(
-        static_cast<float>((inputs.local_gradient_sum * inv_n) * short_side /
-                           static_cast<double>(kLocalContrastGradientScale)));
+    const int local_width = inputs.local_gradient_width > 0
+        ? inputs.local_gradient_width
+        : inputs.width;
+    const int local_height = inputs.local_gradient_height > 0
+        ? inputs.local_gradient_height
+        : inputs.height;
+    const std::size_t local_n =
+        static_cast<std::size_t>(std::max(local_width, 0)) *
+        static_cast<std::size_t>(std::max(local_height, 0));
+    const float local_short_side =
+        static_cast<float>(std::max(1, std::min(local_width, local_height)));
+    image.local_contrast = local_n > 0
+        ? clamp01(static_cast<float>((inputs.local_gradient_sum /
+                                      static_cast<double>(local_n)) *
+                                     local_short_side /
+                                     static_cast<double>(kLocalContrastGradientScale)))
+        : 0.0f;
     image.bright_neutral_fraction =
         static_cast<float>(static_cast<double>(std::max(inputs.bright_neutral, 0)) * inv_n);
 
@@ -272,6 +344,9 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
     image_inputs.width = width;
     image_inputs.height = height;
     std::vector<float> luminance01(n_pixels, 0.0f);
+    const LocalLumaGridSize local_grid = local_luma_grid_size(width, height);
+    std::array<double, kLocalLumaGridCells> local_luma_sums{};
+    std::array<int, kLocalLumaGridCells> local_luma_counts{};
 
     for (std::size_t i = 0; i < n_pixels; ++i) {
         const std::uint8_t r = rgb[3 * i + 0];
@@ -280,6 +355,24 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
         const int lum = bt709_luminance_u8(r, g, b);
         image_inputs.luma_histogram[lum] += 1;
         luminance01[i] = static_cast<float>(lum) / 255.0f;
+        if (local_grid.width > 0 && local_grid.height > 0) {
+            const int x = static_cast<int>(i % static_cast<std::size_t>(width));
+            const int y = static_cast<int>(i / static_cast<std::size_t>(width));
+            const int local_x = std::min(
+                static_cast<int>((static_cast<std::uint64_t>(x) *
+                                  static_cast<std::uint64_t>(local_grid.width)) /
+                                 static_cast<std::uint64_t>(width)),
+                local_grid.width - 1);
+            const int local_y = std::min(
+                static_cast<int>((static_cast<std::uint64_t>(y) *
+                                  static_cast<std::uint64_t>(local_grid.height)) /
+                                 static_cast<std::uint64_t>(height)),
+                local_grid.height - 1);
+            const int local_idx = local_luma_cell_index(local_x, local_y);
+            local_luma_sums[static_cast<std::size_t>(local_idx)] +=
+                static_cast<double>(luminance01[i]);
+            local_luma_counts[static_cast<std::size_t>(local_idx)] += 1;
+        }
 
         if (r == 255 || g == 255 || b == 255) {
             ++image_inputs.clipped;
@@ -325,29 +418,21 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
     }
 
     if (params.analyze_image || params.analyze_debug) {
-        const auto lum_at = [&](int x, int y) -> float {
-            const int cx = std::clamp(x, 0, width - 1);
-            const int cy = std::clamp(y, 0, height - 1);
-            return luminance01[static_cast<std::size_t>(cy) *
-                               static_cast<std::size_t>(width) +
-                               static_cast<std::size_t>(cx)];
-        };
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                const float tl = lum_at(x - 1, y - 1);
-                const float tc = lum_at(x,     y - 1);
-                const float tr = lum_at(x + 1, y - 1);
-                const float ml = lum_at(x - 1, y);
-                const float mr = lum_at(x + 1, y);
-                const float bl = lum_at(x - 1, y + 1);
-                const float bc = lum_at(x,     y + 1);
-                const float br = lum_at(x + 1, y + 1);
-                const float gx = -tl - 2.0f * ml - bl + tr + 2.0f * mr + br;
-                const float gy = -tl - 2.0f * tc - tr + bl + 2.0f * bc + br;
-                image_inputs.local_gradient_sum +=
-                    static_cast<double>(std::sqrt(gx * gx + gy * gy));
+        std::array<float, kLocalLumaGridCells> local_luma{};
+        for (int y = 0; y < local_grid.height; ++y) {
+            for (int x = 0; x < local_grid.width; ++x) {
+                const int idx = local_luma_cell_index(x, y);
+                const int count = local_luma_counts[static_cast<std::size_t>(idx)];
+                local_luma[static_cast<std::size_t>(idx)] = count > 0
+                    ? static_cast<float>(local_luma_sums[static_cast<std::size_t>(idx)] /
+                                         static_cast<double>(count))
+                    : 0.0f;
             }
         }
+        image_inputs.local_gradient_sum =
+            local_luma_grid_gradient_sum(local_luma, local_grid);
+        image_inputs.local_gradient_width = local_grid.width;
+        image_inputs.local_gradient_height = local_grid.height;
 
         const ImageAnalysisThresholds thresholds{
             .near_black_luma = params.near_black_luma,

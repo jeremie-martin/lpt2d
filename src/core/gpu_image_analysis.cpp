@@ -11,11 +11,9 @@
 
 namespace {
 
-constexpr int kGradientBins = 256;
-constexpr float kGradientBinScale = 8.0f;
-
-// LumResult std430: uint lum_hist[256] + grad_hist[256] + lum_clipped.
-constexpr std::size_t kLumSlots = 256 + kGradientBins + 1;
+// LumResult std430: uint lum_hist[256] + lum_clipped +
+// local_luma_sum[128*128] + local_luma_count[128*128].
+constexpr std::size_t kLumSlots = 256 + 1 + 2 * kLocalLumaGridCells;
 constexpr std::size_t kLumBytes = kLumSlots * sizeof(uint32_t);
 // ColorResult std430: hue_hist[36] + sat_hist[256] + rg_hist[511] +
 // yb_hist[1021] + bright_neutral + colored_sat_sum_lo/hi.
@@ -151,6 +149,7 @@ bool GpuImageAnalyzer::init() {
         glGetUniformLocation(program_, "uNeutralSaturationThreshold");
     u_colored_saturation_ =
         glGetUniformLocation(program_, "uColoredSaturationThreshold");
+    u_local_grid_ = glGetUniformLocation(program_, "uLocalGrid");
 
     // Allocate the 4 SSBOs. Luminance and colour are fixed-size (one
     // histogram each). Lights and Circles are dynamically resized per
@@ -234,6 +233,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
                                       static_cast<float>(std::min(width, height)))));
     const int max_bins = std::min(std::max(search_radius + 1, 8), kMaxBins);
     const float search_radius_px = static_cast<float>(search_radius);
+    const LocalLumaGridSize local_grid = local_luma_grid_size(width, height);
 
     // Precompute pixel-space light centres in the TOP-LEFT convention
     // used by viewport_xform. The shader flips gid.y internally so
@@ -291,6 +291,7 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
     if (u_src_ >= 0) glUniform1i(u_src_, 0);
 
     if (u_resolution_ >= 0) glUniform2i(u_resolution_, width, height);
+    if (u_local_grid_ >= 0) glUniform2i(u_local_grid_, local_grid.width, local_grid.height);
     if (u_nlights_ >= 0)    glUniform1i(u_nlights_, n_lights_gpu);
     if (u_bright_ >= 0)     glUniform1f(u_bright_, params.lights.saturated_core_threshold);
     if (u_max_bins_ >= 0)   glUniform1i(u_max_bins_, max_bins);
@@ -357,12 +358,28 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         inputs.height = height;
         for (int i = 0; i < 256; ++i) {
             inputs.luma_histogram[i] = static_cast<int>(lum_raw[i]);
-            const auto grad_count = static_cast<double>(lum_raw[256 + i]);
-            inputs.local_gradient_sum +=
-                grad_count * (static_cast<double>(i) / 255.0) *
-                static_cast<double>(kGradientBinScale);
         }
-        inputs.clipped = static_cast<int>(lum_raw[512]);
+        inputs.clipped = static_cast<int>(lum_raw[256]);
+        constexpr std::size_t local_sum_offset = 257;
+        constexpr std::size_t local_count_offset =
+            local_sum_offset + kLocalLumaGridCells;
+        std::array<float, kLocalLumaGridCells> local_luma{};
+        for (int y = 0; y < local_grid.height; ++y) {
+            for (int x = 0; x < local_grid.width; ++x) {
+                const std::size_t idx = static_cast<std::size_t>(
+                    y * kLocalLumaGridMaxSide + x);
+                const auto count = lum_raw[local_count_offset + idx];
+                local_luma[idx] = count > 0u
+                    ? static_cast<float>(
+                          static_cast<double>(lum_raw[local_sum_offset + idx]) /
+                          (255.0 * static_cast<double>(count)))
+                    : 0.0f;
+            }
+        }
+        inputs.local_gradient_sum =
+            local_luma_grid_gradient_sum(local_luma, local_grid);
+        inputs.local_gradient_width = local_grid.width;
+        inputs.local_gradient_height = local_grid.height;
 
         constexpr std::size_t hue_offset = 0;
         constexpr std::size_t sat_offset = hue_offset + 36;

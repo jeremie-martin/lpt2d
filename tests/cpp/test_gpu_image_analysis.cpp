@@ -271,6 +271,28 @@ TEST(frame_image_stats_local_contrast_is_resolution_stable_cpu) {
     ASSERT_TRUE(a_high.image.local_contrast < 0.25f);
 }
 
+TEST(frame_image_stats_local_contrast_filters_pixel_noise_cpu) {
+    const int w = 128;
+    const int h = 128;
+    std::vector<std::uint8_t> buf(static_cast<std::size_t>(w) *
+                                  static_cast<std::size_t>(h) * 3u);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const std::uint8_t v = ((x + y) & 1) ? 96 : 160;
+            const std::size_t i = (static_cast<std::size_t>(y) *
+                                   static_cast<std::size_t>(w) +
+                                   static_cast<std::size_t>(x)) * 3u;
+            buf[i + 0] = v;
+            buf[i + 1] = v;
+            buf[i + 2] = v;
+        }
+    }
+    auto a = analyze_cpu(buf, w, h);
+
+    ASSERT_TRUE(a.image.rms_contrast > 0.10f);
+    ASSERT_TRUE(a.image.local_contrast < 0.02f);
+}
+
 TEST(frame_image_stats_bright_neutral_fraction_cpu) {
     const std::vector<std::uint8_t> buf = {
         255, 255, 255,
@@ -498,6 +520,21 @@ TEST(gpu_analyzer_colored_debug_matches_cpu) {
     ASSERT_NEAR(gpu.debug.colored_fraction, cpu.debug.colored_fraction, 1e-6f);
     ASSERT_NEAR(gpu.debug.mean_saturation_colored,
                 cpu.debug.mean_saturation_colored, 1e-6f);
+}
+
+TEST(gpu_analyzer_local_contrast_matches_cpu) {
+    GpuFixture f;
+    init_gpu_fixture(f);
+    REQUIRE_TRUE(f.ready);
+    auto buf = make_half_black_white(128, 128);
+    TextureGuard tex(buf.data(), 128, 128);
+
+    FrameAnalysisParams params;
+    params.analyze_lights = false;
+    auto cpu = analyze_cpu(buf, 128, 128, unit_bounds(), {}, params);
+    auto gpu = f.analyzer.analyze(tex.id, 128, 128, unit_bounds(), {}, params);
+
+    ASSERT_NEAR(gpu.image.local_contrast, cpu.image.local_contrast, 1e-6f);
 }
 
 TEST(gpu_analyzer_smoke_light_contract) {

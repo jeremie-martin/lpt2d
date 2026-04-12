@@ -1887,7 +1887,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                         "(P90 - P10) / (P90 + P10).",
                         " %.3f", img.interdecile_luma_contrast);
     stats_labelled_text("Local contrast:",
-                        "Mean Sobel luma gradient scaled by image short side.",
+                        "Mean Sobel luma gradient on a coarse averaged grid.",
                         " %.3f", img.local_contrast);
     stats_labelled_text("Near-black:",
                         "Fraction of pixels at normalized luminance <= 10/255.",

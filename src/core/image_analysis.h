@@ -35,6 +35,15 @@ inline constexpr int kSaturationBins = 256;
 inline constexpr int kHueBins = 36;
 inline constexpr int kRgOpponentBins = 511;   // (R - G) + 255
 inline constexpr int kYbOpponentBins = 1021;  // (R + G - 2B) + 510
+inline constexpr int kLocalLumaGridShortSide = 64;
+inline constexpr int kLocalLumaGridMaxSide = 128;
+inline constexpr int kLocalLumaGridCells =
+    kLocalLumaGridMaxSide * kLocalLumaGridMaxSide;
+
+struct LocalLumaGridSize {
+    int width = 0;
+    int height = 0;
+};
 
 struct ImageStats {
     int width = 0;
@@ -49,7 +58,7 @@ struct ImageStats {
     float rms_contrast = 0.0f;               // standard deviation of luma, [0,1]
     float interdecile_luma_range = 0.0f;     // p90_luma - p10_luma
     float interdecile_luma_contrast = 0.0f;  // (p90 - p10) / (p90 + p10 + eps)
-    float local_contrast = 0.0f;             // normalized Sobel contrast, [0,1]
+    float local_contrast = 0.0f;             // coarse-grid Sobel contrast, [0,1]
     float mean_saturation = 0.0f;            // HSV saturation over all pixels, [0,1]
     float p95_saturation = 0.0f;             // 95th percentile HSV saturation, [0,1]
     float colorfulness = 0.0f;               // normalized opponent-channel colorfulness, [0,1]
@@ -83,6 +92,8 @@ struct ImageAnalysisInputs {
     int bright_neutral = 0;
     double colored_saturation_sum = 0.0;
     double local_gradient_sum = 0.0;
+    int local_gradient_width = 0;
+    int local_gradient_height = 0;
     int width = 0;
     int height = 0;
 };
@@ -99,6 +110,10 @@ void finalize_image_stats(const ImageAnalysisInputs& inputs,
                           const ImageAnalysisThresholds& thresholds,
                           ImageStats& image,
                           ImageDebugStats& debug);
+
+LocalLumaGridSize local_luma_grid_size(int width, int height);
+double local_luma_grid_gradient_sum(std::span<const float> luma,
+                                    LocalLumaGridSize grid);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Point-light appearance

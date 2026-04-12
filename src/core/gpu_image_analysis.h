@@ -96,6 +96,7 @@ private:
     GLint u_bright_luma_ = -1;
     GLint u_neutral_saturation_ = -1;
     GLint u_colored_saturation_ = -1;
+    GLint u_local_grid_ = -1;
     GLint u_src_        = -1;
 
     // Grow a dynamic SSBO if `required_bytes` exceeds its current
