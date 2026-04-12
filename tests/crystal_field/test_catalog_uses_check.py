@@ -8,8 +8,8 @@ from examples.python.families.crystal_field.check import (
     METRIC_KEYS,
     MIN_CONTRAST_SPREAD,
     PROBE_FPS,
-    measurement_context,
     _measure_and_verdict,
+    measurement_context,
 )
 from examples.python.families.crystal_field.params import (
     AmbientConfig,

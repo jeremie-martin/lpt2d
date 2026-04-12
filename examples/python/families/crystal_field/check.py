@@ -403,6 +403,7 @@ def measure_look_variants(
             analyze=True,
         ),
         named_looks,
+        strict=True,
     ):
         yield (
             name,

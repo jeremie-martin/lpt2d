@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import random
 import time
 from pathlib import Path
 
@@ -40,7 +41,6 @@ from .check import _measure_and_verdict
 from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
-    AmbientConfig,
     GridConfig,
     LightConfig,
     LookConfig,
@@ -50,6 +50,7 @@ from .params import (
     ShapeConfig,
     range_spectrum,
 )
+from .sampling import ambient_for_moving_spectrum
 from .scene import build
 
 # ---------------------------------------------------------------------------
@@ -94,14 +95,21 @@ def _base_grid() -> GridConfig:
 
 
 def _base_light(wl_min: float = 380.0, wl_max: float = 780.0) -> LightConfig:
+    spectrum = range_spectrum(wl_min, wl_max)
+    ambient = ambient_for_moving_spectrum(
+        random.Random(f"characterize:{wl_min}:{wl_max}"),
+        style="corners",
+        intensity=0.25,
+        moving_spectrum=spectrum,
+    )
     return LightConfig(
         n_lights=2,
         path_style="channel",
         n_waypoints=8,
-        ambient=AmbientConfig(style="corners", intensity=0.25),
+        ambient=ambient,
         speed=0.12,
         moving_intensity=0.8,
-        spectrum=range_spectrum(wl_min, wl_max),
+        spectrum=spectrum,
     )
 
 
@@ -201,10 +209,10 @@ BASE_SCENES: dict[str, Params] = {
 
 # (name, low, high, steps) — ranges match the sampler's distributions.
 SWEEPS: list[tuple[str, float, float, int]] = [
-    ("exposure", -6.5, -2.5, 7),
-    ("gamma", 1.0, 2.2, 7),
-    ("white_point", 0.3, 1.0, 7),
-    ("contrast", 1.00, 1.05, 7),
+    ("exposure", -8.0, -2.0, 7),
+    ("gamma", 0.8, 2.2, 7),
+    ("white_point", 0.25, 1.5, 7),
+    ("contrast", 1.00, 1.10, 7),
     ("amb_intensity", 0.05, 1.2, 7),
     ("mov_intensity", 0.15, 1.5, 7),
     ("temperature", 0.0, 0.55, 7),

@@ -67,7 +67,6 @@ from .check import (
 from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
-    AmbientConfig,
     GridConfig,
     LightConfig,
     Params,
@@ -82,6 +81,9 @@ from .sampling import (
     _gray_diffuse_material,
     _polygon_shape,
     _random_look,
+    ambient_for_moving_spectrum,
+    sample_ambient_intensity,
+    sample_moving_intensity,
 )
 from .scene import build
 
@@ -195,12 +197,14 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
     # Material: drawn fresh per attempt via the matching per-outcome function.
     material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)
 
+    spectrum = range_spectrum(e["wl_min"], e["wl_max"])
+
     # Light topology fixed per entry; intensities drawn per attempt.
-    # Ranges are defined inline here (not imported from sampling.py) per the
-    # per-branch explicitness rule, even though they match the general path.
-    ambient = AmbientConfig(
+    ambient = ambient_for_moving_spectrum(
+        rng,
         style="corners",
-        intensity=rng.uniform(0.05, 1.2),
+        intensity=sample_ambient_intensity(rng),
+        moving_spectrum=spectrum,
     )
     light = LightConfig(
         n_lights=e["n_lights"],
@@ -208,8 +212,8 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
         n_waypoints=8,
         ambient=ambient,
         speed=0.12,
-        moving_intensity=rng.uniform(0.15, 1.5),
-        spectrum=range_spectrum(e["wl_min"], e["wl_max"]),
+        moving_intensity=sample_moving_intensity(rng),
+        spectrum=spectrum,
     )
 
     # Look drawn with material/light-aware suppression (same as sampling.py).

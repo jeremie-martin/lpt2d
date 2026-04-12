@@ -8,8 +8,11 @@ so that regressions in the LookConfig wiring are caught immediately.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
+import pytest
+
+from anim import Timeline
 from anim.params import params_from_dict
 from examples.python.families.crystal_field.params import (
     AmbientConfig,
@@ -19,8 +22,9 @@ from examples.python.families.crystal_field.params import (
     MaterialConfig,
     Params,
     ShapeConfig,
+    color_spectrum,
 )
-from examples.python.families.crystal_field.scene import build
+from examples.python.families.crystal_field.scene import ambient_intensity_multiplier, build
 
 
 def _params_with_populated_look() -> Params:
@@ -79,6 +83,17 @@ def test_look_config_dict_roundtrip():
     assert restored.light.moving_intensity == p.light.moving_intensity
 
 
+def test_old_params_without_ambient_spectrum_load_as_white_ambient():
+    p = _params_with_populated_look()
+    raw = json.loads(json.dumps(asdict(p)))
+    raw["light"]["ambient"].pop("spectrum")
+    restored = params_from_dict(Params, raw)
+
+    assert restored.light.ambient.spectrum.type == "range"
+    assert restored.light.ambient.spectrum.wavelength_min == 380.0
+    assert restored.light.ambient.spectrum.wavelength_max == 780.0
+
+
 def test_look_config_flows_into_anim_look():
     """Params.look → scene.build → Frame.look must carry every field through.
 
@@ -104,3 +119,22 @@ def test_look_config_flows_into_anim_look():
     assert abs(look.vignette - p.look.vignette) < 1e-6
     assert abs(look.vignette_radius - p.look.vignette_radius) < 1e-6
     assert abs(look.chromatic_aberration - p.look.chromatic_aberration) < 1e-6
+
+
+def test_colored_ambient_flows_into_scene_with_luminance_compensation():
+    p = _params_with_populated_look()
+    ambient_spectrum = color_spectrum((0.0, 0.0, 1.0), white_mix=0.5)
+    ambient = replace(p.light.ambient, spectrum=ambient_spectrum)
+    p = replace(p, light=replace(p.light, ambient=ambient))
+
+    animate = build(p)
+    frame = animate(Timeline(1.0, fps=1).context_at(0))
+    ambient_lights = [light for light in frame.scene.lights if light.id.startswith("amb_")]
+    expected_intensity = ambient.intensity * ambient_intensity_multiplier(ambient_spectrum)
+
+    assert len(ambient_lights) == 4
+    assert expected_intensity == pytest.approx(ambient.intensity / 0.5361, rel=1e-4)
+    assert {light.spectrum.type for light in ambient_lights} == {"color"}
+    assert {round(light.intensity, 6) for light in ambient_lights} == {
+        round(expected_intensity, 6)
+    }

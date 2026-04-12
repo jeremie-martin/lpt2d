@@ -100,16 +100,8 @@ class MaterialConfig:
 
 
 @dataclass
-class AmbientConfig:
-    """Fixed ambient lights that illuminate the scene globally."""
-
-    style: str  # "corners", "sides", "none"
-    intensity: float  # per-light intensity (typically 0.2-0.4)
-
-
-@dataclass
 class LightSpectrumConfig:
-    """Serializable light spectrum intent for moving lights."""
+    """Serializable light spectrum intent for moving and ambient lights."""
 
     type: str = "range"  # "range" or "color"
     wavelength_min: float = 380.0
@@ -135,6 +127,15 @@ def color_spectrum(
         linear_rgb=[float(linear_rgb[0]), float(linear_rgb[1]), float(linear_rgb[2])],
         white_mix=white_mix,
     )
+
+
+@dataclass
+class AmbientConfig:
+    """Fixed ambient lights that illuminate the scene globally."""
+
+    style: str  # "corners", "sides", "none"
+    intensity: float  # per-light white-equivalent intensity
+    spectrum: LightSpectrumConfig = field(default_factory=LightSpectrumConfig)
 
 
 @dataclass

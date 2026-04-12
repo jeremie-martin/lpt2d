@@ -4,11 +4,11 @@
 
 ## Main insights
 
-Gamma does not appear to affect the radius of the light point’s apparent “circle of overexposed light,” but it is a strong lever for correcting overall exposure (both over- and under-exposure). In contrast, exposure and white point significantly impact the radius of this apparent circle and seem to play a similar role more broadly. It would be useful to allow gamma to vary from 1.0 to 2.2.
+Gamma does not appear to affect the radius of the light point’s apparent “circle of overexposed light,” but it is a strong lever for correcting overall exposure (both over- and under-exposure). In contrast, exposure and white point significantly impact the radius of this apparent circle and seem to play a similar role more broadly. The active sampler allows gamma to vary from 0.8 to 2.2.
 
 An albedo in the range of 0.7–1.0 generally looks **much** better for diffuse surfaces than an albedo near 0.0.
 
-There is also a case for allowing slight contrast adjustments (around 1.00–1.05).
+There is also a case for allowing modest contrast adjustments; the active sampler uses 1.00–1.10.
 
 ## Preliminary note on filled colored diffuse objects
 
@@ -63,6 +63,8 @@ A positive temperature (0.0–0.55) can look very good and could also be applied
 
 While not the main focus, animations with a washed-out look (i.e., not enough contrast) should be rejected. This may become more common if contrast, gamma, and white point adjustments are introduced.
 
-At the same time, there is a strong case for supporting a wider range of white points (0.3 to 1.0) and gamma values (1.0 to 2.2).
+At the same time, there is a strong case for supporting wider look ranges:
+exposure -8.0 to -2.0, gamma 0.8 to 2.2, contrast 1.00 to 1.10, and
+white point 0.25 to 1.5.
 
 Finally, the measurement of the apparent circle size of the lights should be made as robust as possible.

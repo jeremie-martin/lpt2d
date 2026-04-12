@@ -22,23 +22,34 @@ walls bounce escaped light back into the field.
 | `check.py` | Rejection gates (light-radius + luminance metrics) |
 | `describe.py` | One-line variant summary |
 | `stats.py` | Parameter distribution analysis (no rendering) |
+| `GENERATION.md` | High-level algorithm and validation notes |
 
 ## How parameter generation works
 
 `sample(rng)` builds a `Params` through a layered decision tree:
 
-1. **Grid** — spacing drives density.  30% chance of a small sparse grid
-   (3–5 rows, 4–7 cols); otherwise derived from spacing.
-2. **Shape** — 60% polygon (3–6 sides, always with rounded corners),
-   40% circle.  Polygons get optional rotation and per-object jitter.
-3. **Material** — polygons are always diffuse (straight edges + glass =
-   chaotic).  Circles are mostly glass (90%).  IOR is continuous
-   [1.3, 2.2] biased toward high values (wider caustics).
+1. **Grid** — spacing is sampled in [0.20, 0.32] and drives the number
+   of rows/columns that fit inside the mirror box.
+2. **Shape** — active free-sampler scenes use rounded polygons with
+   optional shared rotation and per-object jitter. Glass circle support is
+   still present for targeted tools, but glass is temporarily excluded from
+   the active free sampler.
+3. **Material** — one of four active peer outcomes is sampled with equal
+   probability: black diffuse, gray diffuse, colored diffuse, or brushed
+   metal.
 4. **Light** — 1–3 moving lights at constant speed.  Speed decreases
-   with more lights and with glass material.  When objects have no
-   spectral color, 35% chance the moving light gets a warm range spectrum
-   (orange/deep-orange).  Ambient lights at corners are the
-   default (70%).
+   with more lights. When objects have no spectral color, warm range
+   spectra (orange/deep-orange) are sampled often. Colored moving lights
+   get one shared complementary ambient color with randomized hue jitter
+   and white mix; per-light ambient variation is left for future
+   exploration.
+
+Ambient intensity is sampled as a white-equivalent value.  If the ambient
+light is colored, `scene.py` computes the effective RGB after white mix,
+estimates Rec.709 linear luminance, and divides the authored ambient
+intensity by that luminance.  This keeps colored ambient lights close to
+the rendered brightness of the old white ambient light while preserving
+the hue.
 
 ## Commands
 
@@ -54,18 +65,26 @@ python -m examples.python.families.crystal_field catalog \
 # Parameter distributions (instant, no rendering)
 python -m examples.python.families.crystal_field stats
 python -m examples.python.families.crystal_field stats -n 50000 --seed 99
+
+# Compare white ambient against complementary ambient
+python -m examples.python.families.crystal_field ambient_compare --limit 4
 ```
 
 ## Key tunable ranges
 
 | Parameter | Range | Notes |
 |-----------|-------|-------|
-| IOR | 1.3–2.2 (beta, mode ~1.8) | Higher = wider caustics |
-| Spacing | 0.18–0.30 | Controls object density |
-| Speed | 0.08–0.25 u/s | Reduced for multi-light and glass |
-| Ambient intensity | 0.1–0.4 | Per corner/side light |
-| Exposure | -5.5 to -3.5 | Log scale brightness |
-| Corner radius | 10–35% of size | Always applied to polygons |
+| IOR | outcome-specific | Glass derives IOR from dispersion; brushed metal samples 1.0 or [1.0, 1.4] |
+| Spacing | 0.20–0.32 | Controls object density |
+| Speed | 0.08–0.20 u/s | Max is 0.20 for one light, 0.14 for multi-light |
+| Ambient intensity | 0.05–1.2 | Per corner/side white-equivalent light |
+| Ambient white mix | 0.25–0.75 | Only for complementary colored ambient |
+| Moving intensity | 0.15–1.5 | Narrow range spectra also get a render-time spectral boost |
+| Exposure | -8.0 to -2.0 | Log scale brightness |
+| Gamma | 0.8 to 2.2 | Tonemap curve |
+| Contrast | 1.00 to 1.10 | Subtle post-process contrast boost |
+| White point | 0.25 to 1.5 | Tonemap shoulder / brightness control |
+| Corner radius | 12–35% of size | Always applied to polygons |
 
 ## Rejection Criteria
 

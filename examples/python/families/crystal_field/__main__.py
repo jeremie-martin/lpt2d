@@ -2,7 +2,7 @@
 
 Supports the standard Family subcommands (search, survey, render) plus
 ``stats``, ``catalog``, ``catalog_videos``, ``catalog_shots``,
-``characterize``, and ``spectrum_compare``.
+``characterize``, ``spectrum_compare``, and ``ambient_compare``.
 """
 
 from __future__ import annotations
@@ -35,6 +35,10 @@ elif cmd == "spectrum_compare":
     from .spectrum_compare import run_spectrum_compare
 
     run_spectrum_compare(sys.argv[2:])
+elif cmd == "ambient_compare":
+    from .ambient_compare import run_ambient_compare
+
+    run_ambient_compare(sys.argv[2:])
 else:
     from . import FAMILY
 

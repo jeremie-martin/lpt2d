@@ -30,6 +30,12 @@ def describe(p: Params) -> str:
     # Count only non-None entries: brushed-metal's "mixed" sub-case has
     # color_names=[name, None] and semantically carries one color, not two.
     n_colors = sum(1 for c in p.material.color_names if c is not None)
+    if amb and p.light.ambient.spectrum.type == "color":
+        amb_rgb = p.light.ambient.spectrum.linear_rgb
+        amb += (
+            f" rgb={amb_rgb[0]:.2f},{amb_rgb[1]:.2f},{amb_rgb[2]:.2f}"
+            f" wm={p.light.ambient.spectrum.white_mix:.2f}"
+        )
     return (
         f"grid={p.grid.rows}x{p.grid.cols} {shape_desc} "
         f"mat={mat_desc} "

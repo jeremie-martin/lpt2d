@@ -16,6 +16,14 @@ static float shader_light_response(float nm, const LightSpectrum& spectrum) {
     return 0.5f + x / (2.0f * std::sqrt(1.0f + x * x));
 }
 
+static float luminance(float r, float g, float b) {
+    return 0.2126f * r + 0.7152f * g + 0.0722f * b;
+}
+
+static float luminance(Vec3 rgb) {
+    return luminance(rgb.r, rgb.g, rgb.b);
+}
+
 // --- wavelength_to_rgb ---
 
 TEST(wavelength_green_peak) {
@@ -100,6 +108,14 @@ TEST(range_to_color_spectrum_orange_is_reddish_and_scales_energy) {
     ASSERT_TRUE(converted.intensity_scale > 1.0f);
 }
 
+TEST(range_to_color_spectrum_headroom_dims_rgb_and_raises_scale) {
+    auto full = range_to_color_spectrum(550.0f, 700.0f, 1.0f);
+    auto half = range_to_color_spectrum(550.0f, 700.0f, 0.5f);
+    ASSERT_NEAR(half.spectrum.linear_r, 0.5f, 1e-6f);
+    ASSERT_TRUE(half.spectrum.linear_g < full.spectrum.linear_g);
+    ASSERT_TRUE(half.intensity_scale > full.intensity_scale);
+}
+
 TEST(light_spectrum_color_mid_gray_avoids_white_sentinel) {
     LightSpectrum gray = light_spectrum_color(0.5f, 0.5f, 0.5f);
     ASSERT_EQ(gray.type, LightSpectrumType::Color);
@@ -124,6 +140,30 @@ TEST(light_spectrum_color_white_keeps_white_sentinel) {
                 white.spectral_c1 == 0.0f &&
                 white.spectral_c2 == 0.0f);
     ASSERT_NEAR(shader_light_response(580.0f, white), 1.0f, 1e-6f);
+}
+
+TEST(light_spectrum_color_fit_preserves_ambient_luminance_targets) {
+    struct Case { float r, g, b, white_mix; };
+    const Case cases[] = {
+        {0.0f, 0.0f, 1.0f, 0.25f},
+        {0.0f, 0.0f, 1.0f, 0.50f},
+        {0.0f, 0.0f, 1.0f, 0.75f},
+        {0.0f, 1.0f, 1.0f, 0.50f},
+        {0.5f, 0.0f, 1.0f, 0.50f},
+        {1.0f, 0.4f, 0.0f, 0.50f},
+        {0.0f, 1.0f, 0.0f, 0.25f},
+        {1.0f, 0.0f, 0.0f, 0.25f},
+    };
+
+    for (const Case& c : cases) {
+        LightSpectrum spectrum = light_spectrum_color(c.r, c.g, c.b, c.white_mix);
+        Vec3 fitted = spectral_to_rgb(spectrum.spectral_c0, spectrum.spectral_c1, spectrum.spectral_c2);
+        float tr = c.r + (1.0f - c.r) * c.white_mix;
+        float tg = c.g + (1.0f - c.g) * c.white_mix;
+        float tb = c.b + (1.0f - c.b) * c.white_mix;
+        float target_luminance = luminance(tr, tg, tb);
+        ASSERT_TRUE(std::abs(luminance(fitted) - target_luminance) / target_luminance < 0.05f);
+    }
 }
 
 // --- rgb_to_spectral / spectral_to_rgb roundtrip ---

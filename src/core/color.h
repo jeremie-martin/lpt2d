@@ -43,7 +43,7 @@ LightSpectrum light_spectrum_from_coeffs(float c0, float c1, float c2);
 // Convert a legacy uniform wavelength range to a fitted color spectrum plus a
 // scalar that should be multiplied into light intensity to preserve the old
 // range's linear RGB energy as closely as the three-coefficient model allows.
-RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max);
+RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max, float headroom = 1.0f);
 
 // Resolve a named color to spectral coefficients. Returns nullopt for unknown names.
 std::optional<SpectralCoeffs> named_color(std::string_view name);

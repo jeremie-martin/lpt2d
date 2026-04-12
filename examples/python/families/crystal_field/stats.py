@@ -40,6 +40,7 @@ def run_stats(argv: list[str] | None = None) -> None:
     polygon_count = 0
     n_color_dist: Counter[int] = Counter()
     colored_light = 0
+    colored_ambient = 0
     small_grid = 0
 
     iors: list[float] = []
@@ -51,6 +52,7 @@ def run_stats(argv: list[str] | None = None) -> None:
     cols_list: list[int] = []
     spacings: list[float] = []
     amb_intensities: list[float] = []
+    amb_white_mixes: list[float] = []
     mov_intensities: list[float] = []
     gammas: list[float] = []
     contrasts: list[float] = []
@@ -110,6 +112,9 @@ def run_stats(argv: list[str] | None = None) -> None:
 
         if p.light.ambient.style != "none":
             amb_intensities.append(p.light.ambient.intensity)
+            if p.light.ambient.spectrum.type == "color":
+                colored_ambient += 1
+                amb_white_mixes.append(p.light.ambient.spectrum.white_mix)
 
         if (
             p.light.spectrum.type == "range"
@@ -157,7 +162,7 @@ def run_stats(argv: list[str] | None = None) -> None:
         print(f"  jitter     {100 * has_jitter / polygon_count:.1f}% of polygons")
     print()
 
-    print("── Material outcomes (5 peers, ~20% each) ───────────")
+    print("── Material outcomes (active peers, equal probability) ─")
     print(f"  {counter_line(outcomes)}")
     print()
 
@@ -194,6 +199,9 @@ def run_stats(argv: list[str] | None = None) -> None:
     print(f"  style      {counter_line(amb_styles)}")
     if amb_intensities:
         print(f"  intensity  {dist(amb_intensities)} (when present)")
+    print(f"  colored    {pct(colored_ambient)}")
+    if amb_white_mixes:
+        print(f"  white_mix  {dist(amb_white_mixes)} (colored ambient)")
     print(f"  moving_int {dist(mov_intensities)}")
     print()
 

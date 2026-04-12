@@ -131,6 +131,7 @@ ImVec4 spectrum_preview_color(const LightSpectrum& spectrum) {
 
 bool edit_light_spectrum_fields(LightSpectrum& spectrum, float& intensity) {
     bool changed = false;
+    static float conversion_headroom = 0.5f;
     ImVec4 preview = spectrum_preview_color(spectrum);
     ImGui::ColorButton("Preview", preview, ImGuiColorEditFlags_NoPicker, ImVec2(28, 18));
     ImGui::SameLine();
@@ -159,7 +160,9 @@ bool edit_light_spectrum_fields(LightSpectrum& spectrum, float& intensity) {
         return changed;
     }
 
-    auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max);
+    ImGui::SliderFloat("Conversion headroom", &conversion_headroom, 0.05f, 1.0f, "%.2f");
+    auto converted = range_to_color_spectrum(spectrum.wavelength_min, spectrum.wavelength_max,
+                                             conversion_headroom);
     if (ImGui::Button("Convert range to color")) {
         spectrum = converted.spectrum;
         intensity *= converted.intensity_scale;
