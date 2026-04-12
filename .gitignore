@@ -19,6 +19,8 @@ __pycache__/
 *.mp4
 *.mkv
 *.webm
+/*.shot.json
+/lpt2d
 /middle_frame.json
 /twin_prisms.json
 /prism_sweep_frame0.json
@@ -37,6 +39,8 @@ __pycache__/
 # Local benchmark/evaluation outputs
 /benchmarks/
 /baselines/
+/brightness_experiment_shots.py
+/owo/
 /runs/
 
 # Local editor / profiling artifacts

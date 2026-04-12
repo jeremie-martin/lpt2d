@@ -22,6 +22,7 @@ walls bounce escaped light back into the field.
 | `check.py` | Rejection gates (light-radius + luminance metrics) |
 | `describe.py` | One-line variant summary |
 | `stats.py` | Parameter distribution analysis (no rendering) |
+| `study.py` | Measured probe datasets and offline analysis |
 | `GENERATION.md` | High-level algorithm and validation notes |
 
 ## How parameter generation works
@@ -68,7 +69,30 @@ python -m examples.python.families.crystal_field stats -n 50000 --seed 99
 
 # Compare white ambient against complementary ambient
 python -m examples.python.families.crystal_field ambient_compare --limit 4
+
+# Measured free-sampler probe dataset, no final renders
+python -m examples.python.families.crystal_field study measure \
+  --out renders/families/crystal_field/studies/measured_noglass_1000_seed0.jsonl \
+  --n 1000 --seed 0
+python -m examples.python.families.crystal_field study analyze \
+  --in renders/families/crystal_field/studies/measured_noglass_1000_seed0.jsonl \
+  --out renders/families/crystal_field/studies/measured_noglass_1000_seed0_analysis
+
+# Interrupt/resume-safe 50k task
+bash examples/python/families/crystal_field/run_measured_study_50k.sh
+
+# Interrupt/resume-safe 1M task
+bash examples/python/families/crystal_field/run_measured_study_1m.sh
 ```
+
+The analysis directory contains CSV tables plus a static `index.html`
+dashboard. The dashboard reports group pass rates, first-failure reasons,
+single-parameter quantile bins, conditional bins by categorical scenario, and
+two-parameter interaction heatmaps such as exposure versus ambient intensity,
+or ambient intensity versus probe metrics like ambient radius and mean
+brightness. Probe metrics appear in the dashboard with a `metric_` prefix.
+See `SAMPLER_TUNING_NOTES.md` for the first measured-study interpretation
+and sampler-policy refactor notes.
 
 ## Key tunable ranges
 
