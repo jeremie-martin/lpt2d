@@ -1887,7 +1887,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                         "(P90 - P10) / (P90 + P10).",
                         " %.3f", img.interdecile_luma_contrast);
     stats_labelled_text("Local contrast:",
-                        "Resolution-normalized Sobel edge contrast.",
+                        "Mean Sobel luma gradient scaled by image short side.",
                         " %.3f", img.local_contrast);
     stats_labelled_text("Near-black:",
                         "Fraction of pixels at normalized luminance <= 10/255.",
@@ -1932,7 +1932,7 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                             "Percentage of pixels with HSV saturation above the chroma threshold.",
                             " %.1f%%", dbg.colored_fraction * 100.0f);
         stats_labelled_text("Colored saturation:",
-                            "Mean HSV saturation over chromatic pixels.",
+                            "Mean HSV saturation over pixels above the chroma threshold.",
                             " %.3f", dbg.mean_saturation_colored);
         stats_labelled_text("Saturation coverage:",
                             "Chromatic-pixel mean saturation multiplied by colored-pixel fraction.",

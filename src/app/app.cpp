@@ -88,7 +88,6 @@ struct AuthoredAnalysisTarget {
     Bounds camera_bounds{};
     uint64_t analysis_revision = 0;
     uint64_t mirrored_trace_generation = 0;
-    bool last_used_display_fast_path = false;
 
     void mark_dirty() {
         scene_dirty = true;
@@ -177,18 +176,7 @@ struct AuthoredAnalysisTarget {
         }
     }
 
-    bool compute(EditorState& ed, Renderer& display_renderer,
-                 const Bounds& display_bounds, FrameAnalysis& out) {
-        last_used_display_fast_path = false;
-        const Bounds scene_bounds = scene_default_bounds(ed.shot.scene);
-        const Bounds current_camera_bounds =
-            ed.shot.camera.resolve(ed.shot.canvas.aspect(), scene_bounds);
-        if (bounds_close(display_bounds, current_camera_bounds)) {
-            last_used_display_fast_path = true;
-            out = display_renderer.run_frame_analysis();
-            return true;
-        }
-
+    bool compute(EditorState& ed, Renderer& display_renderer, FrameAnalysis& out) {
         if (!ensure_uploaded(ed))
             return false;
 
@@ -374,7 +362,6 @@ int App::run(const AppConfig& config) {
     double perf_trace_ms = 0.0;
     double perf_display_ms = 0.0;
     double perf_analysis_ms = 0.0;
-    int perf_fast_analysis_frames = 0;
 
     auto add_scene_material = [](Scene& scene, const Material& material, std::string_view base = "Material") {
         std::string material_id = next_scene_material_id(scene, base);
@@ -398,8 +385,7 @@ int App::run(const AppConfig& config) {
 
     AuthoredAnalysisTarget authored_analysis;
     auto compute_authored_analysis = [&](FrameAnalysis& out) {
-        const Bounds display_bounds = current_display_view(ed, compare_ab, win_w, win_h);
-        return authored_analysis.compute(ed, renderer, display_bounds, out);
+        return authored_analysis.compute(ed, renderer, out);
     };
     auto invalidate_authored_analysis = [&]() {
         authored_analysis.mark_dirty();
@@ -2285,8 +2271,6 @@ int App::run(const AppConfig& config) {
             perf_display_ms += std::chrono::duration<double, std::milli>(t_after_display - t_after_trace).count();
             perf_analysis_ms += std::chrono::duration<double, std::milli>(t_after_analysis - t_after_display).count();
             perf_frame_ms += std::chrono::duration<double, std::milli>(t1 - t0).count();
-            if (authored_analysis.last_used_display_fast_path)
-                ++perf_fast_analysis_frames;
             const double window_s =
                 std::chrono::duration<double>(t1 - perf_window_start).count();
             if (window_s >= 1.0 && perf_frames > 0) {
@@ -2296,7 +2280,6 @@ int App::run(const AppConfig& config) {
                           << " trace_ms=" << (perf_trace_ms * inv)
                           << " display_ms=" << (perf_display_ms * inv)
                           << " analysis_ms=" << (perf_analysis_ms * inv)
-                          << " fast_analysis=" << perf_fast_analysis_frames << "/" << perf_frames
                           << "\n";
                 perf_window_start = t1;
                 perf_frames = 0;
@@ -2304,7 +2287,6 @@ int App::run(const AppConfig& config) {
                 perf_trace_ms = 0.0;
                 perf_display_ms = 0.0;
                 perf_analysis_ms = 0.0;
-                perf_fast_analysis_frames = 0;
             }
         }
     }

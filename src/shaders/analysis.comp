@@ -70,6 +70,8 @@ layout(std430, binding = 1) buffer ColorResult {
     uint rg_hist[511];
     uint yb_hist[1021];
     uint bright_neutral;
+    uint colored_sat_sum_lo;
+    uint colored_sat_sum_hi;
 };
 
 layout(std430, binding = 2) buffer LightBinsResult {
@@ -92,6 +94,7 @@ shared uint tile_rg_hist[511];
 shared uint tile_yb_hist[1021];
 shared uint tile_lum_clipped;
 shared uint tile_bright_neutral;
+shared uint tile_colored_sat_sum;
 
 uint quantized_channel(float c) {
     return uint(clamp(c, 0.0, 1.0) * 255.0 + 0.5);
@@ -124,6 +127,7 @@ void main() {
     if (lid == 0u) {
         tile_lum_clipped = 0u;
         tile_bright_neutral = 0u;
+        tile_colored_sat_sum = 0u;
     }
     barrier();
 
@@ -175,6 +179,7 @@ void main() {
         atomicAdd(tile_rg_hist[uint(int(r) - int(g) + 255)], 1u);
         atomicAdd(tile_yb_hist[uint(int(r) + int(g) - 2 * int(b) + 510)], 1u);
         if (delta > 0u && sat > uColoredSaturationThreshold) {
+            atomicAdd(tile_colored_sat_sum, sat_bin);
             float h_raw;
             if (r == cmax) {
                 h_raw = float(int(g) - int(b)) / float(delta);
@@ -269,5 +274,11 @@ void main() {
     if (lid == 0u) {
         atomicAdd(lum_clipped, tile_lum_clipped);
         atomicAdd(bright_neutral, tile_bright_neutral);
+        if (tile_colored_sat_sum != 0u) {
+            uint old_sum = atomicAdd(colored_sat_sum_lo, tile_colored_sat_sum);
+            if (old_sum > 0xffffffffu - tile_colored_sat_sum) {
+                atomicAdd(colored_sat_sum_hi, 1u);
+            }
+        }
     }
 }

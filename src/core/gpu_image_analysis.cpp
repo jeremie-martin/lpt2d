@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 
 namespace {
 
@@ -17,8 +18,8 @@ constexpr float kGradientBinScale = 8.0f;
 constexpr std::size_t kLumSlots = 256 + kGradientBins + 1;
 constexpr std::size_t kLumBytes = kLumSlots * sizeof(uint32_t);
 // ColorResult std430: hue_hist[36] + sat_hist[256] + rg_hist[511] +
-// yb_hist[1021] + bright_neutral.
-constexpr std::size_t kColorSlots = 36 + 256 + 511 + 1021 + 1;
+// yb_hist[1021] + bright_neutral + colored_sat_sum_lo/hi.
+constexpr std::size_t kColorSlots = 36 + 256 + 511 + 1021 + 3;
 constexpr std::size_t kColorBytes = kColorSlots * sizeof(uint32_t);
 
 // Initial capacity for the dynamic SSBOs — enough for typical scenes
@@ -368,6 +369,8 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         constexpr std::size_t rg_offset = sat_offset + 256;
         constexpr std::size_t yb_offset = rg_offset + 511;
         constexpr std::size_t bright_neutral_offset = yb_offset + 1021;
+        constexpr std::size_t colored_sat_sum_lo_offset = bright_neutral_offset + 1;
+        constexpr std::size_t colored_sat_sum_hi_offset = colored_sat_sum_lo_offset + 1;
         for (int i = 0; i < 36; ++i) {
             inputs.hue_histogram[i] = static_cast<int>(color_raw[hue_offset + i]);
         }
@@ -382,6 +385,11 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         }
         inputs.bright_neutral =
             static_cast<int>(color_raw[bright_neutral_offset]);
+        const auto colored_sat_sum_u8 =
+            (static_cast<std::uint64_t>(color_raw[colored_sat_sum_hi_offset]) << 32u) |
+            static_cast<std::uint64_t>(color_raw[colored_sat_sum_lo_offset]);
+        inputs.colored_saturation_sum =
+            static_cast<double>(colored_sat_sum_u8) / 255.0;
 
         const ImageAnalysisThresholds thresholds{
             .near_black_luma = params.near_black_luma,

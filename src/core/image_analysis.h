@@ -81,6 +81,7 @@ struct ImageAnalysisInputs {
     std::array<int, kYbOpponentBins> yb_histogram{};
     int clipped = 0;
     int bright_neutral = 0;
+    double colored_saturation_sum = 0.0;
     double local_gradient_sum = 0.0;
     int width = 0;
     int height = 0;

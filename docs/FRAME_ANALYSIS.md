@@ -79,7 +79,7 @@ filters. The same value is exposed as `RenderResult.metrics`.
 | `rms_contrast` | Standard deviation of normalized luma |
 | `interdecile_luma_range` | `p90_luma - p10_luma`; robust contrast spread |
 | `interdecile_luma_contrast` | `(p90_luma - p10_luma) / (p90_luma + p10_luma + eps)` |
-| `local_contrast` | Normalized Sobel-gradient contrast |
+| `local_contrast` | Mean Sobel luma gradient scaled by image short side and clamped to `[0, 1]` |
 | `mean_saturation` | Average HSV saturation over all pixels |
 | `p95_saturation` | 95th-percentile HSV saturation |
 | `colorfulness` | Normalized opponent-channel colorfulness |
@@ -111,8 +111,8 @@ dashboards, but most filters should start with `ImageStats`.
 | `luma_entropy` | Shannon entropy of the 256-bin luma histogram, in bits |
 | `luma_entropy_normalized` | Luma entropy divided by 8 bits |
 | `hue_entropy` | Shannon entropy of the 36-bin hue histogram |
-| `colored_fraction` | Fraction of pixels above the chroma threshold |
-| `mean_saturation_colored` | Mean saturation among chromatic pixels only |
+| `colored_fraction` | Fraction of pixels with HSV saturation above `colored_saturation_threshold` |
+| `mean_saturation_colored` | Mean saturation among pixels above `colored_saturation_threshold` |
 | `saturation_coverage` | `mean_saturation_colored * colored_fraction` |
 | `colorfulness_raw` | Unnormalized opponent-channel colorfulness |
 | `luma_histogram` | 256-bin luma histogram |

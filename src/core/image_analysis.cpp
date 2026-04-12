@@ -13,7 +13,10 @@
 namespace {
 
 constexpr float kColorfulnessNormalizingMax = 1.8f;
-constexpr float kLocalContrastGradientScale = 8.0f;
+// Average Sobel magnitude is multiplied by image short side so geometric edges
+// remain comparable across resolutions. A scale of 64 maps one full-frame hard
+// black/white step to about 0.125 instead of saturating the metric.
+constexpr float kLocalContrastGradientScale = 64.0f;
 
 inline int bt709_luminance_u8(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     const std::uint32_t lum = (218u * r + 732u * g + 74u * b) >> 10;
@@ -176,28 +179,25 @@ void finalize_image_stats(const ImageAnalysisInputs& inputs,
         static_cast<float>(static_cast<double>(std::max(inputs.bright_neutral, 0)) * inv_n);
 
     double sat_sum = 0.0;
-    std::size_t colored_count = 0;
-    double colored_sat_sum = 0.0;
-    const int colored_bin_min = std::clamp(
-        static_cast<int>(std::floor(thresholds.colored_saturation_threshold * 255.0f)) + 1,
-        0, 255);
     for (int i = 0; i < kSaturationBins; ++i) {
         const int count_i = std::max(inputs.saturation_histogram[i], 0);
         const double count = static_cast<double>(count_i);
         const double sat = static_cast<double>(i) / 255.0;
         sat_sum += count * sat;
-        if (i >= colored_bin_min) {
-            colored_count += static_cast<std::size_t>(count_i);
-            colored_sat_sum += count * sat;
-        }
     }
     image.mean_saturation = static_cast<float>(sat_sum * inv_n);
     image.p95_saturation =
         histogram_quantile_unit(inputs.saturation_histogram, n, 0.95f, 255.0f);
+
+    std::size_t colored_count = 0;
+    for (int count_i : inputs.hue_histogram) {
+        colored_count += static_cast<std::size_t>(std::max(count_i, 0));
+    }
     debug.colored_fraction =
         static_cast<float>(static_cast<double>(colored_count) * inv_n);
     debug.mean_saturation_colored = colored_count > 0
-        ? static_cast<float>(colored_sat_sum / static_cast<double>(colored_count))
+        ? static_cast<float>(inputs.colored_saturation_sum /
+                             static_cast<double>(colored_count))
         : 0.0f;
     debug.saturation_coverage = debug.mean_saturation_colored * debug.colored_fraction;
 
@@ -206,7 +206,8 @@ void finalize_image_stats(const ImageAnalysisInputs& inputs,
     debug.luma_entropy_normalized =
         static_cast<float>(std::clamp(static_cast<double>(debug.luma_entropy) / 8.0,
                                       0.0, 1.0));
-    const double hue_total = static_cast<double>(std::max<std::size_t>(colored_count, 1u));
+    const double hue_total =
+        static_cast<double>(std::max<std::size_t>(colored_count, 1u));
     double hue_entropy = 0.0;
     for (int count_i : inputs.hue_histogram) {
         if (count_i <= 0) continue;
@@ -301,6 +302,8 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                   2 * static_cast<int>(b) + 510] += 1;
 
         if (delta > 0 && sat > params.colored_saturation_threshold) {
+            image_inputs.colored_saturation_sum +=
+                static_cast<double>(sat_bin) / 255.0;
             float h_raw = 0.0f;
             if (r == cmax) {
                 h_raw = static_cast<float>(static_cast<int>(g) - static_cast<int>(b)) /

@@ -250,9 +250,37 @@ TEST(frame_image_stats_half_black_half_white_cpu) {
     ASSERT_NEAR(a.image.p05_luma, 0.0f, u8(1.0f));
     ASSERT_NEAR(a.debug.p99_luma, 1.0f, u8(1.0f));
     ASSERT_TRUE(a.image.rms_contrast > u8(100.0f));
+    ASSERT_TRUE(a.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a.image.local_contrast < 0.25f);
     ASSERT_NEAR(a.image.near_black_fraction, 0.5f, 1e-4f);
     ASSERT_NEAR(a.image.near_white_fraction, 0.5f, 1e-4f);
     ASSERT_NEAR(a.image.clipped_channel_fraction, 0.5f, 1e-4f);
+}
+
+TEST(frame_image_stats_local_contrast_is_resolution_stable_cpu) {
+    auto low = make_half_black_white(32, 32);
+    auto a_low = analyze_cpu(low, 32, 32);
+
+    auto high = make_half_black_white(64, 64);
+    auto a_high = analyze_cpu(high, 64, 64);
+
+    ASSERT_NEAR(a_low.image.local_contrast, a_high.image.local_contrast, 0.02f);
+    ASSERT_TRUE(a_low.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a_high.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a_low.image.local_contrast < 0.25f);
+    ASSERT_TRUE(a_high.image.local_contrast < 0.25f);
+}
+
+TEST(frame_image_stats_bright_neutral_fraction_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        255, 255, 255,
+        220, 220, 220,
+        255,   0,   0,
+         64,  64,  64,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.image.bright_neutral_fraction, 0.5f, 1e-6f);
 }
 
 TEST(frame_image_stats_clipped_channel_fraction_detects_any_channel_cpu) {
@@ -270,6 +298,19 @@ TEST(frame_image_stats_greyscale_zero_cpu) {
     ASSERT_NEAR(a.debug.saturation_coverage, 0.0f, 1e-6f);
     ASSERT_NEAR(a.debug.hue_entropy, 0.0f, 1e-6f);
     ASSERT_NEAR(a.image.colorfulness, 0.0f, 1e-6f);
+}
+
+TEST(frame_image_debug_colored_fraction_uses_exact_chroma_threshold_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        200, 190, 190,
+    };
+    auto a = analyze_cpu(buf, 1, 1);
+
+    ASSERT_TRUE(a.image.mean_saturation > 0.04f);
+    ASSERT_NEAR(a.debug.colored_fraction, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.mean_saturation_colored, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.saturation_coverage, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.hue_entropy, 0.0f, 1e-6f);
 }
 
 TEST(frame_image_stats_three_primaries_cpu) {
@@ -436,6 +477,27 @@ TEST(gpu_analyzer_smoke_image_stats_contract) {
     ASSERT_NEAR(a.debug.luma_entropy_normalized, 0.0f, 1e-6f);
     ASSERT_NEAR(a.debug.colored_fraction, 0.0f, 1e-6f);
     ASSERT_TRUE(a.lights.empty());
+}
+
+TEST(gpu_analyzer_colored_debug_matches_cpu) {
+    GpuFixture f;
+    init_gpu_fixture(f);
+    REQUIRE_TRUE(f.ready);
+    const std::vector<std::uint8_t> buf = {
+        200, 190, 190,
+        200, 188, 188,
+    };
+    TextureGuard tex(buf.data(), 2, 1);
+
+    FrameAnalysisParams params;
+    params.analyze_lights = false;
+    auto cpu = analyze_cpu(buf, 2, 1, unit_bounds(), {}, params);
+    auto gpu = f.analyzer.analyze(tex.id, 2, 1, unit_bounds(), {}, params);
+
+    ASSERT_NEAR(gpu.image.mean_saturation, cpu.image.mean_saturation, 1e-6f);
+    ASSERT_NEAR(gpu.debug.colored_fraction, cpu.debug.colored_fraction, 1e-6f);
+    ASSERT_NEAR(gpu.debug.mean_saturation_colored,
+                cpu.debug.mean_saturation_colored, 1e-6f);
 }
 
 TEST(gpu_analyzer_smoke_light_contract) {
