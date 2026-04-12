@@ -13,6 +13,7 @@ from examples.python.families.crystal_field.materials import build_materials
 from examples.python.families.crystal_field.params import (
     WALL_ID,
     AmbientConfig,
+    GridConfig,
     LightConfig,
     LightSpectrumConfig,
     MaterialConfig,
@@ -21,6 +22,7 @@ from examples.python.families.crystal_field.params import (
 from examples.python.families.crystal_field.sampling import (
     DEFAULT_SAMPLER_POLICY,
     OUTCOMES,
+    SampleOverrides,
     _biased_uniform_low,
     _brushed_metal_material,
     _colored_diffuse_material,
@@ -47,6 +49,21 @@ def test_general_warm_spectra_exclude_yellow_ranges():
         (550.0, 700.0),
         (570.0, 700.0),
     )
+
+
+def test_active_path_styles_are_channel_and_drift_only():
+    assert DEFAULT_SAMPLER_POLICY.light.path_style_weights == (
+        ("waypoints", 0.0),
+        ("random_walk", 0.0),
+        ("vertical_drift", 0.0),
+        ("drift", 2.0),
+        ("channel", 3.0),
+    )
+
+    rng = random.Random(31)
+    paths = {sample(rng).light.path_style for _ in range(200)}
+
+    assert paths == {"channel", "drift"}
 
 
 def test_active_free_sampler_temporarily_excludes_glass():
@@ -113,7 +130,7 @@ def test_sparse_polygon_grids_bias_size_factor_upward_without_changing_max():
     assert max(sparse) <= policy.polygon_size_factor[1]
 
 
-def test_triangle_shapes_are_less_likely_than_other_polygons():
+def test_triangle_shapes_are_about_fifteen_percent_of_polygons():
     rng = random.Random(17)
     policy = replace(
         DEFAULT_SAMPLER_POLICY.shape,
@@ -126,6 +143,8 @@ def test_triangle_shapes_are_less_likely_than_other_polygons():
         shape = _polygon_shape(rng, 1.0, planned_count=36.0, policy=policy)
         counts[shape.n_sides] += 1
 
+    triangle_ratio = counts[3] / sum(counts.values())
+    assert 0.12 <= triangle_ratio <= 0.18
     assert counts[3] < counts[4]
     assert counts[3] < counts[5]
     assert counts[3] < counts[6]
@@ -142,7 +161,8 @@ def test_complementary_ambient_is_blueish_for_orange_ranges():
     assert ambient.spectrum.type == "color"
     assert ambient.spectrum.linear_rgb[0] == pytest.approx(0.0)
     assert ambient.spectrum.linear_rgb[2] == pytest.approx(1.0)
-    assert 0.35 <= ambient.spectrum.white_mix <= 0.85
+    low, high = DEFAULT_SAMPLER_POLICY.light.ambient.white_mix
+    assert low <= ambient.spectrum.white_mix <= high
 
 
 def test_full_range_light_keeps_white_ambient():
@@ -156,6 +176,35 @@ def test_full_range_light_keeps_white_ambient():
     assert ambient.spectrum.type == "range"
     assert ambient.spectrum.wavelength_min == 380.0
     assert ambient.spectrum.wavelength_max == 780.0
+
+
+def test_sample_overrides_force_only_catalog_axes():
+    grid = GridConfig(rows=5, cols=7, spacing=0.26, offset_rows=True, hole_fraction=0.0)
+    spectrum = range_spectrum(550.0, 700.0)
+
+    p = sample(
+        random.Random(5),
+        overrides=SampleOverrides(
+            outcome="colored_diffuse",
+            grid=grid,
+            n_lights=2,
+            path_style="channel",
+            n_waypoints=8,
+            ambient_style="corners",
+            speed=0.12,
+            spectrum=spectrum,
+        ),
+    )
+
+    assert p.material.outcome == "colored_diffuse"
+    assert p.grid == grid
+    assert p.shape.kind == "polygon"
+    assert p.light.n_lights == 2
+    assert p.light.path_style == "channel"
+    assert p.light.n_waypoints == 8
+    assert p.light.ambient.style == "corners"
+    assert p.light.speed == pytest.approx(0.12)
+    assert p.light.spectrum == spectrum
 
 
 def test_sampled_ambient_rendered_intensity_is_capped_by_moving_light():
@@ -210,8 +259,18 @@ def test_random_look_samples_highlights_shadows_and_disables_vignette():
     assert all(look.vignette == 0.0 for look in looks)
     assert all(look.vignette_radius == DEFAULT_SAMPLER_POLICY.look.vignette_radius for look in looks)
     assert all(1.0 <= look.saturation <= 2.2 for look in looks)
-    assert all(-0.22 <= look.highlights <= 0.22 for look in looks)
-    assert all(-0.22 <= look.shadows <= 0.22 for look in looks)
+    assert all(
+        DEFAULT_SAMPLER_POLICY.look.highlights[0]
+        <= look.highlights
+        <= DEFAULT_SAMPLER_POLICY.look.highlights[1]
+        for look in looks
+    )
+    assert all(
+        DEFAULT_SAMPLER_POLICY.look.shadows[0]
+        <= look.shadows
+        <= DEFAULT_SAMPLER_POLICY.look.shadows[1]
+        for look in looks
+    )
     assert any(look.saturation > 1.0 for look in looks)
     assert any(abs(look.highlights) > 1e-6 for look in looks)
     assert any(abs(look.shadows) > 1e-6 for look in looks)
@@ -242,7 +301,7 @@ def test_random_look_policy_controls_optional_effect_probabilities():
     assert all(look.chromatic_aberration == 0.0 for look in looks)
 
 
-def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_without_clamping():
+def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_with_floor():
     material = MaterialConfig(outcome="gray_diffuse", albedo=0.8, fill=0.16)
     policy = replace(
         DEFAULT_SAMPLER_POLICY.look,
@@ -274,12 +333,12 @@ def test_random_look_applies_warm_spectrum_exposure_gamma_compensation_without_c
     deep_orange = sampled_look(570.0, 700.0)
 
     assert white.exposure == pytest.approx(-5.0)
-    assert white.gamma == pytest.approx(0.8)
+    assert white.gamma == pytest.approx(1.0)
     assert white.saturation == pytest.approx(1.4)
     assert orange.exposure == pytest.approx(-4.76)
-    assert orange.gamma == pytest.approx(0.68)
+    assert orange.gamma == pytest.approx(1.0)
     assert deep_orange.exposure == pytest.approx(-4.29)
-    assert deep_orange.gamma == pytest.approx(0.56)
+    assert deep_orange.gamma == pytest.approx(1.0)
 
 
 def test_brushed_metal_sampler_sets_wall_metallic_and_object_ior_ranges():

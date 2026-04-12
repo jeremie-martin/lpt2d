@@ -39,6 +39,44 @@ def test_default_catalog_web_out_uses_tmp_and_catalog_name():
     ).as_posix() == "/tmp/crystal_field_2026-04-12_10-21-33_web"
 
 
+def test_entry_sample_uses_normal_sampler_with_catalog_overrides(monkeypatch):
+    from examples.python.families.crystal_field import catalog
+    from examples.python.families.crystal_field.sampling import SampleOverrides
+
+    captured: dict[str, SampleOverrides | None] = {}
+
+    def fake_sample(_rng, policy=None, overrides=None):
+        assert policy is None
+        captured["overrides"] = overrides
+        return _synthetic_params()
+
+    monkeypatch.setattr(catalog, "sample", fake_sample)
+
+    entry = {
+        "outcome": "colored_diffuse",
+        "grid_cfg": GridConfig(rows=5, cols=7, spacing=0.26, offset_rows=True, hole_fraction=0.0),
+        "n_lights": 2,
+        "wl_min": 550.0,
+        "wl_max": 700.0,
+    }
+
+    p = catalog._entry_sample(entry, random.Random(0))
+    overrides = captured["overrides"]
+
+    assert p == _synthetic_params()
+    assert isinstance(overrides, SampleOverrides)
+    assert overrides.outcome == "colored_diffuse"
+    assert overrides.grid == entry["grid_cfg"]
+    assert overrides.n_lights == 2
+    assert overrides.path_style == "channel"
+    assert overrides.n_waypoints == 8
+    assert overrides.ambient_style == "corners"
+    assert overrides.speed == 0.12
+    assert overrides.spectrum is not None
+    assert overrides.spectrum.wavelength_min == 550.0
+    assert overrides.spectrum.wavelength_max == 700.0
+
+
 def test_failure_distance_is_zero_for_passing():
     """Baseline: a passing result should have _failure_distance near 0."""
     from anim.family import Verdict

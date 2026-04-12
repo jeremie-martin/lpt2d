@@ -1,19 +1,19 @@
 """Systematic parameter space exploration for crystal_field.
 
-Generates a structured catalog of renders varying one axis at a time
-(material × shape × grid × light colour × n_lights), so the visual effect
+Generates a structured catalog of renders varying selected sampler axes
+(material outcome × grid × light colour × n_lights), so the visual effect
 of each choice can be assessed directly.
 
 Catalog structure vs. general sampling path
 -------------------------------------------
-The catalog **fixes** the structural dimensions per entry (material preset,
-shape, grid size, wavelength range, n_lights) and **draws** the rest:
-``build_seed``, full :class:`LookConfig` (including exposure, gamma,
-contrast, white_point, temperature, highlights, shadows, chromatic_aberration),
-``ambient.intensity``, and ``moving_intensity``.  For each entry the
-catalog runs a retry loop over structural candidates; each candidate traces
-the selected analysis frame once, then tries many random post-processing
-looks via replay before the scene is discarded.
+The catalog calls the normal sampler with explicit overrides for only the
+catalog axes: outcome, grid, wavelength range, n_lights, and fixed channel
+topology. Shape, material details, build seed, light intensities, ambient
+colour, and full :class:`LookConfig` are drawn by the same path as free
+sampling. For each entry the catalog runs a retry loop over structural
+candidates; each candidate traces the selected analysis frame once, then
+tries many random post-processing looks via replay before the scene is
+discarded.
 Failing entries are still saved (best-effort closest-to-passing) and
 tagged in the HTML gallery with a red border + verdict tooltip.
 
@@ -73,23 +73,14 @@ from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
     GridConfig,
-    LightConfig,
     Params,
     range_spectrum,
 )
 from .sampling import (
     OUTCOMES,
-    _black_diffuse_material,
-    _brushed_metal_material,
-    _colored_diffuse_material,
-    _glass_material,
-    _glass_shape,
-    _gray_diffuse_material,
-    _planned_grid_count,
-    _polygon_shape,
+    SampleOverrides,
     _random_look,
-    sample_ambient_for_moving_light,
-    sample_moving_intensity,
+    sample,
 )
 from .scene import build
 
@@ -118,23 +109,6 @@ LIGHT_COLORS = {
     "deep_orange": (570.0, 700.0),
 }
 
-
-# ── Outcome → material sampler ───────────────────────────────────────────
-#
-# Each catalog entry fixes only the ``outcome`` (currently the active non-glass
-# sampler outcomes) and a thin structural scaffolding (grid, light topology,
-# wavelengths, n_lights).  Everything else — **including the shape** — is drawn
-# fresh per attempt via the same per-branch sampling functions as the general
-# path.  No hardcoded material constants inside catalog.py, and no
-# shape-in-the-matrix multiplier.
-
-_OUTCOME_MATERIAL_SAMPLERS = {
-    "glass": _glass_material,
-    "black_diffuse": _black_diffuse_material,
-    "gray_diffuse": _gray_diffuse_material,
-    "colored_diffuse": _colored_diffuse_material,
-    "brushed_metal": _brushed_metal_material,
-}
 
 _CATALOG_OUTCOMES: tuple[str, ...] = tuple(OUTCOMES)
 
@@ -179,56 +153,25 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
 
     The entry fixes only the thin structural scaffolding (outcome name,
     grid size, light wavelengths, n_lights).  Shape, material, look,
-    build_seed, and light intensities are drawn freshly per attempt via
-    the same per-branch sampling functions as the general path.  This
-    keeps catalog and general paths using **exactly** the same logic;
-    catalog.py no longer hardcodes shape or material constants.
+    build_seed, and light intensities are drawn freshly per attempt by the
+    normal sampler. This keeps catalog and general paths using the same logic;
+    catalog.py only supplies sampler overrides for the catalog axes.
     """
-    grid = e["grid_cfg"]
-
-    # Shape: drawn per attempt.  Glass always gets a circle, non-glass
-    # outcomes get a randomized polygon (3/4/5/6 sides, varied size and
-    # rotation).  Same helpers the general sampling path uses.
-    if e["outcome"] == "glass":
-        shape = _glass_shape(rng, grid.spacing)
-    else:
-        shape = _polygon_shape(rng, grid.spacing, planned_count=_planned_grid_count(grid))
-
-    # Material: drawn fresh per attempt via the matching per-outcome function.
-    material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)
-
-    spectrum = range_spectrum(e["wl_min"], e["wl_max"])
-
-    # Light topology fixed per entry; intensities drawn per attempt.
-    moving_intensity = sample_moving_intensity(rng)
-    ambient = sample_ambient_for_moving_light(
+    return sample(
         rng,
-        style="corners",
-        moving_intensity=moving_intensity,
-        moving_spectrum=spectrum,
-    )
-    light = LightConfig(
-        n_lights=e["n_lights"],
-        path_style="channel",
-        n_waypoints=8,
-        ambient=ambient,
-        speed=0.12,
-        moving_intensity=moving_intensity,
-        spectrum=spectrum,
-    )
-
-    # Look drawn with material/light-aware suppression (same as sampling.py).
-    look = _random_look(rng, material, light)
-
-    build_seed = rng.randint(0, 2**32)
-
-    return Params(
-        grid=grid,
-        shape=shape,
-        material=material,
-        light=light,
-        look=look,
-        build_seed=build_seed,
+        overrides=SampleOverrides(
+            outcome=e["outcome"],
+            grid=e["grid_cfg"],
+            n_lights=e["n_lights"],
+            spectrum=range_spectrum(e["wl_min"], e["wl_max"]),
+            ambient_style="corners",
+            # The catalog fixes topology to keep comparisons readable; all
+            # material, shape, intensity, look, and build randomness stays on
+            # the normal sample() path.
+            path_style="channel",
+            n_waypoints=8,
+            speed=0.12,
+        ),
     )
 
 

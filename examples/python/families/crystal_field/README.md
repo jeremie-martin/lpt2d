@@ -37,17 +37,19 @@ walls bounce escaped light back into the field.
    still present for targeted tools, but glass is temporarily excluded from
    the active free sampler. Sparse polygon grids gently bias the sampled
    size factor upward, keeping the same maximum size while avoiding tiny
-   polygons in low-object-count diffuse scenes. Triangles remain possible,
-   but are sampled less often than four-, five-, and six-sided polygons.
+   polygons in low-object-count diffuse scenes. Triangles remain possible
+   at about 15%; four-, five-, and six-sided polygons dominate the sampler.
 3. **Material** — one of four active peer outcomes is sampled with equal
    probability: black diffuse, gray diffuse, colored diffuse, or brushed
    metal.
 4. **Light** — 1–3 moving lights at constant speed.  Speed decreases
-   with more lights. When objects have no spectral color, warm range
-   spectra (orange/deep-orange) are sampled often. Colored moving lights
-   get one shared complementary ambient color with randomized hue jitter
-   and white mix; per-light ambient variation is left for future
-   exploration.
+   with more lights. Active paths are drift and channel only, with channel
+   slightly preferred; the older waypoint, random-walk, and vertical-drift
+   styles remain in code with zero sampler weight. When objects have no
+   spectral color, warm range spectra (orange/deep-orange) are sampled
+   often. Colored moving lights get one shared complementary ambient color
+   with randomized hue jitter and white mix; per-light ambient variation is
+   left for future exploration.
 
 Moving and ambient intensities are sampled as white-equivalent values.
 `scene.py` converts them to render-time point-light intensities through one

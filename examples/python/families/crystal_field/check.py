@@ -27,12 +27,12 @@ PROBE_W, PROBE_H = 960, 540
 PROBE_FPS = 4
 PROBE_RAYS = 400_000
 
-MIN_MOVING_RADIUS_RATIO = 0.010
-MAX_MOVING_RADIUS_RATIO = 0.042
+MIN_MOVING_RADIUS_RATIO = 0.014
+MAX_MOVING_RADIUS_RATIO = 0.046
 MIN_AMBIENT_RADIUS_RATIO = 0.008
 MAX_AMBIENT_RADIUS_RATIO = 0.042
 MIN_RADIUS_RATIO = 1.33
-MAX_RADIUS_RATIO = 2.33
+MAX_RADIUS_RATIO = 2.5
 
 MAX_NEAR_BLACK_FRACTION = 0.035
 MIN_MEAN_LUMA = 60.0 / 255.0
@@ -42,7 +42,7 @@ MAX_P05_LUMA = 80.0 / 255.0
 MIN_INTERDECILE_LUMA_RANGE = 50.0 / 255.0
 MIN_LOCAL_CONTRAST = 0.015
 MAX_BRIGHT_NEUTRAL_FRACTION = 0.40
-MAX_MEAN_SATURATION = 0.66
+MAX_MEAN_SATURATION = 0.69
 
 METRIC_KEYS: tuple[str, ...] = (
     "mean_luma",
@@ -282,9 +282,7 @@ def _verdict_for_metrics(
     local_contrast = metrics["local_contrast"]
     bright_neutral_fraction = metrics["bright_neutral_fraction"]
     mean_saturation = metrics["mean_saturation"]
-    max_mean_luminance = (
-        GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
-    )
+    max_mean_luminance = GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
 
     prefix = (
         f"moving_mean={moving_radius_mean:.3f} "

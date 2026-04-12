@@ -49,6 +49,15 @@ lights. This preserves the useful visual character of the old system:
 orange and deep-orange ranges emit only their wavelength band, so their
 bright cores clip toward their own color rather than toward white.
 
+The active free sampler uses only two path styles:
+
+- `channel`, weighted 3, follows the corridor graph between objects.
+- `drift`, weighted 2, moves freely with reflected direction changes inside
+  the grid bounds.
+
+The older `waypoints`, `random_walk`, and `vertical_drift` generators remain
+available in code, but their active sampler weights are zero.
+
 For achromatic scenes, warm moving-light ranges are sampled often:
 
 - orange: `550-700 nm`
@@ -212,18 +221,19 @@ guards.
 
 ## 8. Catalog Search
 
-The catalog is a structured sweep. Unlike the active free sampler, it still
-includes the targeted glass branch so old and experimental glass behavior can
-be inspected deliberately. It fixes:
+The catalog is a structured sweep over the same sampler path as free
+generation. Each catalog cell calls `sample()` with explicit overrides for
+the small set of axes being compared:
 
 - material outcome;
 - grid size;
 - moving-light color range;
 - number of moving lights.
+- fixed channel topology.
 
-For each catalog cell, everything else is sampled per attempt: exact
-material parameters, shape parameters, build seed, ambient intensity,
-ambient color, moving intensity, and post-processing look.
+For each catalog cell, everything else is sampled per attempt by the normal
+sampler: exact material parameters, shape parameters, build seed, ambient
+intensity, ambient color, moving intensity, and post-processing look.
 
 For one structural candidate, the catalog chooses the clear analysis frame
 once, traces it once, and then replays many random post-processing looks

@@ -82,19 +82,19 @@ class GridPolicy:
 class ShapePolicy:
     glass_size_factor: FloatRange = (0.25, 0.38)
     polygon_size_factor: FloatRange = (0.28, 0.43)
-    polygon_sides: WeightedChoices[int] = ((3, 0.5), (4, 1.0), (5, 1.0), (6, 1.0))
+    polygon_sides: WeightedChoices[int] = ((3, 0.53), (4, 1.0), (5, 1.0), (6, 1.0))
     corner_radius_factor: FloatRange = (0.1, 0.3)
     rotation_probability: float = 0.65
-    rotation_jitter_probability: float = 0.35
-    rotation_jitter_min: float = 0.05
+    rotation_jitter_probability: float = 0.4
+    rotation_jitter_min: float = 0.06
 
 
 @dataclass(frozen=True)
 class AmbientPolicy:
     style_weights: WeightedChoices[str] = (("corners", 8.0), ("sides", 2.0))
     intensity: FloatRange = (0.25, 1.0)
-    hue_jitter_degrees: float = 18.0
-    white_mix: FloatRange = (0.35, 0.85)
+    hue_jitter_degrees: float = 22.0
+    white_mix: FloatRange = (0.3, 0.8)
 
 
 @dataclass(frozen=True)
@@ -102,10 +102,10 @@ class LightPolicy:
     glass_n_lights: WeightedChoices[int] = ((1, 7.0), (2, 3.0))
     non_glass_n_lights: WeightedChoices[int] = ((1, 5.0), (2, 4.0), (3, 1.0))
     path_style_weights: WeightedChoices[str] = (
-        ("waypoints", 2.0),
-        ("random_walk", 1.0),
-        ("vertical_drift", 1.0),
-        ("drift", 3.0),
+        ("waypoints", 0.0),
+        ("random_walk", 0.0),
+        ("vertical_drift", 0.0),
+        ("drift", 2.0),
         ("channel", 3.0),
     )
     n_waypoints: IntRange = (5, 10)
@@ -130,12 +130,12 @@ class LookPolicy:
     saturation: FloatRange = (1.0, 2.2)
     temperature_enabled_probability: float = 0.50
     temperature: FloatRange = (0.0, 0.5)
-    highlights: FloatRange = (-0.22, 0.22)
-    shadows: FloatRange = (-0.22, 0.22)
+    highlights: FloatRange = (-0.3, 0.3)
+    shadows: FloatRange = (-0.3, 0.3)
     vignette: float = 0.0
     vignette_radius: float = 1.5
     chromatic_aberration_enabled_probability: float = 0.50
-    chromatic_aberration: FloatRange = (0.0, 0.006)
+    chromatic_aberration: FloatRange = (0.001, 0.006)
 
 
 _ORANGE_EXPOSURE_OFFSET = 0.240
@@ -164,6 +164,25 @@ class SamplerPolicy:
 
 DEFAULT_SAMPLER_POLICY = SamplerPolicy()
 OUTCOMES = DEFAULT_SAMPLER_POLICY.active_outcomes
+
+
+@dataclass(frozen=True)
+class SampleOverrides:
+    """Optional fixed axes for systematic tools like the catalog.
+
+    Unset fields are drawn exactly like the free sampler. This keeps targeted
+    tools on the same sampling path while allowing a small number of axes to
+    be pinned for matrix-style comparisons.
+    """
+
+    outcome: MaterialOutcome | None = None
+    grid: GridConfig | None = None
+    n_lights: int | None = None
+    path_style: str | None = None
+    n_waypoints: int | None = None
+    ambient_style: str | None = None
+    speed: float | None = None
+    spectrum: LightSpectrumConfig | None = None
 
 
 def _uniform(rng: random.Random, bounds: FloatRange) -> float:
@@ -556,34 +575,57 @@ def _random_light(
     is_glass: bool,
     has_object_color: bool,
     policy: LightPolicy | None = None,
+    overrides: SampleOverrides | None = None,
 ) -> LightConfig:
     policy = policy or DEFAULT_SAMPLER_POLICY.light
+    overrides = overrides or SampleOverrides()
 
     # Number of lights: glass prefers 1; non-glass allows 1-3.
-    n_lights = _weighted_choice(
-        rng,
-        policy.glass_n_lights if is_glass else policy.non_glass_n_lights,
+    n_lights = (
+        overrides.n_lights
+        if overrides.n_lights is not None
+        else _weighted_choice(
+            rng,
+            policy.glass_n_lights if is_glass else policy.non_glass_n_lights,
+        )
     )
 
     # Path style.
-    path_style = _weighted_choice(rng, policy.path_style_weights)
+    path_style = (
+        overrides.path_style
+        if overrides.path_style is not None
+        else _weighted_choice(rng, policy.path_style_weights)
+    )
 
-    n_waypoints = _randint(rng, policy.n_waypoints)
+    n_waypoints = (
+        overrides.n_waypoints
+        if overrides.n_waypoints is not None
+        else _randint(rng, policy.n_waypoints)
+    )
 
     # Speed: base 0.08–0.20, slower with more lights.
     speed_max = policy.one_light_speed_max if n_lights == 1 else policy.multi_light_speed_max
-    speed = rng.uniform(policy.speed_min, speed_max)
+    speed = (
+        overrides.speed if overrides.speed is not None else rng.uniform(policy.speed_min, speed_max)
+    )
 
     moving_intensity = sample_moving_intensity(rng, policy)
 
     # Light colour: warm tint when the scene has no object colour.
     # 70% of achromatic scenes get coloured light to avoid too much gray.
-    wl_min, wl_max = 380.0, 780.0
-    if not has_object_color and rng.random() < policy.warm_light_probability_for_achromatic:
-        wl_min, wl_max = rng.choice(policy.warm_spectra)
-    spectrum = range_spectrum(wl_min, wl_max)
+    if overrides.spectrum is not None:
+        spectrum = overrides.spectrum
+    else:
+        wl_min, wl_max = 380.0, 780.0
+        if not has_object_color and rng.random() < policy.warm_light_probability_for_achromatic:
+            wl_min, wl_max = rng.choice(policy.warm_spectra)
+        spectrum = range_spectrum(wl_min, wl_max)
 
-    amb_style = _weighted_choice(rng, policy.ambient.style_weights)
+    amb_style = (
+        overrides.ambient_style
+        if overrides.ambient_style is not None
+        else _weighted_choice(rng, policy.ambient.style_weights)
+    )
     ambient = sample_ambient_for_moving_light(
         rng,
         style=amb_style,
@@ -635,6 +677,8 @@ def _random_look(
         elif math.isclose(wl_min, 570.0) and math.isclose(wl_max, 700.0):
             exposure += _DEEP_ORANGE_EXPOSURE_OFFSET
             gamma *= _DEEP_ORANGE_GAMMA_MULTIPLIER
+
+    gamma = max(gamma, 1.0)  # avoid extreme crush that hides the look variation
 
     # Temperature: 50% off, 50% uniform(0.0, 0.55) — but forbidden on warm light.
     warm_light = (light.spectrum.type == "range" and light.spectrum.wavelength_min >= 500.0) or (
@@ -693,21 +737,29 @@ _MATERIAL_SAMPLERS: dict[MaterialOutcome, Callable[[random.Random], MaterialConf
 def sample(
     rng: random.Random,
     policy: SamplerPolicy | None = None,
+    overrides: SampleOverrides | None = None,
 ) -> Params:
     """Generate one random crystal_field variant.
 
     Picks one of the active policy outcomes and draws grid, shape, material,
     light, and look for it in one shot. ``Family.search`` retries the whole
-    sample on rejection — there is no inner search loop.
+    sample on rejection — there is no inner search loop. ``overrides`` lets
+    systematic tools pin a few axes while keeping the normal sampler path for
+    everything else.
 
     Glass is temporarily excluded from the active free sampler. The glass
     branch remains below so targeted tools, old params, and future tuning
     can continue to use it deliberately.
     """
     policy = policy or DEFAULT_SAMPLER_POLICY
-    outcome = _weighted_choice(rng, policy.outcomes)
+    overrides = overrides or SampleOverrides()
+    outcome = (
+        overrides.outcome
+        if overrides.outcome is not None
+        else _weighted_choice(rng, policy.outcomes)
+    )
 
-    grid = _random_grid(rng, policy.grid)
+    grid = overrides.grid if overrides.grid is not None else _random_grid(rng, policy.grid)
 
     if outcome == "glass":
         shape = _glass_shape(rng, grid.spacing, policy.shape)
@@ -726,6 +778,7 @@ def sample(
         is_glass=(outcome == "glass"),
         has_object_color=has_object_color,
         policy=policy.light,
+        overrides=overrides,
     )
     look = _random_look(rng, material, light, policy=policy.look)
 
