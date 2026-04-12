@@ -89,9 +89,9 @@ class ShapePolicy:
 @dataclass(frozen=True)
 class AmbientPolicy:
     style_weights: WeightedChoices[str] = (("corners", 8.0), ("sides", 2.0))
-    intensity: FloatRange = (0.05, 1.2)
+    intensity: FloatRange = (0.25, 1.0)
     hue_jitter_degrees: float = 18.0
-    white_mix: FloatRange = (0.25, 0.75)
+    white_mix: FloatRange = (0.35, 0.85)
 
 
 @dataclass(frozen=True)
@@ -109,7 +109,7 @@ class LightPolicy:
     speed_min: float = 0.08
     one_light_speed_max: float = 0.20
     multi_light_speed_max: float = 0.14
-    moving_intensity: FloatRange = (0.15, 1.5)
+    moving_intensity: FloatRange = (0.75, 1.75)
     warm_light_probability_for_achromatic: float = 0.70
     warm_spectra: tuple[FloatRange, ...] = (
         (550.0, 700.0),
@@ -120,18 +120,24 @@ class LightPolicy:
 
 @dataclass(frozen=True)
 class LookPolicy:
-    exposure: FloatRange = (-8.0, -2.0)
-    gamma: FloatRange = (0.8, 2.2)
+    exposure: FloatRange = (-6.5, -4.5)
+    gamma: FloatRange = (1.2, 2.2)
     contrast: FloatRange = (1.00, 1.10)
-    white_point: FloatRange = (0.25, 1.5)
+    white_point: FloatRange = (0.4, 0.6)
     temperature_enabled_probability: float = 0.50
-    temperature: FloatRange = (0.0, 0.55)
+    temperature: FloatRange = (0.0, 0.5)
     highlights: FloatRange = (-0.22, 0.22)
     shadows: FloatRange = (-0.22, 0.22)
     vignette: float = 0.0
-    vignette_radius: float = 0.7
+    vignette_radius: float = 1.5
     chromatic_aberration_enabled_probability: float = 0.50
     chromatic_aberration: FloatRange = (0.0, 0.006)
+
+
+_ORANGE_EXPOSURE_OFFSET = 0.2
+_ORANGE_GAMMA_MULTIPLIER = 0.829
+_DEEP_ORANGE_EXPOSURE_OFFSET = 0.2
+_DEEP_ORANGE_GAMMA_MULTIPLIER = 0.829
 
 
 @dataclass(frozen=True)
@@ -417,6 +423,7 @@ def _brushed_metal_material(rng: random.Random) -> MaterialConfig:
 
 # ── Light ────────────────────────────────────────────────────────────────
 
+
 def _is_colored_light_spectrum(spectrum: LightSpectrumConfig) -> bool:
     if spectrum.type == "range":
         return spectrum.wavelength_max - spectrum.wavelength_min < 300.0
@@ -547,13 +554,21 @@ def _random_look(
     contrast = _uniform(rng, policy.contrast)
     white_point = _uniform(rng, policy.white_point)
 
+    if light.spectrum.type == "range":
+        wl_min = light.spectrum.wavelength_min
+        wl_max = light.spectrum.wavelength_max
+        # Warm narrow bands keep smaller measured circles after spectral_boost.
+        # Exposure restores circle size; gamma compensates the extra brightness.
+        if math.isclose(wl_min, 550.0) and math.isclose(wl_max, 700.0):
+            exposure += _ORANGE_EXPOSURE_OFFSET
+            gamma *= _ORANGE_GAMMA_MULTIPLIER
+        elif math.isclose(wl_min, 570.0) and math.isclose(wl_max, 700.0):
+            exposure += _DEEP_ORANGE_EXPOSURE_OFFSET
+            gamma *= _DEEP_ORANGE_GAMMA_MULTIPLIER
+
     # Temperature: 50% off, 50% uniform(0.0, 0.55) — but forbidden on warm light.
-    warm_light = (
-        light.spectrum.type == "range"
-        and light.spectrum.wavelength_min >= 500.0
-    ) or (
-        light.spectrum.type == "color"
-        and light.spectrum.linear_rgb != [1.0, 1.0, 1.0]
+    warm_light = (light.spectrum.type == "range" and light.spectrum.wavelength_min >= 500.0) or (
+        light.spectrum.type == "color" and light.spectrum.linear_rgb != [1.0, 1.0, 1.0]
     )
     temperature = _optional_uniform(
         rng,
