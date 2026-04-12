@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from datetime import datetime
 
 from examples.python.families.crystal_field.check import (
     METRIC_KEYS,
@@ -20,6 +21,22 @@ from examples.python.families.crystal_field.params import (
     Params,
     ShapeConfig,
 )
+
+
+def test_default_catalog_out_uses_timestamp_under_family_render_root():
+    from examples.python.families.crystal_field.catalog import _default_catalog_out
+
+    assert _default_catalog_out(datetime(2026, 4, 12, 10, 21, 33)).as_posix() == (
+        "renders/families/crystal_field/2026-04-12_10-21-33"
+    )
+
+
+def test_default_catalog_web_out_uses_tmp_and_catalog_name():
+    from examples.python.families.crystal_field.catalog import _default_catalog_web_out
+
+    assert _default_catalog_web_out(
+        "renders/families/crystal_field/2026-04-12_10-21-33"
+    ).as_posix() == "/tmp/crystal_field_2026-04-12_10-21-33_web"
 
 
 def test_failure_distance_is_zero_for_passing():

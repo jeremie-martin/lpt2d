@@ -21,6 +21,10 @@ Run::
 
     python -m examples.python.families.crystal_field catalog
     python -m examples.python.families.crystal_field catalog --out renders/catalog
+
+When ``--out`` is omitted, the catalog is written under
+``renders/families/crystal_field/YYYY-MM-DD_HH-MM-SS``. A JPEG web copy is
+always written as well; by default it goes under ``/tmp``.
 """
 
 from __future__ import annotations
@@ -33,6 +37,7 @@ import random as _rng_mod
 import shutil
 import time
 from dataclasses import asdict, replace
+from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -373,10 +378,35 @@ def _metrics_payload(key: str, result: MeasurementResult) -> dict:
 # ── Main ─────────────────────────────────────────────────────────────────
 
 
+_DEFAULT_CATALOG_ROOT = Path("renders/families/crystal_field")
+_DEFAULT_WEB_ROOT = Path("/tmp")
+
+
+def _default_catalog_out(now: datetime | None = None) -> Path:
+    now = now or datetime.now()
+    return _DEFAULT_CATALOG_ROOT / now.strftime("%Y-%m-%d_%H-%M-%S")
+
+
+def _default_catalog_web_out(catalog_out: Path | str) -> Path:
+    catalog_out = Path(catalog_out)
+    return _DEFAULT_WEB_ROOT / f"crystal_field_{catalog_out.name}_web"
+
+
 def run_catalog(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Crystal field parameter catalog")
-    parser.add_argument("--out", type=str, default="renders/families/crystal_field/catalog")
-    parser.add_argument("--web-out", type=str, help="optional JPEG web gallery output")
+    parser.add_argument(
+        "--out",
+        type=str,
+        help=(
+            "Output directory. Defaults to "
+            "renders/families/crystal_field/YYYY-MM-DD_HH-MM-SS"
+        ),
+    )
+    parser.add_argument(
+        "--web-out",
+        type=str,
+        help="JPEG web gallery output. Defaults to /tmp/crystal_field_<catalog-dir>_web",
+    )
     parser.add_argument(
         "--jpeg-quality",
         type=int,
@@ -409,7 +439,10 @@ def run_catalog(argv: list[str] | None = None) -> None:
         outcome_entries = [e for e in entries if e["outcome"] == outcome]
         print(f"  {outcome}: {len(outcome_entries)} entries")
 
-    out = Path(args.out)
+    out = Path(args.out) if args.out else _default_catalog_out()
+    web_out = Path(args.web_out) if args.web_out else _default_catalog_web_out(out)
+    print(f"Output: {out}")
+    print(f"Web output: {web_out}")
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
 
@@ -491,10 +524,8 @@ def run_catalog(argv: list[str] | None = None) -> None:
 
     _write_index(out, verdicts)
     print(f"Index: {out}/index.html")
-    if args.web_out:
-        web_out = Path(args.web_out)
-        _write_web_gallery(out, web_out, verdicts, jpeg_quality=args.jpeg_quality)
-        print(f"Web index: {web_out}/index.html")
+    _write_web_gallery(out, web_out, verdicts, jpeg_quality=args.jpeg_quality)
+    print(f"Web index: {web_out}/index.html")
 
 
 def _load_verdicts(path: Path) -> dict[str, Verdict]:
