@@ -7,7 +7,7 @@ simple visual envelope used by the compensation study:
 
     mean luminance in [60, 140]
     mean saturation <= 0.66
-    shadow fraction <= 0.20
+    near-black fraction <= 0.20
     moving radius >= 0.010
 
 The output can be fed directly to fixed_compensation_study.py:
@@ -62,7 +62,7 @@ def _passes_clean_filter(
     mean_min: float,
     mean_max: float,
     max_mean_saturation: float,
-    max_shadow_fraction: float,
+    max_near_black_fraction: float,
     min_moving_radius: float,
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
@@ -72,8 +72,8 @@ def _passes_clean_filter(
         reasons.append(f"mean>{mean_max:g}")
     if measurement.mean_saturation > max_mean_saturation:
         reasons.append(f"mean_saturation>{max_mean_saturation:g}")
-    if measurement.shadow_fraction > max_shadow_fraction:
-        reasons.append(f"shadow_fraction>{max_shadow_fraction:g}")
+    if measurement.near_black_fraction > max_near_black_fraction:
+        reasons.append(f"near_black_fraction>{max_near_black_fraction:g}")
     if measurement.moving_radius < min_moving_radius:
         reasons.append(f"moving_radius<{min_moving_radius:g}")
     return not reasons, reasons
@@ -100,10 +100,10 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=540)
     parser.add_argument("--rays", type=int, default=400_000)
-    parser.add_argument("--mean-min", type=float, default=60.0)
-    parser.add_argument("--mean-max", type=float, default=140.0)
+    parser.add_argument("--mean-min", type=float, default=60.0 / 255.0)
+    parser.add_argument("--mean-max", type=float, default=140.0 / 255.0)
     parser.add_argument("--max-mean-saturation", type=float, default=0.66)
-    parser.add_argument("--max-shadow-fraction", type=float, default=0.20)
+    parser.add_argument("--max-near-black-fraction", type=float, default=0.20)
     parser.add_argument("--min-moving-radius", type=float, default=0.010)
     args = parser.parse_args()
 
@@ -144,7 +144,7 @@ def main() -> None:
                 mean_min=args.mean_min,
                 mean_max=args.mean_max,
                 max_mean_saturation=args.max_mean_saturation,
-                max_shadow_fraction=args.max_shadow_fraction,
+                max_near_black_fraction=args.max_near_black_fraction,
                 min_moving_radius=args.min_moving_radius,
             )
             if not ok:
@@ -171,8 +171,8 @@ def main() -> None:
             kept.append(row)
             print(
                 f"kept {row['scene']:42s} "
-                f"mean={measurement.mean:5.1f} sat={measurement.mean_saturation:.3f} "
-                f"shadow={measurement.shadow_fraction:.3f} radius={measurement.moving_radius:.4f}"
+                f"mean={measurement.mean:.3f} sat={measurement.mean_saturation:.3f} "
+                f"near_black={measurement.near_black_fraction:.3f} radius={measurement.moving_radius:.4f}"
             )
 
         if bucket_kept < args.per_bucket:
@@ -193,7 +193,7 @@ def main() -> None:
             "mean_min": args.mean_min,
             "mean_max": args.mean_max,
             "max_mean_saturation": args.max_mean_saturation,
-            "max_shadow_fraction": args.max_shadow_fraction,
+            "max_near_black_fraction": args.max_near_black_fraction,
             "min_moving_radius": args.min_moving_radius,
             "excluded_materials": ["glass"],
         },

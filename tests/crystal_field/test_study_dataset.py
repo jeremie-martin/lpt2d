@@ -57,8 +57,20 @@ def _params(outcome: str = "glass") -> Params:
 def _result(ok: bool, summary: str) -> MeasurementResult:
     return MeasurementResult(
         metrics={
-            "mean": 79.0 if ok else 81.0,
-            "contrast_spread": 60.0,
+            "mean_luma": 0.31 if ok else 0.62,
+            "median_luma": 0.30 if ok else 0.60,
+            "p05_luma": 0.04,
+            "p95_luma": 0.80,
+            "p10_luma": 0.10,
+            "p90_luma": 0.70,
+            "interdecile_luma_range": 0.60,
+            "local_contrast": 0.20,
+            "bright_neutral_fraction": 0.01,
+            "near_black_fraction": 0.02,
+            "near_white_fraction": 0.00,
+            "mean_saturation": 0.40,
+            "colorfulness": 0.20,
+            "colored_fraction": 0.30,
             "moving_radius_mean": 0.014,
             "ambient_radius_mean": 0.009,
             "moving_to_ambient_radius_ratio": 1.55,
@@ -79,17 +91,18 @@ def test_measured_record_extracts_tags_features_and_reason():
         seed=7,
         trial=3,
         p=p,
-        result=_result(False, "moving_mean=0.014 brightness=81.0 (too bright)"),
+        result=_result(False, "moving_mean=0.014 mean_luma=0.620 (too bright)"),
         elapsed_ms=12.0,
     )
 
-    assert rec["schema"] == 1
+    assert rec["schema"] == 2
     assert rec["record"] == "measured_probe"
     assert rec["status"] == "rejected"
     assert rec["tags"]["outcome"] == "glass"
     assert rec["features"]["look_exposure"] == -5.0
+    assert rec["features"]["look_saturation"] == 1.0
     assert rec["features"]["object_count"] == 12
-    assert rec["verdict"]["reason"] == "brightness_high"
+    assert rec["verdict"]["reason"] == "mean_luma_high"
     assert rec["probe"]["width"] == study.PROBE_W
     assert rec["params"]["material"]["outcome"] == "glass"
 
@@ -102,6 +115,8 @@ def test_measured_features_count_only_real_material_colors():
     tags = study._tags(p)
 
     assert features["material_color_count"] == 1
+    assert features["look_saturation"] == p.look.saturation
+    assert "look_saturation" in study.INTERACTION_FEATURES
     assert tags["material_color_mode"] == "mixed"
 
 
@@ -153,7 +168,7 @@ def test_analyze_command_writes_summary_tables(tmp_path):
         seed=0,
         trial=1,
         p=_params("black_diffuse"),
-        result=_result(False, "moving_mean=0.014 brightness=81.0 (too bright)"),
+        result=_result(False, "moving_mean=0.014 mean_luma=0.620 (too bright)"),
         elapsed_ms=11.0,
     )
     dataset.write_text(json.dumps(accepted) + "\n" + json.dumps(rejected) + "\n")
@@ -164,7 +179,7 @@ def test_analyze_command_writes_summary_tables(tmp_path):
     summary = json.loads((out / "summary.json").read_text())
     assert summary["record_count"] == 2
     assert summary["accepted_count"] == 1
-    assert summary["failure_reasons"]["brightness_high"] == 1
+    assert summary["failure_reasons"]["mean_luma_high"] == 1
     assert (out / "groups.csv").exists()
     assert (out / "failure_reasons.csv").exists()
     assert (out / "feature_stats.csv").exists()
@@ -193,8 +208,8 @@ def test_spectrum_metric_stats_show_metric_shift_by_light_color():
         elapsed_ms=1.0,
     )
     orange["tags"]["moving_spectrum"] = "range_550_700"
-    orange["metrics"]["mean"] = 120.0
-    white["metrics"]["mean"] = 80.0
+    orange["metrics"]["mean_luma"] = 0.47
+    white["metrics"]["mean_luma"] = 0.31
 
     rows = study._spectrum_metric_stat_rows([white, orange])
 
@@ -203,7 +218,7 @@ def test_spectrum_metric_stats_show_metric_shift_by_light_color():
         for row in rows
         if row["group"] == "tags.moving_spectrum"
         and row["value"] == "white_range"
-        and row["feature"] == "metric_mean"
+        and row["feature"] == "metric_mean_luma"
         and row["cohort"] == "all"
     )
     orange_mean = next(
@@ -211,12 +226,12 @@ def test_spectrum_metric_stats_show_metric_shift_by_light_color():
         for row in rows
         if row["group"] == "tags.moving_spectrum"
         and row["value"] == "range_550_700"
-        and row["feature"] == "metric_mean"
+        and row["feature"] == "metric_mean_luma"
         and row["cohort"] == "all"
     )
 
-    assert white_mean["median"] == 80.0
-    assert orange_mean["median"] == 120.0
+    assert white_mean["median"] == 0.31
+    assert orange_mean["median"] == 0.47
 
 
 def test_conditional_numeric_bins_are_grouped_by_scenario():
@@ -228,7 +243,10 @@ def test_conditional_numeric_bins_are_grouped_by_scenario():
             seed=0,
             trial=trial,
             p=_params(outcome),
-            result=_result(ok, "synthetic pass" if ok else "brightness=81.0 (too bright)"),
+            result=_result(
+                ok,
+                "synthetic pass" if ok else "mean_luma=0.620 (too bright)",
+            ),
             elapsed_ms=1.0,
         )
         rec["features"]["look_exposure"] = float(trial)

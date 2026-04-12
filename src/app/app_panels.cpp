@@ -932,16 +932,16 @@ static void draw_section_objects(PanelContext& ctx) {
                             ctx.renderer.trace_and_draw_multi(tcfg, analysis_dispatches);
                         ctx.renderer.update_display(contribution_look, diagnostic_copy.canvas.aspect());
                         FrameAnalysisParams lum_only;
-                        lum_only.analyze_color = false;
+                        lum_only.analyze_debug = false;
                         lum_only.analyze_lights = false;
-                        auto metrics = ctx.renderer.run_frame_analysis(lum_only).luminance;
+                        auto metrics = ctx.renderer.run_frame_analysis(lum_only).image;
                         panel.light_analysis.push_back({
                             source.label,
-                            metrics.mean,
+                            metrics.mean_luma,
                             1.0f - metrics.near_black_fraction,
                             0.0f,
                         });
-                        total_mean += metrics.mean;
+                        total_mean += metrics.mean_luma;
                     }
 
                     for (auto& entry : panel.light_analysis)
@@ -1798,7 +1798,7 @@ static void draw_section_output(PanelContext& ctx) {
 
 // Pair a text label with a tooltip explaining its technical meaning.
 // The old Stats section inside the Look tab used jargon headers (P05,
-// Hue entropy, Richness, FWHM) that were opaque to anyone not already
+// Hue entropy, colorfulness, FWHM) that were opaque to anyone not already
 // familiar with the analyser's internals. The floating Stats window
 // shows human-readable terms and parks the jargon in tooltips for
 // readers who want the exact definition.
@@ -1831,8 +1831,8 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         return;
     }
 
-    const LuminanceStats& lum = live_metrics.luminance;
-    const ColorStats& color = live_metrics.color;
+    const ImageStats& img = live_metrics.image;
+    const ImageDebugStats& dbg = live_metrics.debug;
 
     // Top-of-window toggles. "Live" gates the authored-camera analysis
     // update; turning it off freezes the numbers while the user is doing
@@ -1849,101 +1849,98 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     ImGui::Separator();
 
     int hist_min = 0;
-    while (hist_min < 256 && lum.histogram[hist_min] == 0)
+    while (hist_min < 256 && dbg.luma_histogram[hist_min] == 0)
         ++hist_min;
     int hist_max_bin = 255;
-    while (hist_max_bin >= 0 && lum.histogram[hist_max_bin] == 0)
+    while (hist_max_bin >= 0 && dbg.luma_histogram[hist_max_bin] == 0)
         --hist_max_bin;
 
     // Histogram across the full window width.
     float hist_f[256];
     float hist_max = 0;
     for (int i = 0; i < 256; ++i) {
-        hist_f[i] = static_cast<float>(lum.histogram[i]);
+        hist_f[i] = static_cast<float>(dbg.luma_histogram[i]);
         if (hist_f[i] > hist_max) hist_max = hist_f[i];
     }
     ImGui::PlotHistogram("##lum_hist", hist_f, 256, 0, nullptr, 0, hist_max,
                          ImVec2(-1, 70.0f * dpi_scale));
 
-    // ── Luminance row ────────────────────────────────────────────────
-    ImGui::TextUnformatted("Luminance");
+    // ── Image stats ─────────────────────────────────────────────────
+    ImGui::TextUnformatted("Image");
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-        ImGui::SetTooltip("BT.709 luminance on a 0-255 scale, measured on the post-tonemap display buffer.");
-    stats_labelled_text("Brightness:", "Mean luminance (0-255, BT.709).",
-                        " %.1f", lum.mean);
-    stats_labelled_text("P01:",
-                        "1st percentile luminance.",
-                        " %.0f", lum.percentile_01);
-    stats_labelled_text("P10:",
-                        "10th percentile luminance.",
-                        " %.0f", lum.percentile_10);
-    stats_labelled_text("Median:",
+        ImGui::SetTooltip("BT.709 luminance and HSV saturation measured on the post-tonemap display buffer. Values are normalized to [0, 1].");
+    stats_labelled_text("Mean luma:", "Mean BT.709 luminance.",
+                        " %.3f", img.mean_luma);
+    stats_labelled_text("Median luma:",
                         "50th percentile luminance.",
-                        " %.0f", lum.median);
-    stats_labelled_text("P90:",
-                        "90th percentile luminance.",
-                        " %.0f", lum.percentile_90);
-    stats_labelled_text("Contrast std:",
-                        "Standard deviation of luminance (0-255 scale).",
-                        " %.1f", lum.contrast_std);
-    stats_labelled_text("Contrast spread:",
-                        "95th percentile minus 5th percentile luminance.",
-                        " %.1f", lum.contrast_spread);
-    stats_labelled_text("Shadows:",
-                        "5th percentile luminance.",
-                        " %.0f", lum.shadow_floor);
-    stats_labelled_text("Highlights:",
-                        "95th percentile luminance.",
-                        " %.0f", lum.highlight_ceiling);
-    stats_labelled_text("Peak:",
-                        "99th percentile luminance. Useful for small bright features.",
-                        " %.0f", lum.highlight_peak);
-    stats_labelled_text("Range:",
-                        "First and last populated histogram bins (min / max luminance).",
-                        " %d - %d", hist_min < 256 ? hist_min : 0, hist_max_bin >= 0 ? hist_max_bin : 0);
-    stats_labelled_text("Luma entropy:",
-                        "Shannon entropy of the 256-bin luminance histogram, normalized to [0, 1].",
-                        " %.3f", lum.histogram_entropy_normalized);
-    stats_labelled_text("Shadow pixels:",
-                        "Fraction of pixels with luminance <= 64.",
-                        " %.1f%%", lum.shadow_fraction * 100.0f);
-    stats_labelled_text("Midtone pixels:",
-                        "Fraction of pixels with luminance from 65 to 191.",
-                        " %.1f%%", lum.midtone_fraction * 100.0f);
-    stats_labelled_text("Highlight pixels:",
-                        "Fraction of pixels with luminance >= 192.",
-                        " %.1f%%", lum.highlight_fraction * 100.0f);
+                        " %.3f", img.median_luma);
+    stats_labelled_text("P05 / P95:",
+                        "5th and 95th percentile luminance.",
+                        " %.3f / %.3f", img.p05_luma, img.p95_luma);
+    stats_labelled_text("RMS contrast:",
+                        "Standard deviation of normalized luminance.",
+                        " %.3f", img.rms_contrast);
+    stats_labelled_text("Interdecile range:",
+                        "P90 minus P10 luminance.",
+                        " %.3f", img.interdecile_luma_range);
+    stats_labelled_text("Interdecile contrast:",
+                        "(P90 - P10) / (P90 + P10).",
+                        " %.3f", img.interdecile_luma_contrast);
+    stats_labelled_text("Local contrast:",
+                        "Resolution-normalized Sobel edge contrast.",
+                        " %.3f", img.local_contrast);
     stats_labelled_text("Near-black:",
-                        "Fraction of pixels at luminance <= 10.",
-                        " %.1f%%", lum.near_black_fraction * 100.0f);
+                        "Fraction of pixels at normalized luminance <= 10/255.",
+                        " %.1f%%", img.near_black_fraction * 100.0f);
     stats_labelled_text("Near-white:",
-                        "Fraction of pixels at luminance >= 245.",
-                        " %.1f%%", lum.near_white_fraction * 100.0f);
+                        "Fraction of pixels at normalized luminance >= 245/255.",
+                        " %.1f%%", img.near_white_fraction * 100.0f);
     stats_labelled_text("Clipped channels:",
                         "Fraction of pixels with any channel at 255 (highlight clip).",
-                        " %.1f%%", lum.clipped_channel_fraction * 100.0f);
-
-    // ── Colour row ───────────────────────────────────────────────────
-    ImGui::Separator();
-    ImGui::TextUnformatted("Colour");
-    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
-        ImGui::SetTooltip("HSV colour statistics over chromatic pixels (sat > 0.05).");
-    stats_labelled_text("Saturation:",
-                        "Average HSV saturation of pixels above the 0.05 chroma threshold.",
-                        " %.3f", color.mean_saturation);
-    stats_labelled_text("Saturation coverage:",
-                        "Mean saturation multiplied by colored-pixel fraction.",
-                        " %.3f", color.saturation_coverage);
-    stats_labelled_text("Colour variety:",
-                        "Shannon entropy of the 36-bin hue histogram, in bits.\n"
-                        "0 = single colour, ~2.6 = six evenly-spaced hues, ~5 = rainbow.",
-                        " %.2f", color.hue_entropy);
+                        " %.1f%%", img.clipped_channel_fraction * 100.0f);
+    stats_labelled_text("Mean saturation:",
+                        "Mean HSV saturation over all pixels.",
+                        " %.3f", img.mean_saturation);
+    stats_labelled_text("P95 saturation:",
+                        "95th percentile HSV saturation.",
+                        " %.3f", img.p95_saturation);
     stats_labelled_text("Colourfulness:",
-                        "Composite score: colour_variety * saturation * colored fraction.",
-                        " %.3f", color.richness);
-    stats_labelled_text("Colored pixels:",
-                        "Percentage of pixels with HSV saturation above the 0.05 chroma threshold.",
-                        " %.1f%%", color.colored_fraction * 100.0f);
+                        "Normalized opponent-channel colorfulness.",
+                        " %.3f", img.colorfulness);
+    stats_labelled_text("Bright neutral:",
+                        "Fraction of pixels with high luma and low saturation.",
+                        " %.1f%%", img.bright_neutral_fraction * 100.0f);
+
+    if (ImGui::CollapsingHeader("Debug stats")) {
+        stats_labelled_text("P01 / P99:",
+                            "1st and 99th percentile luminance.",
+                            " %.3f / %.3f", dbg.p01_luma, dbg.p99_luma);
+        stats_labelled_text("P10 / P90:",
+                            "10th and 90th percentile luminance.",
+                            " %.3f / %.3f", dbg.p10_luma, dbg.p90_luma);
+        stats_labelled_text("Luma range:",
+                            "First and last populated histogram bins.",
+                            " %d - %d", hist_min < 256 ? hist_min : 0,
+                            hist_max_bin >= 0 ? hist_max_bin : 0);
+        stats_labelled_text("Luma entropy:",
+                            "Shannon entropy of the 256-bin luminance histogram, normalized to [0, 1].",
+                            " %.3f", dbg.luma_entropy_normalized);
+        stats_labelled_text("Hue entropy:",
+                            "Shannon entropy of the 36-bin hue histogram, in bits.",
+                            " %.2f", dbg.hue_entropy);
+        stats_labelled_text("Colored pixels:",
+                            "Percentage of pixels with HSV saturation above the chroma threshold.",
+                            " %.1f%%", dbg.colored_fraction * 100.0f);
+        stats_labelled_text("Colored saturation:",
+                            "Mean HSV saturation over chromatic pixels.",
+                            " %.3f", dbg.mean_saturation_colored);
+        stats_labelled_text("Saturation coverage:",
+                            "Chromatic-pixel mean saturation multiplied by colored-pixel fraction.",
+                            " %.3f", dbg.saturation_coverage);
+        stats_labelled_text("Raw colourfulness:",
+                            "Unnormalized opponent-channel colorfulness.",
+                            " %.3f", dbg.colorfulness_raw);
+    }
 
     // ── Light appearance ─────────────────────────────────────────────
     if (!live_metrics.lights.empty()) {
@@ -1952,13 +1949,12 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
             ImGui::SetTooltip("Per-light apparent point-light disc measured in normalized camera-space units.\n"
                               "Each row is one PointLight in the scene.");
-        if (ImGui::BeginTable("##lights", 7,
+        if (ImGui::BeginTable("##lights", 6,
                               ImGuiTableFlags_SizingStretchProp |
                               ImGuiTableFlags_Borders |
                               ImGuiTableFlags_RowBg)) {
             ImGui::TableSetupColumn("Light");
             ImGui::TableSetupColumn("Radius %");
-            ImGui::TableSetupColumn("Sector %");
             ImGui::TableSetupColumn("Core %");
             ImGui::TableSetupColumn("Edge %");
             ImGui::TableSetupColumn("Contrast");
@@ -1967,7 +1963,6 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::SetTooltip(
                     "Radius: estimated apparent point-light disc radius as %% of the short image side.\n"
-                    "Sector: temporary sector-consensus radius candidate for detector comparison.\n"
                     "Core: diagnostic saturated-core radius as %% of the short image side.\n"
                     "Edge: transition width as %% of the short image side.\n"
                     "Contrast: peak minus background luminance.\n"
@@ -1984,14 +1979,12 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
                 ImGui::TableSetColumnIndex(1);
                 ImGui::Text("%.2f", c.radius_ratio * 100.0f);
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%.2f", c.radius_candidate_sector_consensus_ratio * 100.0f);
-                ImGui::TableSetColumnIndex(3);
                 ImGui::Text("%.2f", c.saturated_radius_ratio * 100.0f);
-                ImGui::TableSetColumnIndex(4);
+                ImGui::TableSetColumnIndex(3);
                 ImGui::Text("%.2f", c.transition_width_ratio * 100.0f);
-                ImGui::TableSetColumnIndex(5);
+                ImGui::TableSetColumnIndex(4);
                 ImGui::Text("%.3f", c.peak_contrast);
-                ImGui::TableSetColumnIndex(6);
+                ImGui::TableSetColumnIndex(5);
                 ImGui::Text("%.2f", c.confidence);
             }
             ImGui::EndTable();
@@ -2001,15 +1994,15 @@ void draw_stats_window(PanelState& panel, FrameAnalysis& live_metrics,
     // ── Snapshot A comparison ────────────────────────────────────────
     if (compare_ab.metrics_valid) {
         ImGui::Separator();
-        const LuminanceStats& alum = compare_ab.analysis.luminance;
-        ImGui::Text("Snapshot A: brightness %.1f  near-black %.1f%%  clipped %.1f%%",
-                    alum.mean,
-                    alum.near_black_fraction * 100.0f,
-                    alum.clipped_channel_fraction * 100.0f);
-        ImGui::Text("Delta vs A:  brightness %+.1f  near-black %+.1f%%  clipped %+.1f%%",
-                    lum.mean - alum.mean,
-                    (lum.near_black_fraction - alum.near_black_fraction) * 100.0f,
-                    (lum.clipped_channel_fraction - alum.clipped_channel_fraction) * 100.0f);
+        const ImageStats& aimg = compare_ab.analysis.image;
+        ImGui::Text("Snapshot A: mean %.3f  near-black %.1f%%  clipped %.1f%%",
+                    aimg.mean_luma,
+                    aimg.near_black_fraction * 100.0f,
+                    aimg.clipped_channel_fraction * 100.0f);
+        ImGui::Text("Delta vs A:  mean %+.3f  near-black %+.1f%%  clipped %+.1f%%",
+                    img.mean_luma - aimg.mean_luma,
+                    (img.near_black_fraction - aimg.near_black_fraction) * 100.0f,
+                    (img.clipped_channel_fraction - aimg.clipped_channel_fraction) * 100.0f);
     }
 
     ImGui::End();

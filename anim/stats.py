@@ -1,8 +1,8 @@
 """Frame statistics for automated analysis and agent workflows.
 
-The actual luminance, colour, and point-light appearance math lives in
+The actual image-stat and point-light appearance math lives in
 the C++ frame-analysis core (see `src/core/image_analysis.cpp`). Callers
-should read `rr.metrics` / `rr.analysis.luminance` / `rr.analysis.color`
+should read `rr.metrics` / `rr.analysis.image` / `rr.analysis.debug`
 directly after rendering a frame with ``analyze=True``.
 
 What remains in this module:
@@ -12,7 +12,7 @@ What remains in this module:
 - `LookProfile` / `LookComparison` / `LookReport` — Look-quality analytics.
 - `LightContribution` / `StructureReport` and the shape-clutter diagnostics.
 
-All of these operate on `FrameMetrics` (the C++ LuminanceStats type).
+All of these operate on normalized `ImageStats`.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from .types import (
     Bezier,
     Circle,
     Ellipse,
-    FrameMetrics,
+    ImageStats,
     FrameReport,
     Look,
     Material,
@@ -50,8 +50,7 @@ from .types import (
 class QualityGate:
     """Threshold configuration for automated quality checks.
 
-    ``min_mean`` uses 0-1 scale (mapped from the 0-255 mean luminance).
-    Fraction thresholds are already on the 0-1 scale.
+    All thresholds use the public normalized image-stat scale.
     """
 
     max_clipped_channel_fraction: float = 0.05  # warn if any-channel clipping > 5%
@@ -66,7 +65,7 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
     Gracefully returns empty if live metrics are not available.
     """
     warnings: list[str] = []
-    if report.mean is None:
+    if report.mean_luma is None:
         return warnings
     if (
         report.clipped_channel_fraction is not None
@@ -76,8 +75,8 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
             "clipping "
             f"{report.clipped_channel_fraction:.1%} > {gate.max_clipped_channel_fraction:.1%}"
         )
-    if report.mean / 255.0 < gate.min_mean:
-        warnings.append(f"mean brightness {report.mean / 255.0:.2f} < {gate.min_mean}")
+    if report.mean_luma < gate.min_mean:
+        warnings.append(f"mean brightness {report.mean_luma:.2f} < {gate.min_mean}")
     if (
         report.near_black_fraction is not None
         and report.near_black_fraction > gate.max_near_black_fraction
@@ -94,16 +93,14 @@ def check_quality(report: FrameReport, gate: QualityGate) -> list[str]:
 
 @dataclass(frozen=True)
 class StatsDiff:
-    """Per-field difference between two FrameMetrics (b - a).
+    """Per-field difference between two normalized ImageStats values (b - a)."""
 
-    `mean` is the signed delta of `FrameMetrics.mean`.
-    """
-
-    mean: float
+    mean_luma: float
     near_black_fraction: float
     clipped_channel_fraction: float
-    median: float
-    highlight_ceiling: float
+    median_luma: float
+    p95_luma: float
+    interdecile_luma_range: float
 
     def summary(self) -> str:
         """One-line summary with signed deltas."""
@@ -113,18 +110,19 @@ class StatsDiff:
 
         return " ".join(
             [
-                _fmt("mean", self.mean),
+                _fmt("mean_luma", self.mean_luma),
                 _fmt("near_black", self.near_black_fraction),
                 _fmt("clipped", self.clipped_channel_fraction),
-                _fmt("median", self.median),
-                _fmt("highlight_ceiling", self.highlight_ceiling),
+                _fmt("median_luma", self.median_luma),
+                _fmt("p95_luma", self.p95_luma),
+                _fmt("interdecile_range", self.interdecile_luma_range),
             ]
         )
 
 
 def compare_stats(
-    a: list[tuple[int, float, FrameMetrics]],
-    b: list[tuple[int, float, FrameMetrics]],
+    a: list[tuple[int, float, ImageStats]],
+    b: list[tuple[int, float, ImageStats]],
 ) -> list[tuple[int, float, StatsDiff]]:
     """Compare two render_stats() results frame-by-frame.
 
@@ -142,13 +140,16 @@ def compare_stats(
                 fi_a,
                 t_a,
                 StatsDiff(
-                    mean=sb.mean - sa.mean,
+                    mean_luma=sb.mean_luma - sa.mean_luma,
                     near_black_fraction=sb.near_black_fraction - sa.near_black_fraction,
                     clipped_channel_fraction=(
                         sb.clipped_channel_fraction - sa.clipped_channel_fraction
                     ),
-                    median=sb.median - sa.median,
-                    highlight_ceiling=sb.highlight_ceiling - sa.highlight_ceiling,
+                    median_luma=sb.median_luma - sa.median_luma,
+                    p95_luma=sb.p95_luma - sa.p95_luma,
+                    interdecile_luma_range=(
+                        sb.interdecile_luma_range - sa.interdecile_luma_range
+                    ),
                 ),
             )
         )
@@ -164,7 +165,7 @@ def compare_summary(diffs: list[tuple[int, float, StatsDiff]]) -> str:
         lines.append(f"  frame {fi} ({t:.2f}s): {d.summary()}")
     # Aggregate
     n = len(diffs)
-    avg_mean = sum(d.mean for _, _, d in diffs) / n
+    avg_mean = sum(d.mean_luma for _, _, d in diffs) / n
     avg_clip = sum(d.clipped_channel_fraction for _, _, d in diffs) / n
     lines.append(f"  average: mean={avg_mean:+.2f} clipped={avg_clip:+.4f}")
     return "\n".join(lines)
@@ -470,13 +471,13 @@ class LookProfile:
     """
 
     look: Look
-    per_frame: list[tuple[int, float, FrameMetrics]]
+    per_frame: list[tuple[int, float, ImageStats]]
     mean_brightness: float
     std_brightness: float
     max_clipped_channel_fraction: float
     max_near_black_fraction: float
-    mean_contrast_spread: float
-    std_contrast_spread: float
+    mean_interdecile_luma_range: float
+    std_interdecile_luma_range: float
 
     @property
     def stability(self) -> float:
@@ -496,14 +497,15 @@ class LookProfile:
             "Max clipping: "
             f"{self.max_clipped_channel_fraction:.1%}  "
             f"Max near-black: {self.max_near_black_fraction:.1%}",
-            "Contrast spread: "
-            f"mean={self.mean_contrast_spread:.1f} std={self.std_contrast_spread:.1f}",
+            "Interdecile luma range: "
+            f"mean={self.mean_interdecile_luma_range:.3f} "
+            f"std={self.std_interdecile_luma_range:.3f}",
             f"Frames sampled: {len(self.per_frame)}",
         ]
         return "\n".join(lines)
 
     @staticmethod
-    def from_stats(look: Look, results: list[tuple[int, float, FrameMetrics]]) -> "LookProfile":
+    def from_stats(look: Look, results: list[tuple[int, float, ImageStats]]) -> "LookProfile":
         """Compute profile from render_stats output."""
         if not results:
             return LookProfile(
@@ -513,18 +515,16 @@ class LookProfile:
                 std_brightness=0,
                 max_clipped_channel_fraction=0,
                 max_near_black_fraction=0,
-                mean_contrast_spread=0,
-                std_contrast_spread=0,
+                mean_interdecile_luma_range=0,
+                std_interdecile_luma_range=0,
             )
-        brightnesses = [s.mean / 255.0 for _, _, s in results]
-        contrast_spreads = [
-            s.highlight_ceiling - s.shadow_floor for _, _, s in results
-        ]
+        brightnesses = [s.mean_luma for _, _, s in results]
+        contrast_ranges = [s.interdecile_luma_range for _, _, s in results]
         n = len(results)
         mean_b = sum(brightnesses) / n
         std_b = (sum((b - mean_b) ** 2 for b in brightnesses) / max(n - 1, 1)) ** 0.5
-        mean_cr = sum(contrast_spreads) / n
-        std_cr = (sum((c - mean_cr) ** 2 for c in contrast_spreads) / max(n - 1, 1)) ** 0.5
+        mean_cr = sum(contrast_ranges) / n
+        std_cr = (sum((c - mean_cr) ** 2 for c in contrast_ranges) / max(n - 1, 1)) ** 0.5
         return LookProfile(
             look=look,
             per_frame=list(results),
@@ -534,8 +534,8 @@ class LookProfile:
                 s.clipped_channel_fraction for _, _, s in results
             ),
             max_near_black_fraction=max(s.near_black_fraction for _, _, s in results),
-            mean_contrast_spread=mean_cr,
-            std_contrast_spread=std_cr,
+            mean_interdecile_luma_range=mean_cr,
+            std_interdecile_luma_range=std_cr,
         )
 
 
@@ -620,7 +620,7 @@ class LookReport:
         dark_threshold: float = 0.15,
         bright_threshold: float = 0.70,
         clipped_channel_threshold: float = 0.05,
-        contrast_spread_threshold: float = 30.0,
+        interdecile_luma_range_threshold: float = 30.0 / 255.0,
     ) -> "LookReport":
         """Analyze a profile and flag problem frames."""
         dark = []
@@ -628,14 +628,14 @@ class LookReport:
         clipping = []
         low_contrast = []
         for fi, _t, s in profile.per_frame:
-            b = s.mean / 255.0
+            b = s.mean_luma
             if b < dark_threshold:
                 dark.append(fi)
             if b > bright_threshold:
                 bright.append(fi)
             if s.clipped_channel_fraction > clipped_channel_threshold:
                 clipping.append(fi)
-            if (s.highlight_ceiling - s.shadow_floor) < contrast_spread_threshold:
+            if s.interdecile_luma_range < interdecile_luma_range_threshold:
                 low_contrast.append(fi)
         return LookReport(
             profile=profile,
@@ -660,7 +660,7 @@ class LightContribution:
 
     source_id: str
     source_index: int
-    mean_linear_luma: float  # linear mean BT.709 luminance, 0-255 display scale
+    mean_linear_luma: float  # linear mean BT.709 luminance, normalized display scale
     coverage_fraction: float  # spatial coverage (1 - near_black_fraction)
     share: float  # this source's linear mean / summed linear mean across sources
 
@@ -670,8 +670,8 @@ class StructureReport:
     """Effect of a shape on the scene's appearance."""
 
     shape_id: str
-    stats_with: FrameMetrics
-    stats_without: FrameMetrics
+    stats_with: ImageStats
+    stats_without: ImageStats
     diff: StatsDiff
     role: str  # "brightener", "dimmer", "neutral"
 

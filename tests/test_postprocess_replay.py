@@ -121,51 +121,46 @@ def _render_replay(
         session.close()
 
 
-def _assert_metrics_equal(a: _lpt2d.LuminanceStats, b: _lpt2d.LuminanceStats) -> None:
+def _assert_metrics_equal(a: _lpt2d.ImageStats, b: _lpt2d.ImageStats) -> None:
     for name in (
-        "mean",
-        "percentile_01",
-        "percentile_10",
-        "median",
-        "percentile_90",
-        "shadow_floor",
-        "highlight_ceiling",
-        "highlight_peak",
-        "contrast_std",
-        "contrast_spread",
-        "histogram_entropy",
-        "histogram_entropy_normalized",
-        "near_black_fraction",
-        "near_white_fraction",
-        "shadow_fraction",
-        "midtone_fraction",
-        "highlight_fraction",
-        "clipped_channel_fraction",
         "width",
         "height",
+        "mean_luma",
+        "median_luma",
+        "p05_luma",
+        "p95_luma",
+        "near_black_fraction",
+        "near_white_fraction",
+        "clipped_channel_fraction",
+        "rms_contrast",
+        "interdecile_luma_range",
+        "interdecile_luma_contrast",
+        "local_contrast",
+        "mean_saturation",
+        "p95_saturation",
+        "colorfulness",
+        "bright_neutral_fraction",
     ):
         assert getattr(a, name) == pytest.approx(getattr(b, name))
-    assert list(a.histogram) == list(b.histogram)
 
 
 def _assert_metrics_equivalent(
-    a: _lpt2d.LuminanceStats,
-    b: _lpt2d.LuminanceStats,
+    a: _lpt2d.ImageStats,
+    b: _lpt2d.ImageStats,
 ) -> None:
-    if list(a.histogram) == list(b.histogram):
-        _assert_metrics_equal(a, b)
-        return
-
     assert a.width == b.width
     assert a.height == b.height
-    assert sum(a.histogram) == sum(b.histogram)
-    assert a.mean == pytest.approx(b.mean, abs=0.01)
-    assert a.median == pytest.approx(b.median, abs=1.0)
-    assert a.contrast_std == pytest.approx(b.contrast_std, abs=0.05)
-    assert a.contrast_spread == pytest.approx(b.contrast_spread, abs=1.0)
+    assert a.mean_luma == pytest.approx(b.mean_luma, abs=0.01 / 255.0)
+    assert a.median_luma == pytest.approx(b.median_luma, abs=1.0 / 255.0)
+    assert a.rms_contrast == pytest.approx(b.rms_contrast, abs=0.05 / 255.0)
+    assert a.interdecile_luma_range == pytest.approx(
+        b.interdecile_luma_range, abs=1.0 / 255.0
+    )
     assert a.near_black_fraction == pytest.approx(b.near_black_fraction, abs=0.001)
     assert a.near_white_fraction == pytest.approx(b.near_white_fraction, abs=0.001)
     assert a.clipped_channel_fraction == pytest.approx(b.clipped_channel_fraction, abs=0.001)
+    assert a.mean_saturation == pytest.approx(b.mean_saturation, abs=0.01)
+    assert a.colorfulness == pytest.approx(b.colorfulness, abs=0.01)
 
 
 def _pixel_delta(a: bytes, b: bytes) -> tuple[int, int, float]:
@@ -227,8 +222,8 @@ def test_postprocess_analyze_true_matches_full_render_analysis():
 
     _assert_pixels_equivalent(replay.pixels, full.pixels)
     _assert_metrics_equal(replay.metrics, full.metrics)
-    _assert_metrics_equal(replay.analysis.luminance, full.analysis.luminance)
-    _assert_metrics_equal(replay.metrics, replay.analysis.luminance)
+    _assert_metrics_equal(replay.analysis.image, full.analysis.image)
+    _assert_metrics_equal(replay.metrics, replay.analysis.image)
     assert len(list(replay.analysis.lights)) == len(list(full.analysis.lights))
 
 
@@ -244,8 +239,10 @@ def test_postprocess_half_float_matches_full_render():
         max_diff=3,
         max_changed_fraction=0.08,
     )
-    assert replay.metrics.mean == pytest.approx(full.metrics.mean, abs=0.1)
-    assert replay.metrics.median == pytest.approx(full.metrics.median, abs=1.0)
+    assert replay.metrics.mean_luma == pytest.approx(full.metrics.mean_luma, abs=0.1 / 255.0)
+    assert replay.metrics.median_luma == pytest.approx(
+        full.metrics.median_luma, abs=1.0 / 255.0
+    )
     assert replay.metrics.width == full.metrics.width
     assert replay.metrics.height == full.metrics.height
 
@@ -353,8 +350,8 @@ def test_render_frame_variants_uses_named_dict_overrides():
 
     assert list(variants) == ["base", "low_gamma"]
     assert variants["low_gamma"].look.gamma == pytest.approx(0.8)
-    assert variants["low_gamma"].result.metrics.mean == pytest.approx(
-        variants["low_gamma"].result.analysis.luminance.mean
+    assert variants["low_gamma"].result.metrics.mean_luma == pytest.approx(
+        variants["low_gamma"].result.analysis.image.mean_luma
     )
 
     full = _render_full(variants["low_gamma"].look, scene=scene, analyze=True)

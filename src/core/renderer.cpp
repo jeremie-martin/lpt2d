@@ -1165,7 +1165,7 @@ static void flip_rgb8_rows(uint8_t* data, int width, int height,
 }
 
 void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect,
-                           const VignetteFrame* vignette_frame, FrameMetrics* out_metrics,
+                           const VignetteFrame* vignette_frame, ImageStats* out_metrics,
                            FrameAnalysis* out_analysis) {
     update_display(pp, display_aspect, vignette_frame);
 
@@ -1174,7 +1174,7 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
     if (want_analysis) {
         FrameAnalysisParams params;
         if (out_analysis == nullptr) {
-            params.analyze_color = false;
+            params.analyze_debug = false;
             params.analyze_lights = false;
         }
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
@@ -1184,7 +1184,7 @@ void Renderer::read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp,
             std::span<const LightRef>(light_refs_.data(), light_refs_.size()),
             params);
         if (out_metrics != nullptr) {
-            *out_metrics = slot.luminance;
+            *out_metrics = slot.image;
         }
     }
 

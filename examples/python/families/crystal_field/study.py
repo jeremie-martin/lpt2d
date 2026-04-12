@@ -48,7 +48,7 @@ from .params import LightSpectrumConfig, Params
 from .sampling import sample
 from .scene import build
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 RECORD_KIND = "measured_probe"
 CHECK_MODULE = importlib.import_module(f"{__package__}.check")
 
@@ -60,13 +60,13 @@ THRESHOLD_NAMES = (
     "MIN_RADIUS_RATIO",
     "MAX_RADIUS_RATIO",
     "MAX_NEAR_BLACK_FRACTION",
-    "MIN_MEAN_LUMINANCE",
-    "MAX_MEAN_LUMINANCE",
-    "GLASS_MAX_MEAN_LUMINANCE",
-    "MAX_SHADOW_FLOOR",
-    "MIN_CONTRAST_SPREAD",
-    "MAX_SHADOW_FRACTION",
-    "BLACK_DIFFUSE_MAX_SHADOW_FRACTION",
+    "MIN_MEAN_LUMA",
+    "MAX_MEAN_LUMA",
+    "GLASS_MAX_MEAN_LUMA",
+    "MAX_P05_LUMA",
+    "MIN_INTERDECILE_LUMA_RANGE",
+    "MIN_LOCAL_CONTRAST",
+    "MAX_BRIGHT_NEUTRAL_FRACTION",
     "MAX_MEAN_SATURATION",
 )
 
@@ -86,6 +86,7 @@ INTERACTION_FEATURES = (
     "look_white_point",
     "look_gamma",
     "look_contrast",
+    "look_saturation",
     "look_highlights",
     "look_shadows",
     "ambient_intensity",
@@ -100,15 +101,17 @@ INTERACTION_FEATURES = (
 )
 
 SPECTRUM_METRIC_FEATURES = (
-    "metric_mean",
-    "metric_median",
-    "metric_percentile_10",
-    "metric_percentile_90",
-    "metric_contrast_spread",
-    "metric_shadow_fraction",
+    "metric_mean_luma",
+    "metric_median_luma",
+    "metric_p10_luma",
+    "metric_p90_luma",
+    "metric_interdecile_luma_range",
+    "metric_local_contrast",
+    "metric_bright_neutral_fraction",
     "metric_near_black_fraction",
     "metric_near_white_fraction",
     "metric_mean_saturation",
+    "metric_colorfulness",
     "metric_colored_fraction",
     "metric_moving_radius_mean",
     "metric_ambient_radius_mean",
@@ -259,6 +262,7 @@ def _flat_features(p: Params) -> dict[str, Any]:
         "look_gamma": p.look.gamma,
         "look_contrast": p.look.contrast,
         "look_white_point": p.look.white_point,
+        "look_saturation": p.look.saturation,
         "look_temperature": p.look.temperature,
         "look_highlights": p.look.highlights,
         "look_shadows": p.look.shadows,
@@ -303,16 +307,18 @@ def _verdict_reason(ok: bool, summary: str) -> str:
         return "moving_to_ambient_radius_ratio"
     if "near_black" in text:
         return "near_black_fraction"
-    if "brightness" in text and "too dark" in text:
-        return "brightness_low"
-    if "brightness" in text and "too bright" in text:
-        return "brightness_high"
-    if "shadows=" in text:
-        return "shadow_floor"
-    if "contrast_spread" in text:
-        return "contrast_spread"
-    if "shadow_pixels" in text:
-        return "shadow_fraction"
+    if "mean_luma" in text and "too dark" in text:
+        return "mean_luma_low"
+    if "mean_luma" in text and "too bright" in text:
+        return "mean_luma_high"
+    if "p05_luma" in text:
+        return "p05_luma"
+    if "interdecile_luma_range" in text:
+        return "interdecile_luma_range"
+    if "local_contrast" in text:
+        return "local_contrast"
+    if "bright_neutral" in text:
+        return "bright_neutral_fraction"
     if "saturation" in text:
         return "mean_saturation"
     return "other"
@@ -1795,7 +1801,7 @@ function init() {{
   setOptions(
     $('spectrumMetricSelect'),
     spectrumMetrics,
-    spectrumMetrics.includes('metric_mean') ? 'metric_mean' : spectrumMetrics[0]
+    spectrumMetrics.includes('metric_mean_luma') ? 'metric_mean_luma' : spectrumMetrics[0]
   );
   $('spectrumGroupSelect').addEventListener('change', renderSpectrumImpact);
   $('spectrumMetricSelect').addEventListener('change', renderSpectrumImpact);

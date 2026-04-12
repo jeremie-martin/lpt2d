@@ -14,14 +14,11 @@ def test_constraint_dashboard_model_matches_current_overrides():
     outcomes = {row["outcome"]: row for row in model["effective_outcomes"]}
 
     assert outcomes["glass"]["active"] == "no"
-    assert outcomes["glass"]["mean"] == (
-        f"{CHECK.MIN_MEAN_LUMINANCE:.1f} to {CHECK.GLASS_MAX_MEAN_LUMINANCE:.1f}"
+    assert outcomes["glass"]["mean_luma"] == (
+        f"{CHECK.MIN_MEAN_LUMA:.3f} to {CHECK.GLASS_MAX_MEAN_LUMA:.3f}"
     )
-    assert outcomes["black_diffuse"]["shadow_fraction"] == (
-        f"<= {100 * CHECK.BLACK_DIFFUSE_MAX_SHADOW_FRACTION:.1f}%"
-    )
-    assert outcomes["gray_diffuse"]["shadow_fraction"] == (
-        f"<= {100 * CHECK.MAX_SHADOW_FRACTION:.1f}%"
+    assert outcomes["black_diffuse"]["bright_neutral"] == (
+        f"<= {100 * CHECK.MAX_BRIGHT_NEUTRAL_FRACTION:.1f}%"
     )
 
 

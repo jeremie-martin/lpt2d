@@ -1,8 +1,8 @@
 """Shared helpers for the spectral compensation studies.
 
 The studies in this directory compare final-frame appearance, not raw
-radiometry. Brightness is the renderer's BT.709 mean luminance on the final
-RGB8 image. Circle size is the analyzer's apparent moving-light radius.
+radiometry. Brightness is the renderer's normalized BT.709 mean luminance on
+the final RGB8 image. Circle size is the analyzer's apparent moving-light radius.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class Measurement:
     mean: float
     median: float
     mean_saturation: float
-    shadow_fraction: float
+    near_black_fraction: float
     moving_radius: float
     ambient_radius: float
     moving_confidence: float
@@ -121,10 +121,10 @@ def measure_result(rr: _lpt2d.RenderResult) -> Measurement:
     moving = moving_lights(rr.analysis)
     ambient = ambient_lights(rr.analysis)
     return Measurement(
-        mean=float(rr.analysis.luminance.mean),
-        median=float(rr.analysis.luminance.median),
-        mean_saturation=float(rr.analysis.color.mean_saturation),
-        shadow_fraction=float(rr.analysis.luminance.shadow_fraction),
+        mean=float(rr.analysis.image.mean_luma),
+        median=float(rr.analysis.image.median_luma),
+        mean_saturation=float(rr.analysis.image.mean_saturation),
+        near_black_fraction=float(rr.analysis.image.near_black_fraction),
         moving_radius=mean_or_zero(float(c.radius_ratio) for c in moving),
         ambient_radius=mean_or_zero(float(c.radius_ratio) for c in ambient),
         moving_confidence=mean_or_zero(float(c.confidence) for c in moving),

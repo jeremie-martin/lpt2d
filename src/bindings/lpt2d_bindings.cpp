@@ -741,47 +741,48 @@ NB_MODULE(_lpt2d, m) {
         );
     }, "scene"_a, "origin"_a, "direction"_a);
 
-    // ── FrameMetrics / LuminanceStats ────────────────────────────
-    auto lum_stats_cls = nb::class_<LuminanceStats>(m, "LuminanceStats")
+    // ── ImageStats / ImageDebugStats ────────────────────────────
+    nb::class_<ImageStats>(m, "ImageStats")
         .def(nb::init<>())
-        .def_ro("mean", &LuminanceStats::mean)
-        .def_ro("percentile_01", &LuminanceStats::percentile_01)
-        .def_ro("percentile_10", &LuminanceStats::percentile_10)
-        .def_ro("median", &LuminanceStats::median)
-        .def_ro("percentile_90", &LuminanceStats::percentile_90)
-        .def_ro("shadow_floor", &LuminanceStats::shadow_floor)
-        .def_ro("highlight_ceiling", &LuminanceStats::highlight_ceiling)
-        .def_ro("highlight_peak", &LuminanceStats::highlight_peak)
-        .def_ro("contrast_std", &LuminanceStats::contrast_std)
-        .def_ro("contrast_spread", &LuminanceStats::contrast_spread)
-        .def_ro("histogram_entropy", &LuminanceStats::histogram_entropy)
-        .def_ro("histogram_entropy_normalized",
-                &LuminanceStats::histogram_entropy_normalized)
-        .def_ro("near_black_fraction", &LuminanceStats::near_black_fraction)
-        .def_ro("near_white_fraction", &LuminanceStats::near_white_fraction)
-        .def_ro("shadow_fraction", &LuminanceStats::shadow_fraction)
-        .def_ro("midtone_fraction", &LuminanceStats::midtone_fraction)
-        .def_ro("highlight_fraction", &LuminanceStats::highlight_fraction)
-        .def_ro("clipped_channel_fraction", &LuminanceStats::clipped_channel_fraction)
-        .def_ro("width", &LuminanceStats::width)
-        .def_ro("height", &LuminanceStats::height)
-        .def_prop_ro("histogram", [](const LuminanceStats& s) {
-            std::vector<int> h(s.histogram.begin(), s.histogram.end());
-            return h;
-        });
-    m.attr("FrameMetrics") = lum_stats_cls;
+        .def_ro("width", &ImageStats::width)
+        .def_ro("height", &ImageStats::height)
+        .def_ro("mean_luma", &ImageStats::mean_luma)
+        .def_ro("median_luma", &ImageStats::median_luma)
+        .def_ro("p05_luma", &ImageStats::p05_luma)
+        .def_ro("p95_luma", &ImageStats::p95_luma)
+        .def_ro("near_black_fraction", &ImageStats::near_black_fraction)
+        .def_ro("near_white_fraction", &ImageStats::near_white_fraction)
+        .def_ro("clipped_channel_fraction", &ImageStats::clipped_channel_fraction)
+        .def_ro("rms_contrast", &ImageStats::rms_contrast)
+        .def_ro("interdecile_luma_range", &ImageStats::interdecile_luma_range)
+        .def_ro("interdecile_luma_contrast", &ImageStats::interdecile_luma_contrast)
+        .def_ro("local_contrast", &ImageStats::local_contrast)
+        .def_ro("mean_saturation", &ImageStats::mean_saturation)
+        .def_ro("p95_saturation", &ImageStats::p95_saturation)
+        .def_ro("colorfulness", &ImageStats::colorfulness)
+        .def_ro("bright_neutral_fraction", &ImageStats::bright_neutral_fraction);
 
-    // ── ColorStats ───────────────────────────────────────────────
-    nb::class_<ColorStats>(m, "ColorStats")
-        .def_ro("mean_saturation", &ColorStats::mean_saturation)
-        .def_ro("saturation_coverage", &ColorStats::saturation_coverage)
-        .def_ro("hue_entropy", &ColorStats::hue_entropy)
-        .def_ro("colored_fraction", &ColorStats::colored_fraction)
-        .def_ro("richness", &ColorStats::richness)
-        .def_ro("n_colored", &ColorStats::n_colored)
-        .def_prop_ro("hue_histogram", [](const ColorStats& s) {
-            std::vector<int> h(s.hue_histogram.begin(), s.hue_histogram.end());
-            return h;
+    nb::class_<ImageDebugStats>(m, "ImageDebugStats")
+        .def(nb::init<>())
+        .def_ro("p01_luma", &ImageDebugStats::p01_luma)
+        .def_ro("p10_luma", &ImageDebugStats::p10_luma)
+        .def_ro("p90_luma", &ImageDebugStats::p90_luma)
+        .def_ro("p99_luma", &ImageDebugStats::p99_luma)
+        .def_ro("luma_entropy", &ImageDebugStats::luma_entropy)
+        .def_ro("luma_entropy_normalized", &ImageDebugStats::luma_entropy_normalized)
+        .def_ro("hue_entropy", &ImageDebugStats::hue_entropy)
+        .def_ro("colored_fraction", &ImageDebugStats::colored_fraction)
+        .def_ro("mean_saturation_colored", &ImageDebugStats::mean_saturation_colored)
+        .def_ro("saturation_coverage", &ImageDebugStats::saturation_coverage)
+        .def_ro("colorfulness_raw", &ImageDebugStats::colorfulness_raw)
+        .def_prop_ro("luma_histogram", [](const ImageDebugStats& s) {
+            return std::vector<int>(s.luma_histogram.begin(), s.luma_histogram.end());
+        })
+        .def_prop_ro("saturation_histogram", [](const ImageDebugStats& s) {
+            return std::vector<int>(s.saturation_histogram.begin(), s.saturation_histogram.end());
+        })
+        .def_prop_ro("hue_histogram", [](const ImageDebugStats& s) {
+            return std::vector<int>(s.hue_histogram.begin(), s.hue_histogram.end());
         });
 
     // ── LightRef ─────────────────────────────────────────────────
@@ -808,8 +809,6 @@ NB_MODULE(_lpt2d, m) {
         .def_ro("image_y", &PointLightAppearance::image_y)
         .def_ro("visible", &PointLightAppearance::visible)
         .def_ro("radius_ratio", &PointLightAppearance::radius_ratio)
-        .def_ro("radius_candidate_sector_consensus_ratio",
-                &PointLightAppearance::radius_candidate_sector_consensus_ratio)
         .def_ro("coverage_fraction", &PointLightAppearance::coverage_fraction)
         .def_ro("saturated_radius_ratio", &PointLightAppearance::saturated_radius_ratio)
         .def_ro("transition_width_ratio", &PointLightAppearance::transition_width_ratio)
@@ -835,8 +834,8 @@ NB_MODULE(_lpt2d, m) {
 
     // ── FrameAnalysis ────────────────────────────────────────────
     nb::class_<FrameAnalysis>(m, "FrameAnalysis")
-        .def_ro("luminance", &FrameAnalysis::luminance)
-        .def_ro("color", &FrameAnalysis::color)
+        .def_ro("image", &FrameAnalysis::image)
+        .def_ro("debug", &FrameAnalysis::debug)
         .def_ro("lights", &FrameAnalysis::lights);
 
     // ── FrameAnalysisParams ──────────────────────────────────────
@@ -844,13 +843,17 @@ NB_MODULE(_lpt2d, m) {
         .def("__init__", [](FrameAnalysisParams* self) {
             new (self) FrameAnalysisParams{};
         })
-        .def_rw("analyze_luminance", &FrameAnalysisParams::analyze_luminance)
-        .def_rw("analyze_color", &FrameAnalysisParams::analyze_color)
+        .def_rw("analyze_image", &FrameAnalysisParams::analyze_image)
+        .def_rw("analyze_debug", &FrameAnalysisParams::analyze_debug)
         .def_rw("analyze_lights", &FrameAnalysisParams::analyze_lights)
         .def_rw("lights", &FrameAnalysisParams::lights)
-        .def_rw("saturation_threshold", &FrameAnalysisParams::saturation_threshold)
-        .def_rw("near_black_bin_max", &FrameAnalysisParams::near_black_bin_max)
-        .def_rw("near_white_bin_min", &FrameAnalysisParams::near_white_bin_min);
+        .def_rw("near_black_luma", &FrameAnalysisParams::near_black_luma)
+        .def_rw("near_white_luma", &FrameAnalysisParams::near_white_luma)
+        .def_rw("bright_luma_threshold", &FrameAnalysisParams::bright_luma_threshold)
+        .def_rw("neutral_saturation_threshold",
+                &FrameAnalysisParams::neutral_saturation_threshold)
+        .def_rw("colored_saturation_threshold",
+                &FrameAnalysisParams::colored_saturation_threshold);
 
     // Frame analysis is returned through `RenderSession.render_shot(...,
     // analyze=True)` and the renderer readback paths.

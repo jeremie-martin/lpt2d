@@ -280,8 +280,9 @@ print(cr.max_diff)     # max per-channel pixel difference
 print(cr.time_a_ms)    # timing from result A
 print(cr.time_b_ms)    # timing from result B
 
-# FrameMetrics comparison (secondary diagnostic signal)
+# ImageStats comparison (secondary diagnostic signal)
 if cr.metrics:
+    print(cr.metrics.mean_luma_delta)
     print(cr.metrics.histogram_overlap)  # 1.0 = identical distribution
     print(cr.metrics.warnings)           # threshold violations
 ```
@@ -368,15 +369,15 @@ strict = Thresholds(pass_psnr=50.0, pass_ssim=0.999, pass_max_diff=5)
 cr = compare_render_results(a, b, thresholds=strict)
 ```
 
-FrameMetrics secondary signal thresholds (produce warnings, don't override
+ImageStats secondary signal thresholds (produce warnings, don't override
 pixel verdict):
 
 | Metric              | Default threshold |
 |---------------------|-------------------|
-| mean_delta          | <= 5.0            |
+| mean_luma_delta     | <= 5/255          |
 | histogram_overlap   | >= 0.98           |
-| median_delta        | <= 10.0           |
-| highlight_ceiling_delta | <= 15.0       |
+| median_luma_delta   | <= 10/255         |
+| p95_luma_delta      | <= 15/255         |
 | near_black_fraction_delta | <= 0.05     |
 | clipped_channel_fraction_delta | <= 0.05 |
 

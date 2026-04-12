@@ -467,7 +467,7 @@ def _passes_clean_filter(
     mean_min: float,
     mean_max: float,
     max_mean_saturation: float,
-    max_shadow_fraction: float,
+    max_near_black_fraction: float,
     min_moving_radius: float,
 ) -> tuple[bool, list[str]]:
     reasons: list[str] = []
@@ -477,8 +477,8 @@ def _passes_clean_filter(
         reasons.append(f"mean>{mean_max:g}")
     if measurement.mean_saturation > max_mean_saturation:
         reasons.append(f"mean_saturation>{max_mean_saturation:g}")
-    if measurement.shadow_fraction > max_shadow_fraction:
-        reasons.append(f"shadow_fraction>{max_shadow_fraction:g}")
+    if measurement.near_black_fraction > max_near_black_fraction:
+        reasons.append(f"near_black_fraction>{max_near_black_fraction:g}")
     if measurement.moving_radius < min_moving_radius:
         reasons.append(f"moving_radius<{min_moving_radius:g}")
     return not reasons, reasons
@@ -512,7 +512,7 @@ def run_study(
     mean_min: float,
     mean_max: float,
     max_mean_saturation: float,
-    max_shadow_fraction: float,
+    max_near_black_fraction: float,
     min_moving_radius: float,
     fixed_gamma_min: float,
 ) -> dict:
@@ -550,7 +550,7 @@ def run_study(
             mean_min=mean_min,
             mean_max=mean_max,
             max_mean_saturation=max_mean_saturation,
-            max_shadow_fraction=max_shadow_fraction,
+            max_near_black_fraction=max_near_black_fraction,
             min_moving_radius=min_moving_radius,
         )
         if ok:
@@ -587,7 +587,7 @@ def run_study(
             "mean_min": mean_min,
             "mean_max": mean_max,
             "max_mean_saturation": max_mean_saturation,
-            "max_shadow_fraction": max_shadow_fraction,
+            "max_near_black_fraction": max_near_black_fraction,
             "min_moving_radius": min_moving_radius,
             "fixed_gamma_min": fixed_gamma_min,
             "deduplicate_shots": deduplicate_shots,
@@ -783,10 +783,10 @@ def main() -> None:
         action="store_true",
         help="Include glass scenes. Default excludes them for compensation calibration.",
     )
-    parser.add_argument("--mean-min", type=float, default=60.0)
-    parser.add_argument("--mean-max", type=float, default=140.0)
+    parser.add_argument("--mean-min", type=float, default=60.0 / 255.0)
+    parser.add_argument("--mean-max", type=float, default=140.0 / 255.0)
     parser.add_argument("--max-mean-saturation", type=float, default=0.66)
-    parser.add_argument("--max-shadow-fraction", type=float, default=0.20)
+    parser.add_argument("--max-near-black-fraction", type=float, default=0.20)
     parser.add_argument("--min-moving-radius", type=float, default=0.010)
     parser.add_argument(
         "--fixed-gamma-min",
@@ -831,7 +831,7 @@ def main() -> None:
         mean_min=args.mean_min,
         mean_max=args.mean_max,
         max_mean_saturation=args.max_mean_saturation,
-        max_shadow_fraction=args.max_shadow_fraction,
+        max_near_black_fraction=args.max_near_black_fraction,
         min_moving_radius=args.min_moving_radius,
         fixed_gamma_min=args.fixed_gamma_min,
     )

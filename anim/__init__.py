@@ -71,19 +71,18 @@ from .types import Bezier as Bezier
 from .types import Camera2D as Camera2D
 from .types import Canvas as Canvas
 from .types import Circle as Circle
-from .types import ColorStats as ColorStats
 from .types import Ellipse as Ellipse
 from .types import Frame as Frame
 from .types import FrameAnalysis as FrameAnalysis
 from .types import FrameContext as FrameContext
-from .types import FrameMetrics as FrameMetrics
 from .types import FrameReport as FrameReport
 from .types import Group as Group
 from .types import LightRef as LightRef
 from .types import LightSpectrum as LightSpectrum
 from .types import LightSpectrumType as LightSpectrumType
 from .types import Look as Look
-from .types import LuminanceStats as LuminanceStats
+from .types import ImageDebugStats as ImageDebugStats
+from .types import ImageStats as ImageStats
 from .types import Material as Material
 from .types import Path as Path
 from .types import PointLight as PointLight
@@ -116,7 +115,6 @@ __all__ = [
     "Camera2D",
     "Canvas",
     "Circle",
-    "ColorStats",
     "Ellipse",
     "EASING_DERIVATIVES",
     "EASINGS",
@@ -124,13 +122,13 @@ __all__ = [
     "Frame",
     "FrameAnalysis",
     "FrameContext",
-    "FrameMetrics",
     "FrameReport",
     "Group",
     "LightRef",
     "LightSpectrum",
     "LightSpectrumType",
-    "LuminanceStats",
+    "ImageDebugStats",
+    "ImageStats",
     "Key",
     "Look",
     "Material",

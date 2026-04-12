@@ -98,7 +98,7 @@ curve that we do not want to apply visually.
 
 The study uses renderer-facing appearance metrics, not raw radiometric energy.
 
-- Brightness: `FrameAnalysis.luminance.mean`, final RGB8 BT.709 mean luminance.
+- Brightness: `FrameAnalysis.image.mean_luma`, final RGB8 BT.709 mean luma.
 - Circle size: mean `FrameAnalysis.lights[*].radius_ratio` over moving lights.
 - Error: each warm-band render is compared with the same shot rendered with a
   white moving light at the same moving-light intensity multiplier.

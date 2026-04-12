@@ -932,11 +932,11 @@ int App::run(const AppConfig& config) {
             overlay_matches_authored_camera &&
             !live_metrics.lights.empty()) {
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const float analysis_w = live_metrics.luminance.width > 0
-                ? static_cast<float>(live_metrics.luminance.width)
+            const float analysis_w = live_metrics.image.width > 0
+                ? static_cast<float>(live_metrics.image.width)
                 : static_cast<float>(overlay_shot.canvas.width);
-            const float analysis_h = live_metrics.luminance.height > 0
-                ? static_cast<float>(live_metrics.luminance.height)
+            const float analysis_h = live_metrics.image.height > 0
+                ? static_cast<float>(live_metrics.image.height)
                 : static_cast<float>(overlay_shot.canvas.height);
             const float sx_scale = (analysis_w > 0.0f) ? (float)win_w / analysis_w : 1.0f;
             const float sy_scale = (analysis_h > 0.0f) ? (float)win_h / analysis_h : 1.0f;

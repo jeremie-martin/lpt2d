@@ -9,7 +9,7 @@ free sampler while the non-glass outcomes are tuned from measured probe data.
 The active peer outcomes:
 
 1. ``black_diffuse``   — high-albedo diffuse, fill = 0 (dark silhouettes)
-2. ``gray_diffuse``    — high-albedo diffuse, fill ∈ [0.12, 0.22], no color
+2. ``gray_diffuse``    — high-albedo diffuse, fill ∈ [0.15, 0.3], no color
 3. ``colored_diffuse`` — high-albedo diffuse, fill ∈ [0.12, 0.22], strictly 1 color
 4. ``brushed_metal``   — metallic+roughness, fill ∈ [0.066, 0.15], 0/1/2 colors
 
@@ -382,7 +382,7 @@ def _gray_diffuse_material(rng: random.Random) -> MaterialConfig:
     return MaterialConfig(
         outcome="gray_diffuse",
         albedo=rng.uniform(0.7, 1.0),
-        fill=rng.uniform(0.12, 0.22),
+        fill=rng.uniform(0.15, 0.3),
         color_names=[],
     )
 

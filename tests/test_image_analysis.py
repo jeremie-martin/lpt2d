@@ -48,7 +48,7 @@ def test_render_frame_no_analyze_leaves_analysis_zeroed():
     assert list(rr.analysis.lights) == []
 
 
-def test_render_frame_analyze_true_populates_luminance_color_lights():
+def test_render_frame_analyze_true_populates_image_debug_lights():
     """analyze=True runs frame analysis and populates every sub-struct."""
     scene = Scene(
         lights=[PointLight(id="light_0", position=[0.0, 0.0], intensity=1.0,
@@ -63,39 +63,40 @@ def test_render_frame_analyze_true_populates_luminance_color_lights():
     rr = render_frame(animate, Timeline(1.0, fps=1),
                       settings=_probe_shot(), analyze=True)
 
-    # Luminance — the rr.metrics alias must match .analysis.luminance exactly.
-    assert rr.metrics.mean == rr.analysis.luminance.mean
-    assert rr.metrics.median == rr.analysis.luminance.median
-    assert rr.metrics.highlight_ceiling == rr.analysis.luminance.highlight_ceiling
+    # ImageStats — rr.metrics is the compact alias for .analysis.image.
+    assert rr.metrics.mean_luma == rr.analysis.image.mean_luma
+    assert rr.metrics.median_luma == rr.analysis.image.median_luma
+    assert rr.metrics.p95_luma == rr.analysis.image.p95_luma
     assert (
         rr.metrics.clipped_channel_fraction
-        == rr.analysis.luminance.clipped_channel_fraction
+        == rr.analysis.image.clipped_channel_fraction
     )
-    assert rr.analysis.luminance.width == 128
-    assert rr.analysis.luminance.height == 128
+    assert rr.analysis.image.width == 128
+    assert rr.analysis.image.height == 128
 
-    # Color — any real render produces at least some chromatic content
-    # from the spectrum → RGB conversion, so colored_fraction >= 0.
-    assert rr.analysis.color.colored_fraction >= 0.0
-    assert rr.analysis.color.richness >= 0.0
+    # Debug stats carry the expanded histograms and color diagnostics.
+    assert rr.analysis.debug.colored_fraction >= 0.0
+    assert rr.analysis.image.colorfulness >= 0.0
+    assert len(list(rr.analysis.debug.luma_histogram)) == 256
 
     # Lights — one PointLight means exactly one measured appearance record.
     assert len(list(rr.analysis.lights)) == 1
     light = list(rr.analysis.lights)[0]
     assert light.id == "light_0"
     assert light.radius_ratio >= 0.0
-    assert light.radius_candidate_sector_consensus_ratio >= 0.0
+    assert light.saturated_radius_ratio >= 0.0
     assert not hasattr(light, "radius_candidate_knee_ratio")
     assert not hasattr(light, "radius_candidate_robust_sector_edge_ratio")
     assert not hasattr(light, "radius_candidate_outer_shoulder_ratio")
+    assert not hasattr(light, "radius_candidate_sector_consensus_ratio")
     assert light.coverage_fraction >= 0.0
 
 
-def test_luminance_stats_default_constructible():
-    """anim/light_analysis.py uses LuminanceStats() as a zero sentinel."""
-    s = _lpt2d.LuminanceStats()
-    assert s.mean == 0.0
-    assert s.median == 0.0
+def test_image_stats_default_constructible():
+    """anim/light_analysis.py uses ImageStats() as a zero sentinel."""
+    s = _lpt2d.ImageStats()
+    assert s.mean_luma == 0.0
+    assert s.median_luma == 0.0
     assert s.width == 0
     assert s.height == 0
 

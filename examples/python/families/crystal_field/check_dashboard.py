@@ -29,10 +29,11 @@ GATING_METRICS = {
     "ambient_radius_max",
     "moving_to_ambient_radius_ratio",
     "near_black_fraction",
-    "mean",
-    "shadow_floor",
-    "contrast_spread",
-    "shadow_fraction",
+    "mean_luma",
+    "p05_luma",
+    "interdecile_luma_range",
+    "local_contrast",
+    "bright_neutral_fraction",
     "mean_saturation",
 }
 
@@ -74,11 +75,12 @@ def _check_order() -> list[dict[str, str]]:
         _constraint("Balance", "moving_to_ambient_radius_ratio", f">= {_num(CHECK.MIN_RADIUS_RATIO)}", "moving_to_ambient_radius_ratio", "Moving lights should read larger than ambient lights."),
         _constraint("Balance", "moving_to_ambient_radius_ratio", f"<= {_num(CHECK.MAX_RADIUS_RATIO)}", "moving_to_ambient_radius_ratio", "Moving lights should not be wildly larger than ambient lights."),
         _constraint("Tone", "near_black_fraction", f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}", "near_black", "Rejects frames with too much crushed black."),
-        _constraint("Tone", "mean", f">= {_num(CHECK.MIN_MEAN_LUMINANCE)}", "brightness", "Rejects frames that are too dark."),
-        _constraint("Tone", "mean", "outcome dependent", "brightness", "Rejects frames that are too bright; glass has a stricter ceiling."),
-        _constraint("Tone", "shadow_floor", f"<= {_num(CHECK.MAX_SHADOW_FLOOR)}", "shadows", "Rejects raised shadows that wash out the image."),
-        _constraint("Tone", "contrast_spread", f">= {_num(CHECK.MIN_CONTRAST_SPREAD)}", "contrast_spread", "Requires enough p10 to p90 luminance spread."),
-        _constraint("Tone", "shadow_fraction", "outcome dependent", "shadow_pixels", "Rejects too many dark pixels; black diffuse gets a looser ceiling."),
+        _constraint("Tone", "mean_luma", f">= {_num(CHECK.MIN_MEAN_LUMA)}", "mean_luma", "Rejects frames that are too dark."),
+        _constraint("Tone", "mean_luma", "outcome dependent", "mean_luma", "Rejects frames that are too bright; glass has a stricter ceiling."),
+        _constraint("Tone", "p05_luma", f"<= {_num(CHECK.MAX_P05_LUMA)}", "p05_luma", "Rejects raised dark values that wash out the image."),
+        _constraint("Tone", "interdecile_luma_range", f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}", "interdecile_luma_range", "Requires enough robust luminance spread."),
+        _constraint("Tone", "local_contrast", f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}", "local_contrast", "Rejects frames without enough spatial edge contrast."),
+        _constraint("Wash-out", "bright_neutral_fraction", f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}", "bright_neutral", "Rejects large bright low-saturation regions."),
         _constraint("Color", "mean_saturation", f"< {_num(CHECK.MAX_MEAN_SATURATION)}", "saturation", "Rejects over-saturated frames."),
     ]
 
@@ -93,11 +95,12 @@ def _global_constraints() -> list[dict[str, str]]:
         _constraint("Ambient radius", "ambient_radius_max", f"<= {_num(CHECK.MAX_AMBIENT_RADIUS_RATIO)}", "ambient_radius_max", "All ambient lights must stay under this upper bound."),
         _constraint("Radius balance", "moving_to_ambient_radius_ratio", f"{_num(CHECK.MIN_RADIUS_RATIO)} to {_num(CHECK.MAX_RADIUS_RATIO)}", "moving_to_ambient_radius_ratio", "Uses moving radius mean divided by ambient radius mean."),
         _constraint("Tone", "near_black_fraction", f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}", "near_black", "Global crushed-black ceiling."),
-        _constraint("Tone", "mean", f">= {_num(CHECK.MIN_MEAN_LUMINANCE)}", "brightness", "Global lower brightness bound."),
-        _constraint("Tone", "mean", f"<= {_num(CHECK.MAX_MEAN_LUMINANCE)} by default", "brightness", "Upper brightness bound unless overridden by outcome."),
-        _constraint("Tone", "shadow_floor", f"<= {_num(CHECK.MAX_SHADOW_FLOOR)}", "shadows", "Global shadow-floor ceiling."),
-        _constraint("Tone", "contrast_spread", f">= {_num(CHECK.MIN_CONTRAST_SPREAD)}", "contrast_spread", "Global contrast requirement."),
-        _constraint("Tone", "shadow_fraction", f"<= {_pct(CHECK.MAX_SHADOW_FRACTION)} by default", "shadow_pixels", "Upper shadow-pixel fraction unless overridden by outcome."),
+        _constraint("Tone", "mean_luma", f">= {_num(CHECK.MIN_MEAN_LUMA)}", "mean_luma", "Global lower brightness bound."),
+        _constraint("Tone", "mean_luma", f"<= {_num(CHECK.MAX_MEAN_LUMA)} by default", "mean_luma", "Upper brightness bound unless overridden by outcome."),
+        _constraint("Tone", "p05_luma", f"<= {_num(CHECK.MAX_P05_LUMA)}", "p05_luma", "Global lower-tail luminance ceiling."),
+        _constraint("Tone", "interdecile_luma_range", f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}", "interdecile_luma_range", "Global robust contrast requirement."),
+        _constraint("Tone", "local_contrast", f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}", "local_contrast", "Global spatial contrast requirement."),
+        _constraint("Wash-out", "bright_neutral_fraction", f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}", "bright_neutral", "Global bright-neutral ceiling."),
         _constraint("Color", "mean_saturation", f"< {_num(CHECK.MAX_MEAN_SATURATION)}", "saturation", "Strictly less than the threshold."),
     ]
 
@@ -106,17 +109,10 @@ def _overrides() -> list[dict[str, str]]:
     return [
         {
             "outcome": "glass",
-            "metric": "mean",
-            "default_rule": f"<= {_num(CHECK.MAX_MEAN_LUMINANCE)}",
-            "effective_rule": f"<= {_num(CHECK.GLASS_MAX_MEAN_LUMINANCE)}",
+            "metric": "mean_luma",
+            "default_rule": f"<= {_num(CHECK.MAX_MEAN_LUMA)}",
+            "effective_rule": f"<= {_num(CHECK.GLASS_MAX_MEAN_LUMA)}",
             "effect": "stricter brightness ceiling",
-        },
-        {
-            "outcome": "black_diffuse",
-            "metric": "shadow_fraction",
-            "default_rule": f"<= {_pct(CHECK.MAX_SHADOW_FRACTION)}",
-            "effective_rule": f"<= {_pct(CHECK.BLACK_DIFFUSE_MAX_SHADOW_FRACTION)}",
-            "effect": "looser shadow-pixel ceiling",
         },
     ]
 
@@ -125,21 +121,10 @@ def _effective_outcomes() -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     active = set(OUTCOMES)
     for outcome in ALL_OUTCOMES:
-        max_mean = (
-            CHECK.GLASS_MAX_MEAN_LUMINANCE
-            if outcome == "glass"
-            else CHECK.MAX_MEAN_LUMINANCE
-        )
-        max_shadow = (
-            CHECK.BLACK_DIFFUSE_MAX_SHADOW_FRACTION
-            if outcome == "black_diffuse"
-            else CHECK.MAX_SHADOW_FRACTION
-        )
+        max_mean = CHECK.GLASS_MAX_MEAN_LUMA if outcome == "glass" else CHECK.MAX_MEAN_LUMA
         override_notes = []
         if outcome == "glass":
             override_notes.append("mean ceiling")
-        if outcome == "black_diffuse":
-            override_notes.append("shadow fraction")
         rows.append(
             {
                 "outcome": outcome,
@@ -147,11 +132,12 @@ def _effective_outcomes() -> list[dict[str, str]]:
                 "moving_radius": f"{_num(CHECK.MIN_MOVING_RADIUS_RATIO)} to {_num(CHECK.MAX_MOVING_RADIUS_RATIO)}",
                 "ambient_radius": f"{_num(CHECK.MIN_AMBIENT_RADIUS_RATIO)} to {_num(CHECK.MAX_AMBIENT_RADIUS_RATIO)}",
                 "radius_ratio": f"{_num(CHECK.MIN_RADIUS_RATIO)} to {_num(CHECK.MAX_RADIUS_RATIO)}",
-                "mean": f"{_num(CHECK.MIN_MEAN_LUMINANCE)} to {_num(max_mean)}",
+                "mean_luma": f"{_num(CHECK.MIN_MEAN_LUMA)} to {_num(max_mean)}",
                 "near_black": f"<= {_pct(CHECK.MAX_NEAR_BLACK_FRACTION)}",
-                "shadow_floor": f"<= {_num(CHECK.MAX_SHADOW_FLOOR)}",
-                "contrast": f">= {_num(CHECK.MIN_CONTRAST_SPREAD)}",
-                "shadow_fraction": f"<= {_pct(max_shadow)}",
+                "p05_luma": f"<= {_num(CHECK.MAX_P05_LUMA)}",
+                "interdecile_range": f">= {_num(CHECK.MIN_INTERDECILE_LUMA_RANGE)}",
+                "local_contrast": f">= {_num(CHECK.MIN_LOCAL_CONTRAST)}",
+                "bright_neutral": f"<= {_pct(CHECK.MAX_BRIGHT_NEUTRAL_FRACTION)}",
                 "saturation": f"< {_num(CHECK.MAX_MEAN_SATURATION)}",
                 "overrides": ", ".join(override_notes) if override_notes else "none",
             }
@@ -254,11 +240,12 @@ def render_html(model: dict[str, Any]) -> str:
             "Moving Radius",
             "Ambient Radius",
             "Moving/Ambient",
-            "Mean",
+            "Mean Luma",
             "Near Black",
-            "Shadow Floor",
-            "Contrast",
-            "Shadow Pixels",
+            "P05 Luma",
+            "Interdecile Range",
+            "Local Contrast",
+            "Bright Neutral",
             "Saturation",
             "Overrides",
         ],
@@ -269,11 +256,12 @@ def render_html(model: dict[str, Any]) -> str:
             "moving_radius",
             "ambient_radius",
             "radius_ratio",
-            "mean",
+            "mean_luma",
             "near_black",
-            "shadow_floor",
-            "contrast",
-            "shadow_fraction",
+            "p05_luma",
+            "interdecile_range",
+            "local_contrast",
+            "bright_neutral",
             "saturation",
             "overrides",
         ],

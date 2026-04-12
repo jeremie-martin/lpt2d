@@ -1,10 +1,10 @@
 """Quality check for crystal_field variants.
 
 The rejection policy is intentionally small and explicit: one analyzed
-probe frame supplies the moving/ambient light radii plus luminance stats,
-and the thresholds below decide acceptance. Older colour-richness,
-edge-width, peak-contrast, confidence, coverage, and pre-render constraint
-guards are deliberately not part of this policy.
+probe frame supplies the moving/ambient light radii plus normalized image
+stats, and the thresholds below decide acceptance. The metric keys mirror
+the generic C++ image-analysis contract instead of crystal-field-specific
+aliases.
 """
 
 from __future__ import annotations
@@ -35,35 +35,37 @@ MIN_RADIUS_RATIO = 1.33
 MAX_RADIUS_RATIO = 2.33
 
 MAX_NEAR_BLACK_FRACTION = 0.035
-MIN_MEAN_LUMINANCE = 60.0
-MAX_MEAN_LUMINANCE = 140.0
-GLASS_MAX_MEAN_LUMINANCE = 80.0
-MAX_SHADOW_FLOOR = 80.0
-MIN_CONTRAST_SPREAD = 50.0
-MAX_SHADOW_FRACTION = 0.20
-BLACK_DIFFUSE_MAX_SHADOW_FRACTION = 0.50
+MIN_MEAN_LUMA = 60.0 / 255.0
+MAX_MEAN_LUMA = 140.0 / 255.0
+GLASS_MAX_MEAN_LUMA = 80.0 / 255.0
+MAX_P05_LUMA = 80.0 / 255.0
+MIN_INTERDECILE_LUMA_RANGE = 50.0 / 255.0
+MIN_LOCAL_CONTRAST = 0.015
+MAX_BRIGHT_NEUTRAL_FRACTION = 0.40
 MAX_MEAN_SATURATION = 0.66
 
 METRIC_KEYS: tuple[str, ...] = (
-    "mean",
-    "percentile_01",
-    "percentile_10",
-    "median",
-    "percentile_90",
-    "shadow_floor",
-    "contrast_spread",
-    "contrast_std",
-    "histogram_entropy",
-    "histogram_entropy_normalized",
+    "mean_luma",
+    "median_luma",
+    "p05_luma",
+    "p95_luma",
+    "p10_luma",
+    "p90_luma",
     "near_black_fraction",
     "near_white_fraction",
-    "shadow_fraction",
-    "midtone_fraction",
-    "highlight_fraction",
     "clipped_channel_fraction",
+    "rms_contrast",
+    "interdecile_luma_range",
+    "interdecile_luma_contrast",
+    "local_contrast",
     "mean_saturation",
+    "p95_saturation",
+    "colorfulness",
+    "bright_neutral_fraction",
+    "luma_entropy_normalized",
     "saturation_coverage",
     "colored_fraction",
+    "mean_saturation_colored",
     "moving_radius_min",
     "moving_radius_mean",
     "moving_radius_max",
@@ -197,28 +199,30 @@ def metrics_from_analysis(analysis) -> dict[str, float]:
     ambient_radius_max = float(max(ambient_radii)) if ambient_radii else 0.0
     radius_ratio = moving_radius_mean / ambient_radius_mean if ambient_radius_mean > 0 else 0.0
 
+    image = analysis.image
+    debug = analysis.debug
     metrics: dict[str, float] = {
-        "mean": float(analysis.luminance.mean),
-        "percentile_01": float(analysis.luminance.percentile_01),
-        "percentile_10": float(analysis.luminance.percentile_10),
-        "median": float(analysis.luminance.median),
-        "percentile_90": float(analysis.luminance.percentile_90),
-        "shadow_floor": float(analysis.luminance.shadow_floor),
-        "contrast_spread": float(analysis.luminance.contrast_spread),
-        "contrast_std": float(analysis.luminance.contrast_std),
-        "histogram_entropy": float(analysis.luminance.histogram_entropy),
-        "histogram_entropy_normalized": float(
-            analysis.luminance.histogram_entropy_normalized
-        ),
-        "near_black_fraction": float(analysis.luminance.near_black_fraction),
-        "near_white_fraction": float(analysis.luminance.near_white_fraction),
-        "shadow_fraction": float(analysis.luminance.shadow_fraction),
-        "midtone_fraction": float(analysis.luminance.midtone_fraction),
-        "highlight_fraction": float(analysis.luminance.highlight_fraction),
-        "clipped_channel_fraction": float(analysis.luminance.clipped_channel_fraction),
-        "mean_saturation": float(analysis.color.mean_saturation),
-        "saturation_coverage": float(analysis.color.saturation_coverage),
-        "colored_fraction": float(analysis.color.colored_fraction),
+        "mean_luma": float(image.mean_luma),
+        "median_luma": float(image.median_luma),
+        "p05_luma": float(image.p05_luma),
+        "p95_luma": float(image.p95_luma),
+        "p10_luma": float(debug.p10_luma),
+        "p90_luma": float(debug.p90_luma),
+        "near_black_fraction": float(image.near_black_fraction),
+        "near_white_fraction": float(image.near_white_fraction),
+        "clipped_channel_fraction": float(image.clipped_channel_fraction),
+        "rms_contrast": float(image.rms_contrast),
+        "interdecile_luma_range": float(image.interdecile_luma_range),
+        "interdecile_luma_contrast": float(image.interdecile_luma_contrast),
+        "local_contrast": float(image.local_contrast),
+        "mean_saturation": float(image.mean_saturation),
+        "p95_saturation": float(image.p95_saturation),
+        "colorfulness": float(image.colorfulness),
+        "bright_neutral_fraction": float(image.bright_neutral_fraction),
+        "luma_entropy_normalized": float(debug.luma_entropy_normalized),
+        "saturation_coverage": float(debug.saturation_coverage),
+        "colored_fraction": float(debug.colored_fraction),
+        "mean_saturation_colored": float(debug.mean_saturation_colored),
         "moving_radius_min": moving_radius_min,
         "moving_radius_mean": moving_radius_mean,
         "moving_radius_max": moving_radius_max,
@@ -228,12 +232,6 @@ def metrics_from_analysis(analysis) -> dict[str, float]:
         "moving_to_ambient_radius_ratio": radius_ratio,
     }
 
-    # Legacy aliases kept for existing scripts/artifacts that still expect
-    # the old names.  New code should use the explicit *_mean and
-    # moving_to_ambient_* keys above.
-    metrics["moving_radius_ratio"] = moving_radius_mean
-    metrics["ambient_radius_ratio"] = ambient_radius_mean
-    metrics["radius_ratio"] = radius_ratio
     return metrics
 
 
@@ -278,18 +276,14 @@ def _verdict_for_metrics(
     ambient_radius_max = metrics["ambient_radius_max"]
     radius_ratio = metrics["moving_to_ambient_radius_ratio"]
     near_black_fraction = metrics["near_black_fraction"]
-    mean_brightness = metrics["mean"]
-    shadow_floor = metrics["shadow_floor"]
-    contrast_spread = metrics["contrast_spread"]
-    shadow_fraction = metrics["shadow_fraction"]
+    mean_luma = metrics["mean_luma"]
+    p05_luma = metrics["p05_luma"]
+    interdecile_luma_range = metrics["interdecile_luma_range"]
+    local_contrast = metrics["local_contrast"]
+    bright_neutral_fraction = metrics["bright_neutral_fraction"]
     mean_saturation = metrics["mean_saturation"]
     max_mean_luminance = (
-        GLASS_MAX_MEAN_LUMINANCE if outcome == "glass" else MAX_MEAN_LUMINANCE
-    )
-    max_shadow_fraction = (
-        BLACK_DIFFUSE_MAX_SHADOW_FRACTION
-        if outcome == "black_diffuse"
-        else MAX_SHADOW_FRACTION
+        GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
     )
 
     prefix = (
@@ -322,24 +316,32 @@ def _verdict_for_metrics(
         )
     if near_black_fraction > MAX_NEAR_BLACK_FRACTION:
         return Verdict(False, f"{prefix} near_black={near_black_fraction:.1%} (too dark)")
-    if mean_brightness < MIN_MEAN_LUMINANCE:
-        return Verdict(False, f"{prefix} brightness={mean_brightness:.1f} (too dark)")
-    if mean_brightness > max_mean_luminance:
-        return Verdict(False, f"{prefix} brightness={mean_brightness:.1f} (too bright)")
-    if shadow_floor > MAX_SHADOW_FLOOR:
-        return Verdict(False, f"{prefix} shadows={shadow_floor:.0f} (too bright)")
-    if contrast_spread < MIN_CONTRAST_SPREAD:
-        return Verdict(False, f"{prefix} contrast_spread={contrast_spread:.1f} (too low)")
-    if shadow_fraction > max_shadow_fraction:
-        return Verdict(False, f"{prefix} shadow_pixels={shadow_fraction:.1%} (too many)")
+    if mean_luma < MIN_MEAN_LUMA:
+        return Verdict(False, f"{prefix} mean_luma={mean_luma:.3f} (too dark)")
+    if mean_luma > max_mean_luminance:
+        return Verdict(False, f"{prefix} mean_luma={mean_luma:.3f} (too bright)")
+    if p05_luma > MAX_P05_LUMA:
+        return Verdict(False, f"{prefix} p05_luma={p05_luma:.3f} (shadows too bright)")
+    if interdecile_luma_range < MIN_INTERDECILE_LUMA_RANGE:
+        return Verdict(
+            False,
+            f"{prefix} interdecile_luma_range={interdecile_luma_range:.3f} (too low)",
+        )
+    if local_contrast < MIN_LOCAL_CONTRAST:
+        return Verdict(False, f"{prefix} local_contrast={local_contrast:.3f} (too low)")
+    if bright_neutral_fraction > MAX_BRIGHT_NEUTRAL_FRACTION:
+        return Verdict(
+            False,
+            f"{prefix} bright_neutral={bright_neutral_fraction:.1%} (washed out)",
+        )
     if mean_saturation >= MAX_MEAN_SATURATION:
         return Verdict(False, f"{prefix} saturation={mean_saturation:.3f} (too high)")
 
     return Verdict(
         True,
         f"{prefix} near_black={near_black_fraction:.1%} "
-        f"brightness={mean_brightness:.1f} shadows={shadow_floor:.0f} "
-        f"contrast_spread={contrast_spread:.1f}",
+        f"mean_luma={mean_luma:.3f} p05_luma={p05_luma:.3f} "
+        f"interdecile_luma_range={interdecile_luma_range:.3f}",
     )
 
 

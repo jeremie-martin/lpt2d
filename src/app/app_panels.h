@@ -2,7 +2,7 @@
 
 #include "app_actions.h"
 #include "editor.h"
-#include "renderer.h"  // for FrameMetrics (type alias for LuminanceStats)
+#include "renderer.h"
 
 #include <array>
 #include <functional>
@@ -109,7 +109,7 @@ void draw_controls_panel(
     int win_w, int win_h, int fb_w, int fb_h
 );
 
-// Draws the floating Stats window (histogram + luminance/colour rows +
+// Draws the floating Stats window (histogram + image/debug rows +
 // point-light appearance table + overlay toggle). No-op when
 // panel.show_stats_panel is false. The top-level window has its own
 // saved position/size in imgui.ini.

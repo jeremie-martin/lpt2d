@@ -5,19 +5,19 @@ from __future__ import annotations
 import pytest
 
 from examples.python.families.crystal_field.check import (
-    BLACK_DIFFUSE_MAX_SHADOW_FRACTION,
-    GLASS_MAX_MEAN_LUMINANCE,
+    GLASS_MAX_MEAN_LUMA,
+    MAX_BRIGHT_NEUTRAL_FRACTION,
     MAX_AMBIENT_RADIUS_RATIO,
-    MAX_MEAN_LUMINANCE,
+    MAX_MEAN_LUMA,
     MAX_MEAN_SATURATION,
     MAX_MOVING_RADIUS_RATIO,
     MAX_NEAR_BLACK_FRACTION,
+    MAX_P05_LUMA,
     MAX_RADIUS_RATIO,
-    MAX_SHADOW_FLOOR,
-    MAX_SHADOW_FRACTION,
     MIN_AMBIENT_RADIUS_RATIO,
-    MIN_CONTRAST_SPREAD,
-    MIN_MEAN_LUMINANCE,
+    MIN_INTERDECILE_LUMA_RANGE,
+    MIN_LOCAL_CONTRAST,
+    MIN_MEAN_LUMA,
     MIN_MOVING_RADIUS_RATIO,
     MIN_RADIUS_RATIO,
     _verdict_for_metrics,
@@ -26,11 +26,12 @@ from examples.python.families.crystal_field.check import (
 
 def _passing_metrics() -> dict[str, float]:
     return {
-        "mean": 100.0,
-        "shadow_floor": 50.0,
-        "contrast_spread": 80.0,
+        "mean_luma": 0.35,
+        "p05_luma": 0.10,
+        "interdecile_luma_range": 0.40,
+        "local_contrast": 0.03,
+        "bright_neutral_fraction": 0.10,
         "near_black_fraction": 0.03,
-        "shadow_fraction": 0.10,
         "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.024,
@@ -77,11 +78,18 @@ def test_passing_metrics_are_accepted():
             "moving_to_ambient_radius_ratio",
         ),
         ({"near_black_fraction": MAX_NEAR_BLACK_FRACTION + 0.001}, "near_black"),
-        ({"mean": MIN_MEAN_LUMINANCE - 1.0}, "brightness"),
-        ({"mean": MAX_MEAN_LUMINANCE + 1.0}, "brightness"),
-        ({"shadow_floor": MAX_SHADOW_FLOOR + 1.0}, "shadows"),
-        ({"contrast_spread": MIN_CONTRAST_SPREAD - 0.1}, "contrast_spread"),
-        ({"shadow_fraction": MAX_SHADOW_FRACTION + 0.001}, "shadow_pixels"),
+        ({"mean_luma": MIN_MEAN_LUMA - 0.001}, "mean_luma"),
+        ({"mean_luma": MAX_MEAN_LUMA + 0.001}, "mean_luma"),
+        ({"p05_luma": MAX_P05_LUMA + 0.001}, "p05_luma"),
+        (
+            {"interdecile_luma_range": MIN_INTERDECILE_LUMA_RANGE - 0.001},
+            "interdecile_luma_range",
+        ),
+        ({"local_contrast": MIN_LOCAL_CONTRAST - 0.001}, "local_contrast"),
+        (
+            {"bright_neutral_fraction": MAX_BRIGHT_NEUTRAL_FRACTION + 0.001},
+            "bright_neutral",
+        ),
         ({"mean_saturation": MAX_MEAN_SATURATION}, "saturation"),
     ],
 )
@@ -97,25 +105,12 @@ def test_rejection_thresholds(override: dict[str, float], summary_token: str):
 
 def test_glass_uses_lower_brightness_ceiling():
     metrics = _passing_metrics()
-    metrics["mean"] = GLASS_MAX_MEAN_LUMINANCE + 1.0
+    metrics["mean_luma"] = GLASS_MAX_MEAN_LUMA + 0.001
 
     verdict = _verdict(metrics, outcome="glass")
 
     assert not verdict.ok
-    assert "brightness" in verdict.summary
-
-
-def test_black_diffuse_uses_relaxed_shadow_pixel_ceiling():
-    metrics = _passing_metrics()
-    metrics["shadow_fraction"] = MAX_SHADOW_FRACTION + 0.05
-
-    assert _verdict(metrics, outcome="black_diffuse").ok
-
-    metrics["shadow_fraction"] = BLACK_DIFFUSE_MAX_SHADOW_FRACTION + 0.001
-    verdict = _verdict(metrics, outcome="black_diffuse")
-
-    assert not verdict.ok
-    assert "shadow_pixels" in verdict.summary
+    assert "mean_luma" in verdict.summary
 
 
 def test_missing_moving_lights_are_rejected():

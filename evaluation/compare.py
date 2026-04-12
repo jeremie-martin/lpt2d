@@ -26,11 +26,11 @@ class Thresholds:
     pass_max_diff: int = 10
     warn_psnr: float = 40.0
     warn_ssim: float = 0.98
-    # FrameMetrics secondary signal
-    max_mean_delta: float = 5.0
+    # ImageStats secondary signal
+    max_mean_luma_delta: float = 5.0 / 255.0
     min_histogram_overlap: float = 0.98
-    max_median_delta: float = 10.0
-    max_highlight_ceiling_delta: float = 15.0
+    max_median_luma_delta: float = 10.0 / 255.0
+    max_p95_luma_delta: float = 15.0 / 255.0
     max_near_black_fraction_delta: float = 0.05
     max_clipped_channel_fraction_delta: float = 0.05
 
@@ -40,12 +40,12 @@ DEFAULT_THRESHOLDS = Thresholds()
 
 @dataclass(frozen=True)
 class MetricsComparison:
-    """Secondary signal: FrameMetrics comparison result."""
+    """Secondary signal: ImageStats comparison result."""
 
-    mean_delta: float
-    histogram_overlap: float
-    median_delta: float
-    highlight_ceiling_delta: float
+    mean_luma_delta: float
+    histogram_overlap: float | None
+    median_luma_delta: float
+    p95_luma_delta: float
     near_black_fraction_delta: float
     clipped_channel_fraction_delta: float
     warnings: list[str] = field(default_factory=list)
@@ -74,45 +74,53 @@ def _histogram_overlap(a: list[int], b: list[int]) -> float:
     return float(np.minimum(ha, hb).sum() / total)
 
 
+def _result_luma_histogram(result) -> list[int] | None:
+    hist = list(result.analysis.debug.luma_histogram)
+    return hist if sum(hist) > 0 else None
+
+
 def compare_metrics(
-    a_mean: float,
-    a_median: float,
-    a_highlight_ceiling: float,
+    a_mean_luma: float,
+    a_median_luma: float,
+    a_p95_luma: float,
     a_near_black_fraction: float,
     a_clipped_channel_fraction: float,
-    a_histogram: list[int],
-    b_mean: float,
-    b_median: float,
-    b_highlight_ceiling: float,
+    a_luma_histogram: list[int] | None,
+    b_mean_luma: float,
+    b_median_luma: float,
+    b_p95_luma: float,
     b_near_black_fraction: float,
     b_clipped_channel_fraction: float,
-    b_histogram: list[int],
+    b_luma_histogram: list[int] | None,
     thresholds: Thresholds = DEFAULT_THRESHOLDS,
 ) -> MetricsComparison:
-    """Compare FrameMetrics as a secondary diagnostic signal."""
-    mean_delta = abs(a_mean - b_mean)
-    median_delta = abs(a_median - b_median)
-    highlight_ceiling_delta = abs(a_highlight_ceiling - b_highlight_ceiling)
+    """Compare ImageStats as a secondary diagnostic signal."""
+    mean_delta = abs(a_mean_luma - b_mean_luma)
+    median_delta = abs(a_median_luma - b_median_luma)
+    p95_luma_delta = abs(a_p95_luma - b_p95_luma)
     near_black_fraction_delta = abs(a_near_black_fraction - b_near_black_fraction)
     clipped_channel_fraction_delta = abs(
         a_clipped_channel_fraction - b_clipped_channel_fraction
     )
-    hist_overlap = _histogram_overlap(a_histogram, b_histogram)
+    hist_overlap = (
+        _histogram_overlap(a_luma_histogram, b_luma_histogram)
+        if a_luma_histogram is not None and b_luma_histogram is not None
+        else None
+    )
 
     warnings: list[str] = []
-    if mean_delta > thresholds.max_mean_delta:
-        warnings.append(f"mean_delta={mean_delta:.2f} > {thresholds.max_mean_delta}")
-    if hist_overlap < thresholds.min_histogram_overlap:
+    if mean_delta > thresholds.max_mean_luma_delta:
+        warnings.append(f"mean_luma_delta={mean_delta:.4f} > {thresholds.max_mean_luma_delta}")
+    if hist_overlap is not None and hist_overlap < thresholds.min_histogram_overlap:
         warnings.append(
             f"histogram_overlap={hist_overlap:.4f} < {thresholds.min_histogram_overlap}"
         )
-    if median_delta > thresholds.max_median_delta:
-        warnings.append(f"median_delta={median_delta:.2f} > {thresholds.max_median_delta}")
-    if highlight_ceiling_delta > thresholds.max_highlight_ceiling_delta:
+    if median_delta > thresholds.max_median_luma_delta:
         warnings.append(
-            "highlight_ceiling_delta="
-            f"{highlight_ceiling_delta:.2f} > {thresholds.max_highlight_ceiling_delta}"
+            f"median_luma_delta={median_delta:.4f} > {thresholds.max_median_luma_delta}"
         )
+    if p95_luma_delta > thresholds.max_p95_luma_delta:
+        warnings.append(f"p95_luma_delta={p95_luma_delta:.4f} > {thresholds.max_p95_luma_delta}")
     if near_black_fraction_delta > thresholds.max_near_black_fraction_delta:
         warnings.append(
             "near_black_fraction_delta="
@@ -126,10 +134,10 @@ def compare_metrics(
         )
 
     return MetricsComparison(
-        mean_delta=mean_delta,
+        mean_luma_delta=mean_delta,
         histogram_overlap=hist_overlap,
-        median_delta=median_delta,
-        highlight_ceiling_delta=highlight_ceiling_delta,
+        median_luma_delta=median_delta,
+        p95_luma_delta=p95_luma_delta,
         near_black_fraction_delta=near_black_fraction_delta,
         clipped_channel_fraction_delta=clipped_channel_fraction_delta,
         warnings=warnings,
@@ -208,24 +216,24 @@ def compare_render_results(
 
     cr = compare_images(a_pixels, b_pixels, thresholds=thresholds)
 
-    # Secondary signal from FrameMetrics
+    # Secondary signal from ImageStats
     mc = None
     a_m = a_result.metrics
     b_m = b_result.metrics
     if a_m is not None and b_m is not None:
         mc = compare_metrics(
-            a_mean=a_m.mean,
-            a_median=a_m.median,
-            a_highlight_ceiling=a_m.highlight_ceiling,
+            a_mean_luma=a_m.mean_luma,
+            a_median_luma=a_m.median_luma,
+            a_p95_luma=a_m.p95_luma,
             a_near_black_fraction=a_m.near_black_fraction,
             a_clipped_channel_fraction=a_m.clipped_channel_fraction,
-            a_histogram=list(a_m.histogram),
-            b_mean=b_m.mean,
-            b_median=b_m.median,
-            b_highlight_ceiling=b_m.highlight_ceiling,
+            a_luma_histogram=_result_luma_histogram(a_result),
+            b_mean_luma=b_m.mean_luma,
+            b_median_luma=b_m.median_luma,
+            b_p95_luma=b_m.p95_luma,
             b_near_black_fraction=b_m.near_black_fraction,
             b_clipped_channel_fraction=b_m.clipped_channel_fraction,
-            b_histogram=list(b_m.histogram),
+            b_luma_histogram=_result_luma_histogram(b_result),
             thresholds=thresholds,
         )
 
@@ -265,24 +273,24 @@ def compare_to_baseline(
 
     cr = compare_images(result_pixels, baseline_pixels, thresholds=thresholds)
 
-    # Secondary signal from FrameMetrics if available
+    # Secondary signal from ImageStats if available
     mc = None
     r_m = result.metrics
     b_m = baseline.get("metrics")
     if r_m is not None and b_m is not None:
         mc = compare_metrics(
-            a_mean=r_m.mean,
-            a_median=r_m.median,
-            a_highlight_ceiling=r_m.highlight_ceiling,
+            a_mean_luma=r_m.mean_luma,
+            a_median_luma=r_m.median_luma,
+            a_p95_luma=r_m.p95_luma,
             a_near_black_fraction=r_m.near_black_fraction,
             a_clipped_channel_fraction=r_m.clipped_channel_fraction,
-            a_histogram=list(r_m.histogram),
-            b_mean=b_m["mean"],
-            b_median=b_m["median"],
-            b_highlight_ceiling=b_m["highlight_ceiling"],
+            a_luma_histogram=_result_luma_histogram(result),
+            b_mean_luma=b_m["mean_luma"],
+            b_median_luma=b_m["median_luma"],
+            b_p95_luma=b_m["p95_luma"],
             b_near_black_fraction=b_m["near_black_fraction"],
             b_clipped_channel_fraction=b_m["clipped_channel_fraction"],
-            b_histogram=b_m["histogram"],
+            b_luma_histogram=b_m.get("luma_histogram"),
             thresholds=thresholds,
         )
 

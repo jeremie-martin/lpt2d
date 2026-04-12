@@ -27,51 +27,77 @@ struct ViewportXform {
 ViewportXform viewport_xform(const Bounds& bounds, int width, int height);
 
 // ───────────────────────────────────────────────────────────────────────────
-// Luminance statistics
+// Image statistics
 // ───────────────────────────────────────────────────────────────────────────
 
-struct LuminanceStats {
-    float mean = 0.0f;                     // BT.709 mean, 0..255 scale
-    float percentile_01 = 0.0f;            // 1st percentile, 0..255
-    float percentile_10 = 0.0f;            // 10th percentile, 0..255
-    float median = 0.0f;                   // 50th percentile, 0..255
-    float percentile_90 = 0.0f;            // 90th percentile, 0..255
-    float shadow_floor = 0.0f;             // 5th percentile, 0..255
-    float highlight_ceiling = 0.0f;        // 95th percentile, 0..255
-    float highlight_peak = 0.0f;           // 99th percentile, 0..255
-    float contrast_std = 0.0f;             // standard deviation, 0..255
-    float contrast_spread = 0.0f;          // highlight_ceiling - shadow_floor, 0..255
-    float histogram_entropy = 0.0f;        // Shannon entropy of luminance histogram, bits
-    float histogram_entropy_normalized = 0.0f; // entropy / 8 bits, [0,1]
-    float near_black_fraction = 0.0f;      // luminance <= near_black_bin_max
-    float near_white_fraction = 0.0f;      // luminance >= near_white_bin_min
-    float shadow_fraction = 0.0f;          // luminance <= 64
-    float midtone_fraction = 0.0f;         // 65 <= luminance <= 191
-    float highlight_fraction = 0.0f;       // luminance >= 192
-    float clipped_channel_fraction = 0.0f; // any channel == 255
-    std::array<int, 256> histogram{};
+inline constexpr int kLumaBins = 256;
+inline constexpr int kSaturationBins = 256;
+inline constexpr int kHueBins = 36;
+inline constexpr int kRgOpponentBins = 511;   // (R - G) + 255
+inline constexpr int kYbOpponentBins = 1021;  // (R + G - 2B) + 510
+
+struct ImageStats {
+    int width = 0;
+    int height = 0;
+    float mean_luma = 0.0f;                  // BT.709 mean, normalized [0,1]
+    float median_luma = 0.0f;                // 50th percentile luma, [0,1]
+    float p05_luma = 0.0f;                   // 5th percentile luma, [0,1]
+    float p95_luma = 0.0f;                   // 95th percentile luma, [0,1]
+    float near_black_fraction = 0.0f;        // luma <= near_black_luma
+    float near_white_fraction = 0.0f;        // luma >= near_white_luma
+    float clipped_channel_fraction = 0.0f;   // any channel == 255
+    float rms_contrast = 0.0f;               // standard deviation of luma, [0,1]
+    float interdecile_luma_range = 0.0f;     // p90_luma - p10_luma
+    float interdecile_luma_contrast = 0.0f;  // (p90 - p10) / (p90 + p10 + eps)
+    float local_contrast = 0.0f;             // normalized Sobel contrast, [0,1]
+    float mean_saturation = 0.0f;            // HSV saturation over all pixels, [0,1]
+    float p95_saturation = 0.0f;             // 95th percentile HSV saturation, [0,1]
+    float colorfulness = 0.0f;               // normalized opponent-channel colorfulness, [0,1]
+    float bright_neutral_fraction = 0.0f;    // bright luma and low saturation
+};
+
+struct ImageDebugStats {
+    float p01_luma = 0.0f;
+    float p10_luma = 0.0f;
+    float p90_luma = 0.0f;
+    float p99_luma = 0.0f;
+    float luma_entropy = 0.0f;
+    float luma_entropy_normalized = 0.0f;
+    float hue_entropy = 0.0f;
+    float colored_fraction = 0.0f;
+    float mean_saturation_colored = 0.0f;
+    float saturation_coverage = 0.0f;
+    float colorfulness_raw = 0.0f;
+    std::array<int, kLumaBins> luma_histogram{};
+    std::array<int, kSaturationBins> saturation_histogram{};
+    std::array<int, kHueBins> hue_histogram{};
+};
+
+struct ImageAnalysisInputs {
+    std::array<int, kLumaBins> luma_histogram{};
+    std::array<int, kSaturationBins> saturation_histogram{};
+    std::array<int, kHueBins> hue_histogram{};
+    std::array<int, kRgOpponentBins> rg_histogram{};
+    std::array<int, kYbOpponentBins> yb_histogram{};
+    int clipped = 0;
+    int bright_neutral = 0;
+    double local_gradient_sum = 0.0;
     int width = 0;
     int height = 0;
 };
 
-LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
-                                  int clipped, int width, int height,
-                                  int near_black_bin_max = 10,
-                                  int near_white_bin_min = 245);
-
-// ───────────────────────────────────────────────────────────────────────────
-// Colour statistics
-// ───────────────────────────────────────────────────────────────────────────
-
-struct ColorStats {
-    float mean_saturation = 0.0f;
-    float saturation_coverage = 0.0f;
-    float hue_entropy = 0.0f;
-    float colored_fraction = 0.0f;
-    float richness = 0.0f;
-    int n_colored = 0;
-    std::array<int, 36> hue_histogram{};
+struct ImageAnalysisThresholds {
+    float near_black_luma = 10.0f / 255.0f;
+    float near_white_luma = 245.0f / 255.0f;
+    float bright_luma_threshold = 0.75f;
+    float neutral_saturation_threshold = 0.10f;
+    float colored_saturation_threshold = 0.05f;
 };
+
+void finalize_image_stats(const ImageAnalysisInputs& inputs,
+                          const ImageAnalysisThresholds& thresholds,
+                          ImageStats& image,
+                          ImageDebugStats& debug);
 
 // ───────────────────────────────────────────────────────────────────────────
 // Point-light appearance
@@ -92,8 +118,6 @@ struct PointLightAppearance {
 
     bool visible = false;
     float radius_ratio = 0.0f;
-    // TEMP: comparison candidate retained while validating the production detector.
-    float radius_candidate_sector_consensus_ratio = 0.0f;
     float coverage_fraction = 0.0f;
     float saturated_radius_ratio = 0.0f;
     float transition_width_ratio = 0.0f;
@@ -120,19 +144,21 @@ struct PointLightAppearanceParams {
 // ───────────────────────────────────────────────────────────────────────────
 
 struct FrameAnalysis {
-    LuminanceStats luminance;
-    ColorStats color;
+    ImageStats image;
+    ImageDebugStats debug;
     std::vector<PointLightAppearance> lights;
 };
 
 struct FrameAnalysisParams {
-    bool analyze_luminance = true;
-    bool analyze_color = true;
+    bool analyze_image = true;
+    bool analyze_debug = true;
     bool analyze_lights = true;
     PointLightAppearanceParams lights = {};
-    float saturation_threshold = 0.05f;
-    int near_black_bin_max = 10;
-    int near_white_bin_min = 245;
+    float near_black_luma = 10.0f / 255.0f;
+    float near_white_luma = 245.0f / 255.0f;
+    float bright_luma_threshold = 0.75f;
+    float neutral_saturation_threshold = 0.10f;
+    float colored_saturation_threshold = 0.05f;
 };
 
 // CPU RGB8 analyzer over a top-left-origin final-frame buffer.

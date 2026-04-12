@@ -9,25 +9,28 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-BASELINE_SET_SCHEMA_VERSION = 4
+BASELINE_SET_SCHEMA_VERSION = 5
 
 
 def _result_metadata(result) -> dict:
     m = result.metrics
+    metrics = {
+        "mean_luma": m.mean_luma,
+        "median_luma": m.median_luma,
+        "p95_luma": m.p95_luma,
+        "near_black_fraction": m.near_black_fraction,
+        "clipped_channel_fraction": m.clipped_channel_fraction,
+    }
+    luma_histogram = list(result.analysis.debug.luma_histogram)
+    if sum(luma_histogram) > 0:
+        metrics["luma_histogram"] = luma_histogram
     return {
         "width": result.width,
         "height": result.height,
         "total_rays": result.total_rays,
         "max_hdr": result.max_hdr,
         "time_ms": result.time_ms,
-        "metrics": {
-            "mean": m.mean,
-            "median": m.median,
-            "highlight_ceiling": m.highlight_ceiling,
-            "near_black_fraction": m.near_black_fraction,
-            "clipped_channel_fraction": m.clipped_channel_fraction,
-            "histogram": list(m.histogram),
-        },
+        "metrics": metrics,
     }
 
 

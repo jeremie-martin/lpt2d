@@ -7,7 +7,7 @@ from datetime import datetime
 
 from examples.python.families.crystal_field.check import (
     METRIC_KEYS,
-    MIN_CONTRAST_SPREAD,
+    MIN_INTERDECILE_LUMA_RANGE,
     PROBE_FPS,
     _measure_and_verdict,
     measurement_context,
@@ -49,11 +49,12 @@ def test_failure_distance_is_zero_for_passing():
 
     # Fabricate a metrics dict that lies safely inside every threshold.
     good_metrics = {
-        "mean": 120.0,
-        "shadow_floor": 50.0,
-        "contrast_spread": 80.0,
+        "mean_luma": 0.35,
+        "p05_luma": 0.10,
+        "interdecile_luma_range": 0.40,
+        "local_contrast": 0.03,
+        "bright_neutral_fraction": 0.10,
         "near_black_fraction": 0.03,
-        "shadow_fraction": 0.10,
         "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.025,
@@ -70,8 +71,8 @@ def test_failure_distance_is_zero_for_passing():
     assert _failure_distance(result) == 0.0
 
 
-def test_failure_distance_increases_with_washed_out():
-    """A metrics dict that fails MIN_CONTRAST_SPREAD should produce a positive score."""
+def test_failure_distance_increases_with_low_interdecile_range():
+    """A metrics dict that fails MIN_INTERDECILE_LUMA_RANGE should produce a positive score."""
     from anim.family import Verdict
     from examples.python.families.crystal_field.catalog import (
         _failure_distance,
@@ -79,11 +80,12 @@ def test_failure_distance_increases_with_washed_out():
     from examples.python.families.crystal_field.check import MeasurementResult
 
     washed_metrics = {
-        "mean": 120.0,
-        "shadow_floor": 50.0,
-        "contrast_spread": MIN_CONTRAST_SPREAD / 2,  # half the threshold
+        "mean_luma": 0.35,
+        "p05_luma": 0.10,
+        "interdecile_luma_range": MIN_INTERDECILE_LUMA_RANGE / 2,
+        "local_contrast": 0.03,
+        "bright_neutral_fraction": 0.10,
         "near_black_fraction": 0.03,
-        "shadow_fraction": 0.10,
         "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.025,
@@ -97,17 +99,18 @@ def test_failure_distance_increases_with_washed_out():
         metrics=washed_metrics,
         verdict=Verdict(False, "washed out"),
     )
-    # Distance should reflect the spread shortfall.
+    # Distance should reflect the robust-range shortfall.
     assert _failure_distance(result) > 0.0
 
 
 def _synthetic_metrics(**overrides: float) -> dict[str, float]:
     metrics = {
-        "mean": 100.0,
-        "shadow_floor": 50.0,
-        "contrast_spread": 80.0,
+        "mean_luma": 0.35,
+        "p05_luma": 0.10,
+        "interdecile_luma_range": 0.40,
+        "local_contrast": 0.03,
+        "bright_neutral_fraction": 0.10,
         "near_black_fraction": 0.03,
-        "shadow_fraction": 0.10,
         "mean_saturation": 0.40,
         "moving_radius_min": 0.015,
         "moving_radius_mean": 0.024,
@@ -182,7 +185,7 @@ def test_find_good_params_replays_look_variants_before_resampling_scene(monkeypa
             materialized[0][0],
             materialized[0][1],
             MeasurementResult(
-                metrics=_synthetic_metrics(mean=20.0),
+                metrics=_synthetic_metrics(mean_luma=0.05),
                 verdict=Verdict(False, "too dark"),
             ),
         )

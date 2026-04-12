@@ -2,8 +2,8 @@
 
 This note records detector variants that were useful during light-radius
 characterization but are no longer part of the active public API. The production
-GUI overlay and the `Radius %` metric use `radius_ratio`. The only retained
-comparison candidate is `radius_candidate_sector_consensus_ratio`.
+GUI overlay and the `Radius %` metric use `radius_ratio`. No alternate radius
+candidate is exposed as public API.
 
 ## Current Signal Contract
 
@@ -15,21 +15,14 @@ RGB8 camera image:
   (`0.5` by default).
 - Subtract a local background estimate before radial/sector edge detection.
 
-Whole-frame luminance/color metrics and light brightness diagnostics still use
+Whole-frame image metrics and light brightness diagnostics still use
 the normal final RGB8 image semantics.
-
-## Retained Candidate
-
-`radius_candidate_sector_consensus_ratio` looks for the radius with the strongest
-agreement across angular sectors. It remains exposed because it often tracks the
-official radius closely and gives a useful independent check when refining the
-production detector.
 
 ## Pruned Variants
 
 These experiments were removed from active code and public bindings after the
-low-gamma luminance run made the official and sector-consensus results strong
-enough to keep the UI focused:
+low-gamma luminance run made the official radius strong enough to keep the UI
+focused:
 
 - Profile knee: selected the knee of the global radial signal profile. It was
   simple but too sensitive to gradual halos and two-scale profiles.
@@ -39,6 +32,9 @@ enough to keep the UI focused:
 - Outer shoulder: searched for a broader secondary shoulder after a bright core.
   It was useful for diagnosing two-scale cases, but was not reliable enough to
   keep as public API.
+- Sector consensus: looked for the radius with the strongest agreement across
+  angular sectors. It was useful during characterization, but keeping only the
+  official `radius_ratio` made the public metric set simpler.
 
 ## Characterization Snapshots
 

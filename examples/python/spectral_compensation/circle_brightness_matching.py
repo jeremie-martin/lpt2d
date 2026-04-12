@@ -50,8 +50,8 @@ def _measure(shot: _lpt2d.Shot, session: _lpt2d.RenderSession) -> dict:
     mov = [c for c in rr.analysis.lights if c.id.startswith("light_")]
     amb = [c for c in rr.analysis.lights if c.id.startswith("amb_")]
     return {
-        "mean": float(rr.analysis.luminance.mean),
-        "median": float(rr.analysis.luminance.median),
+        "mean": float(rr.analysis.image.mean_luma),
+        "median": float(rr.analysis.image.median_luma),
         "mov_rad": statistics.mean([float(c.radius_ratio) for c in mov]) if mov else 0.0,
         "amb_rad": statistics.mean([float(c.radius_ratio) for c in amb]) if amb else 0.0,
     }

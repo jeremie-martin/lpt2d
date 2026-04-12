@@ -5,7 +5,8 @@
 // Reads a single RGB8 source texture (the display FBO post-tonemap colour
 // attachment) and produces:
 //   - a 256-bin BT.709 luminance histogram + clipped-pixel count
-//   - a 36-bin HSV hue histogram + mean saturation (over chromatic pixels)
+//   - a 256-bin local Sobel-gradient histogram
+//   - HSV saturation/hue histograms and opponent-channel histograms
 //   - a per-(light, radial-bin, angular-sector) breakdown used for the
 //     public point-light appearance metrics
 //
@@ -39,7 +40,9 @@ uniform float uBrightThreshold;      // 0..1 max-channel threshold for saturated
 uniform int   uMaxRadiusBins;        // effective MAX_BINS for this call
 uniform float uSearchRadiusPx;       // pixel search radius represented by uMaxRadiusBins
 uniform float uRadiusSignalInvGamma; // radius-only grayscale signal exponent
-uniform float uSatThreshold;         // default 0.05, matches CPU path
+uniform float uBrightLumaThreshold;  // default 0.75, for bright-neutral fraction
+uniform float uNeutralSaturationThreshold; // default 0.10, for bright-neutral fraction
+uniform float uColoredSaturationThreshold; // default 0.05, for hue/debug stats
 
 layout(std430, binding = 3) readonly buffer Lights {
     // Runtime-sized: one vec2 per PointLight in pixel-space (top-left
@@ -57,20 +60,16 @@ layout(std430, binding = 3) readonly buffer Lights {
 
 layout(std430, binding = 0) buffer LumResult {
     uint lum_hist[256];
+    uint grad_hist[256];
     uint lum_clipped;
-    // Convenience slot: lum_npixels = W*H. Not written by the shader,
-    // filled in on the CPU side from `uResolution` after readback.
-    uint lum_npixels;
 };
 
 layout(std430, binding = 1) buffer ColorResult {
     uint hue_hist[36];
-    // Σ(sat * 255) quantised to uint. q8 (max 255/pixel) is enough for
-    // the Stats panel and the per-pixel max of 255 keeps the global
-    // sum under 2^32 all the way up to ~16 Mpx (q16 would overflow
-    // around 65k pixels).
-    uint color_sat_sum_q8;
-    uint color_n_colored;
+    uint sat_hist[256];
+    uint rg_hist[511];
+    uint yb_hist[1021];
+    uint bright_neutral;
 };
 
 layout(std430, binding = 2) buffer LightBinsResult {
@@ -86,10 +85,30 @@ layout(std430, binding = 2) buffer LightBinsResult {
 // ── Tile-local shared accumulators ─────────────────────────────────────
 
 shared uint tile_lum_hist[256];
+shared uint tile_grad_hist[256];
 shared uint tile_hue_hist[36];
+shared uint tile_sat_hist[256];
+shared uint tile_rg_hist[511];
+shared uint tile_yb_hist[1021];
 shared uint tile_lum_clipped;
-shared uint tile_sat_sum_q8;
-shared uint tile_n_colored;
+shared uint tile_bright_neutral;
+
+uint quantized_channel(float c) {
+    return uint(clamp(c, 0.0, 1.0) * 255.0 + 0.5);
+}
+
+uint bt709_luminance_u8(uint r, uint g, uint b) {
+    uint lum = (218u * r + 732u * g + 74u * b) >> 10;
+    return min(lum, 255u);
+}
+
+float luma_at(ivec2 p) {
+    ivec2 q = clamp(p, ivec2(0), uResolution - ivec2(1));
+    vec3 rgb = texelFetch(uSrc, q, 0).rgb;
+    return float(bt709_luminance_u8(quantized_channel(rgb.r),
+                                    quantized_channel(rgb.g),
+                                    quantized_channel(rgb.b))) / 255.0;
+}
 
 void main() {
     uint lid = gl_LocalInvocationIndex;
@@ -97,11 +116,14 @@ void main() {
 
     // ── Phase 1: zero shared state ─────────────────────────────────────
     tile_lum_hist[lid] = 0u;
+    tile_grad_hist[lid] = 0u;
+    tile_sat_hist[lid] = 0u;
     if (lid < 36u) tile_hue_hist[lid] = 0u;
+    for (uint i = lid; i < 511u; i += 256u) tile_rg_hist[i] = 0u;
+    for (uint i = lid; i < 1021u; i += 256u) tile_yb_hist[i] = 0u;
     if (lid == 0u) {
         tile_lum_clipped = 0u;
-        tile_sat_sum_q8 = 0u;
-        tile_n_colored = 0u;
+        tile_bright_neutral = 0u;
     }
     barrier();
 
@@ -112,12 +134,11 @@ void main() {
         // to 0..255 uints so the BT.709 math matches the CPU histogram
         // bit-for-bit. (CPU path does `(218R+732G+74B)>>10` on raw bytes.)
         vec3 rgb = texelFetch(uSrc, gid, 0).rgb;
-        uint r = uint(clamp(rgb.r, 0.0, 1.0) * 255.0 + 0.5);
-        uint g = uint(clamp(rgb.g, 0.0, 1.0) * 255.0 + 0.5);
-        uint b = uint(clamp(rgb.b, 0.0, 1.0) * 255.0 + 0.5);
+        uint r = quantized_channel(rgb.r);
+        uint g = quantized_channel(rgb.g);
+        uint b = quantized_channel(rgb.b);
 
-        uint lum = (218u * r + 732u * g + 74u * b) >> 10;
-        if (lum > 255u) lum = 255u;
+        uint lum = bt709_luminance_u8(r, g, b);
         uint radius_signal = uint(
             pow(float(lum) / 255.0, max(uRadiusSignalInvGamma, 0.01)) * 255.0 + 0.5);
 
@@ -126,27 +147,45 @@ void main() {
         if (r == 255u || g == 255u || b == 255u)
             atomicAdd(tile_lum_clipped, 1u);
 
+        float tl = luma_at(gid + ivec2(-1, -1));
+        float tc = luma_at(gid + ivec2( 0, -1));
+        float tr = luma_at(gid + ivec2( 1, -1));
+        float ml = luma_at(gid + ivec2(-1,  0));
+        float mr = luma_at(gid + ivec2( 1,  0));
+        float bl = luma_at(gid + ivec2(-1,  1));
+        float bc = luma_at(gid + ivec2( 0,  1));
+        float br = luma_at(gid + ivec2( 1,  1));
+        float gx = -tl - 2.0 * ml - bl + tr + 2.0 * mr + br;
+        float gy = -tl - 2.0 * tc - tr + bl + 2.0 * bc + br;
+        uint grad_bin = min(uint(clamp(length(vec2(gx, gy)) / 8.0, 0.0, 1.0) *
+                            255.0 + 0.5), 255u);
+        atomicAdd(tile_grad_hist[grad_bin], 1u);
+
         // ── HSV hue + saturation ────────────────────────────────────
         uint cmax = max(r, max(g, b));
         uint cmin = min(r, min(g, b));
         uint delta = cmax - cmin;
-        if (cmax > 0u && delta > 0u) {
-            float sat = float(delta) / float(cmax);
-            if (sat > uSatThreshold) {
-                atomicAdd(tile_n_colored, 1u);
-                atomicAdd(tile_sat_sum_q8, uint(sat * 255.0 + 0.5));
-                float h_raw;
-                if (r == cmax) {
-                    h_raw = float(int(g) - int(b)) / float(delta);
-                } else if (g == cmax) {
-                    h_raw = 2.0 + float(int(b) - int(r)) / float(delta);
-                } else {
-                    h_raw = 4.0 + float(int(r) - int(g)) / float(delta);
-                }
-                float h = fract(h_raw / 6.0);
-                uint hbin = min(uint(floor(h * 36.0)), 35u);
-                atomicAdd(tile_hue_hist[hbin], 1u);
+        float sat = (cmax > 0u) ? float(delta) / float(cmax) : 0.0;
+        uint sat_bin = min(uint(sat * 255.0 + 0.5), 255u);
+        atomicAdd(tile_sat_hist[sat_bin], 1u);
+        if (float(lum) / 255.0 >= uBrightLumaThreshold &&
+            sat <= uNeutralSaturationThreshold) {
+            atomicAdd(tile_bright_neutral, 1u);
+        }
+        atomicAdd(tile_rg_hist[uint(int(r) - int(g) + 255)], 1u);
+        atomicAdd(tile_yb_hist[uint(int(r) + int(g) - 2 * int(b) + 510)], 1u);
+        if (delta > 0u && sat > uColoredSaturationThreshold) {
+            float h_raw;
+            if (r == cmax) {
+                h_raw = float(int(g) - int(b)) / float(delta);
+            } else if (g == cmax) {
+                h_raw = 2.0 + float(int(b) - int(r)) / float(delta);
+            } else {
+                h_raw = 4.0 + float(int(r) - int(g)) / float(delta);
             }
+            float h = fract(h_raw / 6.0);
+            uint hbin = min(uint(floor(h * 36.0)), 35u);
+            atomicAdd(tile_hue_hist[hbin], 1u);
         }
 
         // ── Circles: Voronoi nearest-light + radial bin ─────────────
@@ -211,13 +250,24 @@ void main() {
     // fewer atomics for a 16x16 tile on the dominant histograms.
     uint local_count = tile_lum_hist[lid];
     if (local_count != 0u) atomicAdd(lum_hist[lid], local_count);
+    uint local_grad = tile_grad_hist[lid];
+    if (local_grad != 0u) atomicAdd(grad_hist[lid], local_grad);
+    uint local_sat = tile_sat_hist[lid];
+    if (local_sat != 0u) atomicAdd(sat_hist[lid], local_sat);
     if (lid < 36u) {
         uint local_hue = tile_hue_hist[lid];
         if (local_hue != 0u) atomicAdd(hue_hist[lid], local_hue);
     }
+    for (uint i = lid; i < 511u; i += 256u) {
+        uint local_rg = tile_rg_hist[i];
+        if (local_rg != 0u) atomicAdd(rg_hist[i], local_rg);
+    }
+    for (uint i = lid; i < 1021u; i += 256u) {
+        uint local_yb = tile_yb_hist[i];
+        if (local_yb != 0u) atomicAdd(yb_hist[i], local_yb);
+    }
     if (lid == 0u) {
-        atomicAdd(lum_clipped,       tile_lum_clipped);
-        atomicAdd(color_sat_sum_q8,  tile_sat_sum_q8);
-        atomicAdd(color_n_colored, tile_n_colored);
+        atomicAdd(lum_clipped, tile_lum_clipped);
+        atomicAdd(bright_neutral, tile_bright_neutral);
     }
 }

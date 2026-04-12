@@ -14,11 +14,6 @@ struct PostProcess;
 struct Scene;
 struct TraceConfig;
 
-// FrameMetrics is the luminance-only view of the authored-camera analysis.
-// It aliases the same LuminanceStats struct exposed on
-// FrameAnalysis.luminance.
-using FrameMetrics = LuminanceStats;
-
 struct VignetteFrame {
     float center[2] = {0.5f, 0.5f};
     float inv_size[2] = {1.0f, 1.0f};
@@ -67,7 +62,7 @@ public:
     // Read final RGB pixels for image output. When analysis outputs are requested,
     // metrics are produced from the GPU display texture before the pixel readback.
     void read_pixels(std::vector<uint8_t>& out_rgb, const PostProcess& pp, float display_aspect = 0.0f,
-                     const VignetteFrame* vignette_frame = nullptr, FrameMetrics* out_metrics = nullptr,
+                     const VignetteFrame* vignette_frame = nullptr, ImageStats* out_metrics = nullptr,
                      FrameAnalysis* out_analysis = nullptr);
     void read_display_rgba(std::vector<uint8_t>& out_rgba);
 

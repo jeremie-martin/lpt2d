@@ -47,20 +47,20 @@ from anim.examples_support import _authored_shot
 from anim.family import Verdict
 
 from .check import (
-    BLACK_DIFFUSE_MAX_SHADOW_FRACTION,
-    GLASS_MAX_MEAN_LUMINANCE,
+    GLASS_MAX_MEAN_LUMA,
     MAX_AMBIENT_RADIUS_RATIO,
-    MAX_MEAN_LUMINANCE,
+    MAX_BRIGHT_NEUTRAL_FRACTION,
+    MAX_MEAN_LUMA,
     MAX_MEAN_SATURATION,
     MAX_MOVING_RADIUS_RATIO,
     MAX_NEAR_BLACK_FRACTION,
+    MAX_P05_LUMA,
     MAX_RADIUS_RATIO,
-    MAX_SHADOW_FLOOR,
-    MAX_SHADOW_FRACTION,
     METRIC_KEYS,
     MIN_AMBIENT_RADIUS_RATIO,
-    MIN_CONTRAST_SPREAD,
-    MIN_MEAN_LUMINANCE,
+    MIN_INTERDECILE_LUMA_RANGE,
+    MIN_LOCAL_CONTRAST,
+    MIN_MEAN_LUMA,
     MIN_MOVING_RADIUS_RATIO,
     MIN_RADIUS_RATIO,
     PROBE_H,
@@ -261,31 +261,27 @@ def _failure_distance(result: MeasurementResult, outcome: str | None = None) -> 
     m = result.metrics
     dist = 0.0
 
-    max_mean_luminance = (
-        GLASS_MAX_MEAN_LUMINANCE if outcome == "glass" else MAX_MEAN_LUMINANCE
-    )
-    max_shadow_fraction = (
-        BLACK_DIFFUSE_MAX_SHADOW_FRACTION
-        if outcome == "black_diffuse"
-        else MAX_SHADOW_FRACTION
-    )
+    max_mean_luma = GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
 
-    if m["mean"] < MIN_MEAN_LUMINANCE:
-        dist += (MIN_MEAN_LUMINANCE - m["mean"]) / 255.0
-    if m["mean"] > max_mean_luminance:
-        dist += (m["mean"] - max_mean_luminance) / 255.0
+    if m["mean_luma"] < MIN_MEAN_LUMA:
+        dist += MIN_MEAN_LUMA - m["mean_luma"]
+    if m["mean_luma"] > max_mean_luma:
+        dist += m["mean_luma"] - max_mean_luma
 
-    if m["shadow_floor"] > MAX_SHADOW_FLOOR:
-        dist += (m["shadow_floor"] - MAX_SHADOW_FLOOR) / 255.0
+    if m["p05_luma"] > MAX_P05_LUMA:
+        dist += m["p05_luma"] - MAX_P05_LUMA
 
-    if m["contrast_spread"] < MIN_CONTRAST_SPREAD:
-        dist += (MIN_CONTRAST_SPREAD - m["contrast_spread"]) / 255.0
+    if m["interdecile_luma_range"] < MIN_INTERDECILE_LUMA_RANGE:
+        dist += MIN_INTERDECILE_LUMA_RANGE - m["interdecile_luma_range"]
+
+    if m["local_contrast"] < MIN_LOCAL_CONTRAST:
+        dist += MIN_LOCAL_CONTRAST - m["local_contrast"]
 
     if m["near_black_fraction"] > MAX_NEAR_BLACK_FRACTION:
         dist += m["near_black_fraction"] - MAX_NEAR_BLACK_FRACTION
 
-    if m["shadow_fraction"] > max_shadow_fraction:
-        dist += m["shadow_fraction"] - max_shadow_fraction
+    if m["bright_neutral_fraction"] > MAX_BRIGHT_NEUTRAL_FRACTION:
+        dist += m["bright_neutral_fraction"] - MAX_BRIGHT_NEUTRAL_FRACTION
 
     if m["mean_saturation"] >= MAX_MEAN_SATURATION:
         dist += m["mean_saturation"] - MAX_MEAN_SATURATION

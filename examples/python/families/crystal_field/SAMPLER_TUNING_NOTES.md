@@ -100,10 +100,10 @@ the current probe thresholds tend to accept:
 
 | Metric | Useful observed band |
 | --- | --- |
-| `metric_mean` | about `100 .. 135` |
+| `metric_mean_luma` | about `0.39 .. 0.53` |
 | `metric_moving_radius_mean` | about `0.012 .. 0.023` |
 | `metric_ambient_radius_mean` | about `0.008 .. 0.021` |
-| `metric_contrast_spread` | about `69 .. 135` |
+| `metric_interdecile_luma_range` | about `0.27 .. 0.53` |
 | `metric_mean_saturation` | about `0.45 .. 0.55`, bad above `0.66` |
 
 ## Refactor Direction

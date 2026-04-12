@@ -153,7 +153,7 @@ def build_animate(p: AnimParams):
 # ---------------------------------------------------------------------------
 
 MAX_ATTEMPTS = 500
-CONTRAST_THRESHOLD = 25.0  # FrameMetrics.contrast_std must exceed this
+CONTRAST_THRESHOLD = 25.0 / 255.0
 MIN_GOOD_FRACTION = 0.60  # at least 60% of probed frames must be good
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
@@ -255,8 +255,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_std += fs.contrast_std
-        if fs.contrast_std > CONTRAST_THRESHOLD:
+        total_std += fs.rms_contrast
+        if fs.rms_contrast > CONTRAST_THRESHOLD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0
@@ -346,7 +346,7 @@ def main() -> None:
         beauty_ok, n_good, avg_std = check_beauty(p)
         n_frames = Timeline(DURATION, fps=PROBE_FPS).total_frames
         good_pct = 100.0 * n_good / n_frames if n_frames > 0 else 0.0
-        print(f"  good={n_good}/{n_frames} ({good_pct:.0f}%) avg_std={avg_std:.1f}", flush=True)
+        print(f"  good={n_good}/{n_frames} ({good_pct:.0f}%) avg_std={avg_std:.3f}", flush=True)
 
         if not beauty_ok:
             continue

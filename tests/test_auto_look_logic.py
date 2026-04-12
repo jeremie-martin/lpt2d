@@ -18,10 +18,10 @@ from anim.analysis import _choose_initial_exposure, _summarize_brightness
 
 def _fs(mean: float, clipped_channel_fraction: float = 0.0) -> Any:
     return fake_metrics(
-        mean=mean,
-        median=mean,
-        highlight_ceiling=mean,
-        highlight_peak=float(int(mean)),
+        mean_luma=mean / 255.0,
+        median_luma=mean / 255.0,
+        p95_luma=mean / 255.0,
+        p05_luma=mean / 255.0,
         clipped_channel_fraction=clipped_channel_fraction,
     )
 

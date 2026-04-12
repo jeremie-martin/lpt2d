@@ -46,9 +46,8 @@ SeedMode: TypeAlias = _lpt2d.SeedMode
 ProjectorProfile: TypeAlias = _lpt2d.ProjectorProfile
 RenderSession: TypeAlias = _lpt2d.RenderSession
 RenderResult: TypeAlias = _lpt2d.RenderResult
-FrameMetrics: TypeAlias = _lpt2d.FrameMetrics
-LuminanceStats: TypeAlias = _lpt2d.LuminanceStats
-ColorStats: TypeAlias = _lpt2d.ColorStats
+ImageStats: TypeAlias = _lpt2d.ImageStats
+ImageDebugStats: TypeAlias = _lpt2d.ImageDebugStats
 LightRef: TypeAlias = _lpt2d.LightRef
 PointLightAppearance: TypeAlias = _lpt2d.PointLightAppearance
 PointLightAppearanceParams: TypeAlias = _lpt2d.PointLightAppearanceParams
@@ -519,26 +518,22 @@ class FrameReport:
     max_hdr: float
     total_rays: int
     time_ms_exact: float | None = None
-    mean: float | None = None
-    percentile_01: float | None = None
-    percentile_10: float | None = None
-    median: float | None = None
-    percentile_90: float | None = None
-    shadow_floor: float | None = None
-    highlight_ceiling: float | None = None
-    highlight_peak: float | None = None
-    contrast_std: float | None = None
-    contrast_spread: float | None = None
-    histogram_entropy: float | None = None
-    histogram_entropy_normalized: float | None = None
+    mean_luma: float | None = None
+    median_luma: float | None = None
+    p05_luma: float | None = None
+    p95_luma: float | None = None
     near_black_fraction: float | None = None
     near_white_fraction: float | None = None
-    shadow_fraction: float | None = None
-    midtone_fraction: float | None = None
-    highlight_fraction: float | None = None
     clipped_channel_fraction: float | None = None
+    rms_contrast: float | None = None
+    interdecile_luma_range: float | None = None
+    interdecile_luma_contrast: float | None = None
+    local_contrast: float | None = None
+    mean_saturation: float | None = None
+    p95_saturation: float | None = None
+    colorfulness: float | None = None
+    bright_neutral_fraction: float | None = None
     stats_ms: float | None = None
-    histogram: list[int] | None = None
 
 
 def _report_from_result(result: RenderResult, frame_idx: int, time_ms: float) -> FrameReport:
@@ -553,23 +548,19 @@ def _report_from_result(result: RenderResult, frame_idx: int, time_ms: float) ->
         max_hdr=result.max_hdr,
         total_rays=result.total_rays,
         time_ms_exact=actual_ms,
-        mean=m.mean,
-        percentile_01=m.percentile_01,
-        percentile_10=m.percentile_10,
-        median=m.median,
-        percentile_90=m.percentile_90,
-        shadow_floor=m.shadow_floor,
-        highlight_ceiling=m.highlight_ceiling,
-        highlight_peak=m.highlight_peak,
-        contrast_std=m.contrast_std,
-        contrast_spread=m.contrast_spread,
-        histogram_entropy=m.histogram_entropy,
-        histogram_entropy_normalized=m.histogram_entropy_normalized,
+        mean_luma=m.mean_luma,
+        median_luma=m.median_luma,
+        p05_luma=m.p05_luma,
+        p95_luma=m.p95_luma,
         near_black_fraction=m.near_black_fraction,
         near_white_fraction=m.near_white_fraction,
-        shadow_fraction=m.shadow_fraction,
-        midtone_fraction=m.midtone_fraction,
-        highlight_fraction=m.highlight_fraction,
         clipped_channel_fraction=m.clipped_channel_fraction,
-        histogram=m.histogram,
+        rms_contrast=m.rms_contrast,
+        interdecile_luma_range=m.interdecile_luma_range,
+        interdecile_luma_contrast=m.interdecile_luma_contrast,
+        local_contrast=m.local_contrast,
+        mean_saturation=m.mean_saturation,
+        p95_saturation=m.p95_saturation,
+        colorfulness=m.colorfulness,
+        bright_neutral_fraction=m.bright_neutral_fraction,
     )

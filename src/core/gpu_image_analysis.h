@@ -93,7 +93,9 @@ private:
     GLint u_max_bins_   = -1;
     GLint u_search_radius_px_ = -1;
     GLint u_radius_signal_inv_gamma_ = -1;
-    GLint u_sat_        = -1;
+    GLint u_bright_luma_ = -1;
+    GLint u_neutral_saturation_ = -1;
+    GLint u_colored_saturation_ = -1;
     GLint u_src_        = -1;
 
     // Grow a dynamic SSBO if `required_bytes` exceeds its current

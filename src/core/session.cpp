@@ -137,7 +137,7 @@ RenderResult RenderSession::develop_result(const PostProcess& pp, bool analyze,
     auto& r = impl_->renderer;
 
     // Read pixels for the render result. The analyzer runs on the GPU display
-    // texture first; analyze=false requests luminance only.
+    // texture first; analyze=false requests compact image stats only.
     RenderResult result;
     if (analyze) {
         r.read_pixels(result.pixels, pp, (float)impl_->width / (float)impl_->height, nullptr,

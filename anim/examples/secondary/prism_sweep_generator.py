@@ -5,7 +5,7 @@ Randomly samples animation parameters and verifies two constraints:
 1. **Geometric** (analytical): beam on prism for the majority of the animation.
    Enters at t in [0.5, 1.0]s, exits at t in [9.0, 9.5]s.
 2. **Beauty** (render-based): at least 3 seconds of frames with high spectral
-   color richness.
+   colorfulness.
 
 When a valid animation is found, renders it in HQ and saves parameters + video.
 
@@ -74,7 +74,7 @@ BEAM_BASE_X = -1.4
 # ---------------------------------------------------------------------------
 
 MAX_ATTEMPTS = 2000
-RICHNESS_THRESHOLD = 0.4
+COLORFULNESS_THRESHOLD = 0.4
 MIN_COLORFUL_SECONDS = 3.0
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
@@ -241,7 +241,7 @@ def check_geometry(p: AnimParams) -> tuple[bool, float, float, float]:
 
 
 # ---------------------------------------------------------------------------
-# Constraint 2: color richness (render-based, using library color_stats)
+# Constraint 2: colorfulness (render-based, using ImageStats)
 # ---------------------------------------------------------------------------
 
 
@@ -314,8 +314,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int]:
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi, True)
-        cs = render_result.analysis.color
-        if cs.richness > RICHNESS_THRESHOLD:
+        stats = render_result.analysis.image
+        if stats.colorfulness > COLORFULNESS_THRESHOLD:
             colorful += 1
 
     min_colorful_frames = int(MIN_COLORFUL_SECONDS * PROBE_FPS)
@@ -407,7 +407,7 @@ def main() -> None:
 
     if found == 0:
         print(f"No valid animation found in {MAX_ATTEMPTS} attempts.")
-        print("Try adjusting parameter ranges or lowering RICHNESS_THRESHOLD.")
+        print("Try adjusting parameter ranges or lowering COLORFULNESS_THRESHOLD.")
 
 
 if __name__ == "__main__":

@@ -24,8 +24,11 @@ def _make_background(path: Path, size: tuple[int, int] = (640, 360)) -> None:
 
 def _sample_metrics() -> dict[str, float]:
     return {
-        "mean": 118.0,
-        "contrast_spread": 12.0,
+        "mean_luma": 0.46,
+        "p05_luma": 0.12,
+        "interdecile_luma_range": 0.32,
+        "local_contrast": 0.04,
+        "bright_neutral_fraction": 0.08,
         "near_black_fraction": 0.025,
         "analysis_time": 1.25,
         "moving_radius_min": 0.019,

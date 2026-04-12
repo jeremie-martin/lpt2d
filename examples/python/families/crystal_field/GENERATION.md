@@ -192,7 +192,7 @@ Some thresholds depend on material outcome:
 - glass has a lower maximum mean luminance;
 - black diffuse allows more shadow pixels.
 
-The current checker deliberately does not use older color-richness,
+The current checker deliberately does not use older color-colorfulness,
 edge-width, peak-contrast, confidence, coverage, or pre-render geometry
 guards.
 

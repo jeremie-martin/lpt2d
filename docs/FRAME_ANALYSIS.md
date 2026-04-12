@@ -1,14 +1,15 @@
 # Frame Analysis
 
-Frame analysis is the numeric description of the final camera image. It is the
-data layer used by scripts, the Python API, and the GUI Stats panel to answer
-questions such as:
+Frame analysis is the numeric description of the final authored-camera image.
+It is used by scripts, the Python API, and the GUI Stats panel to answer:
 
 - Is the image too dark, too bright, clipped, or washed out?
-- How much contrast and color does the final image have?
+- How much robust contrast and color does the final image have?
 - How large and sharp is the visible disk produced by each authored point light?
 
 The public API is `FrameAnalysis` in C++ and `rr.analysis` in Python.
+`RenderResult.metrics` is the compact `ImageStats` value from
+`RenderResult.analysis.image`.
 
 ## Image Contract
 
@@ -30,13 +31,13 @@ The GUI must preserve camera semantics:
 
 ## Units
 
-Frame analysis should be resolution independent wherever the value is meant to
-be compared across images.
+All public image values are normalized and resolution independent unless the
+field explicitly says it is a raw histogram count.
 
 | Kind | Unit |
 |---|---|
-| Luminance values | BT.709 luminance on the final `0..255` RGB8 scale |
-| Percentiles | Luminance bin values on the same `0..255` scale |
+| Luma values | BT.709 luma on the final RGB8 image, normalized to `[0, 1]` |
+| Saturation and colorfulness | Normalized to `[0, 1]` |
 | Occupancy values | Fraction of the full image area in `[0, 1]` |
 | Light radius and edge width | Fraction of `min(width, height)` |
 | Light coverage | Fraction of the full image area |
@@ -54,81 +55,72 @@ from anim.renderer import render_frame
 rr = render_frame(animate, timeline, settings=shot, analyze=True)
 analysis = rr.analysis
 
-print(analysis.luminance.mean, analysis.luminance.contrast_spread)
-print(analysis.color.richness, analysis.color.colored_fraction)
+print(analysis.image.mean_luma, analysis.image.interdecile_luma_range)
+print(analysis.image.colorfulness, analysis.debug.colored_fraction)
 
 for light in analysis.lights:
     print(light.id, light.radius_ratio, light.transition_width_ratio, light.confidence)
 ```
 
-## Luminance
+## ImageStats
 
-`FrameAnalysis.luminance` describes whole-frame brightness, contrast, shadows,
-highlights, and clipping in the final image.
+`FrameAnalysis.image` is the compact set intended for normal scripts and
+filters. The same value is exposed as `RenderResult.metrics`.
 
 | Field | Meaning |
 |---|---|
 | `width`, `height` | Dimensions of the image actually analyzed |
-| `histogram` | 256-bin luminance histogram; counts sum to `width * height` |
-| `mean` | Average brightness |
-| `percentile_01` | 1st-percentile brightness |
-| `percentile_10` | 10th-percentile brightness |
-| `median` | 50th-percentile brightness |
-| `percentile_90` | 90th-percentile brightness |
-| `shadow_floor` | 5th-percentile brightness |
-| `highlight_ceiling` | 95th-percentile brightness |
-| `highlight_peak` | 99th-percentile brightness |
-| `contrast_std` | Standard deviation of luminance |
-| `contrast_spread` | `highlight_ceiling - shadow_floor` |
-| `histogram_entropy` | Shannon entropy of the 256-bin luminance histogram, in bits |
-| `histogram_entropy_normalized` | Luminance entropy divided by 8 bits, in `[0, 1]` |
-| `near_black_fraction` | Fraction of the image at or below the near-black threshold; default luminance bin `10` |
-| `near_white_fraction` | Fraction of the image at or above the near-white threshold; default luminance bin `245` |
-| `shadow_fraction` | Fraction of pixels with luminance `<= 64` |
-| `midtone_fraction` | Fraction of pixels with luminance from `65` to `191` |
-| `highlight_fraction` | Fraction of pixels with luminance `>= 192` |
-| `clipped_channel_fraction` | Fraction of the image where any RGB channel is exactly 255 |
+| `mean_luma` | Average BT.709 luma |
+| `median_luma` | 50th-percentile luma |
+| `p05_luma`, `p95_luma` | 5th and 95th percentile luma |
+| `near_black_fraction` | Fraction of pixels with luma `<= near_black_luma`; default `10/255` |
+| `near_white_fraction` | Fraction of pixels with luma `>= near_white_luma`; default `245/255` |
+| `clipped_channel_fraction` | Fraction of pixels where any RGB channel is exactly 255 |
+| `rms_contrast` | Standard deviation of normalized luma |
+| `interdecile_luma_range` | `p90_luma - p10_luma`; robust contrast spread |
+| `interdecile_luma_contrast` | `(p90_luma - p10_luma) / (p90_luma + p10_luma + eps)` |
+| `local_contrast` | Normalized Sobel-gradient contrast |
+| `mean_saturation` | Average HSV saturation over all pixels |
+| `p95_saturation` | 95th-percentile HSV saturation |
+| `colorfulness` | Normalized opponent-channel colorfulness |
+| `bright_neutral_fraction` | Fraction of pixels that are bright and low-saturation |
 
 Interpretation:
 
-- `mean` is the broad brightness estimate.
-- `contrast_std` is sensitive to global variation across the frame.
-- `contrast_spread` ignores extreme outliers and is useful for washed-out or
-  flat-image checks.
-- `histogram_entropy_normalized` is a compact tonal-complexity score. It uses
-  normalized bin probabilities, so it is designed for resolution-independent
-  comparisons.
-- `shadow_floor` and `near_black_fraction` describe dark occupancy.
-- `highlight_ceiling`, `highlight_peak`, `near_white_fraction`, and
-  `clipped_channel_fraction` describe bright occupancy and saturation.
-- `shadow_fraction`, `midtone_fraction`, and `highlight_fraction` give a
-  coarse tonal occupancy split that is less threshold-specific than
-  near-black and near-white.
+- `mean_luma` is the broad brightness estimate.
+- `rms_contrast` captures global variation and is sensitive to large dark or
+  bright regions.
+- `interdecile_luma_range` is the preferred robust contrast spread for flat or
+  washed-out image checks.
+- `local_contrast` captures spatial edge contrast, so it can distinguish a
+  smooth gradient from a frame with similar global luma spread but sharper
+  structure.
+- `bright_neutral_fraction` is a direct washed-out signal: bright pixels with
+  low saturation.
 - `clipped_channel_fraction` is not the same as white-pixel fraction; it counts
   any pixel with at least one saturated RGB channel.
 
-Scripts should prefer fractions and percentiles over raw histogram counts unless
-they intentionally need resolution-dependent information.
+## ImageDebugStats
 
-## Color
-
-`FrameAnalysis.color` summarizes chromatic content in the final image.
+`FrameAnalysis.debug` carries expanded diagnostics. It is useful for tuning and
+dashboards, but most filters should start with `ImageStats`.
 
 | Field | Meaning |
 |---|---|
-| `mean_saturation` | Average HSV saturation of pixels above the chroma threshold |
-| `saturation_coverage` | `mean_saturation * colored_fraction`; chroma amount over the whole image |
-| `hue_entropy` | Shannon entropy of the hue histogram |
-| `colored_fraction` | Fraction of the image considered chromatic |
-| `richness` | Combined colorfulness score: entropy, saturation, and area |
-| `n_colored` | Raw count of chromatic pixels |
-| `hue_histogram` | 36-bin hue histogram |
+| `p01_luma`, `p10_luma`, `p90_luma`, `p99_luma` | Additional luma percentiles |
+| `luma_entropy` | Shannon entropy of the 256-bin luma histogram, in bits |
+| `luma_entropy_normalized` | Luma entropy divided by 8 bits |
+| `hue_entropy` | Shannon entropy of the 36-bin hue histogram |
+| `colored_fraction` | Fraction of pixels above the chroma threshold |
+| `mean_saturation_colored` | Mean saturation among chromatic pixels only |
+| `saturation_coverage` | `mean_saturation_colored * colored_fraction` |
+| `colorfulness_raw` | Unnormalized opponent-channel colorfulness |
+| `luma_histogram` | 256-bin luma histogram |
+| `saturation_histogram` | 256-bin HSV saturation histogram |
+| `hue_histogram` | 36-bin hue histogram for chromatic pixels |
 
-`saturation_coverage` is useful when the amount of chroma matters more than
-hue variety. `richness` is a compact "does this frame contain meaningful color
-variety?" score. Hue-distribution metrics are diagnostic and can be more
-sensitive to low ray counts than luminance-histogram metrics; prefer
-`saturation_coverage` and `colored_fraction` for stable catalog comparisons.
+Scripts should prefer normalized summary fields over raw histogram counts unless
+they intentionally need distribution-level diagnostics.
 
 ## Point-Light Appearance
 
@@ -138,8 +130,8 @@ not the physical light object in isolation.
 
 This sensitivity is intentional. Exposure, white point, contrast, gamma,
 reflections, occlusion, bloom-like post-processing, nearby objects, and the
-background can all change the apparent disk. The analysis should report the
-disk visible in the current final frame.
+background can all change the apparent disk. The analysis reports the disk
+visible in the current final frame.
 
 | Field | Meaning |
 |---|---|
@@ -148,11 +140,10 @@ disk visible in the current final frame.
 | `image_x`, `image_y` | Projected light center in the analyzed camera image |
 | `visible` | Whether a measurable light appearance was found |
 | `radius_ratio` | Official apparent light-disk radius, normalized by image short side |
-| `radius_candidate_sector_consensus_ratio` | Temporary comparison candidate: radius with strongest angular-sector edge agreement |
 | `coverage_fraction` | Area of that disk as a fraction of the image |
-| `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
 | `saturated_radius_ratio` | Diagnostic radius of the saturated or near-saturated core |
-| `peak_luminance` | Brightest measured luminance associated with the light |
+| `transition_width_ratio` | Estimated edge or falloff width, normalized by image short side |
+| `peak_luminance` | Brightest measured luma associated with the light |
 | `background_luminance` | Estimated local background near the light |
 | `peak_contrast` | `peak_luminance - background_luminance` |
 | `touches_frame_edge` | Whether the estimated disk is truncated by the frame boundary |
@@ -161,38 +152,17 @@ disk visible in the current final frame.
 `radius_ratio` is the main answer for "how big is the circle of light?" It
 should be the value used by tooling, overlays, and automated filters.
 
-`radius_candidate_sector_consensus_ratio` is the only remaining comparison
-candidate. It is exported so the GPU analyzer, C++ API, Python bindings, GUI,
-and characterization gallery can compare the official radius with the strongest
-alternate result from the same final camera image. It is not intended to become
-permanent API surface.
-
-The light-radius characterization gallery includes stability sweeps for gamma,
-ray count, and resolution. These are meant to catch detector drift caused by
-post-processing, stochastic noise, or image-size changes. All radius values in
-those tables are normalized by the image short side, so resolution changes
-should ideally produce very small drift for the same apparent image.
-
 The light-radius detector intentionally uses an internal grayscale radius signal
-rather than raw RGB channels: BT.709 luminance from the real final RGB8 camera
-image, remapped with `lights.radius_signal_gamma` before radial profiles are
-measured. This is equivalent to asking "what circle would be visible if this
-final image were converted to luminance and viewed with a low gamma", without
-changing the rendered image, the public post-processing settings, or the
-whole-frame luminance/color metrics.
-
-The official radius and sector-consensus candidate subtract a local background
-estimate in the same low-gamma radius-signal space before looking for the
-apparent light-disk boundary. Older profile-knee, robust-sector-edge, and
-outer-shoulder detector experiments were pruned from active code after the
-low-gamma luminance characterization pass; see `docs/LIGHT_RADIUS_DETECTOR_HISTORY.md`.
+rather than raw RGB channels: BT.709 luma from the real final RGB8 camera image,
+remapped with `lights.radius_signal_gamma` before radial profiles are measured.
+This is equivalent to asking "what circle would be visible if this final image
+were converted to luma and viewed with a low gamma", without changing the
+rendered image, the public post-processing settings, or the whole-frame image
+stats.
 
 `saturated_radius_ratio` is only a diagnostic. It can be useful for debugging
 clipping, but it is not the general apparent radius because many valid light
 disks are soft, colored, or not fully saturated.
-
-`transition_width_ratio` describes edge sharpness. Lower values mean a crisper
-boundary; higher values mean a soft halo or gradual falloff.
 
 Low `confidence` means the radius should be treated cautiously. Common causes
 include weak contrast, a very soft edge, contamination from nearby geometry,
@@ -205,12 +175,14 @@ thresholds that define public semantic boundaries.
 
 | Field | Meaning |
 |---|---|
-| `analyze_luminance` | Populate `luminance` |
-| `analyze_color` | Populate `color` |
+| `analyze_image` | Populate `image` |
+| `analyze_debug` | Populate `debug` |
 | `analyze_lights` | Populate `lights` |
-| `near_black_bin_max` | Upper luminance bin counted as near black; default `10` |
-| `near_white_bin_min` | Lower luminance bin counted as near white; default `245` |
-| `saturation_threshold` | Chroma threshold used by color analysis |
+| `near_black_luma` | Inclusive near-black luma threshold; default `10/255` |
+| `near_white_luma` | Inclusive near-white luma threshold; default `245/255` |
+| `bright_luma_threshold` | Bright threshold for `bright_neutral_fraction`; default `0.75` |
+| `neutral_saturation_threshold` | Low-saturation threshold for `bright_neutral_fraction`; default `0.10` |
+| `colored_saturation_threshold` | Chroma threshold for hue/color debug stats; default `0.05` |
 | `lights.search_radius_ratio` | Maximum search distance around each light, as a short-side fraction |
 | `lights.radius_signal_gamma` | Gamma used only for the internal grayscale light-radius signal; default `0.5` |
 | `lights.saturated_core_threshold` | Threshold for the diagnostic saturated-core radius |
@@ -223,10 +195,14 @@ across many scenes.
 
 ## Practical Use
 
-- Use `luminance.mean`, `contrast_std`, `contrast_spread`, shadows, highlights,
-  peak, near-black, near-white, and clipped-channel fractions for exposure and
-  washed-out checks.
-- Use `color.richness` and its component fields for colorfulness checks.
+- Use `image.mean_luma`, `image.p05_luma`, `image.p95_luma`,
+  `image.rms_contrast`, `image.interdecile_luma_range`,
+  `image.local_contrast`, `image.near_black_fraction`,
+  `image.near_white_fraction`, and `image.clipped_channel_fraction` for
+  exposure and contrast checks.
+- Use `image.bright_neutral_fraction` for washed-out bright neutral areas.
+- Use `image.mean_saturation`, `image.p95_saturation`, and
+  `image.colorfulness` for color checks.
 - Use `lights[*].radius_ratio` for the apparent size of point-light disks.
 - Use `lights[*].transition_width_ratio` and `confidence` to decide whether a
   radius measurement is sharp and trustworthy.

@@ -22,7 +22,7 @@ from .types import (
     AnimateFn,
     Camera2D,
     Frame,
-    FrameMetrics,
+    ImageStats,
     FrameReport,
     Quality,
     Look,
@@ -495,8 +495,7 @@ def render_frame(
     -------
     RenderResult
         Object with ``.pixels`` (bytes, RGB8), ``.time_ms`` (float),
-        ``.total_rays`` (int), and ``.metrics`` (FrameMetrics with
-        histogram, luminance stats, etc.).  When ``analyze=True``, also
+        ``.total_rays`` (int), and ``.metrics`` (ImageStats). When ``analyze=True``, also
         ``.analysis`` with colour stats and per-light circles.
     """
     timeline, shot = _resolve_args(timeline, settings)
@@ -596,8 +595,8 @@ def render_stats(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     fast: bool = False,
-) -> list[tuple[int, float, FrameMetrics]]:
-    """Render frames and return their per-frame C++ FrameMetrics."""
+) -> list[tuple[int, float, ImageStats]]:
+    """Render frames and return their per-frame C++ ImageStats."""
     timeline, shot = _resolve_args(timeline, settings)
     w, h = shot.canvas.width, shot.canvas.height
 
@@ -609,7 +608,7 @@ def render_stats(
         indices = list(frames)
 
     session = RenderSession(w, h, fast)
-    results: list[tuple[int, float, FrameMetrics]] = []
+    results: list[tuple[int, float, ImageStats]] = []
 
     for fi in indices:
         ctx = timeline.context_at(fi)

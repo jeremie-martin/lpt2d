@@ -237,8 +237,8 @@ def light_contributions(
             animate_solo, solo_shot, analysis_shot.camera
         )
         if s is not None:
-            results.append((label, idx, s.mean, 1.0 - s.near_black_fraction))
-            total_mean += s.mean
+            results.append((label, idx, s.mean_luma, 1.0 - s.near_black_fraction))
+            total_mean += s.mean_luma
         else:
             results.append((label, idx, 0.0, 0.0))
 
@@ -304,9 +304,7 @@ def structure_contribution(
         trace=analysis_shot.trace,
     )
 
-    # Empty FrameMetrics sentinel for the "render failed" fallback. The
-    # C++ LuminanceStats default constructor zeros every field.
-    _empty = _lpt2d.LuminanceStats()
+    _empty = _lpt2d.ImageStats()
     s_with = analysis_mod._measure_single_frame(
         lambda _ctx, _s=scene: Frame(scene=_s),
         shot_with,
@@ -319,18 +317,21 @@ def structure_contribution(
     ) or _empty
 
     diff = StatsDiff(
-        mean=s_without.mean - s_with.mean,
+        mean_luma=s_without.mean_luma - s_with.mean_luma,
         near_black_fraction=s_without.near_black_fraction - s_with.near_black_fraction,
         clipped_channel_fraction=(
             s_without.clipped_channel_fraction - s_with.clipped_channel_fraction
         ),
-        median=s_without.median - s_with.median,
-        highlight_ceiling=s_without.highlight_ceiling - s_with.highlight_ceiling,
+        median_luma=s_without.median_luma - s_with.median_luma,
+        p95_luma=s_without.p95_luma - s_with.p95_luma,
+        interdecile_luma_range=(
+            s_without.interdecile_luma_range - s_with.interdecile_luma_range
+        ),
     )
 
-    if diff.mean > 5.0:
+    if diff.mean_luma > 5.0 / 255.0:
         role = "dimmer"
-    elif diff.mean < -5.0:
+    elif diff.mean_luma < -5.0 / 255.0:
         role = "brightener"
     else:
         role = "neutral"

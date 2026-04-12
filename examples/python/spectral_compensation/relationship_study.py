@@ -19,6 +19,7 @@ import _lpt2d
 
 SHOT_ROOT = Path("renders/lpt2d_crystal_field_catalog_replay_20260411")
 PROBE_RAYS = 400_000
+MIN_BASE_MEAN_LUMA = 20.0 / 255.0
 
 # Fine sweeps
 EXPOSURE_OFFSETS = [-1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
@@ -30,7 +31,7 @@ def _measure(shot: _lpt2d.Shot, session: _lpt2d.RenderSession) -> dict:
     mov = [c for c in rr.analysis.lights if c.id.startswith("light_")]
     amb = [c for c in rr.analysis.lights if c.id.startswith("amb_")]
     return {
-        "mean": float(rr.analysis.luminance.mean),
+        "mean": float(rr.analysis.image.mean_luma),
         "mov_rad": statistics.mean([float(c.radius_ratio) for c in mov]) if mov else 0.0,
         "amb_rad": statistics.mean([float(c.radius_ratio) for c in amb]) if amb else 0.0,
     }
@@ -82,9 +83,9 @@ def main() -> None:
         base_shot.trace.rays = PROBE_RAYS
         base_m = _measure(base_shot, session)
 
-        if base_m["mean"] < 20 or base_m["mov_rad"] < 0.001:
+        if base_m["mean"] < MIN_BASE_MEAN_LUMA or base_m["mov_rad"] < 0.001:
             session.close()
-            print(f"  [{pi+1:2d}/{len(paths)}] {label:45s}  SKIP (mean={base_m['mean']:.0f} rad={base_m['mov_rad']:.4f})")
+            print(f"  [{pi+1:2d}/{len(paths)}] {label:45s}  SKIP (mean_luma={base_m['mean']:.3f} rad={base_m['mov_rad']:.4f})")
             continue
 
         # Exposure sweep
@@ -121,7 +122,7 @@ def main() -> None:
             "base_mean": base_m["mean"], "base_mov_rad": base_m["mov_rad"],
             "exposure_sweep": exp_rows, "gamma_sweep": gamma_rows,
         })
-        print(f"  [{pi+1:2d}/{len(paths)}] {label:45s}  mean={base_m['mean']:6.1f}  rad={base_m['mov_rad']:.4f}")
+        print(f"  [{pi+1:2d}/{len(paths)}] {label:45s}  mean_luma={base_m['mean']:.3f}  rad={base_m['mov_rad']:.4f}")
 
     # ── Analysis ───────────────────────────────────────────────────
     print(f"\n\n{'=' * 100}")

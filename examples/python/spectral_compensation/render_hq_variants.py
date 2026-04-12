@@ -80,7 +80,7 @@ def main() -> None:
             save_image(str(out / f"{fname}.png"), rr.pixels, shot.canvas.width, shot.canvas.height)
             _lpt2d.save_shot(shot, str(out / f"{fname}.shot.json"))
 
-            mean = float(rr.analysis.luminance.mean)
+            mean = float(rr.analysis.image.mean_luma)
             mov = [c for c in rr.analysis.lights if c.id.startswith("light_")]
             mov_rad = float(mov[0].radius_ratio) if mov else 0.0
             print(f"  {material:18s} {band_name:14s}  mean={mean:6.1f}  mov_rad={mov_rad:.4f}  -> {fname}")

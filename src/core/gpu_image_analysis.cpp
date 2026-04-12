@@ -10,13 +10,16 @@
 
 namespace {
 
-// LumResult std430: uint hist[256] + lum_clipped + lum_npixels (the
-// latter is a convenience slot the shader doesn't write — computed
-// CPU-side). No padding uints; the old layout had two that nothing
-// read or wrote.
-constexpr std::size_t kLumBytes   = (256 + 2) * sizeof(uint32_t);
-// ColorResult std430: uint hue_hist[36] + sat_sum_q8 + n_colored.
-constexpr std::size_t kColorBytes = (36 + 2) * sizeof(uint32_t);
+constexpr int kGradientBins = 256;
+constexpr float kGradientBinScale = 8.0f;
+
+// LumResult std430: uint lum_hist[256] + grad_hist[256] + lum_clipped.
+constexpr std::size_t kLumSlots = 256 + kGradientBins + 1;
+constexpr std::size_t kLumBytes = kLumSlots * sizeof(uint32_t);
+// ColorResult std430: hue_hist[36] + sat_hist[256] + rg_hist[511] +
+// yb_hist[1021] + bright_neutral.
+constexpr std::size_t kColorSlots = 36 + 256 + 511 + 1021 + 1;
+constexpr std::size_t kColorBytes = kColorSlots * sizeof(uint32_t);
 
 // Initial capacity for the dynamic SSBOs — enough for typical scenes
 // without a reallocation on the first few analyze() calls. Grows by
@@ -142,7 +145,11 @@ bool GpuImageAnalyzer::init() {
     u_search_radius_px_ = glGetUniformLocation(program_, "uSearchRadiusPx");
     u_radius_signal_inv_gamma_ =
         glGetUniformLocation(program_, "uRadiusSignalInvGamma");
-    u_sat_        = glGetUniformLocation(program_, "uSatThreshold");
+    u_bright_luma_ = glGetUniformLocation(program_, "uBrightLumaThreshold");
+    u_neutral_saturation_ =
+        glGetUniformLocation(program_, "uNeutralSaturationThreshold");
+    u_colored_saturation_ =
+        glGetUniformLocation(program_, "uColoredSaturationThreshold");
 
     // Allocate the 4 SSBOs. Luminance and colour are fixed-size (one
     // histogram each). Lights and Circles are dynamically resized per
@@ -291,7 +298,15 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
         const float gamma = std::max(params.lights.radius_signal_gamma, 0.05f);
         glUniform1f(u_radius_signal_inv_gamma_, 1.0f / gamma);
     }
-    if (u_sat_ >= 0)        glUniform1f(u_sat_, params.saturation_threshold);
+    if (u_bright_luma_ >= 0) {
+        glUniform1f(u_bright_luma_, params.bright_luma_threshold);
+    }
+    if (u_neutral_saturation_ >= 0) {
+        glUniform1f(u_neutral_saturation_, params.neutral_saturation_threshold);
+    }
+    if (u_colored_saturation_ >= 0) {
+        glUniform1f(u_colored_saturation_, params.colored_saturation_threshold);
+    }
 
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, lum_ssbo_);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, color_ssbo_);
@@ -308,16 +323,16 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
 
     // ── Readback ───────────────────────────────────────────────────────
     //
-    // Lum + colour are always < 1.5 KB. The light-bin buffer is compact
+    // Lum + colour are small fixed-size buffers. The light-bin buffer is compact
     // compared with full-frame RGB readback and is skipped entirely when
     // the caller opted out of point-light analysis.
 
-    std::array<uint32_t, 256 + 2> lum_raw{};
+    std::array<uint32_t, kLumSlots> lum_raw{};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, lum_ssbo_);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                        static_cast<GLsizeiptr>(kLumBytes), lum_raw.data());
 
-    std::array<uint32_t, 36 + 2> color_raw{};
+    std::array<uint32_t, kColorSlots> color_raw{};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, color_ssbo_);
     glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0,
                        static_cast<GLsizeiptr>(kColorBytes), color_raw.data());
@@ -334,52 +349,56 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
     }
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    // ── Luminance finalize (shared with CPU path) ──────────────────────
-    if (params.analyze_luminance) {
-        std::array<int, 256> hist_int{};
+    // ── Image stats finalize (shared with CPU path) ────────────────────
+    if (params.analyze_image || params.analyze_debug) {
+        ImageAnalysisInputs inputs;
+        inputs.width = width;
+        inputs.height = height;
         for (int i = 0; i < 256; ++i) {
-            hist_int[i] = static_cast<int>(lum_raw[i]);
+            inputs.luma_histogram[i] = static_cast<int>(lum_raw[i]);
+            const auto grad_count = static_cast<double>(lum_raw[256 + i]);
+            inputs.local_gradient_sum +=
+                grad_count * (static_cast<double>(i) / 255.0) *
+                static_cast<double>(kGradientBinScale);
         }
-        const int clipped = static_cast<int>(lum_raw[256]);
-        out.luminance = finalize_luminance(hist_int, clipped, width, height,
-                                           params.near_black_bin_max,
-                                           params.near_white_bin_min);
-    }
+        inputs.clipped = static_cast<int>(lum_raw[512]);
 
-    // ── Color finalize (inline) ────────────────────────────────────────
-    if (params.analyze_color) {
-        ColorStats cs;
+        constexpr std::size_t hue_offset = 0;
+        constexpr std::size_t sat_offset = hue_offset + 36;
+        constexpr std::size_t rg_offset = sat_offset + 256;
+        constexpr std::size_t yb_offset = rg_offset + 511;
+        constexpr std::size_t bright_neutral_offset = yb_offset + 1021;
         for (int i = 0; i < 36; ++i) {
-            cs.hue_histogram[i] = static_cast<int>(color_raw[i]);
+            inputs.hue_histogram[i] = static_cast<int>(color_raw[hue_offset + i]);
         }
-        const uint32_t sat_sum_q8 = color_raw[36];
-        const uint32_t n_colored = color_raw[37];
-        const std::size_t n_pixels  =
-            static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-
-        cs.n_colored = static_cast<int>(n_colored);
-        cs.colored_fraction = n_pixels > 0
-            ? static_cast<float>(n_colored) / static_cast<float>(n_pixels)
-            : 0.0f;
-        cs.mean_saturation = n_colored > 0
-            ? (static_cast<float>(sat_sum_q8) / 255.0f) / static_cast<float>(n_colored)
-            : 0.0f;
-
-        // Shannon entropy on the hue histogram (bits).
-        if (n_colored > 0) {
-            const double inv = 1.0 / static_cast<double>(n_colored);
-            double entropy = 0.0;
-            for (int k = 0; k < 36; ++k) {
-                if (cs.hue_histogram[k] > 0) {
-                    const double p = static_cast<double>(cs.hue_histogram[k]) * inv;
-                    entropy -= p * std::log2(p);
-                }
-            }
-            cs.hue_entropy = static_cast<float>(entropy);
+        for (int i = 0; i < 256; ++i) {
+            inputs.saturation_histogram[i] = static_cast<int>(color_raw[sat_offset + i]);
         }
-        cs.saturation_coverage = cs.mean_saturation * cs.colored_fraction;
-        cs.richness = cs.hue_entropy * cs.mean_saturation * cs.colored_fraction;
-        out.color = cs;
+        for (int i = 0; i < 511; ++i) {
+            inputs.rg_histogram[i] = static_cast<int>(color_raw[rg_offset + i]);
+        }
+        for (int i = 0; i < 1021; ++i) {
+            inputs.yb_histogram[i] = static_cast<int>(color_raw[yb_offset + i]);
+        }
+        inputs.bright_neutral =
+            static_cast<int>(color_raw[bright_neutral_offset]);
+
+        const ImageAnalysisThresholds thresholds{
+            .near_black_luma = params.near_black_luma,
+            .near_white_luma = params.near_white_luma,
+            .bright_luma_threshold = params.bright_luma_threshold,
+            .neutral_saturation_threshold = params.neutral_saturation_threshold,
+            .colored_saturation_threshold = params.colored_saturation_threshold,
+        };
+        finalize_image_stats(inputs, thresholds, out.image, out.debug);
+        if (!params.analyze_debug) {
+            out.debug = {};
+        }
+        if (!params.analyze_image) {
+            out.image = {};
+            out.image.width = width;
+            out.image.height = height;
+        }
     }
 
     // ── Light appearance finalize (per-light) ──────────────────────────
@@ -605,94 +624,8 @@ GpuImageAnalyzer::analyze(GLuint source_texture, int width, int height,
             const int radius_bin = has_edge ? edge_bin : r50;
             const float radius_px = bin_radius_px(radius_bin, max_bins, search_radius_px);
 
-            std::vector<float> sector_envelopes(
-                static_cast<std::size_t>(kNumSectors) * static_cast<std::size_t>(max_bins),
-                0.0f);
-            std::vector<float> sector_peaks(static_cast<std::size_t>(kNumSectors), 0.0f);
-            std::vector<int> sector_peak_bins(static_cast<std::size_t>(kNumSectors), 0);
-            int valid_sectors = 0;
-            std::vector<float> sector_profile(static_cast<std::size_t>(max_bins), 0.0f);
-            for (int s = 0; s < kNumSectors; ++s) {
-                std::fill(sector_profile.begin(), sector_profile.end(), 0.0f);
-                for (int r = 0; r < max_bins; ++r) {
-                    const std::size_t idx = static_cast<std::size_t>(r) *
-                                            static_cast<std::size_t>(kNumSectors) +
-                                            static_cast<std::size_t>(s);
-                    if (counts[idx] == 0u) continue;
-                    sector_profile[static_cast<std::size_t>(r)] =
-                        std::max(0.0f, clamp01(mean_radius_signal[idx]) -
-                                             background_radius_signal);
-                }
-
-                std::vector<float> sector_smooth = smooth_profile(sector_profile);
-                int sector_peak_bin = 0;
-                float sector_peak_excess = 0.0f;
-                for (int r = 0; r <= peak_search_end; ++r) {
-                    if (sector_smooth[static_cast<std::size_t>(r)] > sector_peak_excess) {
-                        sector_peak_excess = sector_smooth[static_cast<std::size_t>(r)];
-                        sector_peak_bin = r;
-                    }
-                }
-                if (sector_peak_excess < std::max(0.015f, signal_peak_excess * 0.18f)) {
-                    continue;
-                }
-                enforce_nonincreasing_after_peak(sector_smooth, sector_peak_bin);
-
-                sector_peaks[static_cast<std::size_t>(s)] = sector_peak_excess;
-                sector_peak_bins[static_cast<std::size_t>(s)] = sector_peak_bin;
-                ++valid_sectors;
-                for (int r = 0; r < max_bins; ++r) {
-                    sector_envelopes[static_cast<std::size_t>(s) *
-                                         static_cast<std::size_t>(max_bins) +
-                                     static_cast<std::size_t>(r)] =
-                        sector_smooth[static_cast<std::size_t>(r)];
-                }
-            }
-            float sector_consensus_px = radius_px;
-            const int min_valid_sectors = std::max(6, kNumSectors / 4);
-            if (valid_sectors >= min_valid_sectors) {
-                std::vector<float> sector_drops;
-                sector_drops.reserve(kNumSectors);
-                int sector_consensus_bin = -1;
-                float best_sector_score = 0.0f;
-                for (int r = min_edge_bin; r < max_bins - 2; ++r) {
-                    sector_drops.clear();
-                    for (int s = 0; s < kNumSectors; ++s) {
-                        const float sector_peak = sector_peaks[static_cast<std::size_t>(s)];
-                        if (sector_peak <= 0.0f) continue;
-                        const int sector_peak_bin = sector_peak_bins[static_cast<std::size_t>(s)];
-                        const int lo = std::max(sector_peak_bin, r - 2);
-                        const int hi = std::min(max_bins - 1, r + 2);
-                        const auto base_idx =
-                            static_cast<std::size_t>(s) * static_cast<std::size_t>(max_bins);
-                        const float mid = sector_envelopes[base_idx + static_cast<std::size_t>(r)];
-                        const float drop =
-                            sector_envelopes[base_idx + static_cast<std::size_t>(lo)] -
-                            sector_envelopes[base_idx + static_cast<std::size_t>(hi)];
-                        if (drop > 0.0f && mid > sector_peak * 0.05f) {
-                            sector_drops.push_back(drop);
-                        }
-                    }
-                    if (sector_drops.size() <
-                        static_cast<std::size_t>(std::max(4, valid_sectors / 3))) {
-                        continue;
-                    }
-                    const float score = quantile_sorted(sector_drops, 0.50f);
-                    if (score > best_sector_score) {
-                        best_sector_score = score;
-                        sector_consensus_bin = r;
-                    }
-                }
-                if (sector_consensus_bin >= 0 &&
-                    best_sector_score >= signal_peak_excess * 0.02f) {
-                    sector_consensus_px =
-                        bin_radius_px(sector_consensus_bin, max_bins, search_radius_px);
-                }
-            }
-
             c.visible = radius_px > 0.0f;
             c.radius_ratio = radius_px / short_side;
-            c.radius_candidate_sector_consensus_ratio = sector_consensus_px / short_side;
             c.coverage_fraction = clamp01((PI * radius_px * radius_px) /
                                           static_cast<float>(width * height));
             c.transition_width_ratio =
