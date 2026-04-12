@@ -218,6 +218,33 @@ def test_conditional_numeric_bins_are_grouped_by_scenario():
     assert [row["total"] for row in black_rows] == [5, 5]
 
 
+def test_numeric_bins_keep_duplicate_values_together():
+    records = [
+        {
+            "status": "accepted" if trial % 3 == 0 else "rejected",
+            "features": {"duplicate_heavy": 0.0 if trial < 12 else float(trial - 11)},
+            "metrics": {},
+        }
+        for trial in range(20)
+    ]
+
+    rows = study._numeric_bin_rows(records, bins=4)
+
+    assert [row["total"] for row in rows] == [12, 3, 3, 2]
+    assert rows[0]["low"] == 0.0
+    assert rows[0]["high"] == 0.0
+    assert sum(row["total"] for row in rows) == len(records)
+    assert sum(1 for row in rows if row["low"] == row["high"] == 0.0) == 1
+
+
+def test_axis_bins_keep_duplicate_values_together():
+    axis = study._axis_bins([0.0] * 12 + [float(value) for value in range(1, 9)], bins=4)
+
+    assert axis[0] == (0.0, 0.0)
+    assert len(axis) == 4
+    assert sum(1 for low, high in axis if low == high == 0.0) == 1
+
+
 def test_numeric_interactions_bin_two_parameters():
     records = []
     for trial in range(16):

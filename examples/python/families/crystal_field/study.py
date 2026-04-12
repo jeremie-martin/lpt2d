@@ -899,21 +899,59 @@ def _numeric_bin_rows(records: list[dict[str, Any]], *, bins: int = 10) -> list[
     return _bin_rows_for_values(_numeric_values_by_feature(records), bins=bins)
 
 
+def _bucket_ranges_for_counts(bucket_counts: list[int], *, bins: int) -> list[tuple[int, int]]:
+    if bins <= 0 or not bucket_counts:
+        return []
+
+    bin_count = min(bins, len(bucket_counts))
+    suffix_counts = [0] * (len(bucket_counts) + 1)
+    for index in range(len(bucket_counts) - 1, -1, -1):
+        suffix_counts[index] = suffix_counts[index + 1] + bucket_counts[index]
+
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    remaining_bins = bin_count
+    while start < len(bucket_counts) and remaining_bins > 0:
+        if remaining_bins == 1:
+            end = len(bucket_counts)
+        else:
+            max_end = len(bucket_counts) - (remaining_bins - 1)
+            target = suffix_counts[start] / remaining_bins
+            count = 0
+            end = start
+            while end < max_end:
+                count += bucket_counts[end]
+                end += 1
+                if count >= target:
+                    break
+        ranges.append((start, end))
+        start = end
+        remaining_bins -= 1
+    return ranges
+
+
 def _bin_rows_for_values(values_by_feature: Mapping[str, list[tuple[float, str]]], *, bins: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for feature, values in sorted(values_by_feature.items()):
         if len(values) < bins:
             continue
         sorted_values = sorted(values, key=lambda item: item[0])
-        if sorted_values[0][0] == sorted_values[-1][0]:
+        value_buckets: list[tuple[float, Counter[str]]] = []
+        for value, status in sorted_values:
+            if value_buckets and value_buckets[-1][0] == value:
+                value_buckets[-1][1][status] += 1
+            else:
+                value_buckets.append((value, Counter({status: 1})))
+        if len(value_buckets) < 2:
             continue
-        for bin_idx in range(bins):
-            start = bin_idx * len(sorted_values) // bins
-            end = (bin_idx + 1) * len(sorted_values) // bins
-            chunk = sorted_values[start:end]
-            if not chunk:
-                continue
-            counter: Counter[str] = Counter(status for _value, status in chunk)
+        bucket_counts = [sum(counter.values()) for _value, counter in value_buckets]
+        for bin_idx, (start, end) in enumerate(
+            _bucket_ranges_for_counts(bucket_counts, bins=bins)
+        ):
+            chunk = value_buckets[start:end]
+            counter: Counter[str] = Counter()
+            for _value, bucket_counter in chunk:
+                counter.update(bucket_counter)
             total = sum(counter.values())
             rows.append(
                 {
@@ -977,14 +1015,22 @@ def _axis_bins(values: list[float], *, bins: int) -> list[tuple[float, float]]:
     sorted_values = sorted(v for v in values if math.isfinite(v))
     if len(sorted_values) < bins or sorted_values[0] == sorted_values[-1]:
         return []
-    axis: list[tuple[float, float]] = []
-    for bin_idx in range(bins):
-        start = bin_idx * len(sorted_values) // bins
-        end = (bin_idx + 1) * len(sorted_values) // bins
-        chunk = sorted_values[start:end]
-        if chunk:
-            axis.append((chunk[0], chunk[-1]))
-    return axis
+    value_buckets: list[tuple[float, int]] = []
+    for value in sorted_values:
+        if value_buckets and value_buckets[-1][0] == value:
+            previous_value, count = value_buckets[-1]
+            value_buckets[-1] = (previous_value, count + 1)
+        else:
+            value_buckets.append((value, 1))
+    if len(value_buckets) < 2:
+        return []
+    return [
+        (value_buckets[start][0], value_buckets[end - 1][0])
+        for start, end in _bucket_ranges_for_counts(
+            [count for _value, count in value_buckets],
+            bins=bins,
+        )
+    ]
 
 
 def _axis_index(value: float, axis: list[tuple[float, float]]) -> int:
@@ -1223,7 +1269,7 @@ tr:hover td {{ background:#171717; }}
 
 <section class="section">
   <h2>Feature Bins</h2>
-  <p class="muted">Bins are equal-count quantiles inside the selected condition. The plot uses the parameter range on the x-axis, gray bars for sample count, and the blue line for <code>P(pass | bin)</code>.</p>
+  <p class="muted">Bins are near equal-count quantiles inside the selected condition. Exact duplicate values stay in one bin. The plot uses the parameter range on the x-axis, gray bars for sample count, and the blue line for <code>P(pass | bin)</code>.</p>
   <div class="controls">
     <label>Feature <select id="binFeatureSelect"></select></label>
     <label>Condition <select id="binGroupSelect"></select></label>
@@ -1285,12 +1331,17 @@ const fmtInt = (value) => Number(value || 0).toLocaleString();
 const fmtNum = (value) => {{
   const n = Number(value);
   if (!Number.isFinite(n)) return 'n/a';
+  if (n !== 0 && Math.abs(n) < 0.001) return n.toExponential(2);
   if (Math.abs(n) >= 1000) return n.toLocaleString(undefined, {{maximumFractionDigits: 0}});
   if (Math.abs(n) >= 10) return n.toLocaleString(undefined, {{maximumFractionDigits: 2}});
   return n.toLocaleString(undefined, {{maximumFractionDigits: 4}});
 }};
 const fmtPct = (value) => `${{(100 * Number(value || 0)).toFixed(3)}}%`;
-const binLabel = (row) => `${{fmtNum(row.low)}} .. ${{fmtNum(row.high)}}`;
+const binLabel = (row) => {{
+  const low = Number(row.low);
+  const high = Number(row.high);
+  return low === high ? `= ${{fmtNum(low)}}` : `${{fmtNum(low)}} .. ${{fmtNum(high)}}`;
+}};
 const setOptions = (select, values, selected) => {{
   select.innerHTML = values.map((value) => `<option value="${{esc(value)}}">${{esc(value)}}</option>`).join('');
   if (selected && values.includes(selected)) select.value = selected;
