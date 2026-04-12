@@ -82,7 +82,7 @@ class GridPolicy:
 class ShapePolicy:
     glass_size_factor: FloatRange = (0.25, 0.38)
     polygon_size_factor: FloatRange = (0.30, 0.45)
-    polygon_size_bias: float = 2.0
+    polygon_size_bias: float = 1.75
     polygon_sides: WeightedChoices[int] = ((3, 0.53), (4, 1.0), (5, 1.0), (6, 1.0))
     corner_radius_factor: FloatRange = (0.1, 0.3)
     rotation_probability: float = 0.7

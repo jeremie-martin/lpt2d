@@ -184,7 +184,7 @@ probe frame for measuring light discs and scene readability.
 The probe render uses a fixed low-resolution analysis shot:
 
 - `960 x 540`
-- `400,000` rays
+- `512,000` rays
 - depth `10`
 - fixed camera centered on the mirror box
 - fixed analysis look
