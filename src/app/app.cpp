@@ -2,6 +2,7 @@
 
 #include "app_actions.h"
 #include "app_panels.h"
+#include "color.h"
 #include "editor.h"
 #include "geometry.h"
 #include "renderer.h"
@@ -1304,6 +1305,7 @@ int App::run(const AppConfig& config) {
                     light.id = next_scene_entity_id(ed.shot.scene, "point_light");
                     light.position = mw;
                     light.intensity = 1.0f;
+                    set_light_spectrum(light, light_spectrum_color(1.0f, 1.0f, 1.0f));
                     ed.shot.scene.lights.push_back(light);
                     ed.select_only({SelectionRef::Light, light.id, ""});
                     ed.interaction.tool = EditTool::Select;
@@ -1315,6 +1317,7 @@ int App::run(const AppConfig& config) {
                     light.position = mw;
                     light.direction = {1.0f, 0.0f};
                     light.intensity = 1.0f;
+                    set_light_spectrum(light, light_spectrum_color(1.0f, 1.0f, 1.0f));
                     ed.shot.scene.lights.push_back(light);
                     ed.select_only({SelectionRef::Light, light.id, ""});
                     ed.interaction.tool = EditTool::Select;
@@ -1510,6 +1513,7 @@ int App::run(const AppConfig& config) {
                     light.a = ed.interaction.create_start;
                     light.b = end;
                     light.intensity = 1.0f;
+                    set_light_spectrum(light, light_spectrum_color(1.0f, 1.0f, 1.0f));
                     ed.shot.scene.lights.push_back(light);
                     ed.select_only({SelectionRef::Light, light.id, ""});
                     created = true;

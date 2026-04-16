@@ -1,4 +1,5 @@
 #include "geometry.h"
+#include "color.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1228,6 +1229,8 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
     if (perimeter <= 0.0f) return {};
 
     std::vector<Light> lights;
+    LightSpectrum emission_spectrum = light_spectrum_from_coeffs(
+        mat.spectral_c0, mat.spectral_c1, mat.spectral_c2);
 
     std::visit(overloaded{
         [&](const Circle& c) {
@@ -1239,6 +1242,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 PointLight light;
                 light.position = pos;
                 light.intensity = per_point;
+                set_light_spectrum(light, emission_spectrum);
 
                 lights.push_back(light);
             }
@@ -1249,6 +1253,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
             light.a = seg.a;
             light.b = seg.b;
             light.intensity = total;
+            set_light_spectrum(light, emission_spectrum);
 
             lights.push_back(light);
         },
@@ -1265,6 +1270,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 light.a = prev;
                 light.b = cur;
                 light.intensity = seg_intensity;
+                set_light_spectrum(light, emission_spectrum);
 
                 lights.push_back(light);
                 prev = cur;
@@ -1281,6 +1287,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 light.a = prev;
                 light.b = cur;
                 light.intensity = seg_intensity;
+                set_light_spectrum(light, emission_spectrum);
 
                 lights.push_back(light);
                 prev = cur;
@@ -1296,6 +1303,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 sl.a = e.a;
                 sl.b = e.b;
                 sl.intensity = mat.emission * (e.b - e.a).length();
+                set_light_spectrum(sl, emission_spectrum);
                 lights.push_back(sl);
             }
             for (auto& c : parts.corners) {
@@ -1313,6 +1321,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                     sl.a = prev;
                     sl.b = cur;
                     sl.intensity = seg_i;
+                    set_light_spectrum(sl, emission_spectrum);
 
                     lights.push_back(sl);
                     prev = cur;
@@ -1331,6 +1340,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                 PointLight light;
                 light.position = pos;
                 light.intensity = per_point;
+                set_light_spectrum(light, emission_spectrum);
 
                 lights.push_back(light);
             }
@@ -1350,6 +1360,7 @@ std::vector<Light> emission_light(const Shape& s, const MaterialMap& materials) 
                     sl.a = prev;
                     sl.b = cur;
                     sl.intensity = seg_intensity;
+                    set_light_spectrum(sl, emission_spectrum);
                     lights.push_back(sl);
                     prev = cur;
                 }

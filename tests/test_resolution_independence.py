@@ -100,7 +100,7 @@ def _render(
     if rays is None:
         rays = int(round(width * height * RAYS_PER_PIXEL))
     shot_dict = {
-        "version": 11,
+        "version": 12,
         "name": "test",
         "camera": scene_dict.get("camera", {}),
         "canvas": {"width": width, "height": height},

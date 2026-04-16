@@ -51,9 +51,10 @@ consistently across C++, Python, JSON, shaders, GUI, and documentation.
 
 | Term | Definition |
 |------|-----------|
-| **PointLight** | Omnidirectional point source. Fields: `position`, `intensity`, `wavelength_min`, `wavelength_max`. |
-| **SegmentLight** | Linear source between two points. Fields: `a`, `b`, `intensity`, wavelength range. |
-| **ProjectorLight** | Directional beam. Fields: `position`, `direction`, `source_radius`, `spread`, `profile`, `source`, `softness`, `intensity`, wavelength range. |
+| **PointLight** | Omnidirectional point source. Fields: `position`, `intensity`, `spectrum`. |
+| **SegmentLight** | Linear source between two points. Fields: `a`, `b`, `intensity`, `spectrum`. |
+| **ProjectorLight** | Directional beam. Fields: `position`, `direction`, `source_radius`, `spread`, `profile`, `source`, `softness`, `intensity`, `spectrum`. |
+| **LightSpectrum** | Wavelength emission model for a light. `range` preserves uniform wavelength bands; `color` fits an RGB target to sigmoid spectral coefficients. |
 | **Light** | Union type of all light variants. |
 | **intensity** | Total emitted power of a light source. |
 | **emission** | Material field; shapes with `emission > 0` become light sources. |

@@ -6,7 +6,8 @@ surface, strict JSON shot interchange, and a GUI for exploration.
 
 ## Current Baseline
 
-- authored shot JSON is strict `version: 11`
+- authored shot JSON is strict `version: 12`
+- the loader temporarily accepts `version: 11` wavelength-range lights and saves them back as v12 spectra
 - Python and CLI rendering both go through the C++ `RenderSession`
 - committed scenes use named material libraries plus `material_id` bindings
 - polygons support per-vertex join intent (`join_modes`) plus per-vertex bevel radii

@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "name": "three_spheres",
   "camera": {
     "bounds": [
@@ -170,8 +170,11 @@
         0.5
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     },
     {
       "id": "source_right",
@@ -181,8 +184,11 @@
         -0.5
       ],
       "intensity": 1.0,
-      "wavelength_min": 380.0,
-      "wavelength_max": 780.0
+      "spectrum": {
+        "type": "range",
+        "wavelength_min": 380.0,
+        "wavelength_max": 780.0
+      }
     }
   ],
   "groups": []

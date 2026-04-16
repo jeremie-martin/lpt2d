@@ -26,11 +26,13 @@ def params_from_dict(cls: Type[T], d: dict) -> T:
     hints = get_type_hints(cls)
     kwargs: dict = {}
 
-    for f in dataclasses.fields(cls):
+    for f in cls.__dataclass_fields__.values():
+        if not getattr(f, "init", True):
+            continue
         if f.name not in d:
             continue
         val = d[f.name]
-        hint = hints[f.name]
+        hint = hints.get(f.name, object)
         kwargs[f.name] = _coerce(hint, val)
 
     return cls(**kwargs)

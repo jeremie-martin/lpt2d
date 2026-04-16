@@ -68,6 +68,20 @@ TEST(validate_scene_empty_material_id_on_shape) {
     ASSERT_TRUE(error.find("material_id") != std::string::npos);
 }
 
+TEST(point_light_default_spectrum_is_full_visible_range) {
+    PointLight light{"default", {0.0f, 0.0f}, 1.0f};
+    const LightSpectrum& spectrum = effective_light_spectrum(light);
+    ASSERT_EQ(spectrum.type, LightSpectrumType::Range);
+    ASSERT_NEAR(spectrum.wavelength_min, 380.0f, 1e-6f);
+    ASSERT_NEAR(spectrum.wavelength_max, 780.0f, 1e-6f);
+}
+
+TEST(light_spectrum_range_canonicalizes_inverted_bounds) {
+    LightSpectrum spectrum = light_spectrum_range(700.0f, 550.0f);
+    ASSERT_NEAR(spectrum.wavelength_min, 700.0f, 1e-6f);
+    ASSERT_NEAR(spectrum.wavelength_max, 700.0f, 1e-6f);
+}
+
 TEST(validate_scene_polygon_corner_radii_mismatch) {
     Scene scene;
     scene.materials["mat"] = Material{};
