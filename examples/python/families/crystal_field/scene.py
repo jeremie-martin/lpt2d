@@ -9,6 +9,7 @@ from anim import (
     Circle,
     Frame,
     FrameContext,
+    LightSpectrum,
     Look,
     PointLight,
     Polygon,
@@ -20,8 +21,14 @@ from anim import (
 from .channels import build_channel_graph
 from .grid import build_grid, remove_holes
 from .materials import assign_material_ids, build_materials
-from .params import DURATION, WALL_ID, Params
-from .paths import build_light_path, path_to_tracks
+from .params import DURATION, WALL_ID, LightSpectrumConfig, Params
+from .paths import (
+    CircleObstacle,
+    LightObstacle,
+    PolygonObstacle,
+    build_light_path,
+    path_to_tracks,
+)
 from .shapes import build_object
 
 
@@ -31,6 +38,90 @@ def grid_bounds(
     xs = [p[0] for p in positions]
     ys = [p[1] for p in positions]
     return (min(xs) - margin, min(ys) - margin, max(xs) + margin, max(ys) + margin)
+
+
+def _moving_light_obstacles(shapes: list[Circle | Polygon]) -> list[LightObstacle]:
+    obstacles: list[LightObstacle] = []
+    for shape in shapes:
+        if isinstance(shape, Circle):
+            obstacles.append(CircleObstacle(center=shape.center, radius=shape.radius))
+        elif isinstance(shape, Polygon):
+            obstacles.append(PolygonObstacle(vertices=tuple(shape.vertices)))
+    return obstacles
+
+
+def resolve_light_spectrum(config: LightSpectrumConfig):
+    if config.type == "color":
+        rgb = config.linear_rgb
+        return LightSpectrum.color(rgb[0], rgb[1], rgb[2], white_mix=config.white_mix)
+    return LightSpectrum.range(config.wavelength_min, config.wavelength_max)
+
+
+def _band_mean_luminance(wl_min: float, wl_max: float) -> float:
+    """Mean perceived luminance per photon for a uniform spectral band."""
+    from _lpt2d import wavelength_to_rgb
+
+    total = 0.0
+    n = 0
+    for nm_i in range(int(wl_min), int(wl_max) + 1):
+        r, g, b = wavelength_to_rgb(float(nm_i))
+        total += 0.2126 * r + 0.7152 * g + 0.0722 * b
+        n += 1
+    return total / max(n, 1)
+
+
+_WHITE_MEAN_LUMINANCE = _band_mean_luminance(380.0, 780.0)
+
+
+def spectral_boost(wl_min: float, wl_max: float) -> float:
+    """Luminance-weighted intensity boost for a narrow spectral band.
+
+    Scales intensity so that a uniform [wl_min, wl_max] range produces the
+    same perceived luminance as full-spectrum white at unit intensity.
+    """
+    band_lum = _band_mean_luminance(wl_min, wl_max)
+    if band_lum < 1e-8:
+        return 1.0
+    return _WHITE_MEAN_LUMINANCE / band_lum
+
+
+def _effective_color_rgb(config: LightSpectrumConfig) -> tuple[float, float, float]:
+    r, g, b = config.linear_rgb
+    r = r + (1.0 - r) * config.white_mix
+    g = g + (1.0 - g) * config.white_mix
+    b = b + (1.0 - b) * config.white_mix
+    return r, g, b
+
+
+def _linear_luminance(rgb: tuple[float, float, float]) -> float:
+    return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+
+
+def spectrum_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    """Render-time multiplier for white-equivalent light intensity.
+
+    ``Params`` stores light intensities as white-equivalent authored intent.
+    Scene assembly applies this multiplier before constructing ``PointLight``
+    so range and RGB spectra retain comparable luminance.
+    """
+    if config.type == "range":
+        return spectral_boost(config.wavelength_min, config.wavelength_max)
+
+    luminance = _linear_luminance(_effective_color_rgb(config))
+    return 1.0 / max(luminance, 1e-4)
+
+
+def rendered_light_intensity(intensity: float, spectrum: LightSpectrumConfig) -> float:
+    """Actual ``PointLight.intensity`` after spectrum compensation."""
+    return intensity * spectrum_intensity_multiplier(spectrum)
+
+
+def moving_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    return spectrum_intensity_multiplier(config)
+
+
+def ambient_intensity_multiplier(config: LightSpectrumConfig) -> float:
+    return spectrum_intensity_multiplier(config)
 
 
 def build(p: Params):
@@ -60,10 +151,20 @@ def build(p: Params):
     # Tight margin keeps moving lights inside the grid rather than
     # wandering to the mirror-box edges where they overlap with ambient.
     gb = grid_bounds(positions, p.grid.spacing * 0.3) if positions else (-0.8, -0.5, 0.8, 0.5)
+    obstacles = _moving_light_obstacles(shapes)
     light_x_tracks: list[Track] = []
     light_y_tracks: list[Track] = []
     for li in range(p.light.n_lights):
-        wps = build_light_path(p.light, li, gb, p.grid.spacing, rng, ch_graph)
+        wps = build_light_path(
+            p.light,
+            li,
+            gb,
+            p.grid.spacing,
+            rng,
+            ch_graph,
+            obstacles,
+            duration=DURATION,
+        )
         xt, yt = path_to_tracks(wps, DURATION)
         light_x_tracks.append(xt)
         light_y_tracks.append(yt)
@@ -71,21 +172,33 @@ def build(p: Params):
     # Fixed ambient lights
     ambient_lights: list[PointLight] = []
     amb = p.light.ambient
+    ambient_spectrum = resolve_light_spectrum(amb.spectrum)
+    ambient_intensity = rendered_light_intensity(amb.intensity, amb.spectrum)
     if amb.style == "corners":
         for i, (ax, ay) in enumerate([(-1.4, 0.75), (1.4, 0.75), (-1.4, -0.75), (1.4, -0.75)]):
             ambient_lights.append(
-                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+                PointLight(
+                    id=f"amb_{i}",
+                    position=[ax, ay],
+                    intensity=ambient_intensity,
+                    spectrum=ambient_spectrum,
+                )
             )
     elif amb.style == "sides":
         for i, (ax, ay) in enumerate([(-1.4, 0.0), (1.4, 0.0)]):
             ambient_lights.append(
-                PointLight(id=f"amb_{i}", position=[ax, ay], intensity=amb.intensity)
+                PointLight(
+                    id=f"amb_{i}",
+                    position=[ax, ay],
+                    intensity=ambient_intensity,
+                    spectrum=ambient_spectrum,
+                )
             )
 
-    # Moving light intensity: base from params, boosted for narrow-band spectra.
-    spectrum_width = p.light.wavelength_max - p.light.wavelength_min
-    spectral_boost = min(400.0 / max(spectrum_width, 50.0), 3.0) if spectrum_width < 300 else 1.0
-    intensity = p.light.moving_intensity * spectral_boost
+    # Moving light intensity: authored as white-equivalent intent, then
+    # compensated for the selected spectrum before rendering.
+    light_spectrum = resolve_light_spectrum(p.light.spectrum)
+    intensity = rendered_light_intensity(p.light.moving_intensity, p.light.spectrum)
 
     look_kwargs = asdict(p.look)
     frame_look = Look().with_overrides(**look_kwargs)
@@ -100,8 +213,7 @@ def build(p: Params):
                     id=f"light_{li}",
                     position=[lx, ly],
                     intensity=intensity,
-                    wavelength_min=p.light.wavelength_min,
-                    wavelength_max=p.light.wavelength_max,
+                    spectrum=light_spectrum,
                 )
             )
 

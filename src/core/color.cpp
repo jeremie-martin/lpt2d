@@ -130,10 +130,11 @@ LightSpectrum light_spectrum_from_coeffs(float c0, float c1, float c2) {
     return spectrum;
 }
 
-RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max) {
+RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max, float headroom) {
     if (wl_min > wl_max) std::swap(wl_min, wl_max);
     wl_min = std::clamp(wl_min, 380.0f, 780.0f);
     wl_max = std::clamp(wl_max, 380.0f, 780.0f);
+    headroom = std::clamp(headroom, 0.01f, 1.0f);
 
     float r = 0.0f, g = 0.0f, b = 0.0f;
     int n = 0;
@@ -154,7 +155,10 @@ RangeToColorSpectrum range_to_color_spectrum(float wl_min, float wl_max) {
 
     Vec3 averaged{r / std::max(n, 1), g / std::max(n, 1), b / std::max(n, 1)};
     float m = std::max({averaged.r, averaged.g, averaged.b, 1e-6f});
-    LightSpectrum spectrum = light_spectrum_color(averaged.r / m, averaged.g / m, averaged.b / m, 0.0f);
+    LightSpectrum spectrum = light_spectrum_color((averaged.r / m) * headroom,
+                                                  (averaged.g / m) * headroom,
+                                                  (averaged.b / m) * headroom,
+                                                  0.0f);
     Vec3 fitted = spectral_to_rgb(spectrum.spectral_c0, spectrum.spectral_c1, spectrum.spectral_c2);
 
     float denom = fitted.r * fitted.r + fitted.g * fitted.g + fitted.b * fitted.b;

@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import random
 import time
 from pathlib import Path
 
@@ -36,11 +37,10 @@ from PIL import Image
 
 from anim import Camera2D, Shot, Timeline, render_frame, save_image
 
-from .check import measure_all
+from .check import _measure_and_verdict
 from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
-    AmbientConfig,
     GridConfig,
     LightConfig,
     LookConfig,
@@ -48,7 +48,9 @@ from .params import (
     Params,
     RotationConfig,
     ShapeConfig,
+    range_spectrum,
 )
+from .sampling import ambient_for_moving_spectrum
 from .scene import build
 
 # ---------------------------------------------------------------------------
@@ -59,8 +61,6 @@ _WIDTH = 960
 _HEIGHT = 540
 _RAYS = 2_000_000
 _CAM = Camera2D(center=[0, 0], width=3.2)
-_TIMELINE = Timeline(DURATION, fps=30)
-_FRAME = int(_TIMELINE.total_frames * 0.4)
 
 _SHOT = Shot.preset("draft", width=_WIDTH, height=_HEIGHT, rays=_RAYS, depth=12)
 
@@ -73,10 +73,10 @@ _SHOT = Shot.preset("draft", width=_WIDTH, height=_HEIGHT, rays=_RAYS, depth=12)
 def _base_look() -> LookConfig:
     """Neutral defaults — every swept dim starts from the middle of its range."""
     return LookConfig(
-        exposure=-4.5,
-        gamma=1.6,
+        exposure=-5.5,
+        gamma=1.7,
         contrast=1.025,
-        white_point=0.65,
+        white_point=0.5,
         temperature=0.0,
         vignette=0.0,
         vignette_radius=0.7,
@@ -95,15 +95,21 @@ def _base_grid() -> GridConfig:
 
 
 def _base_light(wl_min: float = 380.0, wl_max: float = 780.0) -> LightConfig:
+    spectrum = range_spectrum(wl_min, wl_max)
+    ambient = ambient_for_moving_spectrum(
+        random.Random(f"characterize:{wl_min}:{wl_max}"),
+        style="corners",
+        intensity=0.25,
+        moving_spectrum=spectrum,
+    )
     return LightConfig(
         n_lights=2,
         path_style="channel",
         n_waypoints=8,
-        ambient=AmbientConfig(style="corners", intensity=0.25),
+        ambient=ambient,
         speed=0.12,
         moving_intensity=0.8,
-        wavelength_min=wl_min,
-        wavelength_max=wl_max,
+        spectrum=spectrum,
     )
 
 
@@ -170,11 +176,9 @@ def _black_diffuse_scene() -> Params:
         corner_radius=grid.spacing * 0.32 * 0.22,
         rotation=RotationConfig(base_angle=0.15, jitter=0.0),
     )
-    # High albedo + fill=0 → dark silhouettes.  Albedo is never 0.15 (analysis
-    # rules that out).  White light (not warm) so the temperature sweep can
-    # reach positive values — the check.py constraint guard forbids positive
-    # temperature on warm lights, which would fill the temperature strip with
-    # zero-metrics.
+    # High albedo + fill=0 -> dark silhouettes.  Albedo is never 0.15 (analysis
+    # rules that out).  White light (not warm) lets the temperature sweep reach
+    # positive values without changing the light-colour axis at the same time.
     material = MaterialConfig(
         outcome="black_diffuse",
         albedo=0.85,
@@ -205,13 +209,13 @@ BASE_SCENES: dict[str, Params] = {
 
 # (name, low, high, steps) — ranges match the sampler's distributions.
 SWEEPS: list[tuple[str, float, float, int]] = [
-    ("exposure", -6.5, -2.5, 7),
-    ("gamma", 1.0, 2.2, 7),
-    ("white_point", 0.3, 1.0, 7),
-    ("contrast", 1.00, 1.05, 7),
-    ("amb_intensity", 0.05, 1.2, 7),
-    ("mov_intensity", 0.15, 1.5, 7),
-    ("temperature", 0.0, 0.55, 7),
+    ("exposure", -6.5, -4.5, 7),
+    ("gamma", 1.2, 2.2, 7),
+    ("white_point", 0.4, 0.6, 7),
+    ("contrast", 1.00, 1.10, 7),
+    ("amb_intensity", 0.25, 1.0, 7),
+    ("mov_intensity", 0.75, 1.75, 7),
+    ("temperature", 0.0, 0.5, 7),
 ]
 
 
@@ -243,12 +247,19 @@ def _apply_sweep(base: Params, param: str, value: float) -> Params:
 
 
 def _render_and_overlay(p: Params, out_path: Path) -> None:
-    """Render one frame, save PNG, overlay metrics, save again."""
+    """Render the selected analysis frame, save PNG, overlay metrics."""
     animate = build(p)
-    rr = render_frame(animate, _TIMELINE, frame=_FRAME, settings=_SHOT, camera=_CAM)
+    result = _measure_and_verdict(p, animate)
+    timeline = Timeline(DURATION, fps=result.analysis_fps)
+    rr = render_frame(
+        animate,
+        timeline,
+        frame=result.analysis_frame,
+        settings=_SHOT,
+        camera=_CAM,
+    )
     save_image(str(out_path), rr.pixels, _WIDTH, _HEIGHT)
-    metrics = measure_all(p, animate)
-    draw_metrics_overlay(out_path, metrics, font_size=14, padding=6, margin=8)
+    draw_metrics_overlay(out_path, result.metrics, font_size=14, padding=6, margin=8)
 
 
 def _concat_strip(frame_paths: list[Path], out_path: Path) -> None:

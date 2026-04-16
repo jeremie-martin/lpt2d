@@ -16,6 +16,7 @@ import random
 from collections import Counter
 
 from .sampling import sample
+from .scene import rendered_light_intensity
 
 
 def run_stats(argv: list[str] | None = None) -> None:
@@ -40,6 +41,7 @@ def run_stats(argv: list[str] | None = None) -> None:
     polygon_count = 0
     n_color_dist: Counter[int] = Counter()
     colored_light = 0
+    colored_ambient = 0
     small_grid = 0
 
     iors: list[float] = []
@@ -51,7 +53,11 @@ def run_stats(argv: list[str] | None = None) -> None:
     cols_list: list[int] = []
     spacings: list[float] = []
     amb_intensities: list[float] = []
+    amb_rendered_intensities: list[float] = []
+    amb_white_mixes: list[float] = []
     mov_intensities: list[float] = []
+    mov_rendered_intensities: list[float] = []
+    ambient_to_moving_rendered_ratios: list[float] = []
     gammas: list[float] = []
     contrasts: list[float] = []
     white_points: list[float] = []
@@ -104,14 +110,35 @@ def run_stats(argv: list[str] | None = None) -> None:
         vignettes.append(p.look.vignette)
         ca_values.append(p.look.chromatic_aberration)
         mov_intensities.append(p.light.moving_intensity)
+        moving_rendered = rendered_light_intensity(
+            p.light.moving_intensity,
+            p.light.spectrum,
+        )
+        mov_rendered_intensities.append(moving_rendered)
         rows_list.append(p.grid.rows)
         cols_list.append(p.grid.cols)
         spacings.append(p.grid.spacing)
 
         if p.light.ambient.style != "none":
             amb_intensities.append(p.light.ambient.intensity)
+            ambient_rendered = rendered_light_intensity(
+                p.light.ambient.intensity,
+                p.light.ambient.spectrum,
+            )
+            amb_rendered_intensities.append(ambient_rendered)
+            if moving_rendered > 0:
+                ambient_to_moving_rendered_ratios.append(ambient_rendered / moving_rendered)
+            if p.light.ambient.spectrum.type == "color":
+                colored_ambient += 1
+                amb_white_mixes.append(p.light.ambient.spectrum.white_mix)
 
-        if p.light.wavelength_max - p.light.wavelength_min < 300:
+        if (
+            p.light.spectrum.type == "range"
+            and p.light.spectrum.wavelength_max - p.light.spectrum.wavelength_min < 300
+        ) or (
+            p.light.spectrum.type == "color"
+            and p.light.spectrum.linear_rgb != [1.0, 1.0, 1.0]
+        ):
             colored_light += 1
 
         if p.grid.rows <= 5 and p.grid.cols <= 7:
@@ -151,7 +178,7 @@ def run_stats(argv: list[str] | None = None) -> None:
         print(f"  jitter     {100 * has_jitter / polygon_count:.1f}% of polygons")
     print()
 
-    print("── Material outcomes (5 peers, ~20% each) ───────────")
+    print("── Material outcomes (active peers; brushed metal target 50%) ─")
     print(f"  {counter_line(outcomes)}")
     print()
 
@@ -187,8 +214,14 @@ def run_stats(argv: list[str] | None = None) -> None:
     print("── Ambient ───────────────────────────────────────────")
     print(f"  style      {counter_line(amb_styles)}")
     if amb_intensities:
-        print(f"  intensity  {dist(amb_intensities)} (when present)")
-    print(f"  moving_int {dist(mov_intensities)}")
+        print(f"  authored   {dist(amb_intensities)} (white-equivalent, when present)")
+        print(f"  rendered   {dist(amb_rendered_intensities)} (after spectrum compensation)")
+        print(f"  amb/moving {dist(ambient_to_moving_rendered_ratios)} (rendered intensity)")
+    print(f"  colored    {pct(colored_ambient)}")
+    if amb_white_mixes:
+        print(f"  white_mix  {dist(amb_white_mixes)} (colored ambient)")
+    print(f"  moving     {dist(mov_intensities)} (white-equivalent)")
+    print(f"  moving_r   {dist(mov_rendered_intensities)} (after spectrum compensation)")
     print()
 
     print("── Look dims ─────────────────────────────────────────")

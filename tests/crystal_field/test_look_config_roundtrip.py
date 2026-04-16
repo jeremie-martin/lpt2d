@@ -8,8 +8,11 @@ so that regressions in the LookConfig wiring are caught immediately.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
+import pytest
+
+from anim import Timeline
 from anim.params import params_from_dict
 from examples.python.families.crystal_field.params import (
     AmbientConfig,
@@ -19,8 +22,13 @@ from examples.python.families.crystal_field.params import (
     MaterialConfig,
     Params,
     ShapeConfig,
+    color_spectrum,
 )
-from examples.python.families.crystal_field.scene import build
+from examples.python.families.crystal_field.scene import (
+    ambient_intensity_multiplier,
+    build,
+    rendered_light_intensity,
+)
 
 
 def _params_with_populated_look() -> Params:
@@ -58,7 +66,10 @@ def _params_with_populated_look() -> Params:
         gamma=1.7,
         contrast=1.03,
         white_point=0.6,
+        saturation=1.8,
         temperature=0.15,
+        highlights=0.17,
+        shadows=-0.12,
         vignette=0.12,
         vignette_radius=1.6,
         chromatic_aberration=0.0,  # must stay 0 — glass material
@@ -75,6 +86,17 @@ def test_look_config_dict_roundtrip():
     assert restored.look == p.look
     assert restored.material.albedo == p.material.albedo
     assert restored.light.moving_intensity == p.light.moving_intensity
+
+
+def test_old_params_without_ambient_spectrum_load_as_white_ambient():
+    p = _params_with_populated_look()
+    raw = json.loads(json.dumps(asdict(p)))
+    raw["light"]["ambient"].pop("spectrum")
+    restored = params_from_dict(Params, raw)
+
+    assert restored.light.ambient.spectrum.type == "range"
+    assert restored.light.ambient.spectrum.wavelength_min == 380.0
+    assert restored.light.ambient.spectrum.wavelength_max == 780.0
 
 
 def test_look_config_flows_into_anim_look():
@@ -96,7 +118,50 @@ def test_look_config_flows_into_anim_look():
     assert abs(look.gamma - p.look.gamma) < 1e-6
     assert abs(look.contrast - p.look.contrast) < 1e-6
     assert abs(look.white_point - p.look.white_point) < 1e-6
+    assert abs(look.saturation - p.look.saturation) < 1e-6
     assert abs(look.temperature - p.look.temperature) < 1e-6
+    assert abs(look.highlights - p.look.highlights) < 1e-6
+    assert abs(look.shadows - p.look.shadows) < 1e-6
     assert abs(look.vignette - p.look.vignette) < 1e-6
     assert abs(look.vignette_radius - p.look.vignette_radius) < 1e-6
     assert abs(look.chromatic_aberration - p.look.chromatic_aberration) < 1e-6
+
+
+def test_colored_ambient_flows_into_scene_with_luminance_compensation():
+    p = _params_with_populated_look()
+    ambient_spectrum = color_spectrum((0.0, 0.0, 1.0), white_mix=0.5)
+    ambient = replace(p.light.ambient, spectrum=ambient_spectrum)
+    p = replace(p, light=replace(p.light, ambient=ambient))
+
+    animate = build(p)
+    frame = animate(Timeline(1.0, fps=1).context_at(0))
+    ambient_lights = [light for light in frame.scene.lights if light.id.startswith("amb_")]
+    expected_intensity = ambient.intensity * ambient_intensity_multiplier(ambient_spectrum)
+
+    assert len(ambient_lights) == 4
+    assert expected_intensity == pytest.approx(ambient.intensity / 0.5361, rel=1e-4)
+    assert {light.spectrum.type for light in ambient_lights} == {"color"}
+    assert {round(light.intensity, 6) for light in ambient_lights} == {
+        round(expected_intensity, 6)
+    }
+
+
+def test_colored_moving_light_flows_into_scene_with_luminance_compensation():
+    p = _params_with_populated_look()
+    moving_spectrum = color_spectrum((0.0, 0.0, 1.0), white_mix=0.5)
+    p = replace(p, light=replace(p.light, spectrum=moving_spectrum))
+
+    animate = build(p)
+    frame = animate(Timeline(1.0, fps=1).context_at(0))
+    moving_lights = [light for light in frame.scene.lights if light.id.startswith("light_")]
+    expected_intensity = rendered_light_intensity(
+        p.light.moving_intensity,
+        moving_spectrum,
+    )
+
+    assert len(moving_lights) == 1
+    assert expected_intensity == pytest.approx(p.light.moving_intensity / 0.5361, rel=1e-4)
+    assert {light.spectrum.type for light in moving_lights} == {"color"}
+    assert {round(light.intensity, 6) for light in moving_lights} == {
+        round(expected_intensity, 6)
+    }

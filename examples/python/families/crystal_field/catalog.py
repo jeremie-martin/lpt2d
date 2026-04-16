@@ -1,18 +1,19 @@
 """Systematic parameter space exploration for crystal_field.
 
-Generates a structured catalog of renders varying one axis at a time
-(material × shape × grid × light colour × n_lights), so the visual effect
+Generates a structured catalog of renders varying selected sampler axes
+(material outcome × grid × light colour × n_lights), so the visual effect
 of each choice can be assessed directly.
 
 Catalog structure vs. general sampling path
 -------------------------------------------
-The catalog **fixes** the structural dimensions per entry (material preset,
-shape, grid size, wavelength range, n_lights) and **draws** the rest:
-``build_seed``, full :class:`LookConfig` (including exposure, gamma,
-contrast, white_point, temperature, vignette, chromatic_aberration),
-``ambient.intensity``, and ``moving_intensity``.  For each entry the
-catalog runs a plain retry loop against the full ``check.py`` pipeline
-until a passing candidate is found or the attempt budget is exhausted.
+The catalog calls the normal sampler with explicit overrides for only the
+catalog axes: outcome, grid, wavelength range, n_lights, and fixed channel
+topology. Shape, material details, build seed, light intensities, ambient
+colour, and full :class:`LookConfig` are drawn by the same path as free
+sampling. For each entry the catalog runs a retry loop over structural
+candidates; each candidate traces the selected analysis frame once, then
+tries many random post-processing looks via replay before the scene is
+discarded.
 Failing entries are still saved (best-effort closest-to-passing) and
 tagged in the HTML gallery with a red border + verdict tooltip.
 
@@ -20,54 +21,67 @@ Run::
 
     python -m examples.python.families.crystal_field catalog
     python -m examples.python.families.crystal_field catalog --out renders/catalog
+
+When ``--out`` is omitted, the catalog is written under
+``renders/families/crystal_field/YYYY-MM-DD_HH-MM-SS``. A JPEG web copy is
+always written as well; by default it goes under ``/tmp``.
 """
 
 from __future__ import annotations
 
 import argparse
+import html as _html
 import json
 import math
 import random as _rng_mod
+import shutil
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from datetime import datetime
 from pathlib import Path
+
+from PIL import Image
 
 from anim import Camera2D, Shot, Timeline, render_frame, save_image
 from anim.examples_support import _authored_shot
 from anim.family import Verdict
 
 from .check import (
-    MAX_MEAN_LUMINANCE,
+    GLASS_MAX_MEAN_LUMA,
+    MAX_AMBIENT_RADIUS_RATIO,
+    MAX_BRIGHT_NEUTRAL_FRACTION,
+    MAX_MEAN_LUMA,
+    MAX_MEAN_SATURATION,
     MAX_MOVING_RADIUS_RATIO,
+    MAX_NEAR_BLACK_FRACTION,
+    MAX_P05_LUMA,
     MAX_RADIUS_RATIO,
-    MAX_TRANSITION_WIDTH_RATIO,
-    MIN_COLORFUL_SECONDS,
-    MIN_CONTRAST_SPREAD,
-    MIN_CONFIDENCE,
-    MIN_COVERAGE_FRACTION,
-    MIN_MEAN_LUMINANCE,
+    METRIC_KEYS,
+    MIN_AMBIENT_RADIUS_RATIO,
+    MIN_INTERDECILE_LUMA_RANGE,
+    MIN_LOCAL_CONTRAST,
+    MIN_MEAN_LUMA,
     MIN_MOVING_RADIUS_RATIO,
-    MIN_PEAK_CONTRAST,
+    MIN_P05_LUMA,
+    MIN_RADIUS_RATIO,
+    PROBE_H,
+    PROBE_RAYS,
+    PROBE_W,
     MeasurementResult,
-    _measure_and_verdict,
+    measure_look_variants,
 )
 from .overlay import draw_metrics_overlay
 from .params import (
     DURATION,
-    AmbientConfig,
     GridConfig,
-    LightConfig,
     Params,
+    range_spectrum,
 )
 from .sampling import (
-    _black_diffuse_material,
-    _brushed_metal_material,
-    _colored_diffuse_material,
-    _glass_material,
-    _glass_shape,
-    _gray_diffuse_material,
-    _polygon_shape,
+    OUTCOMES,
+    SampleOverrides,
     _random_look,
+    sample,
 )
 from .scene import build
 
@@ -79,9 +93,7 @@ _SHOT = Shot.preset("production", width=1920, height=1080, rays=10_000_000, dept
 # when exporting the authored scene JSON.  render_frame still takes an
 # explicit camera= kwarg below and the values agree.
 _SHOT.camera = Camera2D(center=_CAM.center, width=_CAM.width)
-_TIMELINE = Timeline(DURATION, fps=30)
-_FRAME = int(_TIMELINE.total_frames * 0.4)  # 40% of animation
-_CTX = _TIMELINE.context_at(_FRAME)
+DEFAULT_LOOK_ATTEMPTS = 100
 
 
 # ── Axes ─────────────────────────────────────────────────────────────────
@@ -95,35 +107,11 @@ GRID_SIZES = {
 LIGHT_COLORS = {
     "white": (380.0, 780.0),
     "orange": (550.0, 700.0),
-    "yellow": (515.0, 700.0),
     "deep_orange": (570.0, 700.0),
 }
 
 
-# ── Outcome → material sampler ───────────────────────────────────────────
-#
-# Each catalog entry fixes only the ``outcome`` (one of the 5 peers) and a
-# thin structural scaffolding (grid, light topology, wavelengths,
-# n_lights).  Everything else — **including the shape** — is drawn fresh
-# per attempt via the same per-branch sampling functions as the general
-# path.  No hardcoded material constants inside catalog.py, and no
-# shape-in-the-matrix multiplier.
-
-_OUTCOME_MATERIAL_SAMPLERS = {
-    "glass": _glass_material,
-    "black_diffuse": _black_diffuse_material,
-    "gray_diffuse": _gray_diffuse_material,
-    "colored_diffuse": _colored_diffuse_material,
-    "brushed_metal": _brushed_metal_material,
-}
-
-_CATALOG_OUTCOMES: tuple[str, ...] = (
-    "glass",
-    "black_diffuse",
-    "gray_diffuse",
-    "colored_diffuse",
-    "brushed_metal",
-)
+_CATALOG_OUTCOMES: tuple[str, ...] = tuple(OUTCOMES)
 
 
 # ── Catalog definition ───────────────────────────────────────────────────
@@ -134,8 +122,8 @@ def _build_catalog_entries() -> list[dict]:
 
     Shape is no longer a matrix axis — it's part of the per-attempt
     randomness (same as material params, look dims, intensities).  With
-    5 outcomes × 3 grids × 4 light colors × 2 n_lights, the catalog
-    contains **120 entries**.
+    4 active non-glass outcomes × 3 grids × 3 light colors × 2 n_lights,
+    the catalog contains **72 entries**.
     """
     entries = []
 
@@ -166,61 +154,48 @@ def _entry_sample(e: dict, rng: _rng_mod.Random) -> Params:
 
     The entry fixes only the thin structural scaffolding (outcome name,
     grid size, light wavelengths, n_lights).  Shape, material, look,
-    build_seed, and light intensities are drawn freshly per attempt via
-    the same per-branch sampling functions as the general path.  This
-    keeps catalog and general paths using **exactly** the same logic;
-    catalog.py no longer hardcodes shape or material constants.
+    build_seed, and light intensities are drawn freshly per attempt by the
+    normal sampler. This keeps catalog and general paths using the same logic;
+    catalog.py only supplies sampler overrides for the catalog axes.
     """
-    grid = e["grid_cfg"]
-
-    # Shape: drawn per attempt.  Glass always gets a circle, non-glass
-    # outcomes get a randomized polygon (3/4/5/6 sides, varied size and
-    # rotation).  Same helpers the general sampling path uses.
-    if e["outcome"] == "glass":
-        shape = _glass_shape(rng, grid.spacing)
-    else:
-        shape = _polygon_shape(rng, grid.spacing)
-
-    # Material: drawn fresh per attempt via the matching per-outcome function.
-    material = _OUTCOME_MATERIAL_SAMPLERS[e["outcome"]](rng)
-
-    # Light topology fixed per entry; intensities drawn per attempt.
-    # Ranges are defined inline here (not imported from sampling.py) per the
-    # per-branch explicitness rule, even though they match the general path.
-    ambient = AmbientConfig(
-        style="corners",
-        intensity=rng.uniform(0.05, 1.2),
-    )
-    light = LightConfig(
-        n_lights=e["n_lights"],
-        path_style="channel",
-        n_waypoints=8,
-        ambient=ambient,
-        speed=0.12,
-        moving_intensity=rng.uniform(0.15, 1.5),
-        wavelength_min=e["wl_min"],
-        wavelength_max=e["wl_max"],
-    )
-
-    # Look drawn with material/light-aware suppression (same as sampling.py).
-    look = _random_look(rng, material, light)
-
-    build_seed = rng.randint(0, 2**32)
-
-    return Params(
-        grid=grid,
-        shape=shape,
-        material=material,
-        light=light,
-        look=look,
-        build_seed=build_seed,
+    return sample(
+        rng,
+        overrides=SampleOverrides(
+            outcome=e["outcome"],
+            grid=e["grid_cfg"],
+            n_lights=e["n_lights"],
+            spectrum=range_spectrum(e["wl_min"], e["wl_max"]),
+            ambient_style="corners",
+            # The catalog fixes topology to keep comparisons readable; all
+            # material, shape, intensity, look, and build randomness stays on
+            # the normal sample() path.
+            path_style="channel",
+            n_waypoints=8,
+            speed=0.12,
+        ),
     )
 
 
 # ── Retry loop ───────────────────────────────────────────────────────────
 
 
-def _failure_distance(result: MeasurementResult) -> float:
+def _look_candidates(
+    p: Params,
+    rng: _rng_mod.Random,
+    count: int,
+):
+    """Yield post-process looks for one fixed structural scene.
+
+    The first look is the one sampled with the scene, preserving the old
+    one-look behavior when ``count == 1``. Remaining looks are fresh random
+    post-process draws that can be replayed over the same traced frame.
+    """
+    yield "look_000", p.look
+    for idx in range(1, max(1, count)):
+        yield f"look_{idx:03d}", _random_look(rng, p.material, p.light)
+
+
+def _failure_distance(result: MeasurementResult, outcome: str | None = None) -> float:
     """Heuristic score: how far a failing result is from passing.
 
     Lower = closer.  Used to pick the best-effort fallback from amongst
@@ -230,41 +205,49 @@ def _failure_distance(result: MeasurementResult) -> float:
     m = result.metrics
     dist = 0.0
 
-    if m["colorful_seconds"] < MIN_COLORFUL_SECONDS:
-        dist += (MIN_COLORFUL_SECONDS - m["colorful_seconds"]) * 10.0
+    max_mean_luma = GLASS_MAX_MEAN_LUMA if outcome == "glass" else MAX_MEAN_LUMA
 
-    if m["mean"] < MIN_MEAN_LUMINANCE:
-        dist += (MIN_MEAN_LUMINANCE - m["mean"]) * 5.0
-    elif m["mean"] > MAX_MEAN_LUMINANCE:
-        dist += (m["mean"] - MAX_MEAN_LUMINANCE) * 5.0
+    if m["mean_luma"] < MIN_MEAN_LUMA:
+        dist += MIN_MEAN_LUMA - m["mean_luma"]
+    if m["mean_luma"] > max_mean_luma:
+        dist += m["mean_luma"] - max_mean_luma
 
-    if m["contrast_spread"] < MIN_CONTRAST_SPREAD:
-        dist += (MIN_CONTRAST_SPREAD - m["contrast_spread"]) * 3.0
+    if outcome != "black_diffuse":
+        if m["p05_luma"] < MIN_P05_LUMA:
+            dist += MIN_P05_LUMA - m["p05_luma"]
+        if m["p05_luma"] > MAX_P05_LUMA:
+            dist += m["p05_luma"] - MAX_P05_LUMA
 
-    if m["moving_radius_ratio"] > 0:
-        if m["moving_radius_ratio"] < MIN_MOVING_RADIUS_RATIO:
-            dist += (MIN_MOVING_RADIUS_RATIO - m["moving_radius_ratio"]) * 100.0
-        elif m["moving_radius_ratio"] > MAX_MOVING_RADIUS_RATIO:
-            dist += (m["moving_radius_ratio"] - MAX_MOVING_RADIUS_RATIO) * 100.0
+    if m["interdecile_luma_range"] < MIN_INTERDECILE_LUMA_RANGE:
+        dist += MIN_INTERDECILE_LUMA_RANGE - m["interdecile_luma_range"]
 
-    if (
-        m["moving_radius_ratio"] > 0
-        and m["transition_width_ratio"] > MAX_TRANSITION_WIDTH_RATIO
-    ):
-        dist += (m["transition_width_ratio"] - MAX_TRANSITION_WIDTH_RATIO) * 100.0
+    if m["local_contrast"] < MIN_LOCAL_CONTRAST:
+        dist += MIN_LOCAL_CONTRAST - m["local_contrast"]
 
-    if m["moving_radius_ratio"] > 0 and m["peak_contrast"] < MIN_PEAK_CONTRAST:
-        dist += (MIN_PEAK_CONTRAST - m["peak_contrast"]) * 10.0
+    if m["near_black_fraction"] > MAX_NEAR_BLACK_FRACTION:
+        dist += m["near_black_fraction"] - MAX_NEAR_BLACK_FRACTION
 
-    if m["moving_radius_ratio"] > 0 and m["confidence"] < MIN_CONFIDENCE:
-        dist += (MIN_CONFIDENCE - m["confidence"]) * 5.0
+    if m["bright_neutral_fraction"] > MAX_BRIGHT_NEUTRAL_FRACTION:
+        dist += m["bright_neutral_fraction"] - MAX_BRIGHT_NEUTRAL_FRACTION
 
-    coverage = m.get("coverage_fraction", MIN_COVERAGE_FRACTION)
-    if m["moving_radius_ratio"] > 0 and coverage < MIN_COVERAGE_FRACTION:
-        dist += (MIN_COVERAGE_FRACTION - coverage) * 5000.0
+    if m["mean_saturation"] >= MAX_MEAN_SATURATION:
+        dist += m["mean_saturation"] - MAX_MEAN_SATURATION
 
-    if m["ambient_radius_ratio"] > 0 and m["radius_ratio"] > MAX_RADIUS_RATIO:
-        dist += m["radius_ratio"] - MAX_RADIUS_RATIO
+    if m["moving_radius_min"] < MIN_MOVING_RADIUS_RATIO:
+        dist += (MIN_MOVING_RADIUS_RATIO - m["moving_radius_min"]) * 100.0
+    if m["moving_radius_max"] > MAX_MOVING_RADIUS_RATIO:
+        dist += (m["moving_radius_max"] - MAX_MOVING_RADIUS_RATIO) * 100.0
+
+    if m["ambient_radius_min"] < MIN_AMBIENT_RADIUS_RATIO:
+        dist += (MIN_AMBIENT_RADIUS_RATIO - m["ambient_radius_min"]) * 100.0
+    if m["ambient_radius_max"] > MAX_AMBIENT_RADIUS_RATIO:
+        dist += (m["ambient_radius_max"] - MAX_AMBIENT_RADIUS_RATIO) * 100.0
+
+    radius_ratio = m["moving_to_ambient_radius_ratio"]
+    if radius_ratio < MIN_RADIUS_RATIO:
+        dist += MIN_RADIUS_RATIO - radius_ratio
+    elif radius_ratio > MAX_RADIUS_RATIO:
+        dist += radius_ratio - MAX_RADIUS_RATIO
 
     return dist
 
@@ -273,8 +256,9 @@ def _find_good_params(
     e: dict,
     rng: _rng_mod.Random,
     max_attempts: int = 500,
+    look_attempts: int = DEFAULT_LOOK_ATTEMPTS,
 ) -> tuple[Params, MeasurementResult]:
-    """Draw brightness+look until ``check.py`` passes; fall back to best.
+    """Draw scene candidates, replay many looks, and return the first pass.
 
     Returns the (Params, MeasurementResult) pair.  If no attempt passed,
     returns the closest-to-passing one (``result.verdict.ok == False``).
@@ -285,15 +269,17 @@ def _find_good_params(
     for _ in range(max_attempts):
         p = _entry_sample(e, rng)
         animate = build(p)
-        result = _measure_and_verdict(p, animate)
+        looks = _look_candidates(p, rng, look_attempts)
 
-        if result.verdict.ok:
-            return (p, result)
+        for _name, look, result in measure_look_variants(p, animate, looks):
+            candidate = replace(p, look=look)
+            if result.verdict.ok:
+                return (candidate, result)
 
-        score = _failure_distance(result)
-        if score < best_score:
-            best = (p, result)
-            best_score = score
+            score = _failure_distance(result, outcome=e["outcome"])
+            if score < best_score:
+                best = (candidate, result)
+                best_score = score
 
     assert best is not None  # max_attempts > 0
     return best
@@ -303,29 +289,99 @@ def _entry_tag(e: dict) -> str:
     return f"{e['light_color']}_{e['grid']}_{e['n_lights']}light"
 
 
+def _metrics_payload(key: str, result: MeasurementResult) -> dict:
+    metric_keys = (*METRIC_KEYS, "analysis_frame", "analysis_fps", "analysis_time")
+    return {
+        "schema": 1,
+        "source": (
+            "core FrameAnalysis via _lpt2d; Python only aggregates per-light "
+            "radius_ratio values into moving/ambient group metrics"
+        ),
+        "entry": key,
+        "analysis_frame": result.analysis_frame,
+        "analysis_fps": result.analysis_fps,
+        "analysis_time": result.analysis_time,
+        "probe": {
+            "width": PROBE_W,
+            "height": PROBE_H,
+            "rays": PROBE_RAYS,
+        },
+        "metrics": {k: result.metrics[k] for k in metric_keys if k in result.metrics},
+        "verdict": {
+            "ok": result.verdict.ok,
+            "summary": result.verdict.summary,
+        },
+    }
+
+
 # ── Main ─────────────────────────────────────────────────────────────────
+
+
+_DEFAULT_CATALOG_ROOT = Path("renders/families/crystal_field")
+_DEFAULT_WEB_ROOT = Path("/tmp")
+
+
+def _default_catalog_out(now: datetime | None = None) -> Path:
+    now = now or datetime.now()
+    return _DEFAULT_CATALOG_ROOT / now.strftime("%Y-%m-%d_%H-%M-%S")
+
+
+def _default_catalog_web_out(catalog_out: Path | str) -> Path:
+    catalog_out = Path(catalog_out)
+    return _DEFAULT_WEB_ROOT / f"crystal_field_{catalog_out.name}_web"
 
 
 def run_catalog(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Crystal field parameter catalog")
-    parser.add_argument("--out", type=str, default="renders/families/crystal_field/catalog")
+    parser.add_argument(
+        "--out",
+        type=str,
+        help=(
+            "Output directory. Defaults to "
+            "renders/families/crystal_field/YYYY-MM-DD_HH-MM-SS"
+        ),
+    )
+    parser.add_argument(
+        "--web-out",
+        type=str,
+        help="JPEG web gallery output. Defaults to /tmp/crystal_field_<catalog-dir>_web",
+    )
+    parser.add_argument(
+        "--jpeg-quality",
+        type=int,
+        default=91,
+        help="JPEG quality for --web-out images (default: 91)",
+    )
     parser.add_argument("--seed", type=int, default=0, help="RNG seed (default: 0)")
     parser.add_argument(
         "--max-attempts",
         type=int,
         default=500,
-        help="Max brightness+look attempts per entry (default: 500)",
+        help="Max structural scene attempts per entry (default: 500)",
+    )
+    parser.add_argument(
+        "--look-attempts",
+        type=int,
+        default=DEFAULT_LOOK_ATTEMPTS,
+        help="Post-process looks to replay per structural attempt (default: 100)",
     )
     args = parser.parse_args(argv)
 
     entries = _build_catalog_entries()
     print(f"Catalog: {len(entries)} combinations")
+    print(
+        f"Search budget: {args.max_attempts} structural attempts × "
+        f"{max(1, args.look_attempts)} looks"
+    )
 
     for outcome in _CATALOG_OUTCOMES:
         outcome_entries = [e for e in entries if e["outcome"] == outcome]
         print(f"  {outcome}: {len(outcome_entries)} entries")
 
-    out = Path(args.out)
+    out = Path(args.out) if args.out else _default_catalog_out()
+    web_out = Path(args.web_out) if args.web_out else _default_catalog_web_out(out)
+    print(f"Output: {out}")
+    print(f"Web output: {web_out}")
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
 
@@ -347,25 +403,49 @@ def run_catalog(argv: list[str] | None = None) -> None:
             img_path = outcome_dir / f"{tag}.png"
             params_path = outcome_dir / f"{tag}.json"
             shot_path = outcome_dir / f"{tag}.shot.json"
+            metrics_path = outcome_dir / f"{tag}.metrics.json"
 
-            if img_path.exists():
+            if (
+                img_path.exists()
+                and params_path.exists()
+                and shot_path.exists()
+                and metrics_path.exists()
+            ):
                 continue
 
             entry_rng = _rng_mod.Random(f"{args.seed}:{key}")
-            p, result = _find_good_params(e, entry_rng, max_attempts=args.max_attempts)
+            p, result = _find_good_params(
+                e,
+                entry_rng,
+                max_attempts=args.max_attempts,
+                look_attempts=max(1, args.look_attempts),
+            )
             verdicts[key] = result.verdict
 
             animate = build(p)
-            rr = render_frame(animate, _TIMELINE, frame=_FRAME, settings=_SHOT, camera=_CAM)
+            analysis_timeline = Timeline(DURATION, fps=result.analysis_fps)
+            rr = render_frame(
+                animate,
+                analysis_timeline,
+                frame=result.analysis_frame,
+                settings=_SHOT,
+                camera=_CAM,
+            )
             save_image(str(img_path), rr.pixels, 1920, 1080)
             draw_metrics_overlay(img_path, result.metrics)
 
-            # Three artifacts per entry:
+            # Four artifacts per entry:
             #   *.png        — the overlay-annotated render
             #   *.json       — the crystal_field Params that drove this render
+            #   *.metrics.json — canonical core-analysis metrics + selected frame
             #   *.shot.json  — the authored Shot (version:10) that the engine sees
             params_path.write_text(json.dumps(asdict(p), indent=2))
-            authored = _authored_shot(_SHOT, animate, _CTX)
+            metrics_path.write_text(json.dumps(_metrics_payload(key, result), indent=2))
+            authored = _authored_shot(
+                _SHOT,
+                animate,
+                analysis_timeline.context_at(result.analysis_frame),
+            )
             authored.name = f"crystal_field/{key}"
             authored.save(shot_path)
             _save_verdicts(verdicts_path, verdicts)
@@ -373,7 +453,8 @@ def run_catalog(argv: list[str] | None = None) -> None:
             status = "OK" if result.verdict.ok else "FAIL"
             print(
                 f"  {key} {status} exp={p.look.exposure:.2f} "
-                f"({rr.time_ms:.0f}ms) — {result.verdict.summary}",
+                f"t={result.analysis_time:.2f}s ({rr.time_ms:.0f}ms) — "
+                f"{result.verdict.summary}",
                 flush=True,
             )
 
@@ -382,6 +463,8 @@ def run_catalog(argv: list[str] | None = None) -> None:
 
     _write_index(out, verdicts)
     print(f"Index: {out}/index.html")
+    _write_web_gallery(out, web_out, verdicts, jpeg_quality=args.jpeg_quality)
+    print(f"Web index: {web_out}/index.html")
 
 
 def _load_verdicts(path: Path) -> dict[str, Verdict]:
@@ -399,68 +482,215 @@ def _save_verdicts(path: Path, verdicts: dict[str, Verdict]) -> None:
 def _write_index(
     out: Path,
     verdicts: dict[str, Verdict],
+    *,
+    image_ext: str = "png",
 ) -> None:
     """Write an HTML gallery grouped by outcome, rows=light color, cols=grid size.
 
     Entries whose verdict did not pass are tagged with a ``failed`` CSS
     class (red-orange border) and a tooltip showing ``verdict.summary``.
     """
-    html = [
+    parts = [
         """<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Crystal Field Catalog</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crystal Field Catalog</title>
 <style>
-body { margin:0; background:#111; color:#ccc; font-family:monospace; }
-h1,h2,h3 { text-align:center; color:#ddd; }
-h1 { padding:1em 0 .3em; font-size:1.3em; }
-h2 { font-size:1.1em; border-top:1px solid #333; margin-top:2em; padding-top:1em; }
-h3 { font-size:0.9em; color:#888; }
-table { margin:0 auto; border-collapse:collapse; }
-td { padding:2px; text-align:center; vertical-align:top; }
-td img { width:100%; max-width:320px; display:block; cursor:pointer; }
-td.failed img { border:2px solid #e63; }
-td img.big { position:fixed; top:0; left:0; width:100vw; height:100vh;
-  object-fit:contain; z-index:10; background:#000; cursor:zoom-out; }
-td small { font-size:10px; color:#777; }
-td.failed small { color:#e63; }
-th { padding:4px 8px; color:#aaa; font-size:11px; }
+:root { color-scheme: dark; --bg:#10100f; --panel:#1a1916; --ink:#f2eee5; --muted:#aaa194; --line:#36322b; --accent:#8fd3ff; --bad:#ff8b5f; --good:#8dff9d; }
+* { box-sizing: border-box; }
+body { margin:0; padding:22px; background:var(--bg); color:var(--ink); font-family:ui-sans-serif, system-ui, sans-serif; }
+a { color:var(--accent); }
+header { max-width:1180px; margin:0 auto 22px; }
+h1 { margin:0 0 8px; font-size:clamp(28px, 5vw, 52px); letter-spacing:-0.04em; }
+h2 { margin:34px auto 14px; max-width:1180px; font-size:clamp(22px, 3vw, 34px); }
+.muted { color:var(--muted); }
+.table-wrap { max-width:1180px; margin:0 auto 24px; overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+table { width:100%; border-collapse:collapse; min-width:900px; }
+th,td { padding:8px; border-bottom:1px solid var(--line); text-align:center; vertical-align:top; }
+th { color:var(--good); background:#13120f; font-size:12px; }
+td.failed { background:rgba(255, 105, 64, .08); }
+button.thumb { appearance:none; border:1px solid var(--line); border-radius:10px; padding:0; margin:0; background:#050505; color:var(--ink); cursor:zoom-in; overflow:hidden; width:100%; max-width:320px; text-align:left; position:relative; }
+td.failed button.thumb { border-color:var(--bad); }
+button.thumb img { display:block; width:100%; aspect-ratio:16 / 9; object-fit:contain; background:#050505; }
+button.thumb span { position:absolute; left:8px; bottom:8px; padding:3px 6px; border-radius:999px; background:rgba(0,0,0,.72); font-size:12px; }
+.cell-links { margin-top:6px; font-size:11px; display:flex; justify-content:center; gap:7px; flex-wrap:wrap; }
+.cell-links small { color:var(--muted); }
+td.failed .cell-links small { color:var(--bad); }
+.viewer[hidden] { display:none; }
+.viewer { position:fixed; inset:0; z-index:20; display:grid; grid-template-rows:auto 1fr auto; background:rgba(0,0,0,.94); }
+.viewer-bar { display:flex; align-items:center; gap:8px; padding:9px; border-bottom:1px solid #333; background:#090909; }
+.viewer-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+.viewer button { border:1px solid #444; border-radius:8px; background:#181818; color:var(--ink); padding:8px 10px; font:inherit; }
+.stage { min-height:0; overflow:auto; display:flex; align-items:center; justify-content:center; padding:12px; }
+.stage img { max-width:100%; max-height:100%; height:auto; width:auto; }
+.stage.zoomed { align-items:flex-start; justify-content:flex-start; }
+.caption { padding:9px 12px; color:var(--muted); border-top:1px solid #333; background:#090909; font-size:13px; }
+.no-scroll { overflow:hidden; }
+@media (max-width:640px) {
+  body { padding:14px; }
+  .viewer-bar { gap:5px; padding:7px; }
+  .viewer button { padding:7px 8px; }
+  .viewer-title { font-size:12px; }
+}
 </style></head><body>
-<h1>Crystal Field — Parameter Catalog</h1>
-<p style="text-align:center;font-size:0.85em;color:#777">
+<header>
+<h1>Crystal Field Catalog</h1>
+<p class="muted">
 Rows = light color &times; n_lights, Columns = grid size, Grouped by outcome.<br>
 Shape is drawn per attempt (not a matrix axis) — expect variety within each cell.<br>
-Red borders mark entries that failed <code>check.py</code>; hover for the reason.</p>
+Red borders mark entries that failed <code>check.py</code>. Click any image for previous/next, arrow keys, swipe, or zoom controls.</p>
+</header>
 """
     ]
 
     for outcome in _CATALOG_OUTCOMES:
-        html.append(f"<h2>{outcome}</h2>")
-        html.append("<table><tr><th></th>")
+        parts.append(f"<h2>{_html.escape(outcome)}</h2>")
+        parts.append('<section class="table-wrap"><table><tr><th></th>')
         for gn in ["small", "medium", "large"]:
             g = GRID_SIZES[gn]
-            html.append(f"<th>{gn}<br>{g.rows}×{g.cols}</th>")
-        html.append("</tr>")
+            parts.append(f"<th>{_html.escape(gn)}<br>{g.rows}×{g.cols}</th>")
+        parts.append("</tr>")
 
-        for lc_name in ["white", "orange", "yellow", "deep_orange"]:
+        for lc_name in LIGHT_COLORS:
             for nl in [1, 2]:
-                html.append(f"<tr><th>{lc_name} {nl}L</th>")
+                parts.append(f"<tr><th>{_html.escape(lc_name)} {nl}L</th>")
                 for gn in ["small", "medium", "large"]:
                     tag = f"{lc_name}_{gn}_{nl}light"
                     key = f"{outcome}/{tag}"
-                    src = f"{key}.png"
                     verdict = verdicts.get(key)
                     td_class = ""
-                    tooltip = ""
+                    verdict_text = "pending"
                     if verdict is not None and not verdict.ok:
                         td_class = ' class="failed"'
-                        tooltip = f' title="{verdict.summary}"'
-                    html.append(
-                        f'<td{td_class}><img src="{src}" loading="lazy"{tooltip} '
-                        f"onclick=\"this.classList.toggle('big')\">"
-                        f"<small>{tag}</small></td>"
+                    if verdict is not None:
+                        verdict_text = ("OK: " if verdict.ok else "FAIL: ") + verdict.summary
+                    caption = f"{key} -- {verdict_text}"
+                    src = f"{key}.{image_ext}"
+                    params = f"{key}.json"
+                    metrics = f"{key}.metrics.json"
+                    shot = f"{key}.shot.json"
+                    parts.append(
+                        f"<td{td_class}>"
+                        f'<button class="thumb" data-full="{_html.escape(src, quote=True)}" '
+                        f'data-caption="{_html.escape(caption, quote=True)}">'
+                        f'<img src="{_html.escape(src, quote=True)}" loading="lazy" '
+                        f'alt="{_html.escape(caption, quote=True)}"><span>Open</span></button>'
+                        f'<div class="cell-links"><small>{_html.escape(tag)}</small>'
+                        f'<a href="{_html.escape(params, quote=True)}">params</a>'
+                        f'<a href="{_html.escape(metrics, quote=True)}">metrics</a>'
+                        f'<a href="{_html.escape(shot, quote=True)}">shot</a></div></td>'
                     )
-                html.append("</tr>")
+                parts.append("</tr>")
 
-        html.append("</table>")
+        parts.append("</table></section>")
 
-    html.append("</body></html>")
-    (out / "index.html").write_text("\n".join(html))
+    parts.append(
+        """
+<div class="viewer" id="viewer" hidden>
+  <div class="viewer-bar">
+    <button type="button" id="prevBtn">Prev</button>
+    <button type="button" id="nextBtn">Next</button>
+    <button type="button" id="fitBtn">Fit</button>
+    <button type="button" id="zoomOutBtn">-</button>
+    <button type="button" id="zoomInBtn">+</button>
+    <div class="viewer-title" id="viewerTitle"></div>
+    <button type="button" id="closeBtn">Close</button>
+  </div>
+  <div class="stage" id="stage"><img id="viewerImg" alt=""></div>
+  <div class="caption" id="viewerCaption"></div>
+</div>
+<script>
+const thumbs = Array.from(document.querySelectorAll("[data-full]"));
+const items = thumbs.map((el) => ({ src: el.dataset.full, caption: el.dataset.caption || el.dataset.full }));
+const viewer = document.getElementById("viewer");
+const stage = document.getElementById("stage");
+const img = document.getElementById("viewerImg");
+const title = document.getElementById("viewerTitle");
+const caption = document.getElementById("viewerCaption");
+let current = 0;
+let zoom = 0;
+let touchX = null;
+
+function applyZoom() {
+  if (zoom <= 0) {
+    stage.classList.remove("zoomed");
+    img.style.width = "";
+    img.style.maxWidth = "100%";
+    img.style.maxHeight = "100%";
+    return;
+  }
+  stage.classList.add("zoomed");
+  img.style.maxWidth = "none";
+  img.style.maxHeight = "none";
+  img.style.width = `${Math.max(1, img.naturalWidth * zoom)}px`;
+}
+function show(index) {
+  current = (index + items.length) % items.length;
+  const item = items[current];
+  img.src = item.src;
+  img.alt = item.caption;
+  title.textContent = `${current + 1} / ${items.length}`;
+  caption.textContent = item.caption;
+  applyZoom();
+}
+function openViewer(index) {
+  zoom = 0;
+  viewer.hidden = false;
+  document.body.classList.add("no-scroll");
+  show(index);
+}
+function closeViewer() {
+  viewer.hidden = true;
+  document.body.classList.remove("no-scroll");
+}
+thumbs.forEach((el, index) => el.addEventListener("click", () => openViewer(index)));
+document.getElementById("prevBtn").addEventListener("click", () => show(current - 1));
+document.getElementById("nextBtn").addEventListener("click", () => show(current + 1));
+document.getElementById("closeBtn").addEventListener("click", closeViewer);
+document.getElementById("fitBtn").addEventListener("click", () => { zoom = 0; applyZoom(); });
+document.getElementById("zoomInBtn").addEventListener("click", () => { zoom = zoom <= 0 ? 1 : Math.min(4, zoom * 1.35); applyZoom(); });
+document.getElementById("zoomOutBtn").addEventListener("click", () => { zoom = zoom <= 0 ? 0 : Math.max(0.25, zoom / 1.35); applyZoom(); });
+img.addEventListener("load", applyZoom);
+viewer.addEventListener("click", (event) => { if (event.target === viewer) closeViewer(); });
+stage.addEventListener("touchstart", (event) => { touchX = event.changedTouches[0].clientX; }, { passive: true });
+stage.addEventListener("touchend", (event) => {
+  if (touchX === null) return;
+  const dx = event.changedTouches[0].clientX - touchX;
+  touchX = null;
+  if (Math.abs(dx) > 55) show(current + (dx < 0 ? 1 : -1));
+}, { passive: true });
+window.addEventListener("keydown", (event) => {
+  if (viewer.hidden) return;
+  if (event.key === "Escape") closeViewer();
+  if (event.key === "ArrowLeft") show(current - 1);
+  if (event.key === "ArrowRight") show(current + 1);
+});
+</script>
+</body></html>"""
+    )
+    (out / "index.html").write_text("\n".join(parts))
+
+
+def _write_web_gallery(
+    src: Path,
+    dst: Path,
+    verdicts: dict[str, Verdict],
+    *,
+    jpeg_quality: int,
+) -> None:
+    dst.mkdir(parents=True, exist_ok=True)
+    for outcome in _CATALOG_OUTCOMES:
+        src_dir = src / outcome
+        dst_dir = dst / outcome
+        dst_dir.mkdir(parents=True, exist_ok=True)
+        for png_path in src_dir.glob("*.png"):
+            jpg_path = dst_dir / f"{png_path.stem}.jpg"
+            image = Image.open(png_path).convert("RGB")
+            image.save(jpg_path, "JPEG", quality=jpeg_quality, optimize=True, progressive=True)
+        for sidecar in src_dir.glob("*.json"):
+            shutil.copy2(sidecar, dst_dir / sidecar.name)
+
+    verdicts_src = src / "verdicts.json"
+    if verdicts_src.exists():
+        shutil.copy2(verdicts_src, dst / "verdicts.json")
+    _write_index(dst, verdicts, image_ext="jpg")
