@@ -12,7 +12,11 @@
 
 namespace {
 
-constexpr int kHueBins = 36;
+constexpr float kColorfulnessNormalizingMax = 1.8f;
+// Coarse-grid Sobel magnitude is multiplied by grid short side so geometric
+// edges remain comparable across resolutions. A scale of 64 maps one full-frame
+// hard black/white step to about 0.125 instead of saturating the metric.
+constexpr float kLocalContrastGradientScale = 64.0f;
 
 inline int bt709_luminance_u8(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     const std::uint32_t lum = (218u * r + 732u * g + 74u * b) >> 10;
@@ -32,6 +36,44 @@ float quantile_in_place(std::vector<float>& values, float pct) {
     std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(idx),
                      values.end());
     return values[idx];
+}
+
+int local_luma_cell_index(int x, int y) {
+    return y * kLocalLumaGridMaxSide + x;
+}
+
+template <std::size_t N>
+float histogram_quantile_unit(const std::array<int, N>& histogram,
+                              std::size_t n,
+                              float pct,
+                              float denominator) {
+    if (n == 0 || denominator <= 0.0f) return 0.0f;
+    const double p = std::clamp(static_cast<double>(pct), 0.0, 1.0);
+    const auto target = static_cast<std::size_t>(
+        std::ceil(p * static_cast<double>(n)));
+    const std::size_t rank = std::clamp<std::size_t>(target, 1u, n);
+    std::size_t cumul = 0;
+    for (std::size_t i = 0; i < N; ++i) {
+        cumul += static_cast<std::size_t>(std::max(histogram[i], 0));
+        if (cumul >= rank) {
+            return static_cast<float>(i) / denominator;
+        }
+    }
+    return static_cast<float>(N - 1u) / denominator;
+}
+
+template <std::size_t N>
+double entropy_bits_from_histogram(const std::array<int, N>& histogram,
+                                   std::size_t total) {
+    if (total == 0) return 0.0;
+    double entropy = 0.0;
+    const double inv = 1.0 / static_cast<double>(total);
+    for (int count_i : histogram) {
+        if (count_i <= 0) continue;
+        const double p = static_cast<double>(count_i) * inv;
+        entropy -= p * std::log2(p);
+    }
+    return entropy;
 }
 
 float radius_signal_luminance01(float luminance, float gamma) {
@@ -68,89 +110,209 @@ int first_radius_below(const std::vector<float>& profile, float threshold) {
 
 }  // namespace
 
-LuminanceStats finalize_luminance(const std::array<int, 256>& histogram,
-                                  int clipped, int width, int height,
-                                  int near_black_bin_max,
-                                  int near_white_bin_min) {
-    LuminanceStats s;
-    s.histogram = histogram;
-    s.width = width;
-    s.height = height;
+LocalLumaGridSize local_luma_grid_size(int width, int height) {
+    if (width <= 0 || height <= 0) return {};
 
-    const std::size_t n = static_cast<std::size_t>(width) *
-                          static_cast<std::size_t>(height);
-    if (n == 0) return s;
+    const int image_short = std::max(1, std::min(width, height));
+    const int grid_short = std::min(image_short, kLocalLumaGridShortSide);
+
+    if (width >= height) {
+        const int grid_width = std::clamp(
+            static_cast<int>(std::lround(static_cast<double>(width) *
+                                         static_cast<double>(grid_short) /
+                                         static_cast<double>(height))),
+            1, std::min(width, kLocalLumaGridMaxSide));
+        return {grid_width, grid_short};
+    }
+
+    const int grid_height = std::clamp(
+        static_cast<int>(std::lround(static_cast<double>(height) *
+                                     static_cast<double>(grid_short) /
+                                     static_cast<double>(width))),
+        1, std::min(height, kLocalLumaGridMaxSide));
+    return {grid_short, grid_height};
+}
+
+double local_luma_grid_gradient_sum(std::span<const float> luma,
+                                    LocalLumaGridSize grid) {
+    if (grid.width <= 0 || grid.height <= 0 ||
+        luma.size() < static_cast<std::size_t>(kLocalLumaGridCells)) {
+        return 0.0;
+    }
+
+    const auto lum_at = [&](int x, int y) -> float {
+        const int cx = std::clamp(x, 0, grid.width - 1);
+        const int cy = std::clamp(y, 0, grid.height - 1);
+        return luma[static_cast<std::size_t>(local_luma_cell_index(cx, cy))];
+    };
 
     double sum = 0.0;
-    double squared_sum = 0.0;
+    for (int y = 0; y < grid.height; ++y) {
+        for (int x = 0; x < grid.width; ++x) {
+            const float tl = lum_at(x - 1, y - 1);
+            const float tc = lum_at(x,     y - 1);
+            const float tr = lum_at(x + 1, y - 1);
+            const float ml = lum_at(x - 1, y);
+            const float mr = lum_at(x + 1, y);
+            const float bl = lum_at(x - 1, y + 1);
+            const float bc = lum_at(x,     y + 1);
+            const float br = lum_at(x + 1, y + 1);
+            const float gx = -tl - 2.0f * ml - bl + tr + 2.0f * mr + br;
+            const float gy = -tl - 2.0f * tc - tr + bl + 2.0f * bc + br;
+            sum += static_cast<double>(std::sqrt(gx * gx + gy * gy));
+        }
+    }
+    return sum;
+}
+
+void finalize_image_stats(const ImageAnalysisInputs& inputs,
+                          const FrameAnalysisParams& params,
+                          ImageStats& image,
+                          ImageDebugStats& debug) {
+    image = {};
+    debug = {};
+    image.width = inputs.width;
+    image.height = inputs.height;
+    debug.luma_histogram = inputs.luma_histogram;
+    debug.saturation_histogram = inputs.saturation_histogram;
+    debug.hue_histogram = inputs.hue_histogram;
+
+    const std::size_t n = static_cast<std::size_t>(std::max(inputs.width, 0)) *
+                          static_cast<std::size_t>(std::max(inputs.height, 0));
+    if (n == 0) return;
+
+    const int near_black_cutoff_bin = std::clamp(
+        static_cast<int>(std::floor(static_cast<double>(params.near_black_luma) * 255.0 +
+                                    1.0e-6)),
+        0, 255);
+    const int near_white_cutoff_bin = std::clamp(
+        static_cast<int>(std::ceil(static_cast<double>(params.near_white_luma) * 255.0 -
+                                   1.0e-6)),
+        0, 255);
+
+    double luma_sum = 0.0;
+    double luma_squared_sum = 0.0;
     std::size_t near_black_count = 0;
     std::size_t near_white_count = 0;
-    for (int i = 0; i < 256; ++i) {
-        const double count = static_cast<double>(histogram[i]);
-        sum += count * static_cast<double>(i);
-        squared_sum += count * static_cast<double>(i) * static_cast<double>(i);
-        if (i <= near_black_bin_max)
-            near_black_count += static_cast<std::size_t>(histogram[i]);
-        if (i >= near_white_bin_min)
-            near_white_count += static_cast<std::size_t>(histogram[i]);
-    }
-
-    const double mean = sum / static_cast<double>(n);
-    const double var = (squared_sum / static_cast<double>(n)) - mean * mean;
-
-    s.mean = static_cast<float>(mean);
-    s.contrast_std = var > 0.0 ? static_cast<float>(std::sqrt(var)) : 0.0f;
-    s.near_black_fraction = static_cast<float>(near_black_count) / static_cast<float>(n);
-    s.near_white_fraction = static_cast<float>(near_white_count) / static_cast<float>(n);
-    s.clipped_channel_fraction = static_cast<float>(clipped) / static_cast<float>(n);
-
-    const auto target = [n](float pct) -> std::size_t {
-        const double p = std::clamp(static_cast<double>(pct), 0.0, 1.0);
-        const auto rank = static_cast<std::size_t>(
-            std::ceil(p * static_cast<double>(n)));
-        return std::clamp<std::size_t>(rank, 1u, n);
-    };
-    const std::size_t shadow_target = target(0.05f);
-    const std::size_t median_target = target(0.50f);
-    const std::size_t ceiling_target = target(0.95f);
-    const std::size_t peak_target = target(0.99f);
-
-    float shadow_floor = 255.0f;
-    float median = 255.0f;
-    float highlight_ceiling = 255.0f;
-    float highlight_peak = 255.0f;
-    bool have_shadow = false;
-    bool have_median = false;
-    bool have_ceiling = false;
-    bool have_peak = false;
-    std::size_t cumul = 0;
-    for (int i = 0; i < 256; ++i) {
-        cumul += static_cast<std::size_t>(histogram[i]);
-        if (!have_shadow && cumul >= shadow_target) {
-            shadow_floor = static_cast<float>(i);
-            have_shadow = true;
+    for (int i = 0; i < kLumaBins; ++i) {
+        const int count_i = std::max(inputs.luma_histogram[i], 0);
+        const double count = static_cast<double>(count_i);
+        const double luma = static_cast<double>(i) / 255.0;
+        luma_sum += count * luma;
+        luma_squared_sum += count * luma * luma;
+        if (i <= near_black_cutoff_bin) {
+            near_black_count += static_cast<std::size_t>(count_i);
         }
-        if (!have_median && cumul >= median_target) {
-            median = static_cast<float>(i);
-            have_median = true;
-        }
-        if (!have_ceiling && cumul >= ceiling_target) {
-            highlight_ceiling = static_cast<float>(i);
-            have_ceiling = true;
-        }
-        if (!have_peak && cumul >= peak_target) {
-            highlight_peak = static_cast<float>(i);
-            have_peak = true;
-            break;
+        if (i >= near_white_cutoff_bin) {
+            near_white_count += static_cast<std::size_t>(count_i);
         }
     }
 
-    s.shadow_floor = shadow_floor;
-    s.median = median;
-    s.highlight_ceiling = highlight_ceiling;
-    s.highlight_peak = highlight_peak;
-    s.contrast_spread = s.highlight_ceiling - s.shadow_floor;
-    return s;
+    const double inv_n = 1.0 / static_cast<double>(n);
+    const double mean = luma_sum * inv_n;
+    const double variance = std::max(0.0, luma_squared_sum * inv_n - mean * mean);
+    image.mean_luma = static_cast<float>(mean);
+    image.median_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.50f, 255.0f);
+    image.p05_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.05f, 255.0f);
+    image.p95_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.95f, 255.0f);
+    debug.p01_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.01f, 255.0f);
+    debug.p10_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.10f, 255.0f);
+    debug.p90_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.90f, 255.0f);
+    debug.p99_luma = histogram_quantile_unit(inputs.luma_histogram, n, 0.99f, 255.0f);
+    image.near_black_fraction =
+        static_cast<float>(static_cast<double>(near_black_count) * inv_n);
+    image.near_white_fraction =
+        static_cast<float>(static_cast<double>(near_white_count) * inv_n);
+    image.clipped_channel_fraction =
+        static_cast<float>(static_cast<double>(std::max(inputs.clipped, 0)) * inv_n);
+    image.rms_contrast = static_cast<float>(std::sqrt(variance));
+    image.interdecile_luma_range = std::max(0.0f, debug.p90_luma - debug.p10_luma);
+    image.interdecile_luma_contrast =
+        image.interdecile_luma_range /
+        std::max(debug.p90_luma + debug.p10_luma, 1.0e-6f);
+    const int local_width = inputs.local_gradient_width > 0
+        ? inputs.local_gradient_width
+        : inputs.width;
+    const int local_height = inputs.local_gradient_height > 0
+        ? inputs.local_gradient_height
+        : inputs.height;
+    const std::size_t local_n =
+        static_cast<std::size_t>(std::max(local_width, 0)) *
+        static_cast<std::size_t>(std::max(local_height, 0));
+    const float local_short_side =
+        static_cast<float>(std::max(1, std::min(local_width, local_height)));
+    image.local_contrast = local_n > 0
+        ? clamp01(static_cast<float>((inputs.local_gradient_sum /
+                                      static_cast<double>(local_n)) *
+                                     local_short_side /
+                                     static_cast<double>(kLocalContrastGradientScale)))
+        : 0.0f;
+    image.bright_neutral_fraction =
+        static_cast<float>(static_cast<double>(std::max(inputs.bright_neutral, 0)) * inv_n);
+
+    double sat_sum = 0.0;
+    for (int i = 0; i < kSaturationBins; ++i) {
+        const int count_i = std::max(inputs.saturation_histogram[i], 0);
+        const double count = static_cast<double>(count_i);
+        const double sat = static_cast<double>(i) / 255.0;
+        sat_sum += count * sat;
+    }
+    image.mean_saturation = static_cast<float>(sat_sum * inv_n);
+    image.p95_saturation =
+        histogram_quantile_unit(inputs.saturation_histogram, n, 0.95f, 255.0f);
+
+    std::size_t colored_count = 0;
+    for (int count_i : inputs.hue_histogram) {
+        colored_count += static_cast<std::size_t>(std::max(count_i, 0));
+    }
+    debug.colored_fraction =
+        static_cast<float>(static_cast<double>(colored_count) * inv_n);
+    debug.mean_saturation_colored = colored_count > 0
+        ? static_cast<float>(inputs.colored_saturation_sum /
+                             static_cast<double>(colored_count))
+        : 0.0f;
+    debug.saturation_coverage = debug.mean_saturation_colored * debug.colored_fraction;
+
+    debug.luma_entropy =
+        static_cast<float>(entropy_bits_from_histogram(inputs.luma_histogram, n));
+    debug.luma_entropy_normalized =
+        static_cast<float>(std::clamp(static_cast<double>(debug.luma_entropy) / 8.0,
+                                      0.0, 1.0));
+    const double hue_total =
+        static_cast<double>(std::max<std::size_t>(colored_count, 1u));
+    double hue_entropy = 0.0;
+    for (int count_i : inputs.hue_histogram) {
+        if (count_i <= 0) continue;
+        const double p = static_cast<double>(count_i) / hue_total;
+        hue_entropy -= p * std::log2(p);
+    }
+    debug.hue_entropy = static_cast<float>(hue_entropy);
+
+    double rg_sum = 0.0;
+    double rg_squared_sum = 0.0;
+    for (int i = 0; i < kRgOpponentBins; ++i) {
+        const double count = static_cast<double>(std::max(inputs.rg_histogram[i], 0));
+        const double value = static_cast<double>(i - 255) / 255.0;
+        rg_sum += count * value;
+        rg_squared_sum += count * value * value;
+    }
+    double yb_sum = 0.0;
+    double yb_squared_sum = 0.0;
+    for (int i = 0; i < kYbOpponentBins; ++i) {
+        const double count = static_cast<double>(std::max(inputs.yb_histogram[i], 0));
+        const double value = static_cast<double>(i - 510) / 510.0;
+        yb_sum += count * value;
+        yb_squared_sum += count * value * value;
+    }
+    const double rg_mean = rg_sum * inv_n;
+    const double yb_mean = yb_sum * inv_n;
+    const double rg_var = std::max(0.0, rg_squared_sum * inv_n - rg_mean * rg_mean);
+    const double yb_var = std::max(0.0, yb_squared_sum * inv_n - yb_mean * yb_mean);
+    const double colorfulness =
+        std::sqrt(rg_var + yb_var) + 0.3 * std::sqrt(rg_mean * rg_mean + yb_mean * yb_mean);
+    debug.colorfulness_raw = static_cast<float>(colorfulness);
+    image.colorfulness =
+        clamp01(static_cast<float>(colorfulness / static_cast<double>(kColorfulnessNormalizingMax)));
 }
 
 ViewportXform viewport_xform(const Bounds& bounds, int width, int height) {
@@ -178,84 +340,109 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
         return out;
     }
 
-    std::array<int, 256> histogram{};
-    std::array<int, kHueBins> hue_hist{};
-    int clipped = 0;
-    std::uint64_t sat_sum_q8 = 0;
-    int n_colored = 0;
+    ImageAnalysisInputs image_inputs;
+    image_inputs.width = width;
+    image_inputs.height = height;
     std::vector<float> luminance01(n_pixels, 0.0f);
+    const LocalLumaGridSize local_grid = local_luma_grid_size(width, height);
+    std::array<double, kLocalLumaGridCells> local_luma_sums{};
+    std::array<int, kLocalLumaGridCells> local_luma_counts{};
 
     for (std::size_t i = 0; i < n_pixels; ++i) {
         const std::uint8_t r = rgb[3 * i + 0];
         const std::uint8_t g = rgb[3 * i + 1];
         const std::uint8_t b = rgb[3 * i + 2];
         const int lum = bt709_luminance_u8(r, g, b);
-        histogram[lum] += 1;
+        image_inputs.luma_histogram[lum] += 1;
         luminance01[i] = static_cast<float>(lum) / 255.0f;
+        if (local_grid.width > 0 && local_grid.height > 0) {
+            const int x = static_cast<int>(i % static_cast<std::size_t>(width));
+            const int y = static_cast<int>(i / static_cast<std::size_t>(width));
+            const int local_x = std::min(
+                static_cast<int>((static_cast<std::uint64_t>(x) *
+                                  static_cast<std::uint64_t>(local_grid.width)) /
+                                 static_cast<std::uint64_t>(width)),
+                local_grid.width - 1);
+            const int local_y = std::min(
+                static_cast<int>((static_cast<std::uint64_t>(y) *
+                                  static_cast<std::uint64_t>(local_grid.height)) /
+                                 static_cast<std::uint64_t>(height)),
+                local_grid.height - 1);
+            const int local_idx = local_luma_cell_index(local_x, local_y);
+            local_luma_sums[static_cast<std::size_t>(local_idx)] +=
+                static_cast<double>(luminance01[i]);
+            local_luma_counts[static_cast<std::size_t>(local_idx)] += 1;
+        }
 
         if (r == 255 || g == 255 || b == 255) {
-            ++clipped;
+            ++image_inputs.clipped;
         }
 
-        if (params.analyze_color) {
-            const std::uint8_t cmax = std::max(r, std::max(g, b));
-            const std::uint8_t cmin = std::min(r, std::min(g, b));
-            const std::uint8_t delta = static_cast<std::uint8_t>(cmax - cmin);
-            if (cmax > 0 && delta > 0) {
-                const float sat = static_cast<float>(delta) / static_cast<float>(cmax);
-                if (sat > params.saturation_threshold) {
-                    ++n_colored;
-                    sat_sum_q8 += static_cast<std::uint64_t>(sat * 255.0f + 0.5f);
-                    float h_raw = 0.0f;
-                    if (r == cmax) {
-                        h_raw = static_cast<float>(static_cast<int>(g) - static_cast<int>(b)) /
+        const std::uint8_t cmax = std::max(r, std::max(g, b));
+        const std::uint8_t cmin = std::min(r, std::min(g, b));
+        const std::uint8_t delta = static_cast<std::uint8_t>(cmax - cmin);
+        const float sat = (cmax > 0)
+            ? static_cast<float>(delta) / static_cast<float>(cmax)
+            : 0.0f;
+        const int sat_bin = std::clamp(static_cast<int>(std::lround(sat * 255.0f)), 0, 255);
+        image_inputs.saturation_histogram[sat_bin] += 1;
+        if (luminance01[i] >= params.bright_luma_threshold &&
+            sat <= params.neutral_saturation_threshold) {
+            ++image_inputs.bright_neutral;
+        }
+        image_inputs.rg_histogram[static_cast<int>(r) - static_cast<int>(g) + 255] += 1;
+        image_inputs.yb_histogram[static_cast<int>(r) + static_cast<int>(g) -
+                                  2 * static_cast<int>(b) + 510] += 1;
+
+        if (delta > 0 && sat > params.colored_saturation_threshold) {
+            image_inputs.colored_saturation_sum +=
+                static_cast<double>(sat_bin) / 255.0;
+            float h_raw = 0.0f;
+            if (r == cmax) {
+                h_raw = static_cast<float>(static_cast<int>(g) - static_cast<int>(b)) /
+                        static_cast<float>(delta);
+            } else if (g == cmax) {
+                h_raw = 2.0f + static_cast<float>(static_cast<int>(b) - static_cast<int>(r)) /
                                 static_cast<float>(delta);
-                    } else if (g == cmax) {
-                        h_raw = 2.0f + static_cast<float>(static_cast<int>(b) - static_cast<int>(r)) /
-                                        static_cast<float>(delta);
-                    } else {
-                        h_raw = 4.0f + static_cast<float>(static_cast<int>(r) - static_cast<int>(g)) /
-                                        static_cast<float>(delta);
-                    }
-                    float h = h_raw / 6.0f;
-                    h = h - std::floor(h);
-                    const int hbin = std::min(static_cast<int>(std::floor(h * static_cast<float>(kHueBins))),
-                                              kHueBins - 1);
-                    hue_hist[hbin] += 1;
-                }
+            } else {
+                h_raw = 4.0f + static_cast<float>(static_cast<int>(r) - static_cast<int>(g)) /
+                                static_cast<float>(delta);
             }
+            float h = h_raw / 6.0f;
+            h = h - std::floor(h);
+            const int hbin = std::min(
+                static_cast<int>(std::floor(h * static_cast<float>(kHueBins))),
+                kHueBins - 1);
+            image_inputs.hue_histogram[hbin] += 1;
         }
     }
 
-    if (params.analyze_luminance) {
-        out.luminance = finalize_luminance(histogram, clipped, width, height,
-                                           params.near_black_bin_max,
-                                           params.near_white_bin_min);
-    }
-
-    if (params.analyze_color) {
-        ColorStats cs;
-        cs.n_colored = n_colored;
-        cs.hue_histogram = hue_hist;
-        cs.colored_fraction = n_pixels > 0
-            ? static_cast<float>(n_colored) / static_cast<float>(n_pixels)
-            : 0.0f;
-        cs.mean_saturation = n_colored > 0
-            ? (static_cast<float>(sat_sum_q8) / 255.0f) / static_cast<float>(n_colored)
-            : 0.0f;
-        if (n_colored > 0) {
-            const double inv = 1.0 / static_cast<double>(n_colored);
-            double entropy = 0.0;
-            for (int k = 0; k < kHueBins; ++k) {
-                if (cs.hue_histogram[k] > 0) {
-                    const double p = static_cast<double>(cs.hue_histogram[k]) * inv;
-                    entropy -= p * std::log2(p);
-                }
+    if (params.analyze_image || params.analyze_debug) {
+        std::array<float, kLocalLumaGridCells> local_luma{};
+        for (int y = 0; y < local_grid.height; ++y) {
+            for (int x = 0; x < local_grid.width; ++x) {
+                const int idx = local_luma_cell_index(x, y);
+                const int count = local_luma_counts[static_cast<std::size_t>(idx)];
+                local_luma[static_cast<std::size_t>(idx)] = count > 0
+                    ? static_cast<float>(local_luma_sums[static_cast<std::size_t>(idx)] /
+                                         static_cast<double>(count))
+                    : 0.0f;
             }
-            cs.hue_entropy = static_cast<float>(entropy);
         }
-        cs.richness = cs.hue_entropy * cs.mean_saturation * cs.colored_fraction;
-        out.color = cs;
+        image_inputs.local_gradient_sum =
+            local_luma_grid_gradient_sum(local_luma, local_grid);
+        image_inputs.local_gradient_width = local_grid.width;
+        image_inputs.local_gradient_height = local_grid.height;
+
+        finalize_image_stats(image_inputs, params, out.image, out.debug);
+        if (!params.analyze_debug) {
+            out.debug = {};
+        }
+        if (!params.analyze_image) {
+            out.image = {};
+            out.image.width = width;
+            out.image.height = height;
+        }
     }
 
     if (lights.empty()) {
@@ -523,7 +710,6 @@ FrameAnalysis analyze_rgb8_frame(std::span<const std::uint8_t> rgb,
                                     static_cast<float>(n_pixels);
             app.radius_ratio = std::sqrt(static_cast<float>(component_pixels) /
                                          PI) / short_side;
-            app.radius_candidate_sector_consensus_ratio = app.radius_ratio;
         }
 
         std::vector<float> radial_profile(static_cast<std::size_t>(search_radius) + 1u, 0.0f);

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 import math
@@ -10,7 +11,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import _lpt2d
 
@@ -22,7 +23,7 @@ from .types import (
     AnimateFn,
     Camera2D,
     Frame,
-    FrameMetrics,
+    ImageStats,
     FrameReport,
     Quality,
     Look,
@@ -270,21 +271,12 @@ def _iter_named_look_variants(variants: _LookVariants) -> Iterator[_NamedLookVar
         ):
             yield item
         else:
-            yield f"variant_{idx:03d}", item
-
-
-def _resolve_variant_look(base: Look, variant: _LookVariant) -> Look:
-    return _apply_look_override(base, variant)
+            yield f"variant_{idx:03d}", cast(_LookVariant, item)
 
 
 def _validate_unique_variant_names(named_variants: list[_NamedLookVariant]) -> None:
-    seen: set[str] = set()
-    duplicates: list[str] = []
-    for name, _ in named_variants:
-        if name in seen and name not in duplicates:
-            duplicates.append(name)
-        seen.add(name)
-
+    counts = Counter(name for name, _ in named_variants)
+    duplicates = [name for name, count in counts.items() if count > 1]
     if duplicates:
         joined = ", ".join(repr(name) for name in duplicates)
         raise ValueError(
@@ -323,17 +315,17 @@ def iter_frame_variants(
         ctx = timeline.context_at(frame)
         frame_result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, frame_result, camera)
-        # Freeze the resolved authored/frame look before replacing
-        # cpp_shot.look for the first variant.
+        # Copy the resolved look: `cpp_shot.look = ...` uses C++ value
+        # semantics and would mutate a plain reference between variants.
         base_look = _apply_look_override(cpp_shot.look, {})
 
-        first_look = _resolve_variant_look(base_look, first_variant)
+        first_look = _apply_look_override(base_look, first_variant)
         cpp_shot.look = first_look
         first_result = session.render_shot(cpp_shot, frame, analyze)
         yield RenderVariant(first_name, first_look, first_result)
 
         for name, variant in named_variants:
-            look = _resolve_variant_look(base_look, variant)
+            look = _apply_look_override(base_look, variant)
             result = session.postprocess(look.to_post_process(), analyze)
             yield RenderVariant(name, look, result)
     finally:
@@ -512,8 +504,7 @@ def render_frame(
     -------
     RenderResult
         Object with ``.pixels`` (bytes, RGB8), ``.time_ms`` (float),
-        ``.total_rays`` (int), and ``.metrics`` (FrameMetrics with
-        histogram, luminance stats, etc.).  When ``analyze=True``, also
+        ``.total_rays`` (int), and ``.metrics`` (ImageStats). When ``analyze=True``, also
         ``.analysis`` with colour stats and per-light circles.
     """
     timeline, shot = _resolve_args(timeline, settings)
@@ -613,8 +604,8 @@ def render_stats(
     settings: Shot | Quality | str | None = None,
     camera: Camera2D | None = None,
     fast: bool = False,
-) -> list[tuple[int, float, FrameMetrics]]:
-    """Render frames and return their per-frame C++ FrameMetrics."""
+) -> list[tuple[int, float, ImageStats]]:
+    """Render frames and return their per-frame C++ ImageStats."""
     timeline, shot = _resolve_args(timeline, settings)
     w, h = shot.canvas.width, shot.canvas.height
 
@@ -626,7 +617,7 @@ def render_stats(
         indices = list(frames)
 
     session = RenderSession(w, h, fast)
-    results: list[tuple[int, float, FrameMetrics]] = []
+    results: list[tuple[int, float, ImageStats]] = []
 
     for fi in indices:
         ctx = timeline.context_at(fi)

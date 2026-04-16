@@ -19,8 +19,8 @@ struct RenderResult {
     int height = 0;
     int64_t total_rays = 0;
     float max_hdr = 0.0f;
-    FrameMetrics metrics;    // luminance-only view (= analysis.luminance)
-    FrameAnalysis analysis;  // full frame analysis: luminance + color + point-light appearance
+    ImageStats metrics;      // compact image stats (= analysis.image)
+    FrameAnalysis analysis;  // full frame analysis: image + debug + point-light appearance
     double time_ms = 0.0; // wall-clock milliseconds for render_frame
 };
 
@@ -38,8 +38,8 @@ public:
     // Resolves camera bounds, converts Look → PostProcess, traces rays, post-processes.
     //
     // `analyze` controls whether the result carries full FrameAnalysis
-    // (colour statistics + per-light appearance). When false, only luminance
-    // stats in `result.metrics` are populated.
+    // (debug image statistics + per-light appearance). When false, only compact
+    // image stats in `result.metrics` are populated.
     RenderResult render_shot(const Shot& shot, int frame = 0, bool analyze = false);
 
     // Render with pre-resolved parameters (for animation loops).

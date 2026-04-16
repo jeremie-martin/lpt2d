@@ -159,7 +159,7 @@ PROBE_W, PROBE_H = 640, 360
 
 # For caustics, the beauty is in focused light patterns, not necessarily color.
 # Check for good contrast (high std dev = interesting patterns)
-MIN_CONTRAST_STD = 30.0
+MIN_CONTRAST_STD = 30.0 / 255.0
 MIN_GOOD_FRAMES_FRACTION = 0.6
 
 
@@ -244,8 +244,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_std += fs.contrast_std
-        if fs.contrast_std > MIN_CONTRAST_STD:
+        total_std += fs.rms_contrast
+        if fs.rms_contrast > MIN_CONTRAST_STD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0
@@ -319,7 +319,7 @@ def main() -> None:
         )
 
         beauty_ok, n_good, avg_std = check_beauty(p)
-        print(f"  good_frames={n_good} avg_std={avg_std:.1f}", flush=True)
+        print(f"  good_frames={n_good} avg_std={avg_std:.3f}", flush=True)
 
         if not beauty_ok:
             continue

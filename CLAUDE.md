@@ -54,7 +54,7 @@ measurement for optimization work:
 ```python
 from evaluation import compare_render_results, save_baseline, load_baseline
 
-# Compare two render results (pixels + FrameMetrics + timing)
+# Compare two render results (pixels + ImageStats + timing)
 result = compare_render_results(result_a, result_b)
 print(result.verdict, result.psnr, result.time_a_ms, result.time_b_ms)
 

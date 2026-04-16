@@ -672,10 +672,10 @@ def _run_evaluate(
                     }
                     if fidelity.metrics:
                         sample_entry["metrics"] = {
-                            "mean_delta": fidelity.metrics.mean_delta,
+                            "mean_luma_delta": fidelity.metrics.mean_luma_delta,
                             "histogram_overlap": fidelity.metrics.histogram_overlap,
-                            "median_delta": fidelity.metrics.median_delta,
-                            "highlight_ceiling_delta": fidelity.metrics.highlight_ceiling_delta,
+                            "median_luma_delta": fidelity.metrics.median_luma_delta,
+                            "p95_luma_delta": fidelity.metrics.p95_luma_delta,
                             "near_black_fraction_delta": (
                                 fidelity.metrics.near_black_fraction_delta
                             ),

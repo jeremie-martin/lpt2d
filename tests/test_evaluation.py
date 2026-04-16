@@ -13,6 +13,8 @@ import pytest
 from evaluation import (
     Thresholds,
     Verdict,
+    compare_render_results,
+    compare_to_baseline,
     compare_images,
     compute_mse,
     compute_psnr,
@@ -152,7 +154,7 @@ class TestCompareImages:
         assert result.psnr > 0
 
 
-# ── FrameMetrics comparison ──────────────────────────────────────────────
+# ── ImageStats comparison ────────────────────────────────────────────────
 
 
 class TestCompareMetrics:
@@ -160,22 +162,22 @@ class TestCompareMetrics:
         hist = [0] * 256
         hist[128] = 1000
         mc = compare_metrics(
-            a_mean=128.0,
-            a_median=128.0,
-            a_highlight_ceiling=200.0,
+            a_mean_luma=128.0 / 255.0,
+            a_median_luma=128.0 / 255.0,
+            a_p95_luma=200.0 / 255.0,
             a_near_black_fraction=0.0,
             a_clipped_channel_fraction=0.0,
-            a_histogram=hist,
-            b_mean=128.0,
-            b_median=128.0,
-            b_highlight_ceiling=200.0,
+            a_luma_histogram=hist,
+            b_mean_luma=128.0 / 255.0,
+            b_median_luma=128.0 / 255.0,
+            b_p95_luma=200.0 / 255.0,
             b_near_black_fraction=0.0,
             b_clipped_channel_fraction=0.0,
-            b_histogram=hist,
+            b_luma_histogram=hist,
         )
         assert mc.warnings == []
         assert mc.histogram_overlap == pytest.approx(1.0)
-        assert mc.mean_delta == 0.0
+        assert mc.mean_luma_delta == 0.0
 
     def test_large_mean_shift_warns(self):
         hist_a = [0] * 256
@@ -183,21 +185,21 @@ class TestCompareMetrics:
         hist_b = [0] * 256
         hist_b[200] = 1000
         mc = compare_metrics(
-            a_mean=50.0,
-            a_median=50.0,
-            a_highlight_ceiling=55.0,
+            a_mean_luma=50.0 / 255.0,
+            a_median_luma=50.0 / 255.0,
+            a_p95_luma=55.0 / 255.0,
             a_near_black_fraction=0.0,
             a_clipped_channel_fraction=0.0,
-            a_histogram=hist_a,
-            b_mean=200.0,
-            b_median=200.0,
-            b_highlight_ceiling=205.0,
+            a_luma_histogram=hist_a,
+            b_mean_luma=200.0 / 255.0,
+            b_median_luma=200.0 / 255.0,
+            b_p95_luma=205.0 / 255.0,
             b_near_black_fraction=0.0,
             b_clipped_channel_fraction=0.0,
-            b_histogram=hist_b,
+            b_luma_histogram=hist_b,
         )
         assert len(mc.warnings) > 0
-        assert mc.mean_delta == 150.0
+        assert mc.mean_luma_delta == pytest.approx(150.0 / 255.0)
 
     def test_histogram_overlap_divergent(self):
         hist_a = [0] * 256
@@ -205,18 +207,18 @@ class TestCompareMetrics:
         hist_b = [0] * 256
         hist_b[255] = 1000
         mc = compare_metrics(
-            a_mean=0.0,
-            a_median=0.0,
-            a_highlight_ceiling=0.0,
+            a_mean_luma=0.0,
+            a_median_luma=0.0,
+            a_p95_luma=0.0,
             a_near_black_fraction=1.0,
             a_clipped_channel_fraction=0.0,
-            a_histogram=hist_a,
-            b_mean=255.0,
-            b_median=255.0,
-            b_highlight_ceiling=255.0,
+            a_luma_histogram=hist_a,
+            b_mean_luma=1.0,
+            b_median_luma=1.0,
+            b_p95_luma=1.0,
             b_near_black_fraction=0.0,
             b_clipped_channel_fraction=1.0,
-            b_histogram=hist_b,
+            b_luma_histogram=hist_b,
         )
         assert mc.histogram_overlap == pytest.approx(0.0)
 
@@ -225,16 +227,20 @@ class TestCompareMetrics:
 
 
 class _FakeMetrics:
-    mean = 128.0
-    median = 125.0
-    highlight_ceiling = 200.0
+    mean_luma = 128.0 / 255.0
+    median_luma = 125.0 / 255.0
+    p95_luma = 200.0 / 255.0
     near_black_fraction = 0.01
     clipped_channel_fraction = 0.02
-    histogram = list(range(256))
 
 
 class _FakeResult:
-    def __init__(self, fill: int = 100, time_ms: float = 42.5):
+    def __init__(
+        self,
+        fill: int = 100,
+        time_ms: float = 42.5,
+        debug_luma_histogram: list[int] | None = None,
+    ):
         self.pixels = bytes(np.full((32, 32, 3), fill, dtype=np.uint8).tobytes())
         self.width = 32
         self.height = 32
@@ -242,6 +248,11 @@ class _FakeResult:
         self.max_hdr = 10.5
         self.time_ms = time_ms
         self.metrics = _FakeMetrics()
+        if debug_luma_histogram is None:
+            debug_luma_histogram = list(range(256))
+        self.analysis = SimpleNamespace(
+            debug=SimpleNamespace(luma_histogram=debug_luma_histogram)
+        )
 
 
 class TestBaseline:
@@ -255,13 +266,11 @@ class TestBaseline:
         assert loaded["pixels"].shape == (32, 32, 3)
         assert np.all(loaded["pixels"] == 100)
         assert loaded["time_ms"] == pytest.approx(42.5)
-        assert loaded["metrics"]["mean"] == pytest.approx(128.0)
+        assert loaded["metrics"]["mean_luma"] == pytest.approx(128.0 / 255.0)
         assert loaded["metadata"] == {"scene": "test"}
 
     def test_compare_to_baseline_roundtrip(self, tmp_path):
         """save → load → compare_to_baseline should produce a PASS verdict."""
-        from evaluation import compare_to_baseline
-
         result = _FakeResult()
         save_baseline(tmp_path / "bl", result)
         baseline = load_baseline(tmp_path / "bl")
@@ -271,11 +280,72 @@ class TestBaseline:
         assert cr.time_a_ms == pytest.approx(42.5)
         assert cr.time_b_ms == pytest.approx(42.5)
 
+    def test_compare_render_results_rebuilds_histogram_when_debug_is_zeroed(self):
+        result = _FakeResult(debug_luma_histogram=[0] * 256)
+        cr = compare_render_results(result, _FakeResult(debug_luma_histogram=[0] * 256))
+
+        assert cr.metrics is not None
+        assert cr.metrics.histogram_overlap == pytest.approx(1.0)
+
+    def test_save_baseline_rebuilds_histogram_when_debug_is_zeroed(self, tmp_path):
+        result = _FakeResult(fill=100, debug_luma_histogram=[0] * 256)
+
+        save_baseline(tmp_path / "zeroed", result)
+        baseline = load_baseline(tmp_path / "zeroed")
+
+        assert baseline["metrics"]["luma_histogram"][100] == 32 * 32
+
+    def test_load_baseline_normalizes_legacy_single_baseline_metrics(self, tmp_path):
+        from PIL import Image
+
+        path = tmp_path / "legacy"
+        path.mkdir()
+        Image.fromarray(np.full((32, 32, 3), 100, dtype=np.uint8), "RGB").save(
+            path / "image.png"
+        )
+        (path / "metadata.json").write_text(
+            json.dumps(
+                {
+                    "width": 32,
+                    "height": 32,
+                    "time_ms": 42.5,
+                    "metrics": {
+                        "mean": 128.0 / 255.0,
+                        "median": 125.0 / 255.0,
+                        "highlight_ceiling": 200.0 / 255.0,
+                        "near_black_fraction": 0.01,
+                        "clipped_channel_fraction": 0.02,
+                        "histogram": [0] * 100 + [32 * 32] + [0] * 155,
+                    },
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+
+        baseline = load_baseline(path)
+
+        assert baseline["metrics"]["mean_luma"] == pytest.approx(128.0 / 255.0)
+        assert baseline["metrics"]["median_luma"] == pytest.approx(125.0 / 255.0)
+        assert baseline["metrics"]["p95_luma"] == pytest.approx(200.0 / 255.0)
+        assert baseline["metrics"]["luma_histogram"][100] == 32 * 32
+
+        cr = compare_to_baseline(
+            _FakeResult(fill=100, debug_luma_histogram=[0] * 256),
+            baseline,
+        )
+        assert cr.metrics is not None
+        assert cr.metrics.histogram_overlap == pytest.approx(1.0)
+
     def test_baseline_set_roundtrip(self, tmp_path):
         save_baseline_set(
             tmp_path / "set",
             {
-                0: _FakeResult(fill=100, time_ms=40.0),
+                0: _FakeResult(
+                    fill=100,
+                    time_ms=40.0,
+                    debug_luma_histogram=[0] * 256,
+                ),
                 3: _FakeResult(fill=120, time_ms=44.0),
             },
             metadata={"scene": "test", "frames": 4},
@@ -300,6 +370,7 @@ class TestBaseline:
         assert loaded["cases"][3]["time_ms"] == pytest.approx(44.0)
         assert np.all(loaded["cases"][0]["pixels"] == 100)
         assert np.all(loaded["cases"][3]["pixels"] == 120)
+        assert loaded["cases"][0]["metrics"]["luma_histogram"][100] == 32 * 32
         assert loaded["cases"][0]["render_timing"]["times_ms"] == [40.0, 41.0]
         assert loaded["cases"][0]["wall_timing"]["times_ms"] == [42.0, 43.0]
         assert loaded["cases"][3]["render_timing"]["times_ms"] == [44.0, 45.0]

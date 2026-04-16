@@ -1,8 +1,8 @@
 """Shared helpers for the spectral compensation studies.
 
 The studies in this directory compare final-frame appearance, not raw
-radiometry. Brightness is the renderer's BT.709 mean luminance on the final
-RGB8 image. Circle size is the analyzer's apparent moving-light radius.
+radiometry. Brightness is the renderer's normalized BT.709 mean luminance on
+the final RGB8 image. Circle size is the analyzer's apparent moving-light radius.
 """
 
 from __future__ import annotations
@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Iterable
 
 import _lpt2d
-
+from examples.python.families.crystal_field.scene import (
+    spectral_boost as _crystal_field_spectral_boost,
+)
 
 SHOT_ROOT = Path("renders/lpt2d_crystal_field_catalog_replay_20260411")
 OUT_ROOT = Path("renders/brightness_experiment_shots")
@@ -40,7 +42,7 @@ class Measurement:
     mean: float
     median: float
     mean_saturation: float
-    shadow_fraction: float
+    near_black_fraction: float
     moving_radius: float
     ambient_radius: float
     moving_confidence: float
@@ -50,27 +52,8 @@ class Measurement:
     ambient_count: int
 
 
-def band_mean_luminance(wl_min: float, wl_max: float) -> float:
-    total = 0.0
-    n = 0
-    for nm_i in range(int(wl_min), int(wl_max) + 1):
-        r, g, b = _lpt2d.wavelength_to_rgb(float(nm_i))
-        total += 0.2126 * r + 0.7152 * g + 0.0722 * b
-        n += 1
-    return total / max(n, 1)
-
-
-WHITE_MEAN_LUMINANCE = band_mean_luminance(
-    WHITE_BAND.wavelength_min,
-    WHITE_BAND.wavelength_max,
-)
-
-
 def spectral_boost(band: Band) -> float:
-    band_lum = band_mean_luminance(band.wavelength_min, band.wavelength_max)
-    if band_lum < 1e-8:
-        return 1.0
-    return WHITE_MEAN_LUMINANCE / band_lum
+    return _crystal_field_spectral_boost(band.wavelength_min, band.wavelength_max)
 
 
 def white_shot_paths(root: Path = SHOT_ROOT) -> list[Path]:
@@ -121,10 +104,10 @@ def measure_result(rr: _lpt2d.RenderResult) -> Measurement:
     moving = moving_lights(rr.analysis)
     ambient = ambient_lights(rr.analysis)
     return Measurement(
-        mean=float(rr.analysis.luminance.mean),
-        median=float(rr.analysis.luminance.median),
-        mean_saturation=float(rr.analysis.color.mean_saturation),
-        shadow_fraction=float(rr.analysis.luminance.shadow_fraction),
+        mean=float(rr.analysis.image.mean_luma),
+        median=float(rr.analysis.image.median_luma),
+        mean_saturation=float(rr.analysis.image.mean_saturation),
+        near_black_fraction=float(rr.analysis.image.near_black_fraction),
         moving_radius=mean_or_zero(float(c.radius_ratio) for c in moving),
         ambient_radius=mean_or_zero(float(c.radius_ratio) for c in ambient),
         moving_confidence=mean_or_zero(float(c.confidence) for c in moving),
@@ -260,3 +243,26 @@ def value_summary(values: list[float]) -> dict:
 
 def measurement_dict(measurement: Measurement) -> dict:
     return asdict(measurement)
+
+
+def passes_clean_filter(
+    measurement: Measurement,
+    *,
+    mean_min: float,
+    mean_max: float,
+    max_mean_saturation: float,
+    max_near_black_fraction: float,
+    min_moving_radius: float,
+) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if measurement.mean < mean_min:
+        reasons.append(f"mean<{mean_min:g}")
+    if measurement.mean > mean_max:
+        reasons.append(f"mean>{mean_max:g}")
+    if measurement.mean_saturation > max_mean_saturation:
+        reasons.append(f"mean_saturation>{max_mean_saturation:g}")
+    if measurement.near_black_fraction > max_near_black_fraction:
+        reasons.append(f"near_black_fraction>{max_near_black_fraction:g}")
+    if measurement.moving_radius < min_moving_radius:
+        reasons.append(f"moving_radius<{min_moving_radius:g}")
+    return not reasons, reasons

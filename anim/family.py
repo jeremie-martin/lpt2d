@@ -50,46 +50,45 @@ class ProbeFrame:
     """Per-frame statistics from a probe render.
 
     Wraps the C++ FrameAnalysis for the probe frame and exposes convenience
-    accessors for the luminance / colour fields the filter loop reads in
+    accessors for the image-stat fields the filter loop reads in
     tight inner expressions.
     """
 
     time: float
     analysis: Any  # _lpt2d.FrameAnalysis
 
-    # Convenience accessors — all of these forward to rr.analysis. The
-    # luminance fields use the 0..255 scale, same as the C++ histogram.
+    # Convenience accessors — all of these forward to rr.analysis.
     @property
-    def mean(self) -> float:
-        return self.analysis.luminance.mean
+    def mean_luma(self) -> float:
+        return self.analysis.image.mean_luma
 
     @property
-    def std(self) -> float:
-        return self.analysis.luminance.contrast_std
+    def rms_contrast(self) -> float:
+        return self.analysis.image.rms_contrast
 
     @property
     def near_black_fraction(self) -> float:
-        return self.analysis.luminance.near_black_fraction
+        return self.analysis.image.near_black_fraction
 
     @property
     def clipped_channel_fraction(self) -> float:
-        return self.analysis.luminance.clipped_channel_fraction
+        return self.analysis.image.clipped_channel_fraction
 
     @property
-    def richness(self) -> float:
-        return self.analysis.color.richness
+    def colorfulness(self) -> float:
+        return self.analysis.image.colorfulness
 
     @property
     def colored_fraction(self) -> float:
-        return self.analysis.color.colored_fraction
+        return self.analysis.debug.colored_fraction
 
     @property
     def mean_saturation(self) -> float:
-        return self.analysis.color.mean_saturation
+        return self.analysis.image.mean_saturation
 
     @property
     def hue_entropy(self) -> float:
-        return self.analysis.color.hue_entropy
+        return self.analysis.debug.hue_entropy
 
 
 # ---------------------------------------------------------------------------

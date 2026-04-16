@@ -14,35 +14,11 @@ import json
 import statistics
 from pathlib import Path
 
+from spectral_common import PROBE_RAYS, SHOT_ROOT
+
 import _lpt2d
 from anim import save_image
-
-
-# ── Luminance-weighted boost ───────────────────────────────────────────
-
-def _band_mean_luminance(wl_min: float, wl_max: float) -> float:
-    total = 0.0
-    n = 0
-    for nm_i in range(int(wl_min), int(wl_max) + 1):
-        r, g, b = _lpt2d.wavelength_to_rgb(float(nm_i))
-        total += 0.2126 * r + 0.7152 * g + 0.0722 * b
-        n += 1
-    return total / max(n, 1)
-
-
-_WHITE_LUM = _band_mean_luminance(380.0, 780.0)
-
-
-def luminance_boost(wl_min: float, wl_max: float) -> float:
-    band_lum = _band_mean_luminance(wl_min, wl_max)
-    if band_lum < 1e-8:
-        return 1.0
-    return _WHITE_LUM / band_lum
-
-
-# ── Measurement ────────────────────────────────────────────────────────
-
-PROBE_RAYS = 400_000
+from examples.python.families.crystal_field.scene import spectral_boost as luminance_boost
 
 
 def _measure(shot: _lpt2d.Shot, session: _lpt2d.RenderSession) -> dict:
@@ -50,8 +26,8 @@ def _measure(shot: _lpt2d.Shot, session: _lpt2d.RenderSession) -> dict:
     mov = [c for c in rr.analysis.lights if c.id.startswith("light_")]
     amb = [c for c in rr.analysis.lights if c.id.startswith("amb_")]
     return {
-        "mean": float(rr.analysis.luminance.mean),
-        "median": float(rr.analysis.luminance.median),
+        "mean": float(rr.analysis.image.mean_luma),
+        "median": float(rr.analysis.image.median_luma),
         "mov_rad": statistics.mean([float(c.radius_ratio) for c in mov]) if mov else 0.0,
         "amb_rad": statistics.mean([float(c.radius_ratio) for c in amb]) if amb else 0.0,
     }
@@ -136,7 +112,6 @@ def _bisect_gamma_for_brightness(
 
 # ── Main ───────────────────────────────────────────────────────────────
 
-SHOT_ROOT = Path("renders/lpt2d_crystal_field_catalog_replay_20260411")
 
 SCENES = [
     "glass/white_medium_1light",
@@ -201,7 +176,7 @@ def main() -> None:
                   f"mov_rad={orange_base_m['mov_rad']:.4f} ({orange_base_m['mov_rad']/white_m['mov_rad']*100:.1f}%)" if white_m["mov_rad"] > 0 else "")
 
             if white_m["mov_rad"] < 0.002:
-                print(f"    White circle too small to target, skipping")
+                print("    White circle too small to target, skipping")
                 continue
 
             # Step 3: Find exposure that matches white circle

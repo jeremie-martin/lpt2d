@@ -170,67 +170,172 @@ float expected_disc_coverage(float radius_px, int w, int h) {
     return (kPi * radius_px * radius_px) / static_cast<float>(w * h);
 }
 
+constexpr float u8(float value) {
+    return value / 255.0f;
+}
+
 }  // namespace
 
-TEST(frame_luminance_solid_grey_cpu) {
+TEST(frame_image_stats_solid_grey_cpu) {
     auto buf = make_solid_rgb(16, 16, 128, 128, 128);
     auto a = analyze_cpu(buf, 16, 16);
 
-    ASSERT_EQ(a.luminance.width, 16);
-    ASSERT_EQ(a.luminance.height, 16);
-    ASSERT_NEAR(a.luminance.mean, 128.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.shadow_floor, 128.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.median, 128.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.highlight_ceiling, 128.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.highlight_peak, 128.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.contrast_std, 0.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.near_black_fraction, 0.0f, 1e-6f);
-    ASSERT_NEAR(a.luminance.near_white_fraction, 0.0f, 1e-6f);
-    ASSERT_NEAR(a.luminance.clipped_channel_fraction, 0.0f, 1e-6f);
+    ASSERT_EQ(a.image.width, 16);
+    ASSERT_EQ(a.image.height, 16);
+    ASSERT_NEAR(a.image.mean_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.image.p05_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.image.median_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.image.p95_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.debug.p99_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.image.rms_contrast, 0.0f, u8(1.0f));
+    ASSERT_NEAR(a.image.local_contrast, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.mean_saturation, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.near_black_fraction, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.near_white_fraction, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.clipped_channel_fraction, 0.0f, 1e-6f);
 }
 
-TEST(frame_luminance_tiny_solid_grey_percentiles_cpu) {
+TEST(frame_image_stats_near_black_white_defaults_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        7, 7, 7,
+        10, 10, 10,
+        245, 245, 245,
+        248, 248, 248,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.image.near_black_fraction, 0.5f, 1e-6f);
+    ASSERT_NEAR(a.image.near_white_fraction, 0.5f, 1e-6f);
+}
+
+TEST(frame_image_debug_histogram_metrics_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        0, 0, 0,
+        64, 64, 64,
+        128, 128, 128,
+        255, 255, 255,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.debug.p01_luma, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.p10_luma, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.p90_luma, 1.0f, 1e-6f);
+    ASSERT_NEAR(a.image.p05_luma, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.p95_luma, 1.0f, 1e-6f);
+    ASSERT_NEAR(a.image.interdecile_luma_range, 1.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.luma_entropy, 2.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.luma_entropy_normalized, 0.25f, 1e-6f);
+}
+
+TEST(frame_image_stats_tiny_solid_grey_percentiles_cpu) {
     for (int size : {1, 4}) {
         auto buf = make_solid_rgb(size, size, 128, 128, 128);
         auto a = analyze_cpu(buf, size, size);
 
-        ASSERT_NEAR(a.luminance.shadow_floor, 128.0f, 1.0f);
-        ASSERT_NEAR(a.luminance.median, 128.0f, 1.0f);
-        ASSERT_NEAR(a.luminance.highlight_ceiling, 128.0f, 1.0f);
-        ASSERT_NEAR(a.luminance.highlight_peak, 128.0f, 1.0f);
+        ASSERT_NEAR(a.debug.p01_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.debug.p10_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.image.p05_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.image.median_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.debug.p90_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.image.p95_luma, u8(128.0f), u8(1.0f));
+        ASSERT_NEAR(a.debug.p99_luma, u8(128.0f), u8(1.0f));
     }
 }
 
-TEST(frame_luminance_half_black_half_white_cpu) {
+TEST(frame_image_stats_half_black_half_white_cpu) {
     auto buf = make_half_black_white(32, 32);
     auto a = analyze_cpu(buf, 32, 32);
 
-    ASSERT_NEAR(a.luminance.mean, 127.0f, 2.0f);
-    ASSERT_NEAR(a.luminance.shadow_floor, 0.0f, 1.0f);
-    ASSERT_NEAR(a.luminance.highlight_peak, 255.0f, 1.0f);
-    ASSERT_TRUE(a.luminance.contrast_std > 100.0f);
-    ASSERT_NEAR(a.luminance.near_black_fraction, 0.5f, 1e-4f);
-    ASSERT_NEAR(a.luminance.near_white_fraction, 0.5f, 1e-4f);
-    ASSERT_NEAR(a.luminance.clipped_channel_fraction, 0.5f, 1e-4f);
+    ASSERT_NEAR(a.image.mean_luma, 0.5f, u8(2.0f));
+    ASSERT_NEAR(a.image.p05_luma, 0.0f, u8(1.0f));
+    ASSERT_NEAR(a.debug.p99_luma, 1.0f, u8(1.0f));
+    ASSERT_TRUE(a.image.rms_contrast > u8(100.0f));
+    ASSERT_TRUE(a.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a.image.local_contrast < 0.25f);
+    ASSERT_NEAR(a.image.near_black_fraction, 0.5f, 1e-4f);
+    ASSERT_NEAR(a.image.near_white_fraction, 0.5f, 1e-4f);
+    ASSERT_NEAR(a.image.clipped_channel_fraction, 0.5f, 1e-4f);
 }
 
-TEST(frame_luminance_clipped_channel_fraction_detects_any_channel_cpu) {
+TEST(frame_image_stats_local_contrast_is_resolution_stable_cpu) {
+    auto low = make_half_black_white(32, 32);
+    auto a_low = analyze_cpu(low, 32, 32);
+
+    auto high = make_half_black_white(64, 64);
+    auto a_high = analyze_cpu(high, 64, 64);
+
+    ASSERT_NEAR(a_low.image.local_contrast, a_high.image.local_contrast, 0.02f);
+    ASSERT_TRUE(a_low.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a_high.image.local_contrast > 0.05f);
+    ASSERT_TRUE(a_low.image.local_contrast < 0.25f);
+    ASSERT_TRUE(a_high.image.local_contrast < 0.25f);
+}
+
+TEST(frame_image_stats_local_contrast_filters_pixel_noise_cpu) {
+    const int w = 128;
+    const int h = 128;
+    std::vector<std::uint8_t> buf(static_cast<std::size_t>(w) *
+                                  static_cast<std::size_t>(h) * 3u);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            const std::uint8_t v = ((x + y) & 1) ? 96 : 160;
+            const std::size_t i = (static_cast<std::size_t>(y) *
+                                   static_cast<std::size_t>(w) +
+                                   static_cast<std::size_t>(x)) * 3u;
+            buf[i + 0] = v;
+            buf[i + 1] = v;
+            buf[i + 2] = v;
+        }
+    }
+    auto a = analyze_cpu(buf, w, h);
+
+    ASSERT_TRUE(a.image.rms_contrast > 0.10f);
+    ASSERT_TRUE(a.image.local_contrast < 0.02f);
+}
+
+TEST(frame_image_stats_bright_neutral_fraction_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        255, 255, 255,
+        220, 220, 220,
+        255,   0,   0,
+         64,  64,  64,
+    };
+    auto a = analyze_cpu(buf, 4, 1);
+
+    ASSERT_NEAR(a.image.bright_neutral_fraction, 0.5f, 1e-6f);
+}
+
+TEST(frame_image_stats_clipped_channel_fraction_detects_any_channel_cpu) {
     auto buf = make_solid_rgb(2, 2, 255, 0, 0);
     auto a = analyze_cpu(buf, 2, 2);
-    ASSERT_NEAR(a.luminance.clipped_channel_fraction, 1.0f, 1e-6f);
+    ASSERT_NEAR(a.image.clipped_channel_fraction, 1.0f, 1e-6f);
 }
 
-TEST(frame_color_stats_greyscale_zero_cpu) {
+TEST(frame_image_stats_greyscale_zero_cpu) {
     auto buf = make_solid_rgb(16, 16, 128, 128, 128);
     auto a = analyze_cpu(buf, 16, 16);
 
-    ASSERT_NEAR(a.color.colored_fraction, 0.0f, 1e-6f);
-    ASSERT_NEAR(a.color.mean_saturation, 0.0f, 1e-6f);
-    ASSERT_NEAR(a.color.hue_entropy, 0.0f, 1e-6f);
-    ASSERT_NEAR(a.color.richness, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.colored_fraction, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.mean_saturation, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.saturation_coverage, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.hue_entropy, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.image.colorfulness, 0.0f, 1e-6f);
 }
 
-TEST(frame_color_stats_three_primaries_cpu) {
+TEST(frame_image_debug_colored_fraction_uses_exact_chroma_threshold_cpu) {
+    const std::vector<std::uint8_t> buf = {
+        200, 190, 190,
+    };
+    auto a = analyze_cpu(buf, 1, 1);
+
+    ASSERT_TRUE(a.image.mean_saturation > 0.04f);
+    ASSERT_NEAR(a.debug.colored_fraction, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.mean_saturation_colored, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.saturation_coverage, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.hue_entropy, 0.0f, 1e-6f);
+}
+
+TEST(frame_image_stats_three_primaries_cpu) {
     const int w = 36;
     const int h = 4;
     std::vector<std::uint8_t> buf(static_cast<std::size_t>(w) *
@@ -252,10 +357,12 @@ TEST(frame_color_stats_three_primaries_cpu) {
     }
 
     auto a = analyze_cpu(buf, w, h);
-    ASSERT_NEAR(a.color.colored_fraction, 1.0f, 1e-4f);
-    ASSERT_NEAR(a.color.mean_saturation, 1.0f, 0.01f);
-    ASSERT_NEAR(a.color.hue_entropy, 1.585f, 0.02f);
-    ASSERT_TRUE(a.color.richness > 1.5f);
+    ASSERT_NEAR(a.debug.colored_fraction, 1.0f, 1e-4f);
+    ASSERT_NEAR(a.image.mean_saturation, 1.0f, 0.01f);
+    ASSERT_NEAR(a.image.p95_saturation, 1.0f, 0.01f);
+    ASSERT_NEAR(a.debug.saturation_coverage, 1.0f, 0.01f);
+    ASSERT_NEAR(a.debug.hue_entropy, 1.585f, 0.02f);
+    ASSERT_TRUE(a.image.colorfulness > 0.5f);
 }
 
 TEST(point_light_appearance_single_disc_cpu) {
@@ -373,7 +480,7 @@ TEST(point_light_appearance_empty_lights_returns_empty_cpu) {
     ASSERT_TRUE(a.lights.empty());
 }
 
-TEST(gpu_analyzer_smoke_luminance_color_contract) {
+TEST(gpu_analyzer_smoke_image_stats_contract) {
     GpuFixture f;
     init_gpu_fixture(f);
     REQUIRE_TRUE(f.ready);
@@ -384,11 +491,50 @@ TEST(gpu_analyzer_smoke_luminance_color_contract) {
     params.analyze_lights = false;
     auto a = f.analyzer.analyze(tex.id, 16, 16, unit_bounds(), {}, params);
 
-    ASSERT_EQ(a.luminance.width, 16);
-    ASSERT_EQ(a.luminance.height, 16);
-    ASSERT_NEAR(a.luminance.mean, 128.0f, 1.0f);
-    ASSERT_NEAR(a.color.colored_fraction, 0.0f, 1e-6f);
+    ASSERT_EQ(a.image.width, 16);
+    ASSERT_EQ(a.image.height, 16);
+    ASSERT_NEAR(a.image.mean_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.debug.p10_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.debug.p90_luma, u8(128.0f), u8(1.0f));
+    ASSERT_NEAR(a.debug.luma_entropy_normalized, 0.0f, 1e-6f);
+    ASSERT_NEAR(a.debug.colored_fraction, 0.0f, 1e-6f);
     ASSERT_TRUE(a.lights.empty());
+}
+
+TEST(gpu_analyzer_colored_debug_matches_cpu) {
+    GpuFixture f;
+    init_gpu_fixture(f);
+    REQUIRE_TRUE(f.ready);
+    const std::vector<std::uint8_t> buf = {
+        200, 190, 190,
+        200, 188, 188,
+    };
+    TextureGuard tex(buf.data(), 2, 1);
+
+    FrameAnalysisParams params;
+    params.analyze_lights = false;
+    auto cpu = analyze_cpu(buf, 2, 1, unit_bounds(), {}, params);
+    auto gpu = f.analyzer.analyze(tex.id, 2, 1, unit_bounds(), {}, params);
+
+    ASSERT_NEAR(gpu.image.mean_saturation, cpu.image.mean_saturation, 1e-6f);
+    ASSERT_NEAR(gpu.debug.colored_fraction, cpu.debug.colored_fraction, 1e-6f);
+    ASSERT_NEAR(gpu.debug.mean_saturation_colored,
+                cpu.debug.mean_saturation_colored, 1e-6f);
+}
+
+TEST(gpu_analyzer_local_contrast_matches_cpu) {
+    GpuFixture f;
+    init_gpu_fixture(f);
+    REQUIRE_TRUE(f.ready);
+    auto buf = make_half_black_white(128, 128);
+    TextureGuard tex(buf.data(), 128, 128);
+
+    FrameAnalysisParams params;
+    params.analyze_lights = false;
+    auto cpu = analyze_cpu(buf, 128, 128, unit_bounds(), {}, params);
+    auto gpu = f.analyzer.analyze(tex.id, 128, 128, unit_bounds(), {}, params);
+
+    ASSERT_NEAR(gpu.image.local_contrast, cpu.image.local_contrast, 1e-6f);
 }
 
 TEST(gpu_analyzer_smoke_light_contract) {
@@ -528,8 +674,8 @@ TEST(render_session_large_standard_mirror_batch_stays_finite) {
     const auto max_px = *std::max_element(rr.pixels.begin(), rr.pixels.end());
     REQUIRE_TRUE(max_px > 0);
 
-    const auto& lum = rr.analysis.luminance;
-    ASSERT_TRUE(lum.mean >= 0.0f && lum.mean <= 255.0f);
+    const auto& lum = rr.analysis.image;
+    ASSERT_TRUE(lum.mean_luma >= 0.0f && lum.mean_luma <= 1.0f);
     ASSERT_TRUE(lum.near_black_fraction >= 0.0f && lum.near_black_fraction <= 1.0f);
     ASSERT_TRUE(lum.near_white_fraction >= 0.0f && lum.near_white_fraction <= 1.0f);
     ASSERT_TRUE(lum.clipped_channel_fraction >= 0.0f && lum.clipped_channel_fraction <= 1.0f);

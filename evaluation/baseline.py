@@ -9,25 +9,30 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
-BASELINE_SET_SCHEMA_VERSION = 4
+from ._frame_metrics import normalize_baseline_metrics, result_luma_histogram
+
+BASELINE_SET_SCHEMA_VERSION = 5
 
 
 def _result_metadata(result) -> dict:
     m = result.metrics
+    metrics = {
+        "mean_luma": m.mean_luma,
+        "median_luma": m.median_luma,
+        "p95_luma": m.p95_luma,
+        "near_black_fraction": m.near_black_fraction,
+        "clipped_channel_fraction": m.clipped_channel_fraction,
+    }
+    luma_histogram = result_luma_histogram(result)
+    if luma_histogram is not None:
+        metrics["luma_histogram"] = luma_histogram
     return {
         "width": result.width,
         "height": result.height,
         "total_rays": result.total_rays,
         "max_hdr": result.max_hdr,
         "time_ms": result.time_ms,
-        "metrics": {
-            "mean": m.mean,
-            "median": m.median,
-            "highlight_ceiling": m.highlight_ceiling,
-            "near_black_fraction": m.near_black_fraction,
-            "clipped_channel_fraction": m.clipped_channel_fraction,
-            "histogram": list(m.histogram),
-        },
+        "metrics": metrics,
     }
 
 
@@ -41,7 +46,7 @@ def _baseline_record(image_path: Path, meta: dict, metadata: dict | None = None)
         "total_rays": meta.get("total_rays"),
         "max_hdr": meta.get("max_hdr"),
         "time_ms": meta.get("time_ms"),
-        "metrics": meta.get("metrics"),
+        "metrics": normalize_baseline_metrics(meta.get("metrics")),
         "metadata": metadata,
     }
     if "render_timing" in meta:

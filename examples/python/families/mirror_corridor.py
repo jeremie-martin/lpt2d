@@ -163,9 +163,9 @@ PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
 
 # Constellation check: good contrast (many reflections) and reasonable brightness
-MIN_MEAN_LUM = 30
-MAX_MEAN_LUM = 180
-MIN_STD_LUM = 15
+MIN_MEAN_LUM = 30.0 / 255.0
+MAX_MEAN_LUM = 180.0 / 255.0
+MIN_STD_LUM = 15.0 / 255.0
 MIN_BRIGHT_FRACTION = 0.6
 
 
@@ -270,7 +270,7 @@ def make_probe_shot() -> Shot:
 def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
     """Render low-res frames and check brightness and contrast.
 
-    Returns (ok, avg_mean, avg_contrast_std).
+    Returns (ok, avg_mean_luma, avg_rms_contrast).
     """
     animate = build_animate(p)
     shot = make_probe_shot()
@@ -288,9 +288,9 @@ def check_beauty(p: AnimParams) -> tuple[bool, float, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_mean += fs.mean
-        total_std += fs.contrast_std
-        if fs.mean > MIN_MEAN_LUM:
+        total_mean += fs.mean_luma
+        total_std += fs.rms_contrast
+        if fs.mean_luma > MIN_MEAN_LUM:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0
@@ -394,7 +394,7 @@ def main() -> None:
         )
 
         beauty_ok, avg_lum, avg_std = check_beauty(p)
-        print(f"  avg_luminance={avg_lum:.1f}  avg_contrast={avg_std:.1f}", flush=True)
+        print(f"  avg_luminance={avg_lum:.3f}  avg_contrast={avg_std:.3f}", flush=True)
 
         if not beauty_ok:
             continue

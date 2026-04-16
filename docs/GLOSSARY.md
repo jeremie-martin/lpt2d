@@ -132,9 +132,10 @@ Python wrappers in `anim/types.py` add a `color: ColorSpec` keyword for spectral
 
 | Term | Definition |
 |------|-----------|
-| **FrameMetrics** | C++ luminance summary: `mean`, `median`, `shadow_floor`, `highlight_ceiling`, `near_black_fraction`, `clipped_channel_fraction`, `histogram`. |
+| **ImageStats** | Compact normalized image summary: luma percentiles, robust contrast, saturation, colorfulness, clipping, and washed-out bright-neutral fraction. |
+| **ImageDebugStats** | Expanded diagnostics: luma/saturation/hue histograms, additional percentiles, entropy, and colored-pixel summaries. |
 | **FrameReport** | Python dataclass: enriched per-frame metadata from the renderer. |
-| **FrameStats** | Python dataclass: luminance analysis from raw RGB8 pixels. |
+| **FrameAnalysis** | Full image analysis result: `image`, `debug`, and point-light appearance records. |
 
 ## Animation (Python)
 

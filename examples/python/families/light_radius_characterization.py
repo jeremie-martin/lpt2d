@@ -217,7 +217,6 @@ def _light_metrics(light) -> dict[str, float | int | str | bool]:
         "image_x": light.image_x,
         "image_y": light.image_y,
         "radius_ratio": light.radius_ratio,
-        "radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
         "saturated_radius_ratio": light.saturated_radius_ratio,
         "transition_width_ratio": light.transition_width_ratio,
         "coverage_fraction": light.coverage_fraction,
@@ -233,8 +232,8 @@ def _metrics_for_case(case: Case, rr, *, rays: int, batch: int) -> dict[str, flo
     visible_lights = [light for light in lights if light.visible and light.radius_ratio > 0.0]
     ranked_lights = visible_lights if visible_lights else lights
     light = max(ranked_lights, key=lambda item: (float(item.radius_ratio), float(item.peak_contrast)))
-    lum = rr.analysis.luminance
-    color = rr.analysis.color
+    img = rr.analysis.image
+    dbg = rr.analysis.debug
     return {
         "case_id": case.case_id,
         "group": case.group,
@@ -264,21 +263,20 @@ def _metrics_for_case(case: Case, rr, *, rays: int, batch: int) -> dict[str, flo
         "requested_rays": rays,
         "requested_batch": batch,
         "radius_signal_gamma": RADIUS_SIGNAL_GAMMA,
-        "mean": lum.mean,
-        "median": lum.median,
-        "shadow_floor": lum.shadow_floor,
-        "highlight_ceiling": lum.highlight_ceiling,
-        "highlight_peak": lum.highlight_peak,
-        "contrast_std": lum.contrast_std,
-        "contrast_spread": lum.contrast_spread,
-        "near_black_fraction": lum.near_black_fraction,
-        "near_white_fraction": lum.near_white_fraction,
-        "clipped_channel_fraction": lum.clipped_channel_fraction,
-        "color_richness": color.richness,
+        "mean_luma": img.mean_luma,
+        "median_luma": img.median_luma,
+        "p05_luma": img.p05_luma,
+        "p95_luma": img.p95_luma,
+        "p99_luma": dbg.p99_luma,
+        "rms_contrast": img.rms_contrast,
+        "interdecile_luma_range": img.interdecile_luma_range,
+        "near_black_fraction": img.near_black_fraction,
+        "near_white_fraction": img.near_white_fraction,
+        "clipped_channel_fraction": img.clipped_channel_fraction,
+        "colorfulness": img.colorfulness,
         "image_x": light.image_x,
         "image_y": light.image_y,
         "cpp_radius_ratio": light.radius_ratio,
-        "cpp_radius_candidate_sector_consensus_ratio": light.radius_candidate_sector_consensus_ratio,
         "cpp_saturated_radius_ratio": light.saturated_radius_ratio,
         "cpp_transition_width_ratio": light.transition_width_ratio,
         "cpp_coverage_fraction": light.coverage_fraction,
@@ -322,9 +320,6 @@ def _light_entries(metrics: dict[str, float | int | str]) -> list[dict[str, floa
             "image_x": _metric_float(metrics, "image_x"),
             "image_y": _metric_float(metrics, "image_y"),
             "radius_ratio": _metric_float(metrics, "cpp_radius_ratio"),
-            "radius_candidate_sector_consensus_ratio": _metric_float(
-                metrics, "cpp_radius_candidate_sector_consensus_ratio"
-            ),
         }
     ]
 
@@ -374,11 +369,9 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
     short_side = min(rr.width, rr.height)
 
     radius_color = (60, 255, 90, 255)
-    sector_candidate_color = (70, 235, 255, 255)
     white = (255, 255, 255, 255)
 
     line_width = max(2, rr.width // 640)
-    candidate_width = max(line_width, 2)
     entries = [
         entry
         for entry in _light_entries(metrics)
@@ -391,31 +384,29 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
         cx = _metric_float(entry, "image_x")
         cy = _metric_float(entry, "image_y")
         radius_px = _metric_float(entry, "radius_ratio") * short_side
-        # Draw the production radius plus the retained sector-consensus candidate.
+        # Draw the production radius.
         _draw_dashed_ring(
             draw,
             cx,
             cy,
-            _metric_float(entry, "radius_candidate_sector_consensus_ratio") * short_side,
-            sector_candidate_color,
-            width=candidate_width,
-            phase=0.0,
+            radius_px,
+            radius_color,
+            width=max(line_width + 1, 3),
+            phase=0.22,
         )
-        _draw_dashed_ring(draw, cx, cy, radius_px, radius_color, width=max(line_width + 1, 3), phase=0.22)
         draw.ellipse((cx - 3, cy - 3, cx + 3, cy + 3), fill=(255, 255, 255, 255))
         if len(entries) > 1:
             draw.text((cx + 5, cy + 5), str(entry.get("id", ""))[:22], fill=radius_color, font=label_font)
 
     radius_percent = 100.0 * _metric_float(metrics, "cpp_radius_ratio")
-    sector_candidate_percent = 100.0 * _metric_float(metrics, "cpp_radius_candidate_sector_consensus_ratio")
     edge_percent = 100.0 * _metric_float(metrics, "cpp_transition_width_ratio")
     confidence = _metric_float(metrics, "cpp_confidence")
-    mean = _metric_float(metrics, "mean")
-    contrast_std = _metric_float(metrics, "contrast_std")
-    shadows = _metric_float(metrics, "shadow_floor")
-    highlights = _metric_float(metrics, "highlight_ceiling")
-    peak = _metric_float(metrics, "highlight_peak")
-    contrast_spread = _metric_float(metrics, "contrast_spread")
+    mean = _metric_float(metrics, "mean_luma")
+    contrast = _metric_float(metrics, "rms_contrast")
+    p05 = _metric_float(metrics, "p05_luma")
+    p95 = _metric_float(metrics, "p95_luma")
+    p99 = _metric_float(metrics, "p99_luma")
+    interdecile_range = _metric_float(metrics, "interdecile_luma_range")
     near_black = 100.0 * _metric_float(metrics, "near_black_fraction")
     near_white = 100.0 * _metric_float(metrics, "near_white_fraction")
     clipped = 100.0 * _metric_float(metrics, "clipped_channel_fraction")
@@ -444,15 +435,11 @@ def _overlay_image(rr, metrics: dict[str, float | int | str], out_path: Path) ->
             radius_color,
         ),
         (
-            f"CYAN candidate sector consensus: {sector_candidate_percent:.2f}%",
-            sector_candidate_color,
-        ),
-        (
             f"Edge softness: {edge_percent:.2f}% of image short side; confidence: {confidence:.2f}",
             white,
         ),
-        f"Brightness: {mean:.1f}; contrast: {contrast_std:.1f}",
-        f"Shadows: {shadows:.0f}; highlights: {highlights:.0f}; peak: {peak:.0f}; range: {contrast_spread:.0f}",
+        f"Mean luma: {mean:.3f}; RMS contrast: {contrast:.3f}",
+        f"P05: {p05:.3f}; P95: {p95:.3f}; P99: {p99:.3f}; interdecile range: {interdecile_range:.3f}",
         f"Near black: {near_black:.2f}%; near white: {near_white:.2f}%; clipped channels: {clipped:.2f}%",
     ]
     _draw_label_block(draw, lines, rr.width, rr.height)
@@ -479,12 +466,10 @@ def _write_contact_sheet(cases: list[RenderedCase], out_path: Path, *, cols: int
         sheet.paste(img.resize((tile_width, tile_height), Image.Resampling.LANCZOS), (x, y))
         caption = case_result.case.label
         metric = case_result.metrics
-        sub1 = (
-            f"official {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%; "
-            f"sector {100*_metric_float(metric, 'cpp_radius_candidate_sector_consensus_ratio'):.2f}%"
-        )
+        sub1 = f"official radius {100*_metric_float(metric, 'cpp_radius_ratio'):.2f}%"
         sub2 = (
-            f"brightness {_metric_float(metric, 'mean'):.1f}; contrast {_metric_float(metric, 'contrast_std'):.1f}; "
+            f"mean luma {_metric_float(metric, 'mean_luma'):.3f}; "
+            f"contrast {_metric_float(metric, 'rms_contrast'):.3f}; "
             f"near white {100*_metric_float(metric, 'near_white_fraction'):.2f}%; "
             f"confidence {_metric_float(metric, 'cpp_confidence'):.2f}"
         )
@@ -967,7 +952,6 @@ def _format_radius_range(rows: list[dict[str, str]], key: str) -> str:
 
 RADIUS_STABILITY_COLUMNS = (
     ("Official radius", "cpp_radius_ratio"),
-    ("Sector candidate", "cpp_radius_candidate_sector_consensus_ratio"),
 )
 
 
@@ -1190,7 +1174,6 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             label = row["label"]
             overlay_caption = (
                 f"{cid} overlay: official {_pct(row, 'cpp_radius_ratio')}, "
-                f"sector candidate {_pct(row, 'cpp_radius_candidate_sector_consensus_ratio')}, "
                 f"confidence {_num(row, 'cpp_confidence', 2)}"
             )
             parts.append('<article class="card">')
@@ -1216,9 +1199,8 @@ button.thumb span { position: absolute; left: 8px; bottom: 8px; padding: 3px 6px
             parts.append('<div class="metrics">')
             for label_text, value in (
                 ("official radius", _pct(row, "cpp_radius_ratio")),
-                ("sector candidate", _pct(row, "cpp_radius_candidate_sector_consensus_ratio")),
-                ("brightness", _num(row, "mean", 1)),
-                ("contrast", _num(row, "contrast_std", 1)),
+                ("mean luma", _num(row, "mean_luma", 3)),
+                ("contrast", _num(row, "rms_contrast", 3)),
                 ("near white", _pct(row, "near_white_fraction")),
                 ("confidence", _num(row, "cpp_confidence", 2)),
             ):

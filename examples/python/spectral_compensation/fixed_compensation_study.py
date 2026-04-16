@@ -37,8 +37,6 @@ import statistics
 from dataclasses import dataclass
 from pathlib import Path
 
-import _lpt2d
-
 from spectral_common import (
     OUT_ROOT,
     PROBE_RAYS,
@@ -49,6 +47,8 @@ from spectral_common import (
     load_band_shot,
     load_probe_shot,
     measurement_dict,
+    passes_clean_filter,
+    percentile,
     postprocess_measure,
     ratio,
     ratio_summary,
@@ -57,11 +57,11 @@ from spectral_common import (
     scene_light_count,
     scene_size,
     spectral_boost,
-    percentile,
     value_summary,
     white_shot_paths,
 )
 
+import _lpt2d
 
 EXPOSURE_SEARCH_MIN = -0.20
 EXPOSURE_SEARCH_MAX = 1.80
@@ -461,29 +461,6 @@ def _summarize_rows(rows: list[dict]) -> dict:
     }
 
 
-def _passes_clean_filter(
-    measurement: Measurement,
-    *,
-    mean_min: float,
-    mean_max: float,
-    max_mean_saturation: float,
-    max_shadow_fraction: float,
-    min_moving_radius: float,
-) -> tuple[bool, list[str]]:
-    reasons: list[str] = []
-    if measurement.mean < mean_min:
-        reasons.append(f"mean<{mean_min:g}")
-    if measurement.mean > mean_max:
-        reasons.append(f"mean>{mean_max:g}")
-    if measurement.mean_saturation > max_mean_saturation:
-        reasons.append(f"mean_saturation>{max_mean_saturation:g}")
-    if measurement.shadow_fraction > max_shadow_fraction:
-        reasons.append(f"shadow_fraction>{max_shadow_fraction:g}")
-    if measurement.moving_radius < min_moving_radius:
-        reasons.append(f"moving_radius<{min_moving_radius:g}")
-    return not reasons, reasons
-
-
 def _worst_rows(rows: list[dict], key: str, n: int = 6) -> list[dict]:
     ranked = sorted(rows, key=lambda r: abs(r[key] - 1.0), reverse=True)
     keep_keys = [
@@ -512,7 +489,7 @@ def run_study(
     mean_min: float,
     mean_max: float,
     max_mean_saturation: float,
-    max_shadow_fraction: float,
+    max_near_black_fraction: float,
     min_moving_radius: float,
     fixed_gamma_min: float,
 ) -> dict:
@@ -545,12 +522,12 @@ def run_study(
             white = render_measure(shot, session)
         finally:
             session.close()
-        ok, reasons = _passes_clean_filter(
+        ok, reasons = passes_clean_filter(
             white,
             mean_min=mean_min,
             mean_max=mean_max,
             max_mean_saturation=max_mean_saturation,
-            max_shadow_fraction=max_shadow_fraction,
+            max_near_black_fraction=max_near_black_fraction,
             min_moving_radius=min_moving_radius,
         )
         if ok:
@@ -581,13 +558,12 @@ def run_study(
         "n_input_cases": len(cases),
         "n_clean_source_scenes": len({case.source_hash for case in eligible_cases}),
         "n_scene_cases": len(eligible_cases),
-        "n_scenes": len(eligible_cases),
         "clean_filter": {
             "exclude_materials": sorted(exclude_materials),
             "mean_min": mean_min,
             "mean_max": mean_max,
             "max_mean_saturation": max_mean_saturation,
-            "max_shadow_fraction": max_shadow_fraction,
+            "max_near_black_fraction": max_near_black_fraction,
             "min_moving_radius": min_moving_radius,
             "fixed_gamma_min": fixed_gamma_min,
             "deduplicate_shots": deduplicate_shots,
@@ -635,7 +611,6 @@ def run_study(
                 fixed_exposure_delta,
                 row["white"]["mean"],
             )
-            row["fixed_exposure_delta"] = fixed_exposure_delta
             row["fixed_gamma_needed"] = gamma_needed
             row["fixed_exposure_gamma_needed_brightness_ratio"] = ratio(
                 gamma_measure.mean,
@@ -783,10 +758,10 @@ def main() -> None:
         action="store_true",
         help="Include glass scenes. Default excludes them for compensation calibration.",
     )
-    parser.add_argument("--mean-min", type=float, default=60.0)
-    parser.add_argument("--mean-max", type=float, default=140.0)
+    parser.add_argument("--mean-min", type=float, default=60.0 / 255.0)
+    parser.add_argument("--mean-max", type=float, default=140.0 / 255.0)
     parser.add_argument("--max-mean-saturation", type=float, default=0.66)
-    parser.add_argument("--max-shadow-fraction", type=float, default=0.20)
+    parser.add_argument("--max-near-black-fraction", type=float, default=0.20)
     parser.add_argument("--min-moving-radius", type=float, default=0.010)
     parser.add_argument(
         "--fixed-gamma-min",
@@ -831,7 +806,7 @@ def main() -> None:
         mean_min=args.mean_min,
         mean_max=args.mean_max,
         max_mean_saturation=args.max_mean_saturation,
-        max_shadow_fraction=args.max_shadow_fraction,
+        max_near_black_fraction=args.max_near_black_fraction,
         min_moving_radius=args.min_moving_radius,
         fixed_gamma_min=args.fixed_gamma_min,
     )

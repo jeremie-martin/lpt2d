@@ -19,8 +19,8 @@ from .types import (
     Canvas,
     Frame,
     FrameContext,
-    FrameMetrics,
     Look,
+    ImageStats,
     ProjectorLight,
     Quality,
     RenderSession,
@@ -166,8 +166,8 @@ def _measure_single_frame(
     animate: AnimateFn,
     shot: Shot,
     camera: Camera2D | None = None,
-) -> FrameMetrics | None:
-    """Render frame 0 and return its FrameMetrics, or None on failure."""
+) -> ImageStats | None:
+    """Render frame 0 and return its ImageStats, or None on failure."""
     stats_list = renderer_mod.render_stats(
         animate,
         1.0,
@@ -181,13 +181,13 @@ def _measure_single_frame(
     return None
 
 
-def _summarize_brightness(stats_list: list[FrameMetrics]) -> float:
-    """Return representative brightness (0..1) from a list of FrameMetrics.
+def _summarize_brightness(stats_list: list[ImageStats]) -> float:
+    """Return representative brightness (0..1) from a list of ImageStats.
 
     When inter-frame variance is high (std > 0.05), uses the 25th percentile
     instead of the mean to bias toward darker frames.
     """
-    brightnesses = [s.mean / 255.0 for s in stats_list]
+    brightnesses = [s.mean_luma for s in stats_list]
     measured_mean = sum(brightnesses) / len(brightnesses)
     if len(brightnesses) > 1:
         std_b = (sum((b - measured_mean) ** 2 for b in brightnesses) / (len(brightnesses) - 1)) ** 0.5
@@ -238,7 +238,7 @@ def auto_look(
     chosen_tonemap = shot.look.tonemap if tonemap is None else tonemap
     chosen_normalize = shot.look.normalize if normalize is None else normalize
 
-    def measure_per_frame(look: Look) -> list[tuple[int, float, FrameMetrics]]:
+    def measure_per_frame(look: Look) -> list[tuple[int, float, ImageStats]]:
         draft_shot = Shot(canvas=draft_canvas, look=look, trace=draft_trace)
         return renderer_mod.render_stats(
             animate,
@@ -387,7 +387,7 @@ def look_report(
     dark_threshold: float = 0.15,
     bright_threshold: float = 0.70,
     clipped_channel_threshold: float = 0.05,
-    contrast_spread_threshold: float = 30.0,
+    interdecile_luma_range_threshold: float = 30.0 / 255.0,
 ) -> LookReport:
     """Diagnose how a Look performs across an animation's timeline."""
     if look is None:
@@ -425,7 +425,7 @@ def look_report(
         dark_threshold=dark_threshold,
         bright_threshold=bright_threshold,
         clipped_channel_threshold=clipped_channel_threshold,
-        contrast_spread_threshold=contrast_spread_threshold,
+        interdecile_luma_range_threshold=interdecile_luma_range_threshold,
     )
 
 

@@ -196,9 +196,9 @@ MAX_ATTEMPTS = 500
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
 
-# Combined beauty: contrast (interesting light patterns) AND color richness
-MIN_CONTRAST_STD = 20.0
-RICHNESS_THRESHOLD = 0.05
+# Combined beauty: contrast (interesting light patterns) AND colorfulness
+MIN_CONTRAST_STD = 20.0 / 255.0
+COLORFULNESS_THRESHOLD = 0.05
 MIN_GOOD_FRAMES_FRACTION = 0.50
 
 
@@ -269,10 +269,10 @@ def make_probe_shot() -> Shot:
 
 
 def check_beauty(p: AnimParams) -> tuple[bool, int, float, float]:
-    """Render low-res frames; check contrast AND color richness.
+    """Render low-res frames; check contrast AND colorfulness.
 
-    Returns (ok, n_good, avg_std, avg_richness).
-    A frame is "good" if it has both sufficient contrast and color richness.
+    Returns (ok, n_good, avg_std, avg_colorfulness).
+    A frame is "good" if it has both sufficient contrast and colorfulness.
     At least MIN_GOOD_FRAMES_FRACTION of frames must be good.
     """
     animate = build_animate(p)
@@ -283,7 +283,7 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float, float]:
     n_frames = timeline.total_frames
     good = 0
     total_std = 0.0
-    total_richness = 0.0
+    total_colorfulness = 0.0
 
     for fi in range(n_frames):
         ctx = timeline.context_at(fi)
@@ -292,15 +292,15 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float, float]:
         render_result = session.render_shot(cpp_shot, fi, True)
 
         fs = render_result.metrics
-        cs = render_result.analysis.color
-        total_std += fs.contrast_std
-        total_richness += cs.richness
-        if fs.contrast_std > MIN_CONTRAST_STD and cs.richness > RICHNESS_THRESHOLD:
+        stats = render_result.analysis.image
+        total_std += fs.rms_contrast
+        total_colorfulness += stats.colorfulness
+        if fs.rms_contrast > MIN_CONTRAST_STD and stats.colorfulness > COLORFULNESS_THRESHOLD:
             good += 1
 
     avg_std = total_std / n_frames if n_frames > 0 else 0.0
-    avg_richness = total_richness / n_frames if n_frames > 0 else 0.0
-    return good >= int(n_frames * MIN_GOOD_FRAMES_FRACTION), good, avg_std, avg_richness
+    avg_colorfulness = total_colorfulness / n_frames if n_frames > 0 else 0.0
+    return good >= int(n_frames * MIN_GOOD_FRAMES_FRACTION), good, avg_std, avg_colorfulness
 
 
 # ---------------------------------------------------------------------------
@@ -370,10 +370,10 @@ def main() -> None:
             flush=True,
         )
 
-        beauty_ok, n_good, avg_std, avg_richness = check_beauty(p)
+        beauty_ok, n_good, avg_std, avg_colorfulness = check_beauty(p)
         n_frames = Timeline(DURATION, fps=PROBE_FPS).total_frames
         print(
-            f"  good={n_good}/{n_frames} avg_std={avg_std:.1f} avg_richness={avg_richness:.3f}",
+            f"  good={n_good}/{n_frames} avg_std={avg_std:.3f} avg_colorfulness={avg_colorfulness:.3f}",
             flush=True,
         )
 

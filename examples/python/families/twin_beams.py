@@ -170,7 +170,7 @@ def build_animate(p: AnimParams):
 # ---------------------------------------------------------------------------
 
 MAX_ATTEMPTS = 500
-RICHNESS_THRESHOLD = 0.15
+COLORFULNESS_THRESHOLD = 0.15
 MIN_COLORFUL_SECONDS = 2.0
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
@@ -241,7 +241,7 @@ def make_probe_shot() -> Shot:
 
 
 def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
-    """Render low-res frames and count colorful ones. Returns (ok, n_colorful, avg_richness)."""
+    """Render low-res frames and count colorful ones. Returns (ok, n_colorful, avg_colorfulness)."""
     animate = build_animate(p)
     shot = make_probe_shot()
     timeline = Timeline(DURATION, fps=PROBE_FPS)
@@ -249,21 +249,21 @@ def check_beauty(p: AnimParams) -> tuple[bool, int, float]:
 
     n_frames = timeline.total_frames
     colorful = 0
-    total_richness = 0.0
+    total_colorfulness = 0.0
 
     for fi in range(n_frames):
         ctx = timeline.context_at(fi)
         result = animate(ctx)
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi, True)
-        cs = render_result.analysis.color
-        total_richness += cs.richness
-        if cs.richness > RICHNESS_THRESHOLD:
+        stats = render_result.analysis.image
+        total_colorfulness += stats.colorfulness
+        if stats.colorfulness > COLORFULNESS_THRESHOLD:
             colorful += 1
 
-    avg_richness = total_richness / n_frames if n_frames > 0 else 0.0
+    avg_colorfulness = total_colorfulness / n_frames if n_frames > 0 else 0.0
     min_colorful_frames = int(MIN_COLORFUL_SECONDS * PROBE_FPS)
-    return colorful >= min_colorful_frames, colorful, avg_richness
+    return colorful >= min_colorful_frames, colorful, avg_colorfulness
 
 
 # ---------------------------------------------------------------------------
@@ -356,9 +356,9 @@ def main() -> None:
             flush=True,
         )
 
-        beauty_ok, n_colorful, avg_richness = check_beauty(p)
+        beauty_ok, n_colorful, avg_colorfulness = check_beauty(p)
         colorful_seconds = n_colorful / PROBE_FPS
-        print(f"  colorful={colorful_seconds:.1f}s avg_richness={avg_richness:.3f}", flush=True)
+        print(f"  colorful={colorful_seconds:.1f}s avg_colorfulness={avg_colorfulness:.3f}", flush=True)
 
         if not beauty_ok:
             continue
@@ -374,7 +374,7 @@ def main() -> None:
 
     if found == 0:
         print(f"No valid animation found in {MAX_ATTEMPTS} attempts.")
-        print("Try adjusting parameter ranges or lowering RICHNESS_THRESHOLD.")
+        print("Try adjusting parameter ranges or lowering COLORFULNESS_THRESHOLD.")
 
 
 if __name__ == "__main__":

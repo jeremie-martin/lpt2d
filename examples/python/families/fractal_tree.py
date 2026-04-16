@@ -216,9 +216,9 @@ MAX_ATTEMPTS = 500
 PROBE_FPS = 4
 PROBE_W, PROBE_H = 640, 360
 
-# For trees, we care about illumination coverage rather than spectral richness
+# For trees, we care about illumination coverage rather than spectral variety
 # since the glass is thin. We check that frames aren't too dark.
-MIN_BRIGHT_FRACTION = 0.6  # at least 60% of frames should have mean luminance > 30
+MIN_BRIGHT_FRACTION = 0.6  # at least 60% of frames should have mean luma > 30/255
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +307,8 @@ def check_beauty(p: AnimParams) -> tuple[bool, float]:
         cpp_shot = _resolve_frame_shot(shot, result, None)
         render_result = session.render_shot(cpp_shot, fi)
         fs = render_result.metrics
-        total_mean += fs.mean
-        if fs.mean > 30:
+        total_mean += fs.mean_luma
+        if fs.mean_luma > 30.0 / 255.0:
             bright_count += 1
 
     avg_mean = total_mean / n_frames if n_frames > 0 else 0.0
@@ -384,7 +384,7 @@ def main() -> None:
         )
 
         beauty_ok, avg_lum = check_beauty(p)
-        print(f"  avg_luminance={avg_lum:.1f}", flush=True)
+        print(f"  avg_luminance={avg_lum:.3f}", flush=True)
 
         if not beauty_ok:
             continue
