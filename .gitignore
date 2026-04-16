@@ -29,6 +29,7 @@ __pycache__/
 
 # External tool configs
 /.codex/
+/.claude/
 
 # Local benchmark/evaluation outputs
 /benchmarks/

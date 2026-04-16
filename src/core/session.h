@@ -3,6 +3,7 @@
 #include "renderer.h"
 
 #include <cstdint>
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -46,6 +47,10 @@ public:
                               const TraceConfig& trace_cfg, const PostProcess& pp,
                               int64_t total_rays, bool analyze = false);
 
+    // Re-run post-processing on the most recently traced frame without
+    // re-uploading scene data or tracing rays.
+    RenderResult postprocess(const PostProcess& pp, bool analyze = false);
+
     void close();
     void resize(int width, int height);
     int width() const;
@@ -53,5 +58,7 @@ public:
 
 private:
     struct Impl;
+    RenderResult develop_result(const PostProcess& pp, bool analyze,
+                                std::chrono::steady_clock::time_point t0);
     std::unique_ptr<Impl> impl_;
 };

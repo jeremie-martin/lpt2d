@@ -41,9 +41,12 @@ from .light_analysis import scene_light_report as scene_light_report
 from .light_analysis import structure_contribution as structure_contribution
 from .params import params_from_dict as params_from_dict
 from .renderer import FFmpegOutput as FFmpegOutput
+from .renderer import RenderVariant as RenderVariant
+from .renderer import iter_frame_variants as iter_frame_variants
 from .renderer import render as render
 from .renderer import render_contact_sheet as render_contact_sheet
 from .renderer import render_frame as render_frame
+from .renderer import render_frame_variants as render_frame_variants
 from .renderer import render_stats as render_stats
 from .renderer import render_still as render_still
 from .renderer import save_image as save_image
@@ -150,6 +153,7 @@ __all__ = [
     "sample_scalar",
     "sample_vec2",
     "QualityGate",
+    "RenderVariant",
     "StatsDiff",
     "auto_look",
     "compare_looks",
@@ -187,9 +191,11 @@ __all__ = [
     "rectangle",
     "regular_polygon",
     "ray_intersect",
+    "iter_frame_variants",
     "render",
     "render_contact_sheet",
     "render_frame",
+    "render_frame_variants",
     "render_stats",
     "render_still",
     "save_image",
