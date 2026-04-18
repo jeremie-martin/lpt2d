@@ -209,11 +209,44 @@ is tightened, not the individual render.
 - A variant passes every gate but looks boring. The intent sentence
   was too weak. Rewrite the intent, then re-probe.
 
-## First Family Pick
+## Shipped Status
 
-Chromatic Pendulum is the proposed first family. Rationale: lowest
-object count, highest iconic value, exercises the full family
-scaffold (generator, probe, measurements, MP4 render, seed loop)
-without needing capabilities no other family uses. Parabolic
-Reflector is the proposed second family because it exercises
-`function_curve` which nothing else touches.
+The batch run through 2026-04-18/19 produced the following new families in
+`examples/python/families/`, each with its own probe-gated sampler and
+preview MP4 renders:
+
+Shipped:
+
+- `cathedral_aperture.py` — 6 light branches x 2 golden-ratio wall layouts.
+- `parabolic_reflector.py` — 3 branches x 2 dish layouts, uses
+  `function_curve` for the dish.
+- `sundial.py` — projector rotates along a `thick_arc` sky ring aimed at a
+  pedestal prism.
+- `orbital_prism.py` — fixed projector, prism orbits it on a circle.
+- `glass_organ_pipes.py` — row of coloured glass rectangles with a sweeping
+  projector.
+- `spectral_staircase.py` — fanned glass rectangles as playing cards.
+- `veil.py` — thin wide glass `thick_arc` curtain, projector refracts
+  through it.
+- `wedge_fan_bloom.py` — cluster of dispersive wedges expanding outward.
+- `iris.py` — rotating ring of prism wedges forming an aperture.
+- `hex_jewel.py` — one compound hexagonal body of six packed prisms,
+  different from the existing `hexfield.py`.
+- `refraction_corridor.py` — chain of tilted glass blocks the beam threads
+  through.
+- `periscope.py` — two 45-degree metallic mirrors elbow a beam with a
+  prism mid-path.
+- `grating_splitter.py` — vertical multi-slit barrier splits one beam into
+  a row of per-slit prisms.
+- `double_slit_dispersion.py` — two-slit barrier with differently tinted
+  glass wedges in front of each slit.
+
+All shipped families share: metallic chamber walls, `reinhardx` /
+white_point=0.5 / ambient=0 look, camera width 3.2, duration 6.0 s, preview
+render 640x360 / 30 fps / 0.8 M rays. Each has an explicit layout axis
+(left/right, standard/medieval inversion) as a compositional flip.
+
+Still parked:
+
+- Arbitrary-polygon silhouette subjects (flower, sword, signature curve).
+- HD (1080p) final renders of winning seeds, which are per-request.
