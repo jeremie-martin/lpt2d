@@ -73,12 +73,10 @@ class LightDef:
 @dataclass
 class Params:
     iris_composition: str
-    ring_cx: float
-    ring_cy: float
     ring_radius: float
     n_wedges: int
     wedge_size: float
-    ring_rotation_rate: float
+    ring_rotation_rate_rad_per_sec: float
     wedge_ior: float
     wedge_cauchy_b: float
     wedge_fill: float
@@ -160,12 +158,10 @@ def sample(rng: random.Random) -> Params:
     wall_albedo = rng.uniform(*WALL_ALBEDO_RANGE)
     return Params(
         iris_composition=layout,
-        ring_cx=rng.uniform(-0.15, 0.15),
-        ring_cy=rng.uniform(-0.10, 0.10),
         ring_radius=rng.uniform(0.35, 0.55),
         n_wedges=rng.randint(6, 10),
         wedge_size=rng.uniform(0.07, 0.12),
-        ring_rotation_rate=rng.uniform(-math.tau, math.tau),
+        ring_rotation_rate_rad_per_sec=rng.uniform(-1.0, 1.0),
         wedge_ior=rng.uniform(1.50, 1.62),
         wedge_cauchy_b=rng.uniform(18_000.0, 34_000.0),
         wedge_fill=rng.uniform(*GLASS_FILL_RANGE),
@@ -190,7 +186,8 @@ def _spectrum_for(color: str) -> LightSpectrum:
     return LightSpectrum.range(wavelength_min=380, wavelength_max=780)
 
 
-def _light_position_and_dir(L: LightDef, target: tuple[float, float]):
+def _light_position_and_dir(L: LightDef):
+    """Wall position + direction aimed at the (always-centered) ring."""
     if L.side == "left":
         pos = (-CHAMBER_HW + 0.08, L.offset_tangent)
     elif L.side == "right":
@@ -199,14 +196,14 @@ def _light_position_and_dir(L: LightDef, target: tuple[float, float]):
         pos = (L.offset_tangent, CHAMBER_HH - 0.08)
     else:
         pos = (L.offset_tangent, -CHAMBER_HH + 0.08)
-    a = math.atan2(target[1] - pos[1], target[0] - pos[0])
+    a = math.atan2(-pos[1], -pos[0])
     return pos, (math.cos(a), math.sin(a))
 
 
 def _projectors(p: Params) -> list[ProjectorLight]:
     out: list[ProjectorLight] = []
     for i, L in enumerate(p.lights):
-        pos, dir_ = _light_position_and_dir(L, (p.ring_cx, p.ring_cy))
+        pos, dir_ = _light_position_and_dir(L)
         spectrum = _spectrum_for(L.color)
         out.append(
             ProjectorLight(
@@ -223,13 +220,13 @@ def _projectors(p: Params) -> list[ProjectorLight]:
     return out
 
 
-def _wedge_shapes(p: Params, progress: float):
-    ring_angle = p.ring_rotation_rate * progress
+def _wedge_shapes(p: Params, t_seconds: float):
+    ring_angle = p.ring_rotation_rate_rad_per_sec * t_seconds
     return [
         prism(
             center=(
-                p.ring_cx + p.ring_radius * math.cos(ring_angle + 2 * math.pi * i / p.n_wedges),
-                p.ring_cy + p.ring_radius * math.sin(ring_angle + 2 * math.pi * i / p.n_wedges),
+                p.ring_radius * math.cos(ring_angle + 2 * math.pi * i / p.n_wedges),
+                p.ring_radius * math.sin(ring_angle + 2 * math.pi * i / p.n_wedges),
             ),
             size=p.wedge_size,
             material_id=WEDGE_ID,
@@ -267,12 +264,14 @@ def build(p: Params):
     )
 
     def animate(ctx):
-        progress = ctx.progress if ctx.total_frames > 1 else 0.5
+        # Stills use a fixed midpoint pose so single-frame previews are
+        # stable across requested durations.
+        t_seconds = ctx.time if ctx.total_frames > 1 else DURATION / 2
         scene = Scene(
             materials=materials,
             shapes=[
                 *mirror_box(CHAMBER_HW, CHAMBER_HH, WALL_ID, id_prefix="chamber"),
-                *_wedge_shapes(p, progress),
+                *_wedge_shapes(p, t_seconds),
             ],
             lights=_projectors(p),
         )
@@ -292,9 +291,10 @@ GATE_MIN_PASSING_FRAC = 0.30
 def check(animate) -> Verdict:
     """Reject probes that miss the mean-luma + RMS-contrast band.
 
-    Probe at the module's nominal DURATION; rendering at a different
-    duration only stretches the playback since ``ctx.progress`` is
-    always 0..1, so probe stats stay representative.
+    Probes the module's nominal DURATION at fps=4. Rotation rate is in
+    rad/s, so a longer render covers more total rotation at the same
+    on-screen speed — probe stats sampled over DURATION remain
+    representative of any clip length.
     """
     frames = probe(animate, DURATION, fps=4, camera=CAMERA)
     n = len(frames)
