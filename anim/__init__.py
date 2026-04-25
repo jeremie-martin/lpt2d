@@ -35,10 +35,14 @@ from .easing import smoothstep as smoothstep
 from .family import Family as Family
 from .family import ProbeFrame as ProbeFrame
 from .family import Verdict as Verdict
+from .family import pick_best_frame as pick_best_frame
 from .family import probe as probe
+from .family import save_frame_shot as save_frame_shot
 from .light_analysis import light_contributions as light_contributions
 from .light_analysis import scene_light_report as scene_light_report
 from .light_analysis import structure_contribution as structure_contribution
+from .light_intensity import intensity_for_spectrum as intensity_for_spectrum
+from .light_intensity import spectral_luminance_boost as spectral_luminance_boost
 from .params import params_from_dict as params_from_dict
 from .renderer import FFmpegOutput as FFmpegOutput
 from .renderer import RenderVariant as RenderVariant
@@ -181,6 +185,8 @@ __all__ = [
     "compare_summary",
     "glass",
     "hemispherical_lens",
+    "intensity_for_spectrum",
+    "spectral_luminance_boost",
     "mirror",
     "mirror_block",
     "mirror_box",
@@ -217,5 +223,7 @@ __all__ = [
     "Family",
     "Verdict",
     "ProbeFrame",
+    "pick_best_frame",
     "probe",
+    "save_frame_shot",
 ]

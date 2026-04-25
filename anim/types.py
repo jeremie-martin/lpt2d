@@ -385,40 +385,45 @@ class Shot:
 # ─── Override resolution ─────────────────────────────────────────
 
 
-def _apply_look_override(base: Look, override: Look | dict[str, Any] | None) -> Look:
-    """Resolve per-frame Look overrides into a full Look."""
+def _apply_look_override(base: Look, override: dict[str, Any] | None) -> Look:
+    """Merge per-frame Look overrides onto a base Look.
+
+    Only ``dict`` is accepted: a Look instance carries values for *every*
+    field (defaults included), so passing one would silently replace
+    things the caller never meant to touch (e.g. the shot's vignette).
+    Spread an existing Look with ``asdict(my_look)`` if you really mean
+    to overlay all of it.
+    """
     if override is None:
         return base
-    if isinstance(override, Look):
-        return override
-    if isinstance(override, dict):
-        result = Look(
-            exposure=base.exposure,
-            contrast=base.contrast,
-            gamma=base.gamma,
-            tonemap=base.tonemap,
-            white_point=base.white_point,
-            normalize=base.normalize,
-            normalize_ref=base.normalize_ref,
-            normalize_pct=base.normalize_pct,
-            ambient=base.ambient,
-            background=list(base.background),
-            opacity=base.opacity,
-            saturation=base.saturation,
-            vignette=base.vignette,
-            vignette_radius=base.vignette_radius,
-            temperature=base.temperature,
-            highlights=base.highlights,
-            shadows=base.shadows,
-            hue_shift=base.hue_shift,
-            grain=base.grain,
-            grain_seed=base.grain_seed,
-            chromatic_aberration=base.chromatic_aberration,
-        )
-        for k, v in override.items():
-            setattr(result, k, v)
-        return result
-    raise TypeError(f"Look override must be Look, dict, or None, got {type(override)}")
+    if not isinstance(override, dict):
+        raise TypeError(f"Look override must be dict or None, got {type(override).__name__}")
+    result = Look(
+        exposure=base.exposure,
+        contrast=base.contrast,
+        gamma=base.gamma,
+        tonemap=base.tonemap,
+        white_point=base.white_point,
+        normalize=base.normalize,
+        normalize_ref=base.normalize_ref,
+        normalize_pct=base.normalize_pct,
+        ambient=base.ambient,
+        background=list(base.background),
+        opacity=base.opacity,
+        saturation=base.saturation,
+        vignette=base.vignette,
+        vignette_radius=base.vignette_radius,
+        temperature=base.temperature,
+        highlights=base.highlights,
+        shadows=base.shadows,
+        hue_shift=base.hue_shift,
+        grain=base.grain,
+        grain_seed=base.grain_seed,
+        chromatic_aberration=base.chromatic_aberration,
+    )
+    for k, v in override.items():
+        setattr(result, k, v)
+    return result
 
 
 def _apply_trace_override(
@@ -497,11 +502,18 @@ class FrameContext:
 
 @dataclass
 class Frame:
-    """Return type for animate callbacks that need per-frame camera or render control."""
+    """Return type for animate callbacks that need per-frame camera or render control.
+
+    ``look`` is a partial-overrides dict — keys you set override the base
+    shot's Look, keys you omit pass through. Pass a full ``Look`` only by
+    spreading it (``look=asdict(my_look)``); the protocol intentionally
+    rejects ``Look`` instances to avoid silently clobbering shot fields
+    like vignette that the per-frame caller didn't intend to touch.
+    """
 
     scene: Scene
     camera: Camera2D | None = None
-    look: Look | dict[str, Any] | None = None
+    look: dict[str, Any] | None = None
     trace: TraceDefaults | dict[str, Any] | None = None
 
 

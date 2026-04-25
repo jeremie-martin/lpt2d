@@ -18,6 +18,7 @@ Typical usage in a family script::
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import random
 import sys
@@ -31,6 +32,16 @@ import _lpt2d  # for FrameAnalysis type reference only
 from .params import params_from_dict
 from .renderer import RenderSession, _resolve_frame_shot, render, save_image
 from .types import AnimateFn, Camera2D, Shot, Timeline
+
+
+def _default_interest_score(pf: "ProbeFrame") -> float:
+    """Blend colorfulness, P90 luminance, and a clipping penalty.
+
+    Frames that have a strong colored/bright feature rank high; frames that
+    blow out a large fraction of pixels are demoted."""
+    p90 = pf.analysis.debug.p90_luma
+    clipped = pf.analysis.image.clipped_channel_fraction
+    return pf.colorfulness + 0.35 * p90 - 0.4 * clipped
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -126,17 +137,30 @@ def _make_probe_shot(
     return shot
 
 
+RENDER_PRESETS: dict[str, tuple[int, int, int, str]] = {
+    # name → (width, height, rays, base_quality)
+    "tiny":    (320, 180, 2_000_000, "preview"),
+    "240p":    (426, 240, 400_000, "preview"),
+    "480p":    (854, 480, 1_400_000, "preview"),
+    "720p":    (1280, 720, 3_000_000, "preview"),
+    "hq":      (1920, 1080, 5_000_000, "production"),
+}
+DEFAULT_RENDER_PRESET = "tiny"
+
+
 def _make_render_shot(
     *,
-    hq: bool,
+    preset: str = DEFAULT_RENDER_PRESET,
     depth: int = 12,
     camera: Camera2D | None = None,
 ) -> Shot:
     """Build the Shot used for final output rendering."""
-    if hq:
-        shot = Shot.preset("production", width=1920, height=1080, rays=5_000_000, depth=depth)
-    else:
-        shot = Shot.preset("preview", width=320, height=180, rays=2_000_000, depth=depth)
+    if preset not in RENDER_PRESETS:
+        raise ValueError(
+            f"Unknown render preset {preset!r}. Choices: {sorted(RENDER_PRESETS)}"
+        )
+    width, height, rays, base = RENDER_PRESETS[preset]
+    shot = Shot.preset(base, width=width, height=height, rays=rays, depth=depth)
     shot.camera = camera or _DEFAULT_CAMERA
     shot.look = shot.look.with_overrides(**_STANDARD_LOOK)
     return shot
@@ -198,6 +222,69 @@ def probe(
     return frames
 
 
+def pick_best_frame(
+    animate: AnimateFn,
+    duration: float,
+    *,
+    fps: int = 4,
+    width: int = 640,
+    height: int = 360,
+    rays: int = 200_000,
+    depth: int = 10,
+    camera: Camera2D | None = None,
+    score: Callable[[ProbeFrame], float] | None = None,
+) -> tuple[int, "FrameContextType", float]:
+    """Probe the animation and return the most interesting ``(idx, ctx, score)``.
+
+    ``score`` defaults to colorfulness + 0.35·P90_luma − 0.4·clipped. The
+    caller can pass a custom callable when a family has a specific definition
+    of "the good moment" (e.g., peak beam intensity, widest spectrum).
+    """
+    scorer = score or _default_interest_score
+    frames = probe(
+        animate,
+        duration,
+        fps=fps,
+        width=width,
+        height=height,
+        rays=rays,
+        depth=depth,
+        camera=camera,
+    )
+    if not frames:
+        raise ValueError("probe returned no frames")
+    timeline = Timeline(duration, fps=fps)
+    best_i = max(range(len(frames)), key=lambda i: scorer(frames[i]))
+    return best_i, timeline.context_at(best_i), scorer(frames[best_i])
+
+
+def save_frame_shot(
+    animate: AnimateFn,
+    shot: Shot,
+    ctx: "FrameContextType",
+    out_path: Path | str,
+    *,
+    camera: Camera2D | None = None,
+    name: str | None = None,
+) -> None:
+    """Resolve ``animate(ctx)`` and save a GUI-loadable Shot JSON.
+
+    The saved shot inherits the look/trace/canvas of ``shot`` (usually the
+    final render shot) so opening it in the GUI reproduces what was rendered.
+    If ``name`` is given it overrides the shot's name in the saved JSON.
+    """
+    result = animate(ctx)
+    cpp_shot = _resolve_frame_shot(shot, result, camera)
+    if name is not None:
+        cpp_shot.name = name
+    _lpt2d.save_shot(cpp_shot, str(out_path))
+
+
+# Forward reference so the signatures above stay readable before FrameContext
+# is imported at runtime in the helpers that need it.
+FrameContextType = Any
+
+
 # ---------------------------------------------------------------------------
 # Family
 # ---------------------------------------------------------------------------
@@ -223,11 +310,20 @@ class Family:
         Propose a candidate.  Return None if construction fails.
     build : (Params) -> AnimateFn
         Build a deterministic animation from params.
-    check : (Params, AnimateFn) -> Verdict | None
-        Optional filter.  Receives both params (for arithmetic/geometry)
-        and the animate function (for scene inspection or ``probe()`` calls).
+    check : (Params, AnimateFn) -> Verdict | (AnimateFn) -> Verdict | None
+        Optional filter. Either signature is accepted; arity is detected
+        once at construction time. Use ``(animate)`` for render-stat-only
+        gates; use ``(p, animate)`` when the gate needs params (e.g. to
+        adjust thresholds based on material or layout).
     describe : (Params) -> str | None
         Optional one-line summary for progress output.
+    tag : (Params) -> str | None
+        Optional slug appended to the per-variant output dir
+        (``001`` becomes ``001_<slug>``) and used as the saved shot's name.
+    final_look : (Params) -> dict | None
+        Optional Look-field overrides applied to the *render* shot only
+        (e.g. vignette). The probe shot stays clean so gate stats reflect
+        the underlying scene rather than a darkened lens.
     camera : Camera2D | None
         Override default camera.  Defaults to center=[0,0] width=3.2.
     depth : int
@@ -242,8 +338,11 @@ class Family:
         sample: Callable[[random.Random], Any],
         build: Callable[[Any], AnimateFn],
         *,
-        check: Callable[[Any, AnimateFn], Verdict] | None = None,
+        # check accepts either (animate) or (params, animate)
+        check: Callable[..., Verdict] | None = None,
         describe: Callable[[Any], str] | None = None,
+        tag: Callable[[Any], str | None] | None = None,
+        final_look: Callable[[Any], dict | None] | None = None,
         camera: Camera2D | None = None,
         depth: int = 12,
     ):
@@ -253,7 +352,12 @@ class Family:
         self._sample = sample
         self._build = build
         self._check = check
+        self._check_takes_params = (
+            len(inspect.signature(check).parameters) >= 2 if check is not None else False
+        )
         self._describe = describe
+        self._tag = tag
+        self._final_look = final_look
         self.camera = camera
         self.depth = depth
 
@@ -264,20 +368,26 @@ class Family:
         *,
         n: int = 1,
         seed: int | None = None,
-        hq: bool = False,
+        preset: str = DEFAULT_RENDER_PRESET,
+        duration: float | None = None,
         max_attempts: int = 500,
         out: str | None = None,
     ) -> list:
         """Search for valid variants and render them.
 
+        ``duration`` overrides the family's default if given.
+        ``preset`` picks a render-resolution preset (see ``RENDER_PRESETS``).
         Returns list of accepted params for programmatic use.
         """
         if seed is None:
             seed = int(time.time())
         rng = random.Random(seed)
         base_dir = Path(out or f"renders/families/{self.name}")
+        original_duration = self.duration
+        if duration is not None:
+            self.duration = duration
 
-        print(f"seed={seed} target={n} hq={hq}")
+        print(f"seed={seed} target={n} preset={preset} duration={self.duration}s")
 
         accepted: list = []
         found = 0
@@ -292,7 +402,10 @@ class Family:
 
             if self._check is not None:
                 print(f"[{attempt}] {desc} -- checking...", flush=True)
-                verdict = self._check(params, animate)
+                verdict = (
+                    self._check(params, animate) if self._check_takes_params
+                    else self._check(animate)
+                )
                 print(f"  {verdict.summary}", flush=True)
                 if not verdict.ok:
                     continue
@@ -300,10 +413,17 @@ class Family:
                 print(f"[{attempt}] {desc}", flush=True)
 
             found += 1
-            out_dir = base_dir / f"{found:03d}"
+            slug = f"{found:03d}"
+            tag = self._tag(params) if self._tag else None
+            if tag:
+                slug = f"{slug}_{tag}"
+            out_dir = base_dir / slug
             print(f"  FOUND #{found} -- rendering...")
 
-            self._render_variant(params, animate, out_dir, hq=hq)
+            self._render_variant(
+                params, animate, out_dir,
+                preset=preset, name=f"{self.name}_{slug}",
+            )
             accepted.append(params)
             print("  done.\n")
 
@@ -313,6 +433,7 @@ class Family:
         if found == 0:
             print(f"No valid animation found in {max_attempts} attempts.")
 
+        self.duration = original_duration
         return accepted
 
     # ── Survey ────────────────────────────────────────────────────────
@@ -381,7 +502,8 @@ class Family:
         self,
         params_path: str,
         *,
-        hq: bool = False,
+        preset: str = DEFAULT_RENDER_PRESET,
+        duration: float | None = None,
         out: str | None = None,
     ) -> None:
         """Re-render a previously saved variant from its params.json."""
@@ -394,8 +516,18 @@ class Family:
         params = params_from_dict(self.params_type, d)
         animate = self._build(params)
 
-        out_dir = Path(out) if out else path.parent
-        self._render_variant(params, animate, out_dir, hq=hq)
+        original_duration = self.duration
+        if duration is not None:
+            self.duration = duration
+        try:
+            out_dir = Path(out) if out else path.parent
+            # Reuse the dir's basename for the shot name on re-render.
+            self._render_variant(
+                params, animate, out_dir,
+                preset=preset, name=f"{self.name}_{out_dir.name}",
+            )
+        finally:
+            self.duration = original_duration
 
     # ── CLI ───────────────────────────────────────────────────────────
 
@@ -404,10 +536,15 @@ class Family:
         parser = argparse.ArgumentParser(prog=self.name, description=f"Family: {self.name}")
         sub = parser.add_subparsers(dest="command")
 
+        preset_help = f"Render resolution preset. Choices: {sorted(RENDER_PRESETS)}"
+
         sp_search = sub.add_parser("search", help="Search for valid variants and render them")
         sp_search.add_argument("-n", type=int, default=1, help="Number of variants to find")
         sp_search.add_argument("--seed", type=int, default=None)
-        sp_search.add_argument("--hq", action="store_true")
+        sp_search.add_argument("--preset", choices=sorted(RENDER_PRESETS),
+                               default=DEFAULT_RENDER_PRESET, help=preset_help)
+        sp_search.add_argument("--duration", type=float, default=None,
+                               help="Override the family's default duration (seconds)")
         sp_search.add_argument("--max-attempts", type=int, default=500)
         sp_search.add_argument("--out", type=str, default=None)
 
@@ -418,7 +555,9 @@ class Family:
 
         sp_render = sub.add_parser("render", help="Re-render from saved params.json")
         sp_render.add_argument("params_path", type=str)
-        sp_render.add_argument("--hq", action="store_true")
+        sp_render.add_argument("--preset", choices=sorted(RENDER_PRESETS),
+                               default=DEFAULT_RENDER_PRESET, help=preset_help)
+        sp_render.add_argument("--duration", type=float, default=None)
         sp_render.add_argument("--out", type=str, default=None)
 
         args = parser.parse_args()
@@ -430,12 +569,17 @@ class Family:
 
         if args.command == "search":
             self.search(
-                n=args.n, seed=args.seed, hq=args.hq, max_attempts=args.max_attempts, out=args.out
+                n=args.n, seed=args.seed, preset=args.preset,
+                duration=args.duration,
+                max_attempts=args.max_attempts, out=args.out,
             )
         elif args.command == "survey":
             self.survey(n=args.n, seed=args.seed, out=args.out)
         elif args.command == "render":
-            self.render(args.params_path, hq=args.hq, out=args.out)
+            self.render(
+                args.params_path, preset=args.preset,
+                duration=args.duration, out=args.out,
+            )
         else:
             parser.print_help()
             sys.exit(1)
@@ -448,16 +592,38 @@ class Family:
         animate: AnimateFn,
         out_dir: Path,
         *,
-        hq: bool,
+        preset: str = DEFAULT_RENDER_PRESET,
+        name: str | None = None,
     ) -> None:
-        """Save params and render video for one accepted variant."""
+        """Save params, export the most interesting frame, and render the video."""
         out_dir.mkdir(parents=True, exist_ok=True)
 
         params_path = out_dir / "params.json"
         params_path.write_text(json.dumps(asdict(params), indent=2))
         print(f"  params -> {params_path}")
 
-        shot = _make_render_shot(hq=hq, depth=self.depth, camera=self.camera)
+        shot = _make_render_shot(preset=preset, depth=self.depth, camera=self.camera)
+        if name:
+            shot.name = name
+        if self._final_look is not None:
+            extra = self._final_look(params)
+            if extra:
+                shot.look = shot.look.with_overrides(**extra)
+
+        # Pick the most interesting frame from a probe and save it as a
+        # GUI-loadable Shot JSON next to the video.
+        try:
+            _, ctx, score = pick_best_frame(
+                animate, self.duration, camera=self.camera, depth=self.depth
+            )
+            shot_json_path = out_dir / "frame.shot.json"
+            save_frame_shot(
+                animate, shot, ctx, shot_json_path, camera=self.camera, name=name
+            )
+            print(f"  frame  -> {shot_json_path}  (t={ctx.time:.2f}s, score={score:.3f})")
+        except Exception as e:  # noqa: BLE001 — best-effort; don't block video on it
+            print(f"  frame-export skipped ({type(e).__name__}: {e})")
+
         timeline = Timeline(self.duration, fps=60)
         video_path = out_dir / "video.mp4"
         render(animate, timeline, str(video_path), settings=shot, crf=16)

@@ -10,7 +10,6 @@ from anim import (
     Frame,
     FrameContext,
     LightSpectrum,
-    Look,
     PointLight,
     Polygon,
     Scene,
@@ -201,7 +200,6 @@ def build(p: Params):
     intensity = rendered_light_intensity(p.light.moving_intensity, p.light.spectrum)
 
     look_kwargs = asdict(p.look)
-    frame_look = Look().with_overrides(**look_kwargs)
 
     def animate(ctx: FrameContext) -> Frame:
         lights = list(ambient_lights)
@@ -222,6 +220,6 @@ def build(p: Params):
             shapes=[*wall_shapes, *shapes],
             lights=lights,
         )
-        return Frame(scene=scene, look=frame_look)
+        return Frame(scene=scene, look=look_kwargs)
 
     return animate
