@@ -76,9 +76,16 @@ def glass(
     *,
     color: ColorSpec = None,
     fill: float = 0.0,
+    roughness: float = 0.0,
 ) -> Material:
     return Material(
-        ior=ior, transmission=1.0, absorption=absorption, cauchy_b=cauchy_b, fill=fill, **_sc(color)
+        ior=ior,
+        transmission=1.0,
+        absorption=absorption,
+        cauchy_b=cauchy_b,
+        fill=fill,
+        roughness=roughness,
+        **_sc(color),
     )
 
 

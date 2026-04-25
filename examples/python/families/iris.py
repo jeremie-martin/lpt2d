@@ -80,6 +80,7 @@ class Params:
     wedge_ior: float
     wedge_cauchy_b: float
     wedge_fill: float
+    wedge_roughness: float
     wall_albedo: float
     lights: list[LightDef] = field(default_factory=list)
     branch: str = "solo_white"
@@ -161,10 +162,11 @@ def sample(rng: random.Random) -> Params:
         ring_radius=rng.uniform(0.35, 0.55),
         n_wedges=rng.randint(6, 10),
         wedge_size=rng.uniform(0.07, 0.12),
-        ring_rotation_rate_rad_per_sec=rng.uniform(-1.0, 1.0),
-        wedge_ior=rng.uniform(1.50, 1.62),
-        wedge_cauchy_b=rng.uniform(18_000.0, 34_000.0),
+        ring_rotation_rate_rad_per_sec=rng.uniform(-0.6, 0.6),
+        wedge_ior=rng.uniform(1.45, 1.55),
+        wedge_cauchy_b=rng.uniform(18_000.0, 50_000.0),
         wedge_fill=rng.uniform(*GLASS_FILL_RANGE),
+        wedge_roughness=rng.uniform(0.0, 0.015),
         wall_albedo=wall_albedo,
         lights=lights,
         branch=branch,
@@ -246,6 +248,7 @@ def build(p: Params):
             cauchy_b=p.wedge_cauchy_b,
             color=(0.97, 0.97, 0.98),
             fill=p.wedge_fill,
+            roughness=p.wedge_roughness,
         ),
     }
     warm_frac = sum(1 for L in p.lights if L.color == "warm") / max(1, len(p.lights))
@@ -285,6 +288,7 @@ def build(p: Params):
 GATE_MEAN_LUMA = (0.425, 0.575)
 GATE_RMS_CONTRAST_MIN = 0.25
 GATE_CLIPPED_MAX = 0.40
+GATE_P05_LUMA_MAX = 0.20
 GATE_MIN_PASSING_FRAC = 0.30
 
 
@@ -304,15 +308,18 @@ def check(animate) -> Verdict:
         if GATE_MEAN_LUMA[0] <= f.mean_luma <= GATE_MEAN_LUMA[1]
         and f.rms_contrast >= GATE_RMS_CONTRAST_MIN
         and f.clipped_channel_fraction <= GATE_CLIPPED_MAX
+        and f.analysis.image.p05_luma <= GATE_P05_LUMA_MAX
     )
     mean_luma = sum(f.mean_luma for f in frames) / n
     rms = sum(f.rms_contrast for f in frames) / n
     clipped = sum(f.clipped_channel_fraction for f in frames) / n
+    p05 = sum(f.analysis.image.p05_luma for f in frames) / n
     ok = passing >= int(GATE_MIN_PASSING_FRAC * n)
     return Verdict(
         ok=ok,
         summary=(
-            f"passes={passing}/{n} mean={mean_luma:.3f} rms={rms:.3f} clipped={clipped:.3f}"
+            f"passes={passing}/{n} mean={mean_luma:.3f} rms={rms:.3f} "
+            f"p05={p05:.3f} clipped={clipped:.3f}"
         ),
     )
 
