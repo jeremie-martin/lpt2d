@@ -142,8 +142,8 @@ RENDER_PRESETS: dict[str, tuple[int, int, int, str]] = {
     "tiny":    (320, 180, 2_000_000, "preview"),
     "240p":    (426, 240, 400_000, "preview"),
     "480p":    (854, 480, 1_400_000, "preview"),
-    "720p":    (1280, 720, 3_000_000, "preview"),
-    "hq":      (1920, 1080, 5_000_000, "production"),
+    "720p":    (1280, 720, 4_000_000, "preview"),
+    "hq":      (1920, 1080, 6_000_000, "production"),
 }
 DEFAULT_RENDER_PRESET = "tiny"
 
