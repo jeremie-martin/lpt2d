@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import pickle
 from collections.abc import Callable
 from pathlib import Path
@@ -13,6 +12,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
+from loguru import logger
 
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
@@ -29,8 +29,6 @@ _RATE_LIMIT_REASONS = {
     "userRateLimitExceeded",
     "dailyLimitExceeded",
 }
-
-logger = logging.getLogger(__name__)
 
 
 class RateLimitError(RuntimeError):
@@ -61,14 +59,14 @@ class YouTubeUploader:
             try:
                 creds = pickle.loads(self.token_path.read_bytes())
             except Exception as e:
-                logger.warning("Failed to load cached token: %s", e)
+                logger.warning("Failed to load cached token: {}", e)
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 try:
                     creds.refresh(Request())
                 except Exception as e:
-                    logger.warning("Token refresh failed, running OAuth flow: %s", e)
+                    logger.warning("Token refresh failed, running OAuth flow: {}", e)
                     creds = None
 
             if not creds or not creds.valid:
@@ -143,7 +141,7 @@ class YouTubeUploader:
                 self._add_to_playlist(video_id, playlist_id)
             except HttpError as e:
                 logger.warning(
-                    "Failed to add video %s to playlist %s: %s", video_id, playlist_id, e
+                    "Failed to add video {} to playlist {}: {}", video_id, playlist_id, e
                 )
 
         return video_id

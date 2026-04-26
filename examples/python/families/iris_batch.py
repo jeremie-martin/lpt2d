@@ -27,6 +27,7 @@ import json
 import random
 import time
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 from anim import Shot, render
@@ -236,16 +237,17 @@ def main(argv: list[str] | None = None) -> None:
     print(f"render: {args.width}x{args.height} @ {args.fps}fps  rays={args.rays}  "
           f"depth={args.depth}  duration={args.duration}s", flush=True)
 
+    batch_ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     cells: list[dict] = []
     for i in range(1, args.n + 1):
-        slug = f"{i:03d}"
-        out_dir = out / slug
         rng = random.Random((seed, i).__hash__())
 
-        print(f"[{i}/{args.n}] {slug}  searching...", flush=True)
+        print(f"[{i}/{args.n}] searching...", flush=True)
         p, v, attempts, passed = _search_variant(
             rng, **pinned, max_attempts=args.max_attempts,
         )
+        slug = f"iris_{batch_ts}_{p.branch}_{i:03d}"
+        out_dir = out / slug
         print(f"  {'OK' if passed else 'FAIL'} after {attempts}: {iris.describe(p)}", flush=True)
         print(f"  gate: {v.summary}", flush=True)
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run lpt2d nightly render + ship at 02:00
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+AccuracySec=5min
+Persistent=true
+Unit=lpt2d-nightly.service
+
+[Install]
+WantedBy=timers.target

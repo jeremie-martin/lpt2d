@@ -1,101 +1,458 @@
-"""Inbox watcher: poll for new videos, process them, upload to YouTube.
+"""Inbox watcher: pick up render bundles, upload to YouTube, record + delete.
 
-State is kept entirely in the filesystem via marker files next to each video:
-- ``<video>.uploaded`` — video has been uploaded; contains the YouTube video id
-- ``<video>.failed`` — video failed processing/upload; contains the error message
+The watcher is bundle-oriented. Each subdirectory of ``inbox`` is one render
+bundle and contains at minimum::
 
-Successfully uploaded videos and their derivatives move to ``archive``.
-Failed videos stay in the inbox alongside the marker for inspection.
+    <bundle>/
+      video.mp4
+      params.json
+      verdict.json     (optional)
+      frame.shot.json  (optional)
+      publish.json     (optional, per-bundle override of title/desc/tags/music)
+
+Lifecycle markers (filesystem source of truth):
+
+- ``<bundle>/uploaded`` — written after a successful YouTube upload; contains
+  ``{"yt_id": ..., "uploaded_at": ...}``. The bundle is then bookkept in the
+  ledger and the whole directory is deleted.
+- ``<bundle>/failed`` — written on terminal failure (gate fail, upload error).
+  A line is appended to ``failed.jsonl`` and the bundle is deleted too —
+  the server keeps no archive.
+
+Both ledgers carry the full ``params.json`` + ``verdict.json`` so analysis is
+just ``jq`` or ``pandas.read_json(..., lines=True)``.
+
+Crash safety: the order around the upload is
+``upload → marker → state → ledger → rmtree``. If the watcher dies after the
+marker exists but before the bundle is gone, the next tick sees the marker,
+knows the upload already happened, and just finishes the bookkeeping +
+deletion. The duplicate-upload window is between the YouTube API returning
+the id and the marker write — milliseconds, fsynced.
 """
 
 from __future__ import annotations
 
-import logging
+import json
 import shutil
+import subprocess
 import time
+from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
+from typing import Any
 
-from .post import process
-from .titles import pick
+from loguru import logger
+
+from . import bundle as B
+from . import post
+from .ledger import Ledger, atomic_write_text, now_iso
+from .metadata import PublishOverrides
+from .state import State
+from .titles import pick as pick_title_pool
 from .youtube import (
     CATEGORY_FILM_ANIMATION,
     RateLimitError,
-    UploadError,
     YouTubeUploader,
 )
 
-logger = logging.getLogger(__name__)
-
-VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv"}
 SETTLE_SECONDS = 5.0
+UploadFn = Callable[[Path, dict[str, Any]], str]
 
 
-def _pending_videos(inbox: Path) -> list[Path]:
-    out: list[Path] = []
+class HandleResult(str, Enum):
+    UPLOADED = "uploaded"
+    RESUMED = "resumed"
+    FAILED = "failed"
+    THROTTLED = "throttled"
+
+
+def _read_json_optional(path: Path) -> dict[str, Any] | None:
+    """Return parsed dict, or None if file is absent. Propagates JSONDecodeError."""
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def _write_marker(bundle: Path, yt_id: str, uploaded_at: str) -> None:
+    payload = json.dumps({"yt_id": yt_id, "uploaded_at": uploaded_at}, separators=(",", ":")) + "\n"
+    atomic_write_text(bundle / B.MARKER_UPLOADED, payload, fsync_dir=True)
+
+
+def _read_marker(bundle: Path) -> tuple[str, str | None]:
+    data = json.loads((bundle / B.MARKER_UPLOADED).read_text())
+    return data["yt_id"], data.get("uploaded_at")
+
+
+def _resolve_metadata(overrides: PublishOverrides) -> tuple[str, str, list[str]]:
+    title_default, description_default, tags_default = pick_title_pool()
+    title = overrides.title_hint or title_default
+    description = overrides.description_hint or description_default
+    tags = overrides.tags or tags_default
+    return title, description, tags
+
+
+def _pending_bundles(inbox: Path) -> list[Path]:
+    """Resumed (uploaded-marker) bundles come first so a throttled fresh
+    bundle cannot starve the cleanup queue. ``uploaded`` takes precedence
+    over ``failed`` because it represents a real YouTube id."""
+    if not inbox.is_dir():
+        return []
+    resumed: list[Path] = []
+    fresh: list[Path] = []
     now = time.time()
-    for p in sorted(inbox.iterdir()):
-        if not p.is_file() or p.suffix.lower() not in VIDEO_EXTENSIONS:
+    for d in sorted(inbox.iterdir()):
+        if not d.is_dir():
             continue
-        if (p.parent / (p.name + ".uploaded")).exists():
+        if (d / B.MARKER_UPLOADED).exists():
+            resumed.append(d)
             continue
-        if (p.parent / (p.name + ".failed")).exists():
+        if (d / B.MARKER_FAILED).exists():
             continue
-        if (now - p.stat().st_mtime) < SETTLE_SECONDS:
+        video = d / B.VIDEO
+        params = d / B.PARAMS
+        if not (video.exists() and params.exists()):
             continue
-        out.append(p)
-    return out
+        if (now - video.stat().st_mtime) < SETTLE_SECONDS:
+            continue
+        fresh.append(d)
+    return resumed + fresh
+
+
+def _build_upload_entry(
+    bundle: Path,
+    video_id: str,
+    *,
+    uploaded_at: str,
+    title: str,
+    description: str,
+    tags: list[str],
+    music_path: Path | None,
+    music_dir: Path | None,
+    privacy: str,
+    params: dict[str, Any] | None,
+    verdict: dict[str, Any] | None,
+    processed_path: Path,
+) -> dict[str, Any]:
+    duration_s: float | None = None
+    file_size: int | None = None
+    try:
+        info = post.probe(processed_path)
+        duration_s = info.duration_s
+    except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, OSError) as e:
+        logger.warning("ffprobe failed for {}: {!r}", processed_path, e)
+    try:
+        file_size = processed_path.stat().st_size
+    except OSError:
+        pass
+
+    music_field: dict[str, str] | None = None
+    if music_path is not None:
+        try:
+            relpath = (
+                str(music_path.relative_to(music_dir)) if music_dir is not None else music_path.name
+            )
+        except ValueError:
+            relpath = music_path.name
+        music_field = {"filename": music_path.name, "relpath": relpath}
+
+    return {
+        "uploaded_at": uploaded_at,
+        "youtube_id": video_id,
+        "youtube_url": f"https://youtu.be/{video_id}",
+        "bundle_name": bundle.name,
+        "title": title,
+        "description": description,
+        "tags": list(tags),
+        "music": music_field,
+        "privacy": privacy,
+        "duration_s": duration_s,
+        "file_size": file_size,
+        "params": params,
+        "verdict": verdict,
+    }
+
+
+def _record_failure(
+    bundle: Path,
+    reason: str,
+    *,
+    ledger: Ledger,
+    params: dict[str, Any] | None,
+    verdict: dict[str, Any] | None,
+) -> None:
+    (bundle / B.MARKER_FAILED).write_text(reason)
+    ledger.append_failure(
+        {
+            "failed_at": now_iso(),
+            "bundle_name": bundle.name,
+            "reason": reason,
+            "params": params,
+            "verdict": verdict,
+        }
+    )
+    logger.error("Failed bundle {} ({}); deleting", bundle.name, reason)
+    shutil.rmtree(bundle)
+
+
+def _read_for_resume(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Return ``(parsed_or_None, error_repr_or_None)``. Captures parse errors
+    instead of swallowing them so the resumed ledger entry preserves auditability."""
+    try:
+        return _read_json_optional(path), None
+    except json.JSONDecodeError as e:
+        return None, repr(e)
+
+
+def _finalize_resumed(bundle: Path, ledger: Ledger) -> None:
+    yt_id, marker_uploaded_at = _read_marker(bundle)
+    params, params_err = _read_for_resume(bundle / B.PARAMS)
+    verdict, verdict_err = _read_for_resume(bundle / B.VERDICT)
+    entry: dict[str, Any] = {
+        "uploaded_at": marker_uploaded_at or now_iso(),
+        "youtube_id": yt_id,
+        "youtube_url": f"https://youtu.be/{yt_id}",
+        "bundle_name": bundle.name,
+        "title": None,
+        "description": None,
+        "tags": [],
+        "music": None,
+        "privacy": None,
+        "duration_s": None,
+        "file_size": None,
+        "params": params,
+        "verdict": verdict,
+        "resumed": True,
+    }
+    if params_err is not None:
+        entry["params_error"] = params_err
+    if verdict_err is not None:
+        entry["verdict_error"] = verdict_err
+    ledger.append_upload(entry)
+    logger.warning(
+        "Resumed crashed upload for {} (yt_id={}); finalized + deleted", bundle.name, yt_id
+    )
+    shutil.rmtree(bundle)
+
+
+def _handle(
+    bundle: Path,
+    *,
+    upload_fn: UploadFn,
+    ledger: Ledger,
+    state: State,
+    music_dir: Path,
+    privacy: str,
+    min_interval: int,
+) -> HandleResult:
+    """Process one bundle. ``THROTTLED`` means no later fresh bundle in the
+    same tick can succeed either, so the caller should break."""
+    if (bundle / B.MARKER_UPLOADED).exists():
+        _finalize_resumed(bundle, ledger)
+        return HandleResult.RESUMED
+
+    wait = state.seconds_until_next_allowed(min_interval)
+    if wait > 0:
+        logger.debug("Throttled: {} more seconds until next upload allowed", wait)
+        return HandleResult.THROTTLED
+
+    # params.json / verdict.json: missing → ok; present but unparseable → fail closed.
+    try:
+        params = _read_json_optional(bundle / B.PARAMS)
+    except json.JSONDecodeError as e:
+        _record_failure(
+            bundle,
+            f"params.json unreadable: {e!r}",
+            ledger=ledger,
+            params=None,
+            verdict=None,
+        )
+        return HandleResult.FAILED
+    try:
+        verdict = _read_json_optional(bundle / B.VERDICT)
+    except json.JSONDecodeError as e:
+        _record_failure(
+            bundle,
+            f"verdict.json unreadable: {e!r}",
+            ledger=ledger,
+            params=params,
+            verdict=None,
+        )
+        return HandleResult.FAILED
+
+    if verdict is not None and not verdict.get("ok", True):
+        _record_failure(
+            bundle,
+            "verdict.ok == false",
+            ledger=ledger,
+            params=params,
+            verdict=verdict,
+        )
+        return HandleResult.FAILED
+
+    overrides = PublishOverrides.from_bundle(bundle)
+    title, description, tags = _resolve_metadata(overrides)
+
+    try:
+        processed, music_used = post.process(
+            bundle / B.VIDEO,
+            music=True,
+            music_dir=music_dir,
+            music_override=overrides.music,
+        )
+    except Exception as e:
+        logger.exception("Post-process failed for {}", bundle.name)
+        _record_failure(
+            bundle,
+            f"post-process failed: {e!r}",
+            ledger=ledger,
+            params=params,
+            verdict=verdict,
+        )
+        return HandleResult.FAILED
+
+    logger.info("Uploading {} as {!r}", bundle.name, title)
+    body = {
+        "title": title,
+        "description": description,
+        "tags": list(tags),
+        "privacy_status": privacy,
+        "category_id": CATEGORY_FILM_ANIMATION,
+    }
+    try:
+        yt_id = upload_fn(processed, body)
+    except RateLimitError:
+        raise
+    except Exception as e:
+        logger.exception("Upload failed for {}", bundle.name)
+        _record_failure(
+            bundle,
+            f"upload failed: {e!r}",
+            ledger=ledger,
+            params=params,
+            verdict=verdict,
+        )
+        return HandleResult.FAILED
+
+    uploaded_at = now_iso()
+    _write_marker(bundle, yt_id, uploaded_at)
+    state.record_upload()
+    ledger.append_upload(
+        _build_upload_entry(
+            bundle,
+            yt_id,
+            uploaded_at=uploaded_at,
+            title=title,
+            description=description,
+            tags=list(tags),
+            music_path=music_used,
+            music_dir=music_dir,
+            privacy=privacy,
+            params=params,
+            verdict=verdict,
+            processed_path=processed,
+        )
+    )
+    logger.success("Uploaded {} -> https://youtu.be/{}", bundle.name, yt_id)
+    shutil.rmtree(bundle)
+    return HandleResult.UPLOADED
+
+
+def _build_upload_fn(
+    credentials_dir: Path,
+    *,
+    playlist_id: str | None,
+    dry_run: bool,
+) -> UploadFn:
+    if dry_run:
+        return lambda processed, _body: f"DRYRUN-{processed.stem}"
+
+    uploader = YouTubeUploader(credentials_dir)
+    uploader.authenticate()
+
+    def _upload(processed: Path, body: dict[str, Any]) -> str:
+        return uploader.upload(processed, **body, playlist_id=playlist_id)
+
+    return _upload
 
 
 def watch(
     inbox: Path,
-    archive: Path,
     music_dir: Path,
     credentials_dir: Path,
+    state_file: Path,
+    ledger_dir: Path,
+    *,
     playlist_id: str | None = None,
     privacy_status: str = "private",
     interval: int = 30,
+    min_interval: int = 0,
+    dry_run: bool = False,
 ) -> None:
     inbox.mkdir(parents=True, exist_ok=True)
-    archive.mkdir(parents=True, exist_ok=True)
+    ledger = Ledger(ledger_dir)
+    state = State.load(state_file)
+    upload_fn = _build_upload_fn(credentials_dir, playlist_id=playlist_id, dry_run=dry_run)
 
-    uploader = YouTubeUploader(credentials_dir)
-    uploader.authenticate()
-    logger.info("Watching %s every %ds (archive=%s)", inbox, interval, archive)
+    if dry_run:
+        logger.warning("DRY-RUN mode: uploads will NOT hit YouTube; ids will be DRYRUN-*")
+    logger.info(
+        "Watching {} every {}s (min_interval={}s, privacy={}, dry_run={})",
+        inbox,
+        interval,
+        min_interval,
+        privacy_status,
+        dry_run,
+    )
 
     while True:
-        for video in _pending_videos(inbox):
+        for bundle in _pending_bundles(inbox):
             try:
-                logger.info("Processing %s", video.name)
-                processed = process(video, music=True, music_dir=music_dir)
-                title, description, tags = pick()
-                logger.info("Uploading %s as %r", processed.name, title)
-                video_id = uploader.upload(
-                    processed,
-                    title=title,
-                    description=description,
-                    tags=tags,
-                    privacy_status=privacy_status,
-                    category_id=CATEGORY_FILM_ANIMATION,
-                    playlist_id=playlist_id,
+                result = _handle(
+                    bundle,
+                    upload_fn=upload_fn,
+                    ledger=ledger,
+                    state=state,
+                    music_dir=music_dir,
+                    privacy=privacy_status,
+                    min_interval=min_interval,
                 )
-                logger.info("Uploaded: https://youtu.be/%s", video_id)
-
-                marker = video.parent / (video.name + ".uploaded")
-                marker.write_text(video_id)
-                shutil.move(str(video), archive / video.name)
-                if processed.exists():
-                    shutil.move(str(processed), archive / processed.name)
-                shutil.move(str(marker), archive / marker.name)
             except RateLimitError as e:
                 wait = e.retry_after or 3600
-                logger.warning("Rate limited, sleeping %ds", wait)
+                logger.warning("Rate-limited by YouTube: sleeping {}s", wait)
                 time.sleep(wait)
                 break
-            except UploadError as e:
-                logger.error("Upload error for %s: %s", video.name, e)
-                (video.parent / (video.name + ".failed")).write_text(str(e))
-            except Exception as e:
-                logger.exception("Unexpected error for %s", video.name)
-                (video.parent / (video.name + ".failed")).write_text(repr(e))
+            except Exception:
+                logger.exception("Unexpected error processing {}", bundle.name)
+                continue
+
+            if result is HandleResult.THROTTLED:
+                break
 
         time.sleep(interval)
+
+
+def process_one(
+    bundle: Path,
+    music_dir: Path,
+    credentials_dir: Path,
+    state_file: Path,
+    ledger_dir: Path,
+    *,
+    playlist_id: str | None = None,
+    privacy_status: str = "private",
+    min_interval: int = 0,
+    dry_run: bool = False,
+) -> None:
+    """One-shot: process a single bundle directory and exit."""
+    ledger = Ledger(ledger_dir)
+    state = State.load(state_file)
+    upload_fn = _build_upload_fn(credentials_dir, playlist_id=playlist_id, dry_run=dry_run)
+    _handle(
+        bundle,
+        upload_fn=upload_fn,
+        ledger=ledger,
+        state=state,
+        music_dir=music_dir,
+        privacy=privacy_status,
+        min_interval=min_interval,
+    )

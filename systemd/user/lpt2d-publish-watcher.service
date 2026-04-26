@@ -1,0 +1,23 @@
+[Unit]
+Description=lpt2d publish watcher (server-side; uploads bundles to YouTube)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=%h/lpt2d
+ExecStart=%h/lpt2d-publish/venv/bin/python -m publish watch \
+    --inbox %h/lpt2d-publish/inbox \
+    --music-dir %h/lpt2d-publish/music \
+    --credentials-dir %h/lpt2d-publish/credentials \
+    --state-file %h/lpt2d-publish/state.json \
+    --ledger-dir %h/lpt2d-publish \
+    --log-file %h/lpt2d-publish/watcher.log \
+    --min-interval 3600 \
+    --interval 60
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=default.target

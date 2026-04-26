@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Manage local lpt2d nightly render+ship timers and manual runs.
+# Mirrors scripts/pendulum-schedule.sh from the double-pendulum repo.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+SERVICES=(
+    lpt2d-nightly.service
+    lpt2d-manual.service
+)
+
+TIMERS=(
+    lpt2d-nightly.timer
+)
+
+MANUAL_SERVICE=lpt2d-manual.service
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/lpt2d-schedule.sh <command>
+
+Commands:
+  start       Start a manual render+ship now (continues until done/paused)
+  pause       Stop currently running jobs (next schedule still runs)
+  stop        Stop running jobs AND disable scheduled timers
+  status      Show timer schedule + current unit status
+  brief       Print a short status summary (for menus/scripts)
+  enable      Enable and start nightly timer
+  disable     Disable timer and stop running jobs
+  ship-now    Run the ship script without a render
+  install     Symlink unit files from the repo into ~/.config/systemd/user/
+EOF
+}
+
+cmd="${1:-status}"
+
+case "$cmd" in
+    start|start-now|run-now)
+        systemctl --user daemon-reload
+        systemctl --user start "$MANUAL_SERVICE"
+        echo "Started manual render+ship. Use 'lpt2d-schedule.sh pause' to stop."
+        ;;
+    pause)
+        systemctl --user stop "${SERVICES[@]}" 2>/dev/null || true
+        echo "Paused current run(s). Next scheduled runs remain enabled."
+        ;;
+    stop)
+        systemctl --user disable --now "${TIMERS[@]}" 2>/dev/null || true
+        systemctl --user stop "${SERVICES[@]}" 2>/dev/null || true
+        echo "Stopped current run(s) and disabled scheduled timers."
+        ;;
+    status)
+        echo "Timers:"
+        systemctl --user list-timers --all --no-pager \
+            | grep -E 'lpt2d-(nightly)|NEXT|LEFT|^$' || true
+        echo
+        echo "Units:"
+        systemctl --user --no-pager --full status "${TIMERS[@]}" "${SERVICES[@]}" || true
+        ;;
+    brief)
+        echo "Next timers:"
+        systemctl --user list-timers --all --no-pager \
+            | grep -E 'lpt2d-(nightly)|NEXT|LEFT' || true
+        echo
+        echo "Running services:"
+        systemctl --user list-units --type=service --state=running --no-pager \
+            | grep -E 'lpt2d-(nightly|manual)\.service' || echo "(none)"
+        ;;
+    enable)
+        systemctl --user daemon-reload
+        systemctl --user enable --now "${TIMERS[@]}"
+        echo "Enabled timers."
+        ;;
+    disable)
+        systemctl --user daemon-reload
+        systemctl --user disable --now "${TIMERS[@]}" 2>/dev/null || true
+        systemctl --user stop "${SERVICES[@]}" 2>/dev/null || true
+        echo "Disabled timers and stopped active runs."
+        ;;
+    ship-now)
+        "$ROOT_DIR/scripts/lpt2d-ship.sh"
+        ;;
+    install)
+        target="$HOME/.config/systemd/user"
+        mkdir -p "$target"
+        for unit in lpt2d-nightly.service lpt2d-nightly.timer lpt2d-manual.service; do
+            ln -sf "$ROOT_DIR/systemd/user/$unit" "$target/$unit"
+            echo "linked $unit"
+        done
+        systemctl --user daemon-reload
+        echo "Now: scripts/lpt2d-schedule.sh enable"
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

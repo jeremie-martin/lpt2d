@@ -1,0 +1,16 @@
+[Unit]
+Description=lpt2d manual render + ship
+Conflicts=lpt2d-nightly.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/prog/lpt2d
+ExecStart=%h/prog/lpt2d/scripts/lpt2d-render-and-ship.sh
+RuntimeMaxSec=4h
+TimeoutStopSec=120
+KillSignal=SIGTERM
+SuccessExitStatus=SIGTERM
+Restart=no
+
+[Install]
+WantedBy=default.target

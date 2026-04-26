@@ -16,6 +16,7 @@ dependencies = [
 publish = [
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.100",
+    "loguru>=0.7",
 ]
 
 [dependency-groups]
