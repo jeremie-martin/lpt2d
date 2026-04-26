@@ -16,9 +16,6 @@ __pycache__/
 # Rendered/exported artifacts
 *.png
 *.ppm
-*.mp4
-*.mkv
-*.webm
 /*.shot.json
 /lpt2d
 /middle_frame.json
@@ -44,6 +41,47 @@ __pycache__/
 /owo/
 /relationship_study.py
 /runs/
+
+# Media artifacts (audio/video)
+*.3g2
+*.3gp
+*.aac
+*.aif
+*.aiff
+*.asf
+*.avi
+*.f4a
+*.f4b
+*.f4p
+*.f4v
+*.flac
+*.flv
+*.m2ts
+*.m2v
+*.m4a
+*.m4b
+*.m4p
+*.m4v
+*.mkv
+*.mov
+*.mp3
+*.mp4
+*.mpeg
+*.mpg
+*.mpe
+*.m4p
+*.ogg
+*.oga
+*.opus
+*.rm
+*.rmvb
+*.ts
+*.vob
+*.webm
+*.wav
+*.wma
+*.wmv
+*.ogv
 
 # Local editor / profiling artifacts
 /imgui.ini
