@@ -38,7 +38,6 @@ Commands:
   brief       Print a short status summary (for menus/scripts)
   enable      Enable and start both timers (nightly 01:00–07:00, workday Mon–Fri 09:30–17:30)
   disable     Disable both timers and stop running jobs
-  ship-now    Run the ship script without a render
   install     Symlink all five unit files into ~/.config/systemd/user/
   deploy      Pull repo on $LPT2D_REMOTE, reload systemd, restart watcher.
               Pass --deps to also pip install/upgrade the publish runtime
@@ -90,9 +89,6 @@ case "$cmd" in
         systemctl --user disable --now "${TIMERS[@]}" 2>/dev/null || true
         systemctl --user stop "${SERVICES[@]}" 2>/dev/null || true
         echo "Disabled timers and stopped active runs."
-        ;;
-    ship-now)
-        "$ROOT_DIR/scripts/lpt2d-ship.sh"
         ;;
     install)
         target="$HOME/.config/systemd/user"

@@ -5,7 +5,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEDULE="$ROOT_DIR/scripts/lpt2d-schedule.sh"
-SHIP="$ROOT_DIR/scripts/lpt2d-ship.sh"
 REMOTE="${LPT2D_REMOTE:-holo@vps}"
 
 if ! command -v rofi >/dev/null 2>&1; then
@@ -29,7 +28,6 @@ choice="$(
     printf '%s\n' \
         'Status' \
         'Start now (manual)' \
-        'Ship pending bundles now' \
         'Deploy to server (git pull + restart)' \
         'Pause current run' \
         'Enable schedule timers' \
@@ -58,10 +56,6 @@ case "$choice" in
         ;;
     'Start now (manual)')
         run_action "$SCHEDULE" start && notify "Started manual render+ship"
-        ;;
-    'Ship pending bundles now')
-        output="$("$SHIP" 2>&1)" || true
-        rofi -e "$output"
         ;;
     'Deploy to server (git pull + restart)')
         output="$("$SCHEDULE" deploy 2>&1)" || true

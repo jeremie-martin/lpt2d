@@ -96,12 +96,15 @@ that bounds it:
 All three `Conflicts=` each other, so only one runs at a time.
 
 The script renders one bundle at a time in a loop (`iris_demo.py -n 1`)
-and ships completed ones to the VPS in the background every
-`LPT2D_SHIP_INTERVAL` seconds (30 by default). When the timer expires
-(or the operator stops the service), the script forwards SIGTERM to the
-in-flight render, then `rmtree`s the partial bundle (the one with
-`params.json` but no `verdict.json`) on exit. Net effect: never any
-half-rendered bundles on disk.
+and ships **that bundle and only that bundle** to the VPS the moment it
+completes, then loops. There is no background sweep and no scanning of
+the wider `renders/` tree — old experimental directories are invisible
+to the publish path.
+
+When the timer expires (or the operator stops the service), the script
+forwards SIGTERM to the in-flight render, then `rmtree`s the partial
+bundle (the one with `params.json` but no `verdict.json`) on exit. Net
+effect: never any half-rendered bundles on disk.
 
 `Persistent=false` on both timers — a missed nightly does NOT fire on
 next wake. If the laptop was asleep at 01:00, just hit "Start now (manual)"
