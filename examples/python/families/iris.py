@@ -82,11 +82,16 @@ BASE_PERIOD = 4.0
 # Active light-motion regimes for production. wander2d drifts too fast under
 # the family's speed_scale; polar didn't read well in 15s shorts after
 # iteration. Both stay defined in iris_motion so manual experiments can still
-# pin them via `iris_batch.py --regime polar`.
-LIGHT_REGIMES = tuple(n for n in iris_motion.REGIME_NAMES
-                       if n not in ("wander2d", "polar"))
-# → ('loop', 'patrol', 'two_well', 'chase')  — uniform sampling
-assert len(LIGHT_REGIMES) == 4, LIGHT_REGIMES
+# pin them via `iris_batch.py --regime <name>`.
+#
+# Define the production set EXPLICITLY (rather than as an exclusion). A
+# rename in iris_motion now raises a loud KeyError instead of silently
+# re-enabling a regime we curated out.
+LIGHT_REGIMES = ("loop", "patrol", "two_well", "chase")
+assert all(n in iris_motion.REGIME_NAMES for n in LIGHT_REGIMES), (
+    "production regimes drifted from iris_motion: "
+    f"{[n for n in LIGHT_REGIMES if n not in iris_motion.REGIME_NAMES]}"
+)
 
 # Geom kinds dampen the ring rotation when active so the wedges don't blur.
 _GEOM_RING_DAMP = 0.9
@@ -291,6 +296,10 @@ _BRANCHES = {
     "solo_warm": (_branch_solo_warm, 0.0),
     "duet_contrast": (_branch_duet_contrast, 0.0),
 }
+assert {n for n, (_, w) in _BRANCHES.items() if w > 0} == {"solo_white"}, (
+    "production constraint: solo_white must be the only branch with non-zero "
+    "weight; flip the weight intentionally if you really want a different mix"
+)
 
 
 # ── Sampling ──────────────────────────────────────────────────────────

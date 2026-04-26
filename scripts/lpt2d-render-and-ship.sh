@@ -52,13 +52,15 @@ OUT="$ROOT/renders/lpt2d_iris_${WINDOW}_${TS_SESSION}_${RESOLUTION}"
 # verdict.json was interrupted — rmtree it.
 cleanup_partials() {
     [[ -d "$OUT" ]] || return 0
+    local d
+    shopt -s nullglob
     for d in "$OUT"/*/; do
-        [[ -d "$d" ]] || continue
         if [[ -f "$d/params.json" && ! -f "$d/verdict.json" ]]; then
             echo "[lpt2d] removing partial bundle: $d"
             rm -rf "$d"
         fi
     done
+    shopt -u nullglob
 }
 
 # ── Background ship loop ──────────────────────────────────────────────
@@ -72,9 +74,10 @@ ship_periodically &
 SHIP_PID=$!
 
 # ── Stop handling ─────────────────────────────────────────────────────
-# SIGTERM/SIGINT: set STOP flag and forward to the in-flight render so
-# the wait below returns promptly. EXIT trap kills the ship loop and
-# rmtrees any partial bundle.
+# SIGTERM/SIGINT: set STOP and forward to the in-flight render. Under systemd
+# the default KillMode=control-group already SIGTERMs every pid in the unit's
+# cgroup (bash + python + ffmpeg), so this `kill -TERM` is mainly for the
+# non-systemd "operator runs the script directly" case.
 STOP=0
 RENDER_PID=
 on_signal() {
@@ -82,11 +85,15 @@ on_signal() {
     [[ -n "$RENDER_PID" ]] && kill -TERM "$RENDER_PID" 2>/dev/null || true
 }
 trap on_signal INT TERM
+# Final ship is bounded so a backed-up inbox can't blow past systemd's
+# TimeoutStopSec=120 and trigger a SIGKILL mid-rsync. Anything left over
+# stays locally-`.shipped`-marker-less and ships on the next run.
+# 100s = unit's TimeoutStopSec (120s) − ~20s slack for the preceding steps.
 trap '
     kill "$SHIP_PID" 2>/dev/null || true
     wait "$SHIP_PID" 2>/dev/null || true
     cleanup_partials
-    "$ROOT/scripts/lpt2d-ship.sh" || true
+    timeout 100 "$ROOT/scripts/lpt2d-ship.sh" || true
 ' EXIT
 
 echo "[lpt2d] continuous render: window=$WINDOW resolution=$RESOLUTION out=$OUT (ship every ${SHIP_INTERVAL}s)"
