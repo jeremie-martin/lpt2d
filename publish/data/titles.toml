@@ -27,11 +27,21 @@ descriptions = [
 
 tags = [
     "satisfying",
+    "mesmerizing",
     "generative",
-    "optics",
     "raytracing",
-    "ambient",
     "loop",
     "shorts",
     "procedural",
+]
+
+# Hashtag candidates appended to the title (0-2 random per upload, so most
+# titles stay clean). These appear visibly on the video page, so we exclude
+# rejected words like "loop".
+title_hashtags = [
+    "shorts",
+    "raytracing",
+    "generative",
+    "satisfying",
+    "mesmerizing",
 ]
