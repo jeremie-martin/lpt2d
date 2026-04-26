@@ -30,6 +30,8 @@ Commands:
   disable     Disable timer and stop running jobs
   ship-now    Run the ship script without a render
   install     Symlink unit files from the repo into ~/.config/systemd/user/
+  deploy      Pull repo on $LPT2D_REMOTE, reload systemd, restart watcher
+              (pass --deps to also pip install from pyproject.toml)
 EOF
 }
 
@@ -90,6 +92,39 @@ case "$cmd" in
         done
         systemctl --user daemon-reload
         echo "Now: scripts/lpt2d-schedule.sh enable"
+        ;;
+    deploy)
+        # Pull the repo on the VPS, reload systemd, restart the watcher.
+        # Pass --deps as the second arg to also pip install (slow; only when
+        # pyproject.toml or requirements changed).
+        remote="${LPT2D_REMOTE:-holo@vps}"
+        venv_pip="\$HOME/lpt2d-publish/venv/bin/pip"
+        deps_flag="${2:-}"
+        echo "deploy: $remote"
+        ssh "$remote" "
+            set -e
+            cd ~/lpt2d
+            git fetch --quiet
+            before=\$(git rev-parse HEAD)
+            git pull --ff-only --quiet
+            after=\$(git rev-parse HEAD)
+            if [[ \$before == \$after ]]; then
+                echo 'no new commits'
+            else
+                echo \"updated: \$before -> \$after\"
+                git --no-pager log --oneline \"\$before..\$after\"
+            fi
+            if [[ '$deps_flag' == '--deps' ]]; then
+                echo 'installing deps...'
+                $venv_pip install --upgrade loguru google-auth-oauthlib google-api-python-client
+            fi
+            export XDG_RUNTIME_DIR=/run/user/\$(id -u)
+            systemctl --user daemon-reload
+            systemctl --user restart lpt2d-publish-watcher.service
+            sleep 2
+            systemctl --user is-active lpt2d-publish-watcher.service
+            journalctl --user -u lpt2d-publish-watcher.service -n 5 --no-pager
+        "
         ;;
     -h|--help|help)
         usage

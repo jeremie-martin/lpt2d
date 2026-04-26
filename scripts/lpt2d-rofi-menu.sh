@@ -30,6 +30,7 @@ choice="$(
         'Status' \
         'Start now (manual)' \
         'Ship pending bundles now' \
+        'Deploy to server (git pull + restart)' \
         'Pause current run' \
         'Enable schedule timers' \
         'Disable all timers' \
@@ -60,6 +61,10 @@ case "$choice" in
         ;;
     'Ship pending bundles now')
         output="$("$SHIP" 2>&1)" || true
+        rofi -e "$output"
+        ;;
+    'Deploy to server (git pull + restart)')
+        output="$("$SCHEDULE" deploy 2>&1)" || true
         rofi -e "$output"
         ;;
     'Pause current run')
