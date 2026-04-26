@@ -6,16 +6,16 @@
 # sentinel), so the VPS watcher can start uploading well before the full batch
 # has finished — same shape as dp's per-video scp on the C++ side.
 #
+# Renders via iris_demo.py — the curator's preferred wrapper. Resolution
+# preset knobs (rays/fps/depth/crf) live in iris_demo.RESOLUTION_PRESETS;
+# editing them there propagates to nightly runs without touching this script.
+#
 # Env knobs:
-#   LPT2D_NIGHTLY_N         — bundles per nightly batch (default: 12)
-#   LPT2D_NIGHTLY_RES       — width:height (default: 720:1280, vertical 9:16)
-#   LPT2D_NIGHTLY_FPS       — fps (default: 60)
-#   LPT2D_NIGHTLY_DURATION  — seconds per video (default: 15)
-#   LPT2D_NIGHTLY_RAYS      — rays per pixel (default: 1000000)
-#   LPT2D_NIGHTLY_DEPTH     — bounce depth (default: 10)
-#   LPT2D_SHIP_INTERVAL     — seconds between ship sweeps while rendering (default: 30)
-#   LPT2D_REMOTE            — see lpt2d-ship.sh
-#   LPT2D_REMOTE_INBOX      — see lpt2d-ship.sh
+#   LPT2D_NIGHTLY_N           — bundles per nightly batch (default: 12)
+#   LPT2D_NIGHTLY_RESOLUTION  — iris_demo preset (default: 720p)
+#   LPT2D_SHIP_INTERVAL       — seconds between ship sweeps while rendering (default: 30)
+#   LPT2D_REMOTE              — see lpt2d-ship.sh
+#   LPT2D_REMOTE_INBOX        — see lpt2d-ship.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -32,16 +32,10 @@ fi
 cd "$ROOT"
 
 N="${LPT2D_NIGHTLY_N:-12}"
-RES="${LPT2D_NIGHTLY_RES:-720:1280}"
-WIDTH="${RES%%:*}"
-HEIGHT="${RES##*:}"
-FPS="${LPT2D_NIGHTLY_FPS:-60}"
-DURATION="${LPT2D_NIGHTLY_DURATION:-15}"
-RAYS="${LPT2D_NIGHTLY_RAYS:-1000000}"
-DEPTH="${LPT2D_NIGHTLY_DEPTH:-10}"
+RESOLUTION="${LPT2D_NIGHTLY_RESOLUTION:-720p}"
 
 TS="$(date -u +%Y%m%d)"
-OUT="$ROOT/renders/lpt2d_iris_nightly_${TS}_${WIDTH}x${HEIGHT}_n${N}"
+OUT="$ROOT/renders/lpt2d_iris_nightly_${TS}_${RESOLUTION}_n${N}"
 
 SHIP_INTERVAL="${LPT2D_SHIP_INTERVAL:-30}"
 
@@ -58,13 +52,11 @@ ship_periodically &
 SHIP_PID=$!
 trap 'kill "$SHIP_PID" 2>/dev/null || true; wait "$SHIP_PID" 2>/dev/null || true' EXIT INT TERM
 
-echo "[lpt2d] nightly render: out=$OUT n=$N res=${WIDTH}x${HEIGHT}@${FPS} dur=${DURATION}s (ship every ${SHIP_INTERVAL}s)"
-uv run python examples/python/families/iris_batch.py \
+echo "[lpt2d] nightly render: out=$OUT n=$N resolution=$RESOLUTION (ship every ${SHIP_INTERVAL}s)"
+uv run python examples/python/families/iris_demo.py \
     --out "$OUT" \
     -n "$N" \
-    --width "$WIDTH" --height "$HEIGHT" \
-    --fps "$FPS" --duration "$DURATION" \
-    --rays "$RAYS" --depth "$DEPTH"
+    --resolution "$RESOLUTION"
 
 # Render finished — stop the loop and run one final ship to catch the last
 # bundle (whose verdict.json may have landed after the last sweep tick).
