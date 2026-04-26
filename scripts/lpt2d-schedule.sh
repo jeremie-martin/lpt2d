@@ -122,7 +122,6 @@ case "$cmd" in
             export XDG_RUNTIME_DIR=/run/user/\$(id -u)
             systemctl --user daemon-reload
             systemctl --user restart lpt2d-publish-watcher.service
-            sleep 2
             systemctl --user is-active lpt2d-publish-watcher.service
             journalctl --user -u lpt2d-publish-watcher.service -n 5 --no-pager
         "

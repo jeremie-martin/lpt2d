@@ -58,10 +58,10 @@ from .youtube import (
 )
 
 SETTLE_SECONDS = 5.0
-UploadFn = Callable[[Path, dict[str, Any]], str]
+UploadFn = Callable[..., str]  # (processed: Path, **body) -> yt_id
 
 
-class HandleResult(str, Enum):
+class HandleResult(Enum):
     UPLOADED = "uploaded"
     RESUMED = "resumed"
     FAILED = "failed"
@@ -288,15 +288,12 @@ def _handle(
         )
         return HandleResult.FAILED
 
-    if verdict is not None and not verdict.get("ok", True):
-        _record_failure(
-            bundle,
-            "verdict.ok == false",
-            ledger=ledger,
-            params=params,
-            verdict=verdict,
-        )
+    def fail(reason: str) -> HandleResult:
+        _record_failure(bundle, reason, ledger=ledger, params=params, verdict=verdict)
         return HandleResult.FAILED
+
+    if verdict is not None and not verdict.get("ok", True):
+        return fail("verdict.ok == false")
 
     overrides = PublishOverrides.from_bundle(bundle)
     title, description, tags = _resolve_metadata(overrides)
@@ -309,60 +306,37 @@ def _handle(
             music_override=overrides.music,
         )
     except FileNotFoundError as e:
-        # Almost always a typo in publish.json:music — surface it cleanly so
-        # the operator can see the bad filename in the failed.jsonl reason.
-        reason = (
+        # Almost always a typo in publish.json:music — keep the bad filename
+        # in the failed.jsonl reason so the operator sees it directly.
+        return fail(
             f"music override not found: {overrides.music!r}"
             if overrides.music
             else f"file not found: {e!r}"
         )
-        _record_failure(
-            bundle,
-            reason,
-            ledger=ledger,
-            params=params,
-            verdict=verdict,
-        )
-        return HandleResult.FAILED
     except Exception as e:
         logger.exception("Post-process failed for {}", bundle.name)
-        _record_failure(
-            bundle,
-            f"post-process failed: {e!r}",
-            ledger=ledger,
-            params=params,
-            verdict=verdict,
-        )
-        return HandleResult.FAILED
+        return fail(f"post-process failed: {e!r}")
 
     logger.info("Uploading {} as {!r}", bundle.name, title)
-    body = {
-        "title": title,
-        "description": description,
-        "tags": list(tags),
-        "privacy_status": privacy,
-        "category_id": CATEGORY_FILM_ANIMATION,
-    }
     try:
-        yt_id = upload_fn(processed, body)
+        yt_id = upload_fn(
+            processed,
+            title=title,
+            description=description,
+            tags=list(tags),
+            privacy_status=privacy,
+            category_id=CATEGORY_FILM_ANIMATION,
+        )
     except RateLimitError:
         raise
     except Exception as e:
         logger.exception("Upload failed for {}", bundle.name)
-        _record_failure(
-            bundle,
-            f"upload failed: {e!r}",
-            ledger=ledger,
-            params=params,
-            verdict=verdict,
-        )
-        return HandleResult.FAILED
+        return fail(f"upload failed: {e!r}")
 
+    # Build the ledger entry while the processed file still exists; append
+    # after rmtree so a persistent rmtree failure can't produce duplicate
+    # `resumed=True` lines on retry.
     uploaded_at = now_iso()
-    # Build the ledger entry now while the bundle (and processed file) still
-    # exist on disk — _build_upload_entry probes the processed file for size
-    # and duration. We append after rmtree below to avoid a duplicate
-    # `resumed=True` line if rmtree fails persistently.
     entry = _build_upload_entry(
         bundle,
         yt_id,
@@ -392,12 +366,12 @@ def _build_upload_fn(
     dry_run: bool,
 ) -> UploadFn:
     if dry_run:
-        return lambda processed, _body: f"DRYRUN-{processed.stem}"
+        return lambda processed, **_: f"DRYRUN-{processed.stem}"
 
     uploader = YouTubeUploader(credentials_dir)
     uploader.authenticate()
 
-    def _upload(processed: Path, body: dict[str, Any]) -> str:
+    def _upload(processed: Path, **body: Any) -> str:
         return uploader.upload(processed, **body, playlist_id=playlist_id)
 
     return _upload

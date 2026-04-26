@@ -127,6 +127,27 @@ def _cmd_watch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_pipeline_flags(p: argparse.ArgumentParser, *, default_min_interval: int) -> None:
+    """Flags shared by the ``publish`` (one-shot bundle) and ``watch`` subcommands."""
+    p.add_argument("--music-dir", default=str(DEFAULT_MUSIC))
+    p.add_argument("--credentials-dir", default=str(DEFAULT_CREDENTIALS))
+    p.add_argument("--state-file", default=str(DEFAULT_STATE))
+    p.add_argument("--ledger-dir", default=str(DEFAULT_LEDGER_DIR))
+    p.add_argument("--privacy", default="private", choices=["private", "unlisted", "public"])
+    p.add_argument("--playlist", default=None, help="Playlist id to insert into after upload")
+    p.add_argument(
+        "--min-interval",
+        type=int,
+        default=default_min_interval,
+        help="Minimum seconds between successful uploads",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not call YouTube; emit DRYRUN-* ids and skip OAuth",
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="publish", description="Process and publish lpt2d renders to YouTube."
@@ -165,43 +186,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Run the full pipeline against one bundle directory (process + upload + ledger + delete).",
     )
     pub.add_argument("bundle", help="Path to bundle directory containing video.mp4 + params.json")
-    pub.add_argument("--music-dir", default=str(DEFAULT_MUSIC))
-    pub.add_argument("--privacy", default="private", choices=["private", "unlisted", "public"])
-    pub.add_argument("--playlist", default=None)
-    pub.add_argument("--credentials-dir", default=str(DEFAULT_CREDENTIALS))
-    pub.add_argument("--state-file", default=str(DEFAULT_STATE))
-    pub.add_argument("--ledger-dir", default=str(DEFAULT_LEDGER_DIR))
-    pub.add_argument(
-        "--min-interval",
-        type=int,
-        default=0,
-        help="Minimum seconds between uploads (default: 0 for one-shot)",
-    )
-    pub.add_argument(
-        "--dry-run", action="store_true", help="Do not call YouTube; emit DRYRUN-* ids"
-    )
+    _add_pipeline_flags(pub, default_min_interval=0)
     pub.set_defaults(func=_cmd_publish)
 
     wc = sub.add_parser("watch", help="Watch the inbox and publish new bundles.")
     wc.add_argument("--inbox", default=str(DEFAULT_INBOX))
-    wc.add_argument("--music-dir", default=str(DEFAULT_MUSIC))
-    wc.add_argument("--credentials-dir", default=str(DEFAULT_CREDENTIALS))
-    wc.add_argument("--state-file", default=str(DEFAULT_STATE))
-    wc.add_argument("--ledger-dir", default=str(DEFAULT_LEDGER_DIR))
-    wc.add_argument("--playlist", default=None)
-    wc.add_argument("--privacy", default="private", choices=["private", "unlisted", "public"])
+    _add_pipeline_flags(wc, default_min_interval=3600)
     wc.add_argument("--interval", type=int, default=60, help="Inbox poll interval in seconds")
-    wc.add_argument(
-        "--min-interval",
-        type=int,
-        default=3600,
-        help="Minimum seconds between successful uploads (default: 3600 = 1/hour)",
-    )
-    wc.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Do not call YouTube; emit DRYRUN-* ids and skip OAuth",
-    )
     wc.add_argument("--log-file", default=str(DEFAULT_LOG))
     wc.set_defaults(func=_cmd_watch)
 

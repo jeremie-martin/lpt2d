@@ -65,16 +65,14 @@ def pick_music(music_dir: Path) -> Path | None:
 
 
 def _resolve_music(
-    music: bool | Path | str,
+    music: bool,
     music_dir: Path | str | None,
     music_override: str | None,
 ) -> Path | None:
     """Pick a music track, or return None for "no audio".
 
-    Resolution order:
-      1. ``music_override`` (per-bundle pin) — fail closed if not found.
-      2. ``music is True`` — random from ``music_dir``.
-      3. ``music`` is a string/Path — use it directly.
+    ``music_override`` (per-bundle pin) wins; missing-file fails closed.
+    Else if ``music`` is True, pick a random track from ``music_dir``.
     """
     if music_override:
         if music_dir is None:
@@ -85,23 +83,21 @@ def _resolve_music(
                 f"music_override {music_override!r} not found under {music_dir}"
             )
         return candidate
-    if music is True:
-        if music_dir is None:
-            logger.warning("music=True but no music_dir provided; skipping audio")
-            return None
-        track = pick_music(Path(music_dir))
-        if track is None:
-            logger.warning("No music tracks found in {}", music_dir)
-        return track
-    if isinstance(music, (str, Path)) and music:
-        return Path(music)
-    return None
+    if not music:
+        return None
+    if music_dir is None:
+        logger.warning("music=True but no music_dir provided; skipping audio")
+        return None
+    track = pick_music(Path(music_dir))
+    if track is None:
+        logger.warning("No music tracks found in {}", music_dir)
+    return track
 
 
 def process(
     input_path: Path | str,
     output_path: Path | str | None = None,
-    music: bool | Path | str = False,
+    music: bool = False,
     music_dir: Path | str | None = None,
     music_override: str | None = None,
     rotate_cw: bool = True,
