@@ -6,6 +6,8 @@ Conflicts=lpt2d-nightly.service lpt2d-manual.service
 Type=simple
 WorkingDirectory=%h/prog/lpt2d
 Environment=LPT2D_WINDOW=workday
+# See nightly.service for why we need ~/.local/bin (for `uv`) here.
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=%h/prog/lpt2d/scripts/lpt2d-render-and-ship.sh
 RuntimeMaxSec=8h
 TimeoutStopSec=120

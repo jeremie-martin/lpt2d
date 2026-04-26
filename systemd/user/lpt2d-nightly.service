@@ -6,6 +6,9 @@ Conflicts=lpt2d-workday.service lpt2d-manual.service
 Type=simple
 WorkingDirectory=%h/prog/lpt2d
 Environment=LPT2D_WINDOW=nightly
+# systemd-user defaults PATH to /usr/local/bin:/usr/bin which lacks ~/.local/bin
+# where `uv` lives. Without this override the script's `uv run` returns 127.
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=%h/prog/lpt2d/scripts/lpt2d-render-and-ship.sh
 RuntimeMaxSec=6h
 TimeoutStopSec=120
