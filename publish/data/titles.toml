@@ -1,0 +1,32 @@
+# Flat pools for randomized YouTube metadata.
+# Edit freely; one entry is picked at random per upload.
+# A per-video override can be set on `VideoMetadata.title_hint` / `.description_hint` / `.tags`.
+
+titles = [
+    "this is hypnotic",
+    "1 minute of pure optics",
+    "i could watch this all day",
+    "real raytraced light",
+    "watch the light bend",
+    "physics looks pretty",
+    "satisfying optical loop",
+    "made with light",
+    "every frame is real physics",
+]
+
+descriptions = [
+    "Made with a custom 2D optics raytracer.",
+    "Procedural light, real physics.",
+    "Rendered with a homemade GPU raytracer.",
+]
+
+tags = [
+    "satisfying",
+    "generative",
+    "optics",
+    "raytracing",
+    "ambient",
+    "loop",
+    "shorts",
+    "procedural",
+]

@@ -12,6 +12,12 @@ dependencies = [
     "pillow>=10.0",
 ]
 
+[project.optional-dependencies]
+publish = [
+    "google-auth-oauthlib>=1.0",
+    "google-api-python-client>=2.100",
+]
+
 [dependency-groups]
 dev = [
     "pyright>=1.1.400",
@@ -23,7 +29,7 @@ dev = [
 
 [tool.scikit-build]
 cmake.build-type = "Release"
-wheel.packages = ["anim", "evaluation"]
+wheel.packages = ["anim", "evaluation", "publish"]
 
 [tool.ruff]
 exclude = ["external", ".claude/worktrees"]
@@ -42,9 +48,9 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pyright]
-include = ["anim", "evaluation", "tests"]
+include = ["anim", "evaluation", "publish", "tests"]
 exclude = ["external", ".claude/worktrees"]
-pythonVersion = "3.10"
+pythonVersion = "3.11"
 typeCheckingMode = "basic"
 
 [tool.uv]
