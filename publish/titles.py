@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import random
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 DEFAULT_POOL_PATH = Path(__file__).parent / "data" / "titles.toml"
 TITLE_HASHTAG_COUNT = (0, 2)  # min, max — random pick per upload (0 = clean title)

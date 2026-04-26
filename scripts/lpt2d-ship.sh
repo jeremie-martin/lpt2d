@@ -62,6 +62,7 @@ for b in "${bundles[@]}"; do
     echo "ship: $b -> $REMOTE:$final_remote/"
     rsync -av --partial --mkpath \
         --exclude=".shipped" \
+        --exclude="video_published.mp4" \
         "$b/" "$REMOTE:$tmp_remote/"
     ssh "$REMOTE" "mv -- $(printf '%q' "$tmp_remote") $(printf '%q' "$final_remote")"
     touch "$b/.shipped"

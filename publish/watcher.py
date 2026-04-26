@@ -23,10 +23,12 @@ Both ledgers carry the full ``params.json`` + ``verdict.json`` so analysis is
 just ``jq`` or ``pandas.read_json(..., lines=True)``.
 
 Crash safety: the order around the upload is
-``upload → marker → state → ledger → rmtree``. If the watcher dies after the
-marker exists but before the bundle is gone, the next tick sees the marker,
-knows the upload already happened, and just finishes the bookkeeping +
-deletion. The duplicate-upload window is between the YouTube API returning
+``upload → marker → state → rmtree → ledger``. If the watcher dies after the
+marker exists but before the bundle is gone, the next tick sees the marker
+and runs ``_finalize_resumed`` which rmtrees and writes a ``resumed=True``
+ledger line. ``rmtree`` deliberately runs *before* the ledger append so a
+persistent rmtree failure can't keep producing duplicate ledger lines tick
+after tick. The duplicate-upload window is between the YouTube API returning
 the id and the marker write — milliseconds, fsynced.
 """
 
@@ -102,6 +104,11 @@ def _pending_bundles(inbox: Path) -> list[Path]:
     now = time.time()
     for d in sorted(inbox.iterdir()):
         if not d.is_dir():
+            continue
+        # Dot-prefixed names are reserved for in-progress staging by the ship
+        # script (`.staging_<name>.<pid>`). Skip them so we don't pick up a
+        # half-rsynced bundle whose video.mp4 happened to be written first.
+        if d.name.startswith("."):
             continue
         if (d / B.MARKER_UPLOADED).exists():
             resumed.append(d)
@@ -227,11 +234,13 @@ def _finalize_resumed(bundle: Path, ledger: Ledger) -> None:
         entry["params_error"] = params_err
     if verdict_err is not None:
         entry["verdict_error"] = verdict_err
+    # rmtree before ledger so a persistent rmtree failure can't cause repeat
+    # ticks to keep appending duplicate `resumed=True` lines.
+    shutil.rmtree(bundle)
     ledger.append_upload(entry)
     logger.warning(
         "Resumed crashed upload for {} (yt_id={}); finalized + deleted", bundle.name, yt_id
     )
-    shutil.rmtree(bundle)
 
 
 def _handle(
@@ -299,6 +308,22 @@ def _handle(
             music_dir=music_dir,
             music_override=overrides.music,
         )
+    except FileNotFoundError as e:
+        # Almost always a typo in publish.json:music — surface it cleanly so
+        # the operator can see the bad filename in the failed.jsonl reason.
+        reason = (
+            f"music override not found: {overrides.music!r}"
+            if overrides.music
+            else f"file not found: {e!r}"
+        )
+        _record_failure(
+            bundle,
+            reason,
+            ledger=ledger,
+            params=params,
+            verdict=verdict,
+        )
+        return HandleResult.FAILED
     except Exception as e:
         logger.exception("Post-process failed for {}", bundle.name)
         _record_failure(
@@ -334,26 +359,29 @@ def _handle(
         return HandleResult.FAILED
 
     uploaded_at = now_iso()
+    # Build the ledger entry now while the bundle (and processed file) still
+    # exist on disk — _build_upload_entry probes the processed file for size
+    # and duration. We append after rmtree below to avoid a duplicate
+    # `resumed=True` line if rmtree fails persistently.
+    entry = _build_upload_entry(
+        bundle,
+        yt_id,
+        uploaded_at=uploaded_at,
+        title=title,
+        description=description,
+        tags=list(tags),
+        music_path=music_used,
+        music_dir=music_dir,
+        privacy=privacy,
+        params=params,
+        verdict=verdict,
+        processed_path=processed,
+    )
     _write_marker(bundle, yt_id, uploaded_at)
     state.record_upload()
-    ledger.append_upload(
-        _build_upload_entry(
-            bundle,
-            yt_id,
-            uploaded_at=uploaded_at,
-            title=title,
-            description=description,
-            tags=list(tags),
-            music_path=music_used,
-            music_dir=music_dir,
-            privacy=privacy,
-            params=params,
-            verdict=verdict,
-            processed_path=processed,
-        )
-    )
-    logger.success("Uploaded {} -> https://youtu.be/{}", bundle.name, yt_id)
     shutil.rmtree(bundle)
+    ledger.append_upload(entry)
+    logger.success("Uploaded {} -> https://youtu.be/{}", bundle.name, yt_id)
     return HandleResult.UPLOADED
 
 

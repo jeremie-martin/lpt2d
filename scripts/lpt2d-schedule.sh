@@ -30,8 +30,9 @@ Commands:
   disable     Disable timer and stop running jobs
   ship-now    Run the ship script without a render
   install     Symlink unit files from the repo into ~/.config/systemd/user/
-  deploy      Pull repo on $LPT2D_REMOTE, reload systemd, restart watcher
-              (pass --deps to also pip install from pyproject.toml)
+  deploy      Pull repo on $LPT2D_REMOTE, reload systemd, restart watcher.
+              Pass --deps to also pip install/upgrade the publish runtime
+              packages (loguru + google-* clients) into the venv.
 EOF
 }
 
