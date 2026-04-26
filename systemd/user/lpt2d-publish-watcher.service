@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
+# Prepend ~/lpt2d-publish/bin so a pinned static ffmpeg (>=5.0, required for
+# -display_rotation lossless rotate) takes precedence over a too-old apt build.
+Environment=PATH=%h/lpt2d-publish/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WorkingDirectory=%h/lpt2d
 ExecStart=%h/lpt2d-publish/venv/bin/python -m publish watch \
     --inbox %h/lpt2d-publish/inbox \
