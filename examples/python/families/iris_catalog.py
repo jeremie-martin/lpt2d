@@ -302,7 +302,6 @@ def main(argv: list[str] | None = None) -> None:
 
                 cell_dir.mkdir(parents=True, exist_ok=True)
                 _write_params(cell_dir, p)
-                _write_verdict(cell_dir, pace, light, geom, v, attempts, passed)
 
                 print(f"  rendering {cell_dir}/video.mp4 ...", flush=True)
                 _render_cell(
@@ -312,6 +311,10 @@ def main(argv: list[str] | None = None) -> None:
                     rays=args.rays, depth=args.depth,
                     name=f"iris_catalog_{slug}",
                 )
+
+                # verdict.json is written LAST so its presence is the "render
+                # complete" signal — see iris_batch.py for the full rationale.
+                _write_verdict(cell_dir, pace, light, geom, v, attempts, passed)
                 cells.append({
                     "pace": pace, "light_kind": light, "geom_kind": geom,
                     "branch": BRANCH, "layout": LAYOUT,

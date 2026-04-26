@@ -253,12 +253,6 @@ def main(argv: list[str] | None = None) -> None:
 
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "params.json").write_text(json.dumps(asdict(p), indent=2))
-        (out_dir / "verdict.json").write_text(json.dumps({
-            "ok": v.ok, "summary": v.summary,
-            "attempts": attempts, "gate_passed": passed,
-            "regime": p.regime, "geom_kind": p.geom_kind,
-            "branch": p.branch,
-        }, indent=2))
 
         print(f"  rendering {out_dir}/video.mp4 ...", flush=True)
         _render_variant(
@@ -269,6 +263,16 @@ def main(argv: list[str] | None = None) -> None:
             name=f"iris_batch_{slug}",
             fast=args.fast, crf=args.crf,
         )
+
+        # verdict.json is written LAST so its presence is the "render complete"
+        # signal — the publish ship script gates on it to avoid racing with
+        # ffmpeg's progressive write of video.mp4.
+        (out_dir / "verdict.json").write_text(json.dumps({
+            "ok": v.ok, "summary": v.summary,
+            "attempts": attempts, "gate_passed": passed,
+            "regime": p.regime, "geom_kind": p.geom_kind,
+            "branch": p.branch,
+        }, indent=2))
 
         cells.append({
             "slug": slug,

@@ -18,17 +18,20 @@ if [[ ! -d "$RENDERS_ROOT" ]]; then
     exit 1
 fi
 
-# Discover bundles: directories at depth 2 under renders/ that hold both
-# video.mp4 and params.json and have no .shipped marker. We prune any directory
-# already containing .shipped so the scan doesn't grow unboundedly with all-time
-# nightly history.
+# Discover bundles: directories under renders/ that hold video.mp4 + params.json
+# + verdict.json and have no .shipped marker. verdict.json is required because
+# the renderer writes it LAST as a "render complete" signal — gating on it
+# prevents a periodic ship from racing with ffmpeg's progressive write of
+# video.mp4. We prune any directory already containing .shipped so the scan
+# doesn't grow unboundedly with all-time nightly history.
 mapfile -t bundles < <(
     find "$RENDERS_ROOT" -mindepth 1 -maxdepth 3 -type d \
         \( -exec test -e {}/.shipped \; -prune \) -o \
         \( -mindepth 2 -type d -print \) 2>/dev/null \
         | while read -r d; do
-              [[ -f "$d/video.mp4"   ]] || continue
-              [[ -f "$d/params.json" ]] || continue
+              [[ -f "$d/video.mp4"    ]] || continue
+              [[ -f "$d/params.json"  ]] || continue
+              [[ -f "$d/verdict.json" ]] || continue
               printf '%s\n' "$d"
           done | sort
 )
