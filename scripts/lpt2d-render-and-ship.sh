@@ -8,9 +8,9 @@
 #
 # Env knobs:
 #   LPT2D_NIGHTLY_N         — bundles per nightly batch (default: 12)
-#   LPT2D_NIGHTLY_RES       — width:height (default: 1080:1920)
-#   LPT2D_NIGHTLY_FPS       — fps (default: 24)
-#   LPT2D_NIGHTLY_DURATION  — seconds per video (default: 60)
+#   LPT2D_NIGHTLY_RES       — width:height (default: 720:1280, vertical 9:16)
+#   LPT2D_NIGHTLY_FPS       — fps (default: 60)
+#   LPT2D_NIGHTLY_DURATION  — seconds per video (default: 15)
 #   LPT2D_NIGHTLY_RAYS      — rays per pixel (default: 1000000)
 #   LPT2D_NIGHTLY_DEPTH     — bounce depth (default: 10)
 #   LPT2D_SHIP_INTERVAL     — seconds between ship sweeps while rendering (default: 30)
@@ -32,11 +32,11 @@ fi
 cd "$ROOT"
 
 N="${LPT2D_NIGHTLY_N:-12}"
-RES="${LPT2D_NIGHTLY_RES:-1080:1920}"
+RES="${LPT2D_NIGHTLY_RES:-720:1280}"
 WIDTH="${RES%%:*}"
 HEIGHT="${RES##*:}"
-FPS="${LPT2D_NIGHTLY_FPS:-24}"
-DURATION="${LPT2D_NIGHTLY_DURATION:-60}"
+FPS="${LPT2D_NIGHTLY_FPS:-60}"
+DURATION="${LPT2D_NIGHTLY_DURATION:-15}"
 RAYS="${LPT2D_NIGHTLY_RAYS:-1000000}"
 DEPTH="${LPT2D_NIGHTLY_DEPTH:-10}"
 

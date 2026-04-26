@@ -79,13 +79,14 @@ GAMMA_RANGE = (2.0, 4.0)
 DWELL_RANGE = (0.0, 1.0)
 BASE_PERIOD = 4.0
 
-# Active light-motion regimes — "loop_momentum" and "wander2d" excluded.
-# (wander2d keeps drifting too fast within the family's tighter speed_scale
-#  range; revisit if a slower 2D-wander variant is added.)
+# Active light-motion regimes for production. wander2d drifts too fast under
+# the family's speed_scale; polar didn't read well in 15s shorts after
+# iteration. Both stay defined in iris_motion so manual experiments can still
+# pin them via `iris_batch.py --regime polar`.
 LIGHT_REGIMES = tuple(n for n in iris_motion.REGIME_NAMES
-                       if n not in ("wander2d",))
-# → ('loop', 'patrol', 'two_well', 'chase', 'polar')  — uniform sampling
-assert len(LIGHT_REGIMES) == 5, LIGHT_REGIMES
+                       if n not in ("wander2d", "polar"))
+# → ('loop', 'patrol', 'two_well', 'chase')  — uniform sampling
+assert len(LIGHT_REGIMES) == 4, LIGHT_REGIMES
 
 # Geom kinds dampen the ring rotation when active so the wedges don't blur.
 _GEOM_RING_DAMP = 0.9
@@ -282,10 +283,13 @@ def _branch_duet_contrast(rng: random.Random, regime: str) -> list[LightDef]:
     ]
 
 
+# Random sampling weights. Only solo_white runs in production — solo_warm
+# and duet_contrast read muddier in shorts. Their samplers stay defined so
+# `iris_batch.py --branch solo_warm` still works for offline experiments.
 _BRANCHES = {
-    "solo_white": (_branch_solo_white, 1.2),
-    "solo_warm": (_branch_solo_warm, 1.0),
-    "duet_contrast": (_branch_duet_contrast, 1.4),
+    "solo_white": (_branch_solo_white, 1.0),
+    "solo_warm": (_branch_solo_warm, 0.0),
+    "duet_contrast": (_branch_duet_contrast, 0.0),
 }
 
 
