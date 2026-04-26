@@ -4,10 +4,9 @@ Self-contained wrapper around :mod:`iris_batch` that bakes in the curator's
 chosen constraints so a single command reproduces a "good" batch:
 
 * branch = ``solo_white``
-* pace = ``fast_light``
-* layout = 75% ``iris_vertical`` / 25% ``iris_horizontal`` (weighted random)
-* light_kind / geom_kind / numeric params: free
+* light-motion regime / geom_kind / all numeric params: free
 * duration: 15 s
+* aspect: 9:16 portrait
 * resolution: chosen via ``--resolution {480p, 720p, 1080p}``
 
 Run::
@@ -31,15 +30,15 @@ import argparse
 from examples.python.families import iris_batch
 
 
-# Resolution presets keyed by short name. Each dict carries every render-
-# related knob; bumping a knob here propagates to every subsequent run.
+# Resolution presets keyed by short name. All in 9:16 portrait orientation.
+# Each dict carries every render-related knob; bumping a knob here
+# propagates to every subsequent run.
 RESOLUTION_PRESETS: dict[str, dict[str, int]] = {
-    "480p":  {"width": 854,  "height": 480,  "rays": 1_000_000, "fps": 24, "depth": 10},
-    "720p":  {"width": 1280, "height": 720,  "rays": 4_000_000, "fps": 60, "depth": 12},
-    "1080p": {"width": 1920, "height": 1080, "rays": 6_000_000, "fps": 60, "depth": 12},
+    "480p":  {"width": 480,  "height": 854,  "rays": 1_000_000, "fps": 24, "depth": 10},
+    "720p":  {"width": 720,  "height": 1280, "rays": 4_000_000, "fps": 60, "depth": 12},
+    "1080p": {"width": 1080, "height": 1920, "rays": 6_000_000, "fps": 60, "depth": 12},
 }
 
-LAYOUT_WEIGHTS = "iris_horizontal:1,iris_vertical:3"  # 25% horizontal, 75% vertical
 DURATION_SEC = 15.0
 
 
@@ -66,8 +65,6 @@ def main(argv: list[str] | None = None) -> None:
         "-n", str(args.n),
         "--max-attempts", str(args.max_attempts),
         "--branch", "solo_white",
-        "--pace", "fast_light",
-        "--layout-weights", LAYOUT_WEIGHTS,
         "--width", str(preset["width"]),
         "--height", str(preset["height"]),
         "--rays", str(preset["rays"]),

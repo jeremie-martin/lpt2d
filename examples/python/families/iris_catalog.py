@@ -38,7 +38,7 @@ from anim.types import Timeline
 from examples.python.families import iris
 
 BRANCH = "solo_white"
-LAYOUT = "iris_horizontal"
+LAYOUT = "iris_diagonal"
 
 
 def _cell_slug(pace: str, light_kind: str, geom_kind: str) -> str:
@@ -173,7 +173,7 @@ th { color:var(--good); background:#13120f; font-size:13px; }
 th.row-label { text-align:left; min-width:160px; color:var(--ink); font-family:ui-monospace, monospace; }
 td.failed { background:rgba(255, 105, 64, .08); }
 .cell { display:flex; flex-direction:column; gap:6px; align-items:center; }
-.cell video { width:100%; max-width:280px; aspect-ratio:16 / 9; background:#050505; border:1px solid var(--line); border-radius:8px; display:block; }
+.cell video { width:100%; max-width:200px; aspect-ratio:9 / 16; background:#050505; border:1px solid var(--line); border-radius:8px; display:block; }
 td.failed .cell video { border-color:var(--bad); }
 .cell .meta { font-size:10px; color:var(--muted); font-family:ui-monospace, monospace; word-break:break-word; }
 td.failed .cell .meta { color:var(--bad); }
@@ -183,7 +183,7 @@ td.failed .cell .meta { color:var(--bad); }
 <h1>Iris Motion Catalog</h1>
 <p class="muted">
 Rows = <code>pace × light_kind</code>; columns = <code>geom_kind</code>.<br>
-<code>solo_white · iris_horizontal</code> for every cell. Red border = the gate
+<code>solo_white · iris_diagonal</code> for every cell. Red border = the gate
 (<code>iris.check</code>) never passed within the attempt budget; the cell
 is rendered from the last sampled variant anyway.<br>
 Hover any video to play it.</p>

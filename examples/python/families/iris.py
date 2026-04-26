@@ -7,11 +7,15 @@ into spectrum. As the ring rotates, the chamber continually shifts colour.
 Branches:
 - solo_white      : one full-spectrum projector
 - solo_warm       : one orange projector
-- duet_contrast   : warm + white from opposite sides
+- duet_contrast   : warm + white from independent regime trajectories
 
-Iris compositions:
-- iris_horizontal : projector on a side wall, ring spins in front of it
-- iris_vertical   : medieval inversion — projector on top/bottom
+Light motion (one regime per variant; see :mod:`iris_motion` for details):
+- loop      : deterministic inv-sines, exact density on the path
+- patrol    : waypoint hops with optional dwell
+- two_well  : two attractors, light swings between them
+- chase     : light tracks a slowly-drifting attractor
+- wander2d  : 2D underdamped Langevin in the annular region
+- polar     : angular loop + radial breathing
 
 Wired onto :class:`anim.family.Family` so the search loop, CLI, render
 shot, and frame.shot.json export are shared with every other family.
@@ -40,67 +44,45 @@ from anim import (
 )
 from anim.family import Family
 
+from examples.python.families import iris_motion
+
 # ── Constants ─────────────────────────────────────────────────────────
 
-CAMERA = Camera2D(center=[0, 0], width=3.2)
+# Portrait 9:16 chamber. Camera width matches CHAMBER_HW * 2; with a 9:16
+# canvas the auto-derived camera height (= width * 16/9 = 3.2) lines up
+# exactly with CHAMBER_HH * 2.
+CAMERA = Camera2D(center=[0, 0], width=1.8)
 DURATION = 6.0
-CHAMBER_HW, CHAMBER_HH = 1.6, 0.9
+CHAMBER_HW, CHAMBER_HH = 0.9, 1.6
 
 WALL_ID = "wall"
 WEDGE_ID = "iris_glass"
 
-# Aesthetic ranges (per the wall-albedo + light-intensity feedback band).
+# Aesthetic ranges
 WALL_ALBEDO_RANGE = (0.9, 1.0)
 GLASS_FILL_RANGE = (0.075, 0.15)
 INTENSITY_RANGE = (0.8, 1.2)
 
-IRIS_LAYOUTS = ("iris_horizontal", "iris_vertical")
+# Motion sampling ranges (curator-chosen, per latest tuning session).
+W_CORNER_RANGE = (0.00, 0.225)
+W_VERT_RANGE = (0.00, 0.075)
+A_Y_RANGE = (0.82, 1.10)
+DRIFT_RANGE = (0.09, 0.11)
+SMOOTHNESS_RANGE = (0.90, 0.97)
+SPEED_SCALE_RANGE = (0.20, 0.60)
 
-# ── Motion-budget data tables ─────────────────────────────────────────
-#
-# A variant's motion is described by three orthogonal authored choices:
-#
-#   pace       ∈ PACES          — categorical "speed budget"
-#   light_kind ∈ LIGHT_KINDS    — what the light does (always animated)
-#   geom_kind  ∈ GEOM_KINDS     — what the geometry does on top of the ring spin
-#
-# Numeric ranges live entirely as data in RANGES — every speed-affecting
-# parameter has a "slow" and "fast" entry. PACE_BINS chooses which one to
-# draw from for each family of params at sample time:
-#
-#   slow_light → light from "slow", everything else from "fast"
-#   fast_light → light from "fast", everything else from "slow"
-#
-# Adding a new param is one row in RANGES; adding a new pace is one row in
-# PACE_BINS; adding a new motion is a new entry in LIGHT_KINDS / GEOM_KINDS.
-# The |ω| floor is implicit in the data: the lowest "slow" lower bound on
-# RANGES["ring_rate_abs"] sets it. Keep it consistent if you tune.
+# Secondary motion ranges (used by the stochastic regimes).
+NOISE_AMP_RANGE = (0.20, 0.50)
+N_SINES_RANGE = (2, 4)
+D_RANGE = (0.20, 0.50)
+GAMMA_RANGE = (2.0, 4.0)
+DWELL_RANGE = (0.0, 1.0)
+BASE_PERIOD = 4.0
 
-PACES = ("slow_light", "fast_light")
+# Active light-motion regimes — "loop_momentum" intentionally excluded.
+LIGHT_REGIMES = iris_motion.REGIME_NAMES  # ('loop', 'patrol', 'two_well', 'chase', 'wander2d', 'polar')
 
-PACE_BINS: dict[str, dict[str, str]] = {
-    "slow_light": {"light": "slow", "geom": "fast"},
-    "fast_light": {"light": "fast", "geom": "slow"},
-}
-
-# Each entry: {"slow": (lo, hi), "fast": (lo, hi)}. All inclusive ranges.
-RANGES: dict[str, dict[str, tuple[float, float]]] = {
-    # Light-channel — slide and yaw are sinusoidal back-and-forths so they
-    # are video-length-independent like the ring rotation.
-    "slide_amp_frac":     {"slow": (0.30, 0.50), "fast": (0.80, 1.00)},
-    "slide_period_sec":   {"slow": (15.0, 25.0), "fast": (6.0, 12.0)},
-    "yaw_amp_rad":        {"slow": (0.06, 0.10), "fast": (0.14, 0.22)},
-    "yaw_period_sec":     {"slow": (12.0, 20.0), "fast": (4.0, 8.0)},
-    # Geom-channel
-    "ring_rate_abs":      {"slow": (0.12, 0.27), "fast": (0.30, 0.54)},
-    "counter_rot_rate":   {"slow": (0.30, 0.60), "fast": (0.80, 1.20)},
-    "breathe_amp":        {"slow": (0.12, 0.18), "fast": (0.18, 0.25)},
-    "breathe_period_sec": {"slow": (7.0, 10.0),  "fast": (4.0, 6.0)},
-    "pulse_amp":          {"slow": (0.06, 0.10), "fast": (0.10, 0.14)},
-    "pulse_period_sec":   {"slow": (9.0, 12.0),  "fast": (5.0, 8.0)},
-}
-
-# Geom kinds that pull the ring rate down by 10% (anything other than "none").
+# Geom kinds dampen the ring rotation when active so the wedges don't blur.
 _GEOM_RING_DAMP = 0.9
 
 
@@ -109,8 +91,10 @@ _GEOM_RING_DAMP = 0.9
 
 @dataclass
 class LightDef:
-    side: str
-    offset_tangent: float
+    """One projector. Position + direction come from a :class:`iris_motion.RegimeRunner`
+    constructed from ``regime`` and ``seed`` at build-time."""
+    regime: str
+    seed: int
     spread: float
     source: str
     source_radius: float
@@ -120,7 +104,7 @@ class LightDef:
 
 @dataclass
 class Params:
-    iris_composition: str
+    # Ring + chamber
     ring_radius: float
     n_wedges: int
     wedge_size: float
@@ -131,34 +115,39 @@ class Params:
     wedge_roughness: float
     wall_albedo: float
     wall_roughness: float
-    lights: list[LightDef] = field(default_factory=list)
+    # Branch + regime + geom-kind
     branch: str = "solo_white"
+    regime: str = "loop"
+    geom_kind: str = "none"
+    lights: list[LightDef] = field(default_factory=list)
+    # Light-motion params (shared across all lights in a variant)
+    w_corner: float = 0.30
+    w_vert: float = 0.10
+    a_y: float = 1.00
+    drift: float = 0.10
+    smoothness: float = 0.90
+    speed_scale: float = 0.75
+    noise_amp: float = 0.30
+    n_sines: int = 3
+    D: float = 0.30
+    gamma: float = 3.0
+    dwell: float = 0.0
+    # Geom-channel params (per geom_kind; defaults are no-ops)
+    counter_rot_rate_rad_per_sec: float = 0.0
+    wedge_breathe_amp: float = 0.0
+    wedge_breathe_period_sec: float = 8.0
+    ring_pulse_amp: float = 0.0
+    ring_pulse_period_sec: float = 8.0
+    # Look
     look_exposure: float = -3.6
     look_gamma: float = 1.7
     look_contrast: float = 1.05
     look_shadows: float = 0.0
     look_vignette: float = 0.3
     look_vignette_radius: float = 1.65
-    # Motion authoring (always set by sample()).
-    pace: str = "slow_light"           # one of PACES
-    light_kind: str = "slide"          # one of LIGHT_KINDS
-    geom_kind: str = "none"            # one of GEOM_KINDS
-    # Per-kind numeric params. Defaults are no-ops so that omitting a kind
-    # leaves the scene untouched. All periodic motions share the same
-    # ``offset = center + amp * sin(2π t / period)`` shape.
-    slide_center: float = 0.0
-    slide_amp: float = 0.0
-    slide_period_sec: float = 8.0
-    yaw_amplitude_rad: float = 0.0
-    yaw_period_sec: float = 8.0
-    counter_rot_rate_rad_per_sec: float = 0.0
-    wedge_breathe_amp: float = 0.0
-    wedge_breathe_period_sec: float = 8.0
-    ring_pulse_amp: float = 0.0
-    ring_pulse_period_sec: float = 8.0
 
 
-# ── Sampling ──────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────
 
 
 def _wall_material(albedo: float, roughness: float) -> Material:
@@ -172,64 +161,13 @@ def _exposure_for(albedo: float, n_lights: int) -> float:
     return base + (0.0 if n_lights == 1 else -0.45)
 
 
-def _sides_for(layout: str) -> tuple[str, str]:
-    return ("left", "right") if layout == "iris_horizontal" else ("top", "bottom")
+def _spectrum_for(color: str) -> LightSpectrum:
+    if color == "warm":
+        return LightSpectrum.range(wavelength_min=580, wavelength_max=650)
+    return LightSpectrum.range(wavelength_min=380, wavelength_max=780)
 
 
-def _tangent_range(layout: str) -> tuple[float, float]:
-    return (-0.25, 0.25) if layout == "iris_horizontal" else (-0.45, 0.45)
-
-
-def _sample_light(rng: random.Random, *, side: str, color: str, layout: str) -> LightDef:
-    return LightDef(
-        side=side,
-        offset_tangent=rng.uniform(*_tangent_range(layout)),
-        spread=rng.uniform(0.05, 0.10),
-        source=rng.choice(["ball", "line"]),
-        source_radius=rng.uniform(0.008, 0.020),
-        intensity=rng.uniform(*INTENSITY_RANGE),
-        color=color,
-    )
-
-
-# Each branch defines its own inline sampling — no hoisted shared constants.
-def _branch_solo_white(rng: random.Random, layout: str) -> list[LightDef]:
-    return [_sample_light(rng, side=rng.choice(_sides_for(layout)), color="white", layout=layout)]
-
-
-def _branch_solo_warm(rng: random.Random, layout: str) -> list[LightDef]:
-    return [_sample_light(rng, side=rng.choice(_sides_for(layout)), color="warm", layout=layout)]
-
-
-def _branch_duet_contrast(rng: random.Random, layout: str) -> list[LightDef]:
-    a, b = _sides_for(layout)
-    return [
-        _sample_light(rng, side=a, color="warm", layout=layout),
-        _sample_light(rng, side=b, color="white", layout=layout),
-    ]
-
-
-_BRANCHES = {
-    "solo_white": (_branch_solo_white, 1.2),
-    "solo_warm": (_branch_solo_warm, 1.0),
-    "duet_contrast": (_branch_duet_contrast, 1.4),
-}
-
-
-# ── Motion strategies ─────────────────────────────────────────────────
-#
-# Each strategy is a tiny dataclass bundling two callables:
-#
-#   sample(rng, ctx) -> dict[str, Any]
-#       Draw the per-kind numeric parameters and return Params kwargs.
-#
-#   apply(...) -> per-channel deltas
-#       Compute the time-varying contribution at time t. Default callables
-#       (returning identity values) let a strategy override only the channels
-#       it actually affects.
-#
-# Adding a new motion = add one more entry to LIGHT_KINDS / GEOM_KINDS.
-
+# ── Geom strategies (ring/wedge motion on top of the always-on spin) ────
 
 def _no_radius_factor(p: "Params", t: float) -> float:
     return 1.0
@@ -244,87 +182,30 @@ def _no_rotation_offset(p: "Params", t: float) -> float:
 
 
 @dataclass(frozen=True)
-class LightStrategy:
-    """A way to animate the light. Always one per variant."""
-    # rng, layout, light_bin → kwargs for Params
-    sample: Callable[[random.Random, str, str], dict[str, Any]]
-    # p, L, t → (offset_tangent, yaw)
-    apply: Callable[["Params", "LightDef", float], tuple[float, float]]
-
-
-@dataclass(frozen=True)
 class GeomStrategy:
-    """A way to animate the ring/wedges on top of the always-on spin."""
-    # rng, geom_bin → kwargs for Params
-    sample: Callable[[random.Random, str], dict[str, Any]]
+    """How the ring/wedges move on top of the always-on spin."""
+    sample: Callable[[random.Random], dict[str, Any]]
     radius_factor: Callable[["Params", float], float] = _no_radius_factor
     size_factor: Callable[["Params", int, float], float] = _no_size_factor
     rotation_offset: Callable[["Params", float], float] = _no_rotation_offset
 
 
-def _sample_in(rng: random.Random, key: str, bin_: str) -> float:
-    lo, hi = RANGES[key][bin_]
-    return rng.uniform(lo, hi)
+def _sample_geom_none(rng: random.Random) -> dict[str, Any]:
+    return {}
 
 
-# Light: slide ─ sinusoidal back-and-forth along the wall.
-# offset(t) = slide_center + slide_amp · sin(2π t / slide_period_sec).
-# Both extrema (center ± |slide_amp|) are guaranteed to sit inside the wall
-# tangent range by construction in _sample_slide.
-
-def _sample_slide(rng: random.Random, layout: str, light_bin: str) -> dict[str, Any]:
-    amp_frac = _sample_in(rng, "slide_amp_frac", light_bin)
-    lo, hi = _tangent_range(layout)
-    span = hi - lo
-    half_amp = amp_frac * span / 2.0
-    # Pick a center such that center ± half_amp stays inside the wall range.
-    center_lo, center_hi = lo + half_amp, hi - half_amp
-    center = rng.uniform(center_lo, center_hi) if center_hi > center_lo else (lo + hi) / 2.0
-    direction = rng.choice([-1.0, 1.0])
-    return {
-        "slide_center": center,
-        "slide_amp": direction * half_amp,
-        "slide_period_sec": _sample_in(rng, "slide_period_sec", light_bin),
-    }
-
-
-def _apply_slide(p: "Params", L: "LightDef", t: float) -> tuple[float, float]:
-    offset = p.slide_center + p.slide_amp * math.sin(2.0 * math.pi * t / p.slide_period_sec)
-    return offset, 0.0
-
-
-# Light: yaw ─ sinusoidal back-and-forth of the aim direction.
-
-def _sample_yaw(rng: random.Random, layout: str, light_bin: str) -> dict[str, Any]:
-    amp = _sample_in(rng, "yaw_amp_rad", light_bin)
-    return {
-        "yaw_amplitude_rad": amp * rng.choice([-1.0, 1.0]),
-        "yaw_period_sec": _sample_in(rng, "yaw_period_sec", light_bin),
-    }
-
-
-def _apply_yaw(p: "Params", L: "LightDef", t: float) -> tuple[float, float]:
-    yaw = p.yaw_amplitude_rad * math.sin(2.0 * math.pi * t / p.yaw_period_sec)
-    return L.offset_tangent, yaw
-
-
-# Geom: counter_rot ─ each wedge spins on its own axis at a rate ≠ ring rate.
-
-def _sample_counter_rot(rng: random.Random, geom_bin: str) -> dict[str, Any]:
-    rate = _sample_in(rng, "counter_rot_rate", geom_bin)
-    return {"counter_rot_rate_rad_per_sec": rate * rng.choice([-1.0, 1.0])}
+def _sample_counter_rot(rng: random.Random) -> dict[str, Any]:
+    return {"counter_rot_rate_rad_per_sec": rng.uniform(0.4, 0.9) * rng.choice([-1.0, 1.0])}
 
 
 def _counter_rot_rotation_offset(p: "Params", t: float) -> float:
     return p.counter_rot_rate_rad_per_sec * t
 
 
-# Geom: wedge_breathe ─ per-wedge size oscillation with phase offsets.
-
-def _sample_wedge_breathe(rng: random.Random, geom_bin: str) -> dict[str, Any]:
+def _sample_wedge_breathe(rng: random.Random) -> dict[str, Any]:
     return {
-        "wedge_breathe_amp": _sample_in(rng, "breathe_amp", geom_bin),
-        "wedge_breathe_period_sec": _sample_in(rng, "breathe_period_sec", geom_bin),
+        "wedge_breathe_amp": rng.uniform(0.12, 0.22),
+        "wedge_breathe_period_sec": rng.uniform(5.0, 8.0),
     }
 
 
@@ -337,12 +218,10 @@ def _wedge_breathe_size_factor(p: "Params", i: int, t: float) -> float:
     )
 
 
-# Geom: ring_pulse ─ ring radius oscillates as a whole.
-
-def _sample_ring_pulse(rng: random.Random, geom_bin: str) -> dict[str, Any]:
+def _sample_ring_pulse(rng: random.Random) -> dict[str, Any]:
     return {
-        "ring_pulse_amp": _sample_in(rng, "pulse_amp", geom_bin),
-        "ring_pulse_period_sec": _sample_in(rng, "pulse_period_sec", geom_bin),
+        "ring_pulse_amp": rng.uniform(0.08, 0.14),
+        "ring_pulse_period_sec": rng.uniform(7.0, 11.0),
     }
 
 
@@ -351,15 +230,6 @@ def _ring_pulse_radius_factor(p: "Params", t: float) -> float:
         return 1.0
     return 1.0 + p.ring_pulse_amp * math.sin(2.0 * math.pi * t / p.ring_pulse_period_sec)
 
-
-def _sample_geom_none(rng: random.Random, geom_bin: str) -> dict[str, Any]:
-    return {}
-
-
-LIGHT_KINDS: dict[str, LightStrategy] = {
-    "slide": LightStrategy(sample=_sample_slide, apply=_apply_slide),
-    "yaw":   LightStrategy(sample=_sample_yaw,   apply=_apply_yaw),
-}
 
 GEOM_KINDS: dict[str, GeomStrategy] = {
     "none":          GeomStrategy(sample=_sample_geom_none),
@@ -372,50 +242,97 @@ GEOM_KINDS: dict[str, GeomStrategy] = {
 }
 
 
+# ── Branches ──────────────────────────────────────────────────────────
+
+# (sampler, weight)
+_BRANCHES: dict[str, tuple[Callable[[random.Random, str], list[LightDef]], float]] = {}
+
+
+def _sample_one_light(rng: random.Random, *, regime: str, color: str) -> LightDef:
+    return LightDef(
+        regime=regime,
+        seed=int(rng.randrange(1 << 31)),
+        spread=rng.uniform(0.05, 0.09),
+        source=rng.choice(["ball", "line"]),
+        source_radius=rng.uniform(0.008, 0.020),
+        intensity=rng.uniform(*INTENSITY_RANGE),
+        color=color,
+    )
+
+
+def _branch_solo_white(rng: random.Random, regime: str) -> list[LightDef]:
+    return [_sample_one_light(rng, regime=regime, color="white")]
+
+
+def _branch_solo_warm(rng: random.Random, regime: str) -> list[LightDef]:
+    return [_sample_one_light(rng, regime=regime, color="warm")]
+
+
+def _branch_duet_contrast(rng: random.Random, regime: str) -> list[LightDef]:
+    # Both lights share the same regime but have independent seeds → they
+    # evolve as two distinct trajectories of the same character.
+    return [
+        _sample_one_light(rng, regime=regime, color="warm"),
+        _sample_one_light(rng, regime=regime, color="white"),
+    ]
+
+
+_BRANCHES = {
+    "solo_white": (_branch_solo_white, 1.2),
+    "solo_warm": (_branch_solo_warm, 1.0),
+    "duet_contrast": (_branch_duet_contrast, 1.4),
+}
+
+
 # ── Sampling ──────────────────────────────────────────────────────────
-
-
-def _sample_ring_rate(rng: random.Random, geom_kind: str, geom_bin: str) -> float:
-    """|ω| from RANGES[ring_rate_abs][geom_bin]; ×0.9 if any geom motion is on."""
-    abs_rate = _sample_in(rng, "ring_rate_abs", geom_bin)
-    if geom_kind != "none":
-        abs_rate *= _GEOM_RING_DAMP
-    return abs_rate * rng.choice([-1.0, 1.0])
 
 
 def sample(
     rng: random.Random,
     *,
     branch: str | None = None,
-    layout: str | None = None,
-    pace: str | None = None,
-    light_kind: str | None = None,
+    regime: str | None = None,
     geom_kind: str | None = None,
 ) -> Params:
-    """Sample a variant. Any axis can be pinned by the caller (used by the
-    catalog); unpinned axes are drawn uniformly at random."""
-    names = list(_BRANCHES)
+    """Sample a variant. Any axis can be pinned by the caller; unpinned
+    axes are drawn uniformly at random."""
+    branch_names = list(_BRANCHES)
     chosen_branch = branch or rng.choices(
-        names, weights=[_BRANCHES[n][1] for n in names], k=1
+        branch_names, weights=[_BRANCHES[n][1] for n in branch_names], k=1
     )[0]
-    chosen_layout = layout or rng.choice(IRIS_LAYOUTS)
-    chosen_pace = pace or rng.choice(PACES)
-    chosen_light = light_kind or rng.choice(list(LIGHT_KINDS))
+    chosen_regime = regime or rng.choice(LIGHT_REGIMES)
     chosen_geom = geom_kind or rng.choice(list(GEOM_KINDS))
 
-    light_bin = PACE_BINS[chosen_pace]["light"]
-    geom_bin = PACE_BINS[chosen_pace]["geom"]
+    # Motion params (curator-chosen ranges)
+    w_corner = rng.uniform(*W_CORNER_RANGE)
+    w_vert = rng.uniform(*W_VERT_RANGE)
+    a_y = rng.uniform(*A_Y_RANGE)
+    drift = rng.uniform(*DRIFT_RANGE)
+    smoothness = rng.uniform(*SMOOTHNESS_RANGE)
+    speed_scale = rng.uniform(*SPEED_SCALE_RANGE)
+    noise_amp = rng.uniform(*NOISE_AMP_RANGE)
+    n_sines = rng.randint(*N_SINES_RANGE)
+    D = rng.uniform(*D_RANGE)
+    gamma = rng.uniform(*GAMMA_RANGE)
+    dwell = rng.uniform(*DWELL_RANGE) if chosen_regime == "patrol" else 0.0
 
-    lights = _BRANCHES[chosen_branch][0](rng, chosen_layout)
+    # Ring rotation: |ω| ∈ [0.10, 0.40] rad/s, damped 10% if any geom motion is on.
+    ring_rate_abs = rng.uniform(0.10, 0.40)
+    if chosen_geom != "none":
+        ring_rate_abs *= _GEOM_RING_DAMP
+    ring_rate = ring_rate_abs * rng.choice([-1.0, 1.0])
+
+    # Wall + ring sampling
     wall_albedo = rng.uniform(*WALL_ALBEDO_RANGE)
     n_wedges = rng.randint(6, 10)
-    ring_rate = _sample_ring_rate(rng, chosen_geom, geom_bin)
 
-    light_kwargs = LIGHT_KINDS[chosen_light].sample(rng, chosen_layout, light_bin)
-    geom_kwargs = GEOM_KINDS[chosen_geom].sample(rng, geom_bin)
+    # Lights from branch
+    lights = _BRANCHES[chosen_branch][0](rng, chosen_regime)
+
+    # Geom kwargs
+    geom_kwargs = GEOM_KINDS[chosen_geom].sample(rng)
 
     return Params(
-        iris_composition=chosen_layout,
         ring_radius=rng.uniform(0.35, 0.55),
         n_wedges=n_wedges,
         wedge_size=rng.uniform(0.07, 0.12),
@@ -426,69 +343,25 @@ def sample(
         wedge_roughness=rng.uniform(0.0, 0.015),
         wall_albedo=wall_albedo,
         wall_roughness=rng.uniform(0.075, 0.15),
-        lights=lights,
         branch=chosen_branch,
+        regime=chosen_regime,
+        geom_kind=chosen_geom,
+        lights=lights,
+        w_corner=w_corner, w_vert=w_vert, a_y=a_y,
+        drift=drift, smoothness=smoothness, speed_scale=speed_scale,
+        noise_amp=noise_amp, n_sines=n_sines,
+        D=D, gamma=gamma, dwell=dwell,
         look_exposure=_exposure_for(wall_albedo, len(lights)) + rng.uniform(-0.15, 0.15),
         look_gamma=rng.uniform(1.4, 2.0),
         look_contrast=rng.uniform(1.0, 1.1),
         look_shadows=rng.uniform(-0.2, 0.2),
         look_vignette=rng.uniform(0.1, 0.5),
         look_vignette_radius=rng.uniform(1.5, 1.8),
-        pace=chosen_pace,
-        light_kind=chosen_light,
-        geom_kind=chosen_geom,
-        **light_kwargs,
         **geom_kwargs,
     )
 
 
-# ── Scene ─────────────────────────────────────────────────────────────
-
-
-def _spectrum_for(color: str) -> LightSpectrum:
-    if color == "warm":
-        return LightSpectrum.range(wavelength_min=580, wavelength_max=650)
-    return LightSpectrum.range(wavelength_min=380, wavelength_max=780)
-
-
-def _light_position_and_dir(side: str, offset_tangent: float, yaw: float = 0.0):
-    """Wall position + direction aimed at the (always-centered) ring.
-
-    ``yaw`` rotates the aim by that many radians around the position. Position
-    always stays inside the chamber walls.
-    """
-    if side == "left":
-        pos = (-CHAMBER_HW + 0.08, offset_tangent)
-    elif side == "right":
-        pos = (CHAMBER_HW - 0.08, offset_tangent)
-    elif side == "top":
-        pos = (offset_tangent, CHAMBER_HH - 0.08)
-    else:
-        pos = (offset_tangent, -CHAMBER_HH + 0.08)
-    a = math.atan2(-pos[1], -pos[0]) + yaw
-    return pos, (math.cos(a), math.sin(a))
-
-
-def _projectors(p: Params, t: float) -> list[ProjectorLight]:
-    light_strategy = LIGHT_KINDS[p.light_kind]
-    out: list[ProjectorLight] = []
-    for i, L in enumerate(p.lights):
-        offset, yaw = light_strategy.apply(p, L, t)
-        pos, dir_ = _light_position_and_dir(L.side, offset, yaw=yaw)
-        spectrum = _spectrum_for(L.color)
-        out.append(
-            ProjectorLight(
-                id=f"beam_{i}",
-                position=list(pos),
-                direction=list(dir_),
-                source_radius=L.source_radius,
-                spread=L.spread,
-                source=L.source,
-                intensity=intensity_for_spectrum(L.intensity, spectrum),
-                spectrum=spectrum,
-            )
-        )
-    return out
+# ── Build / animate ───────────────────────────────────────────────────
 
 
 def _wedge_shapes(p: Params, t: float):
@@ -514,7 +387,12 @@ def _wedge_shapes(p: Params, t: float):
 
 
 def build(p: Params):
-    """Family.build: return the per-frame animate callback."""
+    """Family.build: return the per-frame animate callback.
+
+    Construction-time work: build materials, look dict, motion params and
+    one :class:`iris_motion.RegimeRunner` per light. Each runner drives the
+    light's position on every frame call.
+    """
     materials = {
         WALL_ID: _wall_material(p.wall_albedo, p.wall_roughness),
         WEDGE_ID: glass(
@@ -526,9 +404,6 @@ def build(p: Params):
         ),
     }
     warm_frac = sum(1 for L in p.lights if L.color == "warm") / max(1, len(p.lights))
-    # Per-frame look as a *dict* so vignette and other render-only fields
-    # set on the base shot can flow through to the final render but stay
-    # absent from the probe shot.
     look = dict(
         exposure=p.look_exposure,
         gamma=p.look_gamma,
@@ -540,17 +415,52 @@ def build(p: Params):
         temperature=0.25 * warm_frac,
     )
 
+    motion_params = iris_motion.MotionParams(
+        w_corner=p.w_corner, w_vert=p.w_vert, a_y=p.a_y,
+        ring_radius=p.ring_radius, drift=p.drift,
+        noise_amp=p.noise_amp, n_sines=p.n_sines, base_period=BASE_PERIOD,
+        D=p.D, gamma=p.gamma, dwell=p.dwell,
+        smoothness=p.smoothness, speed_scale=p.speed_scale,
+    )
+    runners = [
+        iris_motion.RegimeRunner(L.regime, motion_params, L.seed)
+        for L in p.lights
+    ]
+
     def animate(ctx):
         # Stills use a fixed midpoint pose so single-frame previews are
         # stable across requested durations.
         t_seconds = ctx.time if ctx.total_frames > 1 else DURATION / 2
+
+        projectors: list[ProjectorLight] = []
+        for i, (L, runner) in enumerate(zip(p.lights, runners)):
+            x, y = runner.at(t_seconds)
+            r = math.hypot(x, y)
+            if r < 1e-6:
+                dx, dy = 1.0, 0.0
+            else:
+                dx, dy = -x / r, -y / r
+            spectrum = _spectrum_for(L.color)
+            projectors.append(
+                ProjectorLight(
+                    id=f"beam_{i}",
+                    position=[x, y],
+                    direction=[dx, dy],
+                    source_radius=L.source_radius,
+                    spread=L.spread,
+                    source=L.source,
+                    intensity=intensity_for_spectrum(L.intensity, spectrum),
+                    spectrum=spectrum,
+                )
+            )
+
         scene = Scene(
             materials=materials,
             shapes=[
                 *mirror_box(CHAMBER_HW, CHAMBER_HH, WALL_ID, id_prefix="chamber"),
                 *_wedge_shapes(p, t_seconds),
             ],
-            lights=_projectors(p, t_seconds),
+            lights=projectors,
         )
         return Frame(scene=scene, look=look)
 
@@ -569,10 +479,11 @@ GATE_MIN_PASSING_FRAC = 0.30
 def check(animate) -> Verdict:
     """Reject probes that miss the mean-luma + RMS-contrast band.
 
-    Probes the module's nominal DURATION at fps=4. Rotation rate is in
-    rad/s, so a longer render covers more total rotation at the same
-    on-screen speed — probe stats sampled over DURATION remain
-    representative of any clip length.
+    Probes the module's nominal DURATION at fps=4. With the regime-runner
+    architecture, the probe's lower fps means fewer internal regime steps
+    per probe-frame than render frames — but the runner advances at a
+    fixed internal rate (60 Hz), so the same external time always yields
+    the same world position. Probe stats remain representative.
     """
     frames = probe(animate, DURATION, fps=4, camera=CAMERA)
     n = len(frames)
@@ -603,16 +514,16 @@ def check(animate) -> Verdict:
 
 def describe(p: Params) -> str:
     return (
-        f"branch={p.branch} iris={p.iris_composition} pace={p.pace} "
-        f"light={p.light_kind} geom={p.geom_kind} "
+        f"branch={p.branch} regime={p.regime} geom={p.geom_kind} "
         f"n={p.n_wedges} r={p.ring_radius:.2f} ω={p.ring_rotation_rate_rad_per_sec:+.3f} "
-        f"alb={p.wall_albedo:.2f} exp={p.look_exposure:.2f}"
+        f"alb={p.wall_albedo:.2f} exp={p.look_exposure:.2f} "
+        f"w_c={p.w_corner:.2f} w_v={p.w_vert:.2f} a_y={p.a_y:.2f} "
+        f"drift={p.drift:.2f} ss={p.speed_scale:.2f} sm={p.smoothness:.2f}"
     )
 
 
 def tag(p: Params) -> str:
-    layout = p.iris_composition.replace("iris_", "")
-    return f"{p.branch}_{layout}_{p.pace}_{p.light_kind}_{p.geom_kind}"
+    return f"{p.branch}_{p.regime}_{p.geom_kind}"
 
 
 def final_look(p: Params) -> dict:

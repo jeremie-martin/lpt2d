@@ -14,8 +14,8 @@ Run::
 
     python examples/python/families/iris_batch.py \
         --out renders/iris_batch_demo \
-        -n 12 --pace fast_light --layout iris_vertical --branch solo_white \
-        --width 854 --height 480 --rays 1000000 --depth 10 --fps 24 \
+        -n 12 --pace fast_light --branch solo_white \
+        --width 480 --height 854 --rays 1000000 --depth 10 --fps 24 \
         --duration 15
 """
 
@@ -49,67 +49,20 @@ def _make_batch_shot(*, width: int, height: int, rays: int, depth: int) -> Shot:
     return shot
 
 
-def _parse_layout_weights(spec: str | None) -> dict[str, float] | None:
-    """Parse a string like 'iris_horizontal:1,iris_vertical:3' into a weight map.
-
-    None or empty → None (caller treats as uniform). Unknown layout names raise.
-    """
-    if not spec:
-        return None
-    weights: dict[str, float] = {}
-    for piece in spec.split(","):
-        piece = piece.strip()
-        if not piece:
-            continue
-        key, _, val = piece.partition(":")
-        key = key.strip()
-        if key not in iris.IRIS_LAYOUTS:
-            raise ValueError(
-                f"Unknown layout {key!r} in --layout-weights. "
-                f"Choices: {list(iris.IRIS_LAYOUTS)}"
-            )
-        weights[key] = float(val)
-    return weights
-
-
-def _pick_layout(
-    rng: random.Random,
-    pinned: str | None,
-    weights: dict[str, float] | None,
-) -> str | None:
-    """If pinned, return that layout. Else if weighted, sample. Else None
-    (which lets ``iris.sample`` choose uniformly)."""
-    if pinned is not None:
-        return pinned
-    if not weights:
-        return None
-    layouts = list(weights)
-    return rng.choices(layouts, weights=[weights[k] for k in layouts], k=1)[0]
-
-
 def _search_variant(
     rng: random.Random,
     *,
     branch: str | None,
-    layout: str | None,
-    layout_weights: dict[str, float] | None,
-    pace: str | None,
-    light_kind: str | None,
+    regime: str | None,
     geom_kind: str | None,
     max_attempts: int,
 ) -> tuple[iris.Params, iris.Verdict, int, bool]:
     """Sample with the requested axes pinned (any None = freely sampled).
-    ``layout_weights`` only takes effect when ``layout`` is None — it lets the
-    runner draw a weighted-random layout per attempt. Returns (params,
-    verdict, attempts_used, gate_passed)."""
+    Returns (params, verdict, attempts_used, gate_passed)."""
     last_params: iris.Params | None = None
     last_verdict: iris.Verdict | None = None
     for attempt in range(1, max_attempts + 1):
-        chosen_layout = _pick_layout(rng, layout, layout_weights)
-        p = iris.sample(
-            rng, branch=branch, layout=chosen_layout, pace=pace,
-            light_kind=light_kind, geom_kind=geom_kind,
-        )
+        p = iris.sample(rng, branch=branch, regime=regime, geom_kind=geom_kind)
         animate = iris.build(p)
         v = iris.check(animate)
         last_params, last_verdict = p, v
@@ -172,7 +125,7 @@ h1 { margin:0 0 8px; font-size:clamp(28px, 5vw, 52px); letter-spacing:-0.04em; }
 .card.failed { border-color:var(--bad); background:rgba(255, 105, 64, .04); }
 .card h3 { margin:0; font-family:ui-monospace, monospace; font-size:14px; color:var(--good); }
 .card.failed h3 { color:var(--bad); }
-.card video { width:100%; aspect-ratio:16 / 9; background:#050505; border:1px solid var(--line); border-radius:8px; display:block; }
+.card video { width:100%; max-width:280px; aspect-ratio:9 / 16; background:#050505; border:1px solid var(--line); border-radius:8px; display:block; margin:0 auto; }
 .card .meta { font-size:11px; color:var(--muted); font-family:ui-monospace, monospace; word-break:break-all; }
 .card.failed .meta { color:var(--bad); }
 .links { font-size:12px; display:flex; gap:10px; flex-wrap:wrap; }
@@ -204,7 +157,7 @@ def _write_index(
         failed_class = "" if c["gate_passed"] else " failed"
         status = "OK" if c["gate_passed"] else f"FAIL@{c['attempts']}"
         meta_text = (
-            f"{status} · pace={c['pace']} light={c['light_kind']} geom={c['geom_kind']}"
+            f"{status} · branch={c['branch']} regime={c['regime']} geom={c['geom_kind']}"
             f" · {c['summary']}"
         )
         video = f"{slug}/video.mp4"
@@ -250,20 +203,14 @@ def main(argv: list[str] | None = None) -> None:
     # Constraint pinning. Any unset axis is sampled freely.
     parser.add_argument("--branch", type=str, default=None,
                         choices=["solo_white", "solo_warm", "duet_contrast"])
-    parser.add_argument("--layout", type=str, default=None,
-                        choices=list(iris.IRIS_LAYOUTS),
-                        help="Pin layout for every variant (mutually exclusive with --layout-weights)")
-    parser.add_argument("--layout-weights", type=str, default=None,
-                        help="Weighted layout sampling, e.g. 'iris_horizontal:1,iris_vertical:3'. "
-                             "Ignored if --layout is set.")
-    parser.add_argument("--pace", type=str, default=None, choices=list(iris.PACES))
-    parser.add_argument("--light-kind", type=str, default=None,
-                        choices=list(iris.LIGHT_KINDS))
+    parser.add_argument("--regime", type=str, default=None,
+                        choices=list(iris.LIGHT_REGIMES),
+                        help="Pin the light-motion regime for every variant.")
     parser.add_argument("--geom-kind", type=str, default=None,
                         choices=list(iris.GEOM_KINDS))
     # Render config.
-    parser.add_argument("--width", type=int, default=854)
-    parser.add_argument("--height", type=int, default=480)
+    parser.add_argument("--width", type=int, default=480)
+    parser.add_argument("--height", type=int, default=854)
     parser.add_argument("--rays", type=int, default=1_000_000)
     parser.add_argument("--depth", type=int, default=10)
     parser.add_argument("--fps", type=int, default=24)
@@ -274,20 +221,11 @@ def main(argv: list[str] | None = None) -> None:
     out.mkdir(parents=True, exist_ok=True)
 
     seed = args.seed if args.seed is not None else int(time.time())
-    layout_weights = _parse_layout_weights(args.layout_weights)
-    if args.layout is not None and layout_weights is not None:
-        layout_weights = None  # explicit pin wins
     pinned = {
-        "branch": args.branch, "layout": args.layout, "pace": args.pace,
-        "light_kind": args.light_kind, "geom_kind": args.geom_kind,
+        "branch": args.branch, "regime": args.regime, "geom_kind": args.geom_kind,
     }
     pinned_str = ", ".join(f"{k}={v}" for k, v in pinned.items() if v is not None) or "<none>"
-    weights_str = (
-        ", ".join(f"{k}={v:g}" for k, v in layout_weights.items())
-        if layout_weights else "<uniform>"
-    )
     print(f"batch seed={seed} n={args.n} pinned: {pinned_str}", flush=True)
-    print(f"layout weights: {weights_str}", flush=True)
     print(f"render: {args.width}x{args.height} @ {args.fps}fps  rays={args.rays}  "
           f"depth={args.depth}  duration={args.duration}s", flush=True)
 
@@ -299,8 +237,7 @@ def main(argv: list[str] | None = None) -> None:
 
         print(f"[{i}/{args.n}] {slug}  searching...", flush=True)
         p, v, attempts, passed = _search_variant(
-            rng, **pinned, layout_weights=layout_weights,
-            max_attempts=args.max_attempts,
+            rng, **pinned, max_attempts=args.max_attempts,
         )
         print(f"  {'OK' if passed else 'FAIL'} after {attempts}: {iris.describe(p)}", flush=True)
         print(f"  gate: {v.summary}", flush=True)
@@ -310,8 +247,8 @@ def main(argv: list[str] | None = None) -> None:
         (out_dir / "verdict.json").write_text(json.dumps({
             "ok": v.ok, "summary": v.summary,
             "attempts": attempts, "gate_passed": passed,
-            "pace": p.pace, "light_kind": p.light_kind, "geom_kind": p.geom_kind,
-            "branch": p.branch, "layout": p.iris_composition,
+            "regime": p.regime, "geom_kind": p.geom_kind,
+            "branch": p.branch,
         }, indent=2))
 
         print(f"  rendering {out_dir}/video.mp4 ...", flush=True)
@@ -327,8 +264,8 @@ def main(argv: list[str] | None = None) -> None:
             "slug": slug,
             "ok": v.ok, "summary": v.summary,
             "attempts": attempts, "gate_passed": passed,
-            "pace": p.pace, "light_kind": p.light_kind, "geom_kind": p.geom_kind,
-            "branch": p.branch, "layout": p.iris_composition,
+            "regime": p.regime, "geom_kind": p.geom_kind,
+            "branch": p.branch,
         })
 
     title = f"Iris batch — n={args.n}"
@@ -337,15 +274,10 @@ def main(argv: list[str] | None = None) -> None:
         f"<code>{_html.escape(k)}={_html.escape(v)}</code>"
         for k, v in pinned.items() if v is not None
     ]
-    weights_html = (
-        " · ".join(f"<code>{_html.escape(k)}={v:g}</code>" for k, v in layout_weights.items())
-        if layout_weights else "<i>uniform</i>"
-    )
     blurb = (
         f"Render: {args.width}×{args.height} @ {args.fps} fps, {args.duration:g}s, "
         f"{args.rays:,} rays, depth {args.depth}.<br>"
         f"Pinned axes: {' · '.join(pinned_pieces) or '<i>none</i>'}.<br>"
-        f"Layout weights: {weights_html}.<br>"
         "Hover any video to play it. Red border = the gate never passed within "
         "the attempt budget; the variant is rendered from the last sample anyway."
     )
