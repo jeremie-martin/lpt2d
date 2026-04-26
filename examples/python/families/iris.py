@@ -69,7 +69,7 @@ W_VERT_RANGE = (0.00, 0.075)
 A_Y_RANGE = (0.82, 1.10)
 DRIFT_RANGE = (0.09, 0.11)
 SMOOTHNESS_RANGE = (0.90, 0.97)
-SPEED_SCALE_RANGE = (0.20, 0.60)
+SPEED_SCALE_RANGE = (0.10, 0.40)
 
 # Secondary motion ranges (used by the stochastic regimes).
 NOISE_AMP_RANGE = (0.20, 0.50)
@@ -79,8 +79,13 @@ GAMMA_RANGE = (2.0, 4.0)
 DWELL_RANGE = (0.0, 1.0)
 BASE_PERIOD = 4.0
 
-# Active light-motion regimes — "loop_momentum" intentionally excluded.
-LIGHT_REGIMES = iris_motion.REGIME_NAMES  # ('loop', 'patrol', 'two_well', 'chase', 'wander2d', 'polar')
+# Active light-motion regimes — "loop_momentum" and "wander2d" excluded.
+# (wander2d keeps drifting too fast within the family's tighter speed_scale
+#  range; revisit if a slower 2D-wander variant is added.)
+LIGHT_REGIMES = tuple(n for n in iris_motion.REGIME_NAMES
+                       if n not in ("wander2d",))
+# → ('loop', 'patrol', 'two_well', 'chase', 'polar')  — uniform sampling
+assert len(LIGHT_REGIMES) == 5, LIGHT_REGIMES
 
 # Geom kinds dampen the ring rotation when active so the wedges don't blur.
 _GEOM_RING_DAMP = 0.9
@@ -476,6 +481,10 @@ GATE_P05_LUMA_MAX = 0.20
 GATE_MIN_PASSING_FRAC = 0.30
 
 
+PROBE_DEPTH = 12  # match the render presets — depth affects brightness, so
+                  # the gate must judge an image of the same brightness as ships
+
+
 def check(animate) -> Verdict:
     """Reject probes that miss the mean-luma + RMS-contrast band.
 
@@ -484,8 +493,11 @@ def check(animate) -> Verdict:
     per probe-frame than render frames — but the runner advances at a
     fixed internal rate (60 Hz), so the same external time always yields
     the same world position. Probe stats remain representative.
+
+    Depth matches the render so the gate's brightness/contrast metrics
+    reflect what the user will actually see.
     """
-    frames = probe(animate, DURATION, fps=4, camera=CAMERA)
+    frames = probe(animate, DURATION, fps=4, camera=CAMERA, depth=PROBE_DEPTH)
     n = len(frames)
     passing = sum(
         1

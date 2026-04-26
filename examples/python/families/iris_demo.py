@@ -33,10 +33,14 @@ from examples.python.families import iris_batch
 # Resolution presets keyed by short name. All in 9:16 portrait orientation.
 # Each dict carries every render-related knob; bumping a knob here
 # propagates to every subsequent run.
-RESOLUTION_PRESETS: dict[str, dict[str, int]] = {
-    "480p":  {"width": 480,  "height": 854,  "rays": 1_000_000, "fps": 24, "depth": 10},
-    "720p":  {"width": 720,  "height": 1280, "rays": 4_000_000, "fps": 60, "depth": 12},
-    "1080p": {"width": 1080, "height": 1920, "rays": 6_000_000, "fps": 60, "depth": 12},
+# ``fast`` enables half-float precision (RGBA16F instead of RGBA32F) — much
+# faster, slightly less fidelity in extreme highlights. Useful for quick
+# preview/exploration runs at low resolution.
+RESOLUTION_PRESETS: dict[str, dict[str, object]] = {
+    "360p":  {"width": 360,  "height": 640,  "rays": 1_000_000, "fps": 30, "depth": 12, "fast": False, "crf": 18},
+    "480p":  {"width": 480,  "height": 854,  "rays": 1_000_000, "fps": 24, "depth": 12, "fast": False, "crf": 18},
+    "720p":  {"width": 720,  "height": 1280, "rays": 4_000_000, "fps": 60, "depth": 12, "fast": False, "crf": 15},
+    "1080p": {"width": 1080, "height": 1920, "rays": 6_000_000, "fps": 60, "depth": 12, "fast": False, "crf": 15},
 }
 
 DURATION_SEC = 15.0
@@ -71,7 +75,10 @@ def main(argv: list[str] | None = None) -> None:
         "--fps", str(preset["fps"]),
         "--depth", str(preset["depth"]),
         "--duration", str(DURATION_SEC),
+        "--crf", str(preset.get("crf", 18)),
     ]
+    if preset.get("fast"):
+        batch_argv.append("--fast")
     if args.seed is not None:
         batch_argv += ["--seed", str(args.seed)]
 

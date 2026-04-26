@@ -136,6 +136,53 @@ def test_rewind_after_probe():
     return all_ok
 
 
+def test_fps_independence():
+    """The position at any external time t must NOT depend on the render fps.
+    Probe at fps=4, render at fps=24, render at fps=60 must all see the
+    same trajectory at the timestamps they share. This is the contract the
+    family relies on (probe and render call the same `animate` instance)."""
+    p = _params()
+    seed = 31415
+    test_ts = [0.0, 0.5, 1.0, 2.5, 5.0, 7.5, 10.0, 12.5, 15.0]
+
+    print("Test 5: FPS-independence (same external time → same position)")
+    print(f"{'regime':<14} {'max |Δ| 4↔24':>14} {'max |Δ| 4↔60':>14} {'parity':>10}")
+    all_ok = True
+    for name in fam.REGIME_NAMES:
+        # fps=4: probe-like cadence
+        r4 = fam.RegimeRunner(name, p, seed)
+        ts4 = [k / 4 for k in range(int(15 * 4) + 1)]
+        # Walk the runner through the full ts4 sequence, then sample at test_ts
+        for t in ts4:
+            r4.at(t)
+        # Now sample at test_ts; rewind safely if needed
+        pts4 = [r4.at(t) for t in test_ts]
+
+        # fps=24: render cadence A
+        r24 = fam.RegimeRunner(name, p, seed)
+        ts24 = [k / 24 for k in range(int(15 * 24) + 1)]
+        for t in ts24:
+            r24.at(t)
+        pts24 = [r24.at(t) for t in test_ts]
+
+        # fps=60: render cadence B
+        r60 = fam.RegimeRunner(name, p, seed)
+        ts60 = [k / 60 for k in range(int(15 * 60) + 1)]
+        for t in ts60:
+            r60.at(t)
+        pts60 = [r60.at(t) for t in test_ts]
+
+        a4 = np.array(pts4); a24 = np.array(pts24); a60 = np.array(pts60)
+        d_4_24 = float(np.max(np.abs(a4 - a24)))
+        d_4_60 = float(np.max(np.abs(a4 - a60)))
+        parity = "EXACT" if max(d_4_24, d_4_60) < 1e-10 else "MISMATCH"
+        if max(d_4_24, d_4_60) >= 1e-10:
+            all_ok = False
+        print(f"  {name:<12} {d_4_24:>14.2e} {d_4_60:>14.2e} {parity:>10}")
+    print()
+    return all_ok
+
+
 def test_motion_actually_happens():
     """Sanity: per-regime, position actually changes over the 15s clip."""
     fp = _params()
@@ -155,8 +202,10 @@ if __name__ == "__main__":
     ok1 = test_runner_vs_manual()
     ok2 = test_call_order_independence()
     ok3 = test_rewind_after_probe()
+    ok4 = test_fps_independence()
     test_motion_actually_happens()
     print(f"\nSummary: runner-parity={'OK' if ok1 else 'FAIL'}  "
             f"order={'OK' if ok2 else 'FAIL'}  "
-            f"rewind={'OK' if ok3 else 'FAIL'}")
-    sys.exit(0 if (ok1 and ok2 and ok3) else 1)
+            f"rewind={'OK' if ok3 else 'FAIL'}  "
+            f"fps-indep={'OK' if ok4 else 'FAIL'}")
+    sys.exit(0 if (ok1 and ok2 and ok3 and ok4) else 1)

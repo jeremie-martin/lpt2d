@@ -83,6 +83,8 @@ def _render_variant(
     rays: int,
     depth: int,
     name: str,
+    fast: bool = False,
+    crf: int = 18,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     animate = iris.build(p)
@@ -102,7 +104,8 @@ def _render_variant(
         print(f"  frame-export skipped ({type(e).__name__}: {e})", flush=True)
 
     timeline = Timeline(duration, fps=fps)
-    render(animate, timeline, str(out_dir / "video.mp4"), settings=shot, crf=18)
+    render(animate, timeline, str(out_dir / "video.mp4"),
+            settings=shot, crf=crf, fast=fast)
 
 
 # ── Index.html ─────────────────────────────────────────────────────────
@@ -215,6 +218,10 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--depth", type=int, default=10)
     parser.add_argument("--fps", type=int, default=24)
     parser.add_argument("--duration", type=float, default=iris.DURATION)
+    parser.add_argument("--fast", action="store_true",
+                        help="Render with half-float precision (faster, lower fidelity).")
+    parser.add_argument("--crf", type=int, default=18,
+                        help="ffmpeg CRF (lower = better quality, larger file). Default 18.")
     args = parser.parse_args(argv)
 
     out = Path(args.out)
@@ -258,6 +265,7 @@ def main(argv: list[str] | None = None) -> None:
             duration=args.duration, fps=args.fps,
             rays=args.rays, depth=args.depth,
             name=f"iris_batch_{slug}",
+            fast=args.fast, crf=args.crf,
         )
 
         cells.append({

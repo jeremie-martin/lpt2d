@@ -115,7 +115,7 @@ def _make_default_params() -> MotionParams:
         gamma=3.0,          # mid of (2.0, 4.0)
         dwell=0.5,          # mid of (0.0, 1.0)
         smoothness=0.935,   # mid of (0.90, 0.97)
-        speed_scale=0.40,   # mid of (0.20, 0.60)
+        speed_scale=0.25,   # mid of (0.10, 0.40)
     )
 
 
