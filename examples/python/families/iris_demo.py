@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> None:
         "--max-attempts", type=int, default=500,
         help="Search budget per variant (default 500)",
     )
+    parser.add_argument("--no-index", action="store_true",
+                        help="Skip index.html (passes through to iris_batch).")
     args = parser.parse_args(argv)
 
     preset = RESOLUTION_PRESETS[args.resolution]
@@ -81,6 +83,8 @@ def main(argv: list[str] | None = None) -> None:
         batch_argv.append("--fast")
     if args.seed is not None:
         batch_argv += ["--seed", str(args.seed)]
+    if args.no_index:
+        batch_argv.append("--no-index")
 
     print(f"iris_demo: resolution={args.resolution} {preset}", flush=True)
     iris_batch.main(batch_argv)

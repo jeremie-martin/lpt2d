@@ -66,37 +66,73 @@ systemctl --user status lpt2d-publish-watcher.service
 ## Local-side setup (dev workstation)
 
 ```bash
-# 1. Install local systemd units + helpers.
+# 1. Install all five systemd unit symlinks + reload daemon.
 ~/prog/lpt2d/scripts/lpt2d-schedule.sh install
+
+# 2. Enable both timers (nightly 01:00, workday Mon–Fri 09:30).
 ~/prog/lpt2d/scripts/lpt2d-schedule.sh enable
 
-# 2. Wire env knobs (e.g. in ~/.config/environment.d/lpt2d.conf):
+# 3. Wire env knobs (e.g. in ~/.config/environment.d/lpt2d.conf):
 #    LPT2D_REMOTE=holo@vps
 #    LPT2D_REMOTE_INBOX=/home/holo/lpt2d-publish/inbox
-#    LPT2D_NIGHTLY_N=12
+#    LPT2D_RESOLUTION=720p   # iris_demo preset
 
-# 3. Confirm SSH key to the VPS works without a passphrase (rsync needs it).
+# 4. Confirm SSH key to the VPS works without a passphrase (rsync needs it).
 ssh -o BatchMode=yes "$LPT2D_REMOTE" true && echo OK
 ```
 
+## Schedule
+
+Three systemd user services all invoke `scripts/lpt2d-render-and-ship.sh`,
+differing only in the env var that names the run and the `RuntimeMaxSec`
+that bounds it:
+
+| Service | Trigger | Window | Stops at |
+|---|---|---|---|
+| `lpt2d-nightly.service` | timer `*-*-* 01:00:00` | every night, 6 hours | 07:00 daily |
+| `lpt2d-workday.service` | timer `Mon..Fri 09:30:00` | weekday, 8 hours | 17:30 weekdays |
+| `lpt2d-manual.service` | rofi / `schedule.sh start` | unbounded | manual `pause`/`stop` |
+
+All three `Conflicts=` each other, so only one runs at a time.
+
+The script renders one bundle at a time in a loop (`iris_demo.py -n 1`)
+and ships completed ones to the VPS in the background every
+`LPT2D_SHIP_INTERVAL` seconds (30 by default). When the timer expires
+(or the operator stops the service), the script forwards SIGTERM to the
+in-flight render, then `rmtree`s the partial bundle (the one with
+`params.json` but no `verdict.json`) on exit. Net effect: never any
+half-rendered bundles on disk.
+
+`Persistent=false` on both timers — a missed nightly does NOT fire on
+next wake. If the laptop was asleep at 01:00, just hit "Start now (manual)"
+in the rofi menu.
+
 ## Verification
 
-On the local machine, kick a one-shot:
+On the local machine, kick a manual run:
 
 ```bash
 ~/prog/lpt2d/scripts/lpt2d-schedule.sh start
+```
+
+You can stop it any time via:
+
+```bash
+~/prog/lpt2d/scripts/lpt2d-schedule.sh pause     # leaves timers enabled
+~/prog/lpt2d/scripts/lpt2d-schedule.sh stop      # also disables timers
 ```
 
 On the VPS, watch the lifecycle:
 
 ```bash
 journalctl --user -u lpt2d-publish-watcher.service -f
-ls ~/lpt2d-publish/inbox/        # should show bundles arriving
+ls ~/lpt2d-publish/inbox/        # bundles arrive ~30s after each render
 tail -f ~/lpt2d-publish/uploads.jsonl
 ```
 
-After the first hour the second bundle's upload should appear; the inbox
-shrinks as bundles get processed and deleted.
+The first bundle uploads immediately after rsync; subsequent ones drip out
+at `--min-interval` (3600s) cadence. The inbox shrinks as the watcher
+processes and deletes each one.
 
 ## Operational notes
 

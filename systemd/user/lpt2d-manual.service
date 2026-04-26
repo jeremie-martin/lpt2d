@@ -1,12 +1,12 @@
 [Unit]
-Description=lpt2d manual render + ship
-Conflicts=lpt2d-nightly.service
+Description=lpt2d manual continuous render+ship (runs until manual stop)
+Conflicts=lpt2d-nightly.service lpt2d-workday.service
 
 [Service]
 Type=simple
 WorkingDirectory=%h/prog/lpt2d
+Environment=LPT2D_WINDOW=manual
 ExecStart=%h/prog/lpt2d/scripts/lpt2d-render-and-ship.sh
-RuntimeMaxSec=4h
 TimeoutStopSec=120
 KillSignal=SIGTERM
 SuccessExitStatus=SIGTERM

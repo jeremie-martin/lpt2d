@@ -1,13 +1,13 @@
 [Unit]
-Description=lpt2d nightly continuous render+ship (01:00–07:00)
-Conflicts=lpt2d-workday.service lpt2d-manual.service
+Description=lpt2d workday continuous render+ship (Mon-Fri 09:30–17:30)
+Conflicts=lpt2d-nightly.service lpt2d-manual.service
 
 [Service]
 Type=simple
 WorkingDirectory=%h/prog/lpt2d
-Environment=LPT2D_WINDOW=nightly
+Environment=LPT2D_WINDOW=workday
 ExecStart=%h/prog/lpt2d/scripts/lpt2d-render-and-ship.sh
-RuntimeMaxSec=6h
+RuntimeMaxSec=8h
 TimeoutStopSec=120
 KillSignal=SIGTERM
 SuccessExitStatus=SIGTERM

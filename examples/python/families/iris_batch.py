@@ -223,6 +223,9 @@ def main(argv: list[str] | None = None) -> None:
                         help="Render with half-float precision (faster, lower fidelity).")
     parser.add_argument("--crf", type=int, default=18,
                         help="ffmpeg CRF (lower = better quality, larger file). Default 18.")
+    parser.add_argument("--no-index", action="store_true",
+                        help="Skip index.html. Use when calling repeatedly into the "
+                             "same --out (the publish pipeline's continuous loop does this).")
     args = parser.parse_args(argv)
 
     out = Path(args.out)
@@ -295,8 +298,9 @@ def main(argv: list[str] | None = None) -> None:
         "Hover any video to play it. Red border = the gate never passed within "
         "the attempt budget; the variant is rendered from the last sample anyway."
     )
-    _write_index(out, cells, title=title, heading=heading, blurb=blurb)
-    print(f"\nWrote {out / 'index.html'}", flush=True)
+    if not args.no_index:
+        _write_index(out, cells, title=title, heading=heading, blurb=blurb)
+        print(f"\nWrote {out / 'index.html'}", flush=True)
 
 
 if __name__ == "__main__":

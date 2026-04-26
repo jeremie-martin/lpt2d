@@ -1,21 +1,29 @@
 #!/usr/bin/env bash
-# Daily entry point: render an iris batch and ship completed bundles to the VPS.
-# Wrapped in flock so concurrent timer firings don't double-render. While the
-# renderer is working we run a background ship loop that picks up each bundle
-# as soon as iris_batch writes its verdict.json (the "render complete"
-# sentinel), so the VPS watcher can start uploading well before the full batch
-# has finished — same shape as dp's per-video scp on the C++ side.
+# Continuous render-and-ship loop.
 #
-# Renders via iris_demo.py — the curator's preferred wrapper. Resolution
-# preset knobs (rays/fps/depth/crf) live in iris_demo.RESOLUTION_PRESETS;
-# editing them there propagates to nightly runs without touching this script.
+# Renders iris variants one at a time and ships completed bundles to the VPS
+# in the background. Runs until SIGTERM (timer expiry or manual `systemctl
+# stop`). The current in-flight bundle, if interrupted by SIGTERM, has its
+# directory `rmtree`'d on exit so we never leave half-rendered bundles on
+# disk — the contract is "verdict.json present ⇒ render complete".
+#
+# Three callers:
+#   • lpt2d-nightly.service  (timer 01:00, RuntimeMaxSec=6h → ends 07:00)
+#   • lpt2d-workday.service  (timer Mon-Fri 09:30, RuntimeMaxSec=8h → ends 17:30)
+#   • lpt2d-manual.service   (no timer, runs until manual `systemctl stop`)
+#
+# All three invoke this script. They differ only in the LPT2D_WINDOW env var
+# (which appears in the OUT directory name) and the systemd RuntimeMaxSec.
+#
+# Render knobs (rays/fps/depth/crf/duration/branch) live in
+# iris_demo.RESOLUTION_PRESETS — edit there once and every window inherits.
 #
 # Env knobs:
-#   LPT2D_NIGHTLY_N           — bundles per nightly batch (default: 12)
-#   LPT2D_NIGHTLY_RESOLUTION  — iris_demo preset (default: 720p)
-#   LPT2D_SHIP_INTERVAL       — seconds between ship sweeps while rendering (default: 30)
-#   LPT2D_REMOTE              — see lpt2d-ship.sh
-#   LPT2D_REMOTE_INBOX        — see lpt2d-ship.sh
+#   LPT2D_WINDOW          — nightly | workday | manual (default: manual)
+#   LPT2D_RESOLUTION      — iris_demo preset (default: 720p)
+#   LPT2D_SHIP_INTERVAL   — seconds between ship sweeps (default: 30)
+#   LPT2D_REMOTE          — see lpt2d-ship.sh
+#   LPT2D_REMOTE_INBOX    — see lpt2d-ship.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,40 +39,72 @@ fi
 
 cd "$ROOT"
 
-N="${LPT2D_NIGHTLY_N:-12}"
-RESOLUTION="${LPT2D_NIGHTLY_RESOLUTION:-720p}"
-
-TS="$(date -u +%Y%m%d)"
-OUT="$ROOT/renders/lpt2d_iris_nightly_${TS}_${RESOLUTION}_n${N}"
-
+WINDOW="${LPT2D_WINDOW:-manual}"
+RESOLUTION="${LPT2D_RESOLUTION:-720p}"
 SHIP_INTERVAL="${LPT2D_SHIP_INTERVAL:-30}"
 
-# Background ship loop: while iris_batch is rendering, sweep renders/ every
-# SHIP_INTERVAL seconds and rsync any bundle whose verdict.json has been
-# written. iris_batch writes verdict.json LAST, so no half-encoded video gets
-# shipped.
+TS_SESSION="$(date -u +%Y%m%dT%H%M%SZ)"
+OUT="$ROOT/renders/lpt2d_iris_${WINDOW}_${TS_SESSION}_${RESOLUTION}"
+
+# ── Partial-bundle cleanup ────────────────────────────────────────────
+# A bundle is "complete" iff verdict.json exists (iris_batch writes it last,
+# after the ffmpeg encode returns). Anything with params.json but no
+# verdict.json was interrupted — rmtree it.
+cleanup_partials() {
+    [[ -d "$OUT" ]] || return 0
+    for d in "$OUT"/*/; do
+        [[ -d "$d" ]] || continue
+        if [[ -f "$d/params.json" && ! -f "$d/verdict.json" ]]; then
+            echo "[lpt2d] removing partial bundle: $d"
+            rm -rf "$d"
+        fi
+    done
+}
+
+# ── Background ship loop ──────────────────────────────────────────────
 ship_periodically() {
     while sleep "$SHIP_INTERVAL"; do
         "$ROOT/scripts/lpt2d-ship.sh" || true
     done
 }
+
 ship_periodically &
 SHIP_PID=$!
-trap 'kill "$SHIP_PID" 2>/dev/null || true; wait "$SHIP_PID" 2>/dev/null || true' EXIT INT TERM
 
-echo "[lpt2d] nightly render: out=$OUT n=$N resolution=$RESOLUTION (ship every ${SHIP_INTERVAL}s)"
-uv run python examples/python/families/iris_demo.py \
-    --out "$OUT" \
-    -n "$N" \
-    --resolution "$RESOLUTION"
+# ── Stop handling ─────────────────────────────────────────────────────
+# SIGTERM/SIGINT: set STOP flag and forward to the in-flight render so
+# the wait below returns promptly. EXIT trap kills the ship loop and
+# rmtrees any partial bundle.
+STOP=0
+RENDER_PID=
+on_signal() {
+    STOP=1
+    [[ -n "$RENDER_PID" ]] && kill -TERM "$RENDER_PID" 2>/dev/null || true
+}
+trap on_signal INT TERM
+trap '
+    kill "$SHIP_PID" 2>/dev/null || true
+    wait "$SHIP_PID" 2>/dev/null || true
+    cleanup_partials
+    "$ROOT/scripts/lpt2d-ship.sh" || true
+' EXIT
 
-# Render finished — stop the loop and run one final ship to catch the last
-# bundle (whose verdict.json may have landed after the last sweep tick).
-kill "$SHIP_PID" 2>/dev/null || true
-wait "$SHIP_PID" 2>/dev/null || true
-trap - EXIT INT TERM
+echo "[lpt2d] continuous render: window=$WINDOW resolution=$RESOLUTION out=$OUT (ship every ${SHIP_INTERVAL}s)"
 
-echo "[lpt2d] final ship pass"
-"$ROOT/scripts/lpt2d-ship.sh"
+# Defensive: clean up any debris from a prior run that died past the trap.
+cleanup_partials
 
-echo "[lpt2d] done"
+# ── Main loop ─────────────────────────────────────────────────────────
+while [[ $STOP -eq 0 ]]; do
+    # Remove any partial bundle from a previous failed iteration before
+    # starting the next render.
+    cleanup_partials
+
+    uv run python examples/python/families/iris_demo.py \
+        --out "$OUT" -n 1 --resolution "$RESOLUTION" --no-index &
+    RENDER_PID=$!
+    wait "$RENDER_PID" || true
+    RENDER_PID=
+done
+
+echo "[lpt2d] stop signal received; final ship pass runs in EXIT trap"

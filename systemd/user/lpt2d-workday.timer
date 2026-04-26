@@ -1,0 +1,11 @@
+[Unit]
+Description=Run lpt2d workday render+ship at 09:30 Mon-Fri (until 17:30 via RuntimeMaxSec)
+
+[Timer]
+OnCalendar=Mon..Fri 09:30:00
+AccuracySec=1min
+Persistent=false
+Unit=lpt2d-workday.service
+
+[Install]
+WantedBy=timers.target

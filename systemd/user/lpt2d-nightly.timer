@@ -1,10 +1,10 @@
 [Unit]
-Description=Run lpt2d nightly render + ship at 02:00
+Description=Run lpt2d nightly render+ship at 01:00 (until 07:00 via RuntimeMaxSec)
 
 [Timer]
-OnCalendar=*-*-* 02:00:00
-AccuracySec=5min
-Persistent=true
+OnCalendar=*-*-* 01:00:00
+AccuracySec=1min
+Persistent=false
 Unit=lpt2d-nightly.service
 
 [Install]

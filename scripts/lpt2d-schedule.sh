@@ -7,29 +7,39 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 SERVICES=(
     lpt2d-nightly.service
+    lpt2d-workday.service
     lpt2d-manual.service
 )
 
 TIMERS=(
     lpt2d-nightly.timer
+    lpt2d-workday.timer
 )
 
 MANUAL_SERVICE=lpt2d-manual.service
+
+UNIT_FILES=(
+    lpt2d-nightly.service
+    lpt2d-nightly.timer
+    lpt2d-workday.service
+    lpt2d-workday.timer
+    lpt2d-manual.service
+)
 
 usage() {
     cat <<'EOF'
 Usage: scripts/lpt2d-schedule.sh <command>
 
 Commands:
-  start       Start a manual render+ship now (continues until done/paused)
-  pause       Stop currently running jobs (next schedule still runs)
-  stop        Stop running jobs AND disable scheduled timers
+  start       Start a manual continuous render+ship (runs until paused)
+  pause       Stop currently running jobs (scheduled timers stay enabled)
+  stop        Stop running jobs AND disable both scheduled timers
   status      Show timer schedule + current unit status
   brief       Print a short status summary (for menus/scripts)
-  enable      Enable and start nightly timer
-  disable     Disable timer and stop running jobs
+  enable      Enable and start both timers (nightly 01:00–07:00, workday Mon–Fri 09:30–17:30)
+  disable     Disable both timers and stop running jobs
   ship-now    Run the ship script without a render
-  install     Symlink unit files from the repo into ~/.config/systemd/user/
+  install     Symlink all five unit files into ~/.config/systemd/user/
   deploy      Pull repo on $LPT2D_REMOTE, reload systemd, restart watcher.
               Pass --deps to also pip install/upgrade the publish runtime
               packages (loguru + google-* clients) into the venv.
@@ -56,7 +66,7 @@ case "$cmd" in
     status)
         echo "Timers:"
         systemctl --user list-timers --all --no-pager \
-            | grep -E 'lpt2d-(nightly)|NEXT|LEFT|^$' || true
+            | grep -E 'lpt2d-(nightly|workday)|NEXT|LEFT|^$' || true
         echo
         echo "Units:"
         systemctl --user --no-pager --full status "${TIMERS[@]}" "${SERVICES[@]}" || true
@@ -64,11 +74,11 @@ case "$cmd" in
     brief)
         echo "Next timers:"
         systemctl --user list-timers --all --no-pager \
-            | grep -E 'lpt2d-(nightly)|NEXT|LEFT' || true
+            | grep -E 'lpt2d-(nightly|workday)|NEXT|LEFT' || true
         echo
         echo "Running services:"
         systemctl --user list-units --type=service --state=running --no-pager \
-            | grep -E 'lpt2d-(nightly|manual)\.service' || echo "(none)"
+            | grep -E 'lpt2d-(nightly|workday|manual)\.service' || echo "(none)"
         ;;
     enable)
         systemctl --user daemon-reload
@@ -87,7 +97,7 @@ case "$cmd" in
     install)
         target="$HOME/.config/systemd/user"
         mkdir -p "$target"
-        for unit in lpt2d-nightly.service lpt2d-nightly.timer lpt2d-manual.service; do
+        for unit in "${UNIT_FILES[@]}"; do
             ln -sf "$ROOT_DIR/systemd/user/$unit" "$target/$unit"
             echo "linked $unit"
         done
