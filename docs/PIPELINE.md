@@ -29,7 +29,7 @@ Inside the shell entrypoint:
 - **flock** against `$XDG_RUNTIME_DIR/lpt2d-render-and-ship.lock` —
   concurrent invocations exit 0 with a notice.
 - **Env knobs**: `LPT2D_WINDOW` (default `manual`), `LPT2D_RESOLUTION`
-  (`720p`), `LPT2D_REMOTE` (`holo@vps`), `LPT2D_REMOTE_INBOX`
+  (`720p`), `LPT2D_REMOTE` (`holo@rpi.local`), `LPT2D_REMOTE_INBOX`
   (`/home/holo/lpt2d-publish/inbox`).
 - **OUT dir**: `renders/lpt2d_iris_${WINDOW}_${UTC_TS}_${RESOLUTION}` — one
   per service start.

@@ -22,7 +22,7 @@ records every upload in an append-only ledger, then deletes the bundle.
 ## One-time install (on the VPS)
 
 ```bash
-ssh holo@vps
+ssh holo@rpi.local
 
 # 1. Clone the repo (publish/ is the only thing we need; no C++ build).
 git clone <lpt2d repo url> ~/lpt2d
@@ -39,7 +39,7 @@ python3 -m venv ~/lpt2d-publish/venv
 
 # 3. Drop the OAuth client into credentials/. Get this from Google Cloud
 #    Console → APIs & Services → Credentials → OAuth 2.0 Client → Desktop.
-# scp client_secrets.json holo@vps:~/lpt2d-publish/credentials/
+# scp client_secrets.json holo@rpi.local:~/lpt2d-publish/credentials/
 
 # 4. Bootstrap OAuth. This pops a browser the first time and writes
 #    token.pickle. Run on a machine where you can complete the OAuth
@@ -73,7 +73,7 @@ systemctl --user status lpt2d-publish-watcher.service
 ~/prog/lpt2d/scripts/lpt2d-schedule.sh enable
 
 # 3. Wire env knobs (e.g. in ~/.config/environment.d/lpt2d.conf):
-#    LPT2D_REMOTE=holo@vps
+#    LPT2D_REMOTE=holo@rpi.local
 #    LPT2D_REMOTE_INBOX=/home/holo/lpt2d-publish/inbox
 #    LPT2D_RESOLUTION=720p   # iris_demo preset
 

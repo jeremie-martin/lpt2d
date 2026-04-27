@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEDULE="$ROOT_DIR/scripts/lpt2d-schedule.sh"
-REMOTE="${LPT2D_REMOTE:-holo@vps}"
+REMOTE="${LPT2D_REMOTE:-holo@rpi.local}"
 
 if ! command -v rofi >/dev/null 2>&1; then
     echo "Error: rofi is not installed." >&2

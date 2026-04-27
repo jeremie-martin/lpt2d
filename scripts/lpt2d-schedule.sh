@@ -104,7 +104,7 @@ case "$cmd" in
         # Pull the repo on the VPS, reload systemd, restart the watcher.
         # Pass --deps as the second arg to also pip install (slow; only when
         # pyproject.toml or requirements changed).
-        remote="${LPT2D_REMOTE:-holo@vps}"
+        remote="${LPT2D_REMOTE:-holo@rpi.local}"
         venv_pip="\$HOME/lpt2d-publish/venv/bin/pip"
         deps_flag="${2:-}"
         echo "deploy: $remote"
