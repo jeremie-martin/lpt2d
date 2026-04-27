@@ -35,9 +35,17 @@ LOCK_FILE="$LOCK_DIR/lpt2d-render-and-ship.lock"
 
 mkdir -p "$LOCK_DIR"
 exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "[lpt2d] another render+ship is already running; skipping"
-    exit 0
+# `Conflicts=` between the systemd units does not order shutdown→startup —
+# when (e.g.) nightly fires at 01:00 while manual is still running, both
+# services receive their signals at the same instant and bash from the
+# departing manual is typically still running its EXIT trap when nightly's
+# script tries to grab the lock. `-w 60` waits up to 60s for the previous
+# instance to finish cleanup; if that doesn't happen the new instance
+# `exit 1`s loudly so systemd records a failure rather than silently
+# losing the window.
+if ! flock -w 60 9; then
+    echo "[lpt2d] previous render+ship still holding the lock after 60s; giving up" >&2
+    exit 1
 fi
 
 cd "$ROOT"
