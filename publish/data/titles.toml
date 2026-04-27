@@ -6,23 +6,20 @@
 titles = [
     "this is hypnotic",
     "i could watch this all day",
-    "i wrote a raytracer for this",
-    "i wrote a raytracer just for this",
+    "i wrote a 2D raytracer for this",
+    "i wrote a 2D raytracer just for this",
     "real raytraced light",
-    "yes, i made this myself",
-    "i built this engine from scratch",
+    "pure optics",
+    "pure simulated optics",
     "this is just light",
-    "light caught in glass",
     "all light, no AI",
-    "1 million rays, 60 fps",
 ]
 
 descriptions = [
-    "Rendered with a 2D path tracer I wrote in C++ and GLSL.",
-    "Procedural light. No AI, no compositing.",
+    "Rendered with a 2D spectral path-tracer I wrote in C++ and GLSL.",
+    "Simulated light. No AI.",
     "Custom GPU path tracer, written from scratch.",
-    "Made by me. The renderer too.",
-    "2D path tracer I built from scratch.",
+    "2D light engine I built from scratch.",
 ]
 
 tags = [
@@ -30,18 +27,18 @@ tags = [
     "mesmerizing",
     "generative",
     "raytracing",
-    "loop",
     "shorts",
-    "procedural",
+    "physics",
+    "optics",
 ]
 
 # Hashtag candidates appended to the title (0-2 random per upload, so most
 # titles stay clean). These appear visibly on the video page, so we exclude
 # rejected words like "loop".
 title_hashtags = [
-    "shorts",
+    "physics",
+    "optics",
     "raytracing",
-    "generative",
     "satisfying",
     "mesmerizing",
 ]
