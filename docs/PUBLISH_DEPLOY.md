@@ -1,8 +1,10 @@
-# Publish pipeline — server deployment
+# Publish pipeline — watcher-host deployment
 
-The publish pipeline runs on a VPS, watches an inbox for render bundles
-shipped from the local machine, uploads them to YouTube one at a time,
-records every upload in an append-only ledger, then deletes the bundle.
+The publish pipeline runs on a remote host (currently a Pi 5 at
+`holo@rpi.local`; previously was a VPS — same setup steps work), watches
+an inbox for render bundles shipped from the local machine, uploads them
+to YouTube one at a time, records every upload in an append-only ledger,
+then deletes the bundle.
 
 ## Layout
 
@@ -19,7 +21,7 @@ records every upload in an append-only ledger, then deletes the bundle.
 ~/lpt2d/          # this repo, cloned for the publish module + systemd unit
 ```
 
-## One-time install (on the VPS)
+## One-time install (on the watcher host)
 
 ```bash
 ssh holo@rpi.local
@@ -43,7 +45,7 @@ python3 -m venv ~/lpt2d-publish/venv
 
 # 4. Bootstrap OAuth. This pops a browser the first time and writes
 #    token.pickle. Run on a machine where you can complete the OAuth
-#    redirect — for headless VPS, run it locally first then scp the
+#    redirect — for a headless watcher host, run it locally first then scp the
 #    token.pickle, OR use ssh -L to tunnel the redirect.
 ~/lpt2d-publish/venv/bin/python -m publish upload --help
 
@@ -77,7 +79,7 @@ systemctl --user status lpt2d-publish-watcher.service
 #    LPT2D_REMOTE_INBOX=/home/holo/lpt2d-publish/inbox
 #    LPT2D_RESOLUTION=720p   # iris_demo preset
 
-# 4. Confirm SSH key to the VPS works without a passphrase (rsync needs it).
+# 4. Confirm SSH key to the watcher host works without a passphrase (rsync needs it).
 ssh -o BatchMode=yes "$LPT2D_REMOTE" true && echo OK
 ```
 
@@ -96,7 +98,7 @@ that bounds it:
 All three `Conflicts=` each other, so only one runs at a time.
 
 The script renders one bundle at a time in a loop (`iris_demo.py -n 1`)
-and ships **that bundle and only that bundle** to the VPS the moment it
+and ships **that bundle and only that bundle** to the watcher host the moment it
 completes, then loops. There is no background sweep and no scanning of
 the wider `renders/` tree — old experimental directories are invisible
 to the publish path.
@@ -125,7 +127,7 @@ You can stop it any time via:
 ~/prog/lpt2d/scripts/lpt2d-schedule.sh stop      # also disables timers
 ```
 
-On the VPS, watch the lifecycle:
+On the watcher host, watch the lifecycle:
 
 ```bash
 journalctl --user -u lpt2d-publish-watcher.service -f
@@ -142,7 +144,7 @@ processes and deletes each one.
 - **Rate limit**: `--min-interval 3600` is hard-coded into the unit file. To
   change it (e.g. 30 min), edit
   `systemd/user/lpt2d-publish-watcher.service` in the repo, push, pull on
-  the VPS, then `systemctl --user daemon-reload && systemctl --user
+  the watcher host, then `systemctl --user daemon-reload && systemctl --user
   restart lpt2d-publish-watcher.service`.
 - **Privacy**: defaults to `private` to avoid surprises. Change with
   `--privacy unlisted` or `--privacy public` in the unit's `ExecStart`.

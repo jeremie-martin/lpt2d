@@ -101,7 +101,7 @@ case "$cmd" in
         echo "Now: scripts/lpt2d-schedule.sh enable"
         ;;
     deploy)
-        # Pull the repo on the VPS, reload systemd, restart the watcher.
+        # Pull the repo on the watcher host, reload systemd, restart the watcher.
         # Pass --deps as the second arg to also pip install (slow; only when
         # pyproject.toml or requirements changed).
         remote="${LPT2D_REMOTE:-holo@rpi.local}"

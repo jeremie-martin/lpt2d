@@ -108,12 +108,14 @@ EXIT trap recovery: `cleanup_partials` first (rmtree any partial), then
 limits. Combined with `TimeoutStopSec=120` on the unit, a hung remote
 cannot stall service shutdown beyond ~120 s.
 
-## 3. Consumer side — VPS watcher
+## 3. Consumer side — watcher host
 
-Unit: `Type=simple`, `Restart=always`, `RestartSec=30s`, default
-`KillMode=control-group`. PATH prepended with `~/lpt2d-publish/bin` so
-the static ffmpeg ≥ 5.0 takes precedence over the apt-shipped 4.x
-(required for `-display_rotation`). ExecStart:
+The watcher currently runs on a Pi 5 (`holo@rpi.local`, Debian Bookworm,
+Python 3.11.2, ffmpeg 5.1.6 native). Unit: `Type=simple`, `Restart=always`,
+`RestartSec=30s`, default `KillMode=control-group`. PATH prepended with
+`~/lpt2d-publish/bin` for hosts where the apt-shipped ffmpeg is too old
+(< 5.0 misses `-display_rotation`); on the Pi this dir is empty and the
+prepend is a no-op fallthrough to `/usr/bin`. ExecStart:
 
 ```
 python -m publish watch \
@@ -199,7 +201,7 @@ Credentials at `~/lpt2d-publish/credentials/`:
 1. Load `token.pickle`.
 2. If creds invalid but a refresh token is present → `creds.refresh(Request())`.
 3. If still invalid → `InstalledAppFlow.run_local_server(port=0)` (browser
-   prompt). **Headless caveat**: on the VPS this would hang; bootstrap
+   prompt). **Headless caveat**: on a remote host without a browser this would hang; bootstrap
    token.pickle locally first then `scp`.
 4. Pickle creds back.
 5. Build `googleapiclient.discovery.build("youtube", "v3", ...)`.
@@ -229,10 +231,10 @@ Per-upload (`upload`):
 5. `verdict.json` written **last** — producer/consumer rendezvous point.
 6. `wait $RENDER_PID` returns; `ship_session_bundles` →
    `ship_bundle`:
-   - verdict ok → rsync to staging dir on VPS → ssh atomic mv → `touch .shipped`.
+   - verdict ok → rsync to staging dir on the watcher host → ssh atomic mv → `touch .shipped`.
 7. Loop iterates.
 
-Meanwhile on the VPS:
+Meanwhile on the watcher host:
 
 8. Watcher tick (every 60 s). `_pending_bundles` finds the bundle.
 9. `_handle`: no marker; throttle slot open (or wait); params/verdict OK.
@@ -271,7 +273,7 @@ $ROOT/renders/lpt2d_iris_<window>_<UTC>_<resolution>/
 $XDG_RUNTIME_DIR/lpt2d-render-and-ship.lock
 ```
 
-**VPS:**
+**Watcher host (currently `holo@rpi.local`):**
 
 ```
 ~/lpt2d-publish/
@@ -313,7 +315,7 @@ second look but that aren't bugs today:
    empty list in `publish.json` falls back to the random pool rather than
    uploading with no tags. Slightly inconsistent with `title_hint` /
    `description_hint`, which fall back only when missing.
-4. **Orphan `.staging_<name>.<pid>` dirs accumulate on the VPS** when
+4. **Orphan `.staging_<name>.<pid>` dirs accumulate on the watcher host** when
    rsync succeeds but the SSH atomic-rename step fails (network glitch
    between the two SSH phases). The watcher correctly skips them but
    never reaps them.

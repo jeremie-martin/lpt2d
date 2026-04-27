@@ -86,8 +86,10 @@ ship_bundle() {
         return 1
     fi
 
+    # POSIX-only: `test -e` instead of bash's `[[ -e ]]`, in case the remote
+    # user's shell ever becomes a non-bash sh (Debian's /bin/sh is dash).
     if ! ssh -o ConnectTimeout=30 "$REMOTE" "
-        if [[ -e $(printf '%q' "$final_remote") ]]; then
+        if test -e $(printf '%q' "$final_remote"); then
             rm -rf $(printf '%q' "$tmp_remote")
             echo '[lpt2d] remote target exists, refusing to clobber' >&2
             exit 1
