@@ -11,6 +11,8 @@ is meant to be used now.
   Procedural-from-scratch authoring.
 - [prism_crown_builder.py](/home/holo/prog/lpt2d/examples/python/prism_crown_builder.py)
   Builder- and composition-driven authoring.
+- [iris_ring_starter.py](/home/holo/prog/lpt2d/examples/python/iris_ring_starter.py)
+  Compact iris-style prism-ring authoring with grouped transforms and a spectrum-aware projector.
 - [solid_surface_gallery.py](/home/holo/prog/lpt2d/examples/python/solid_surface_gallery.py)
   A compact survey of solid-object surface authoring and simple group animation.
 - [thick_arc_demo.py](/home/holo/prog/lpt2d/examples/python/thick_arc_demo.py)
@@ -26,6 +28,7 @@ Run examples from the repo root:
 ```bash
 python examples/python/beam_chamber_starter.py
 python examples/python/prism_crown_builder.py --hq
+python examples/python/iris_ring_starter.py --frame 0
 python examples/python/solid_surface_gallery.py --fast
 python examples/python/thick_arc_demo.py
 python examples/python/twin_prisms_scene_patch.py --frame 0

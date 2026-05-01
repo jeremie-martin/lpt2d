@@ -88,3 +88,8 @@ __pycache__/
 /perf.data
 /perf.data.old
 autoresearch-results.tsv
+
+# Local scratch / diagnostic work
+/tmp/diag/
+/tmp/iris_run/
+/tmp/*.log

@@ -15,7 +15,6 @@ from anim import (
     Frame,
     FrameContext,
     Key,
-    Look,
     Material,
     ProjectorLight,
     Scene,
@@ -141,7 +140,7 @@ def frame(ctx: FrameContext) -> Frame:
             )
         ],
     )
-    return Frame(scene=scene, look=Look(exposure=EXPOSURE(ctx.time)))
+    return Frame(scene=scene, look={"exposure": EXPOSURE(ctx.time)})
 
 
 def main(argv: list[str] | None = None) -> None:

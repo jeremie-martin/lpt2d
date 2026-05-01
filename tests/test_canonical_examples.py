@@ -16,6 +16,7 @@ CANONICAL_DIR = REPO_ROOT / "examples" / "python"
 SECONDARY_DIR = REPO_ROOT / "anim" / "examples" / "secondary"
 EXPECTED_CANONICAL = {
     "beam_chamber_starter.py",
+    "iris_ring_starter.py",
     "prism_crown_builder.py",
     "solid_surface_gallery.py",
     "thick_arc_demo.py",

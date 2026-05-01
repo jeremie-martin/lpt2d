@@ -15,7 +15,6 @@ from anim import (
     FrameContext,
     Group,
     Key,
-    Look,
     Material,
     ProjectorLight,
     Scene,
@@ -194,7 +193,7 @@ def frame(ctx: FrameContext) -> Frame:
             *[_make_prism_group(index, radius, spin) for index in range(PRISM_COUNT)],
         ],
     )
-    return Frame(scene=scene, look=Look(exposure=EXPOSURE(ctx.time)))
+    return Frame(scene=scene, look={"exposure": EXPOSURE(ctx.time)})
 
 
 def main(argv: list[str] | None = None) -> None:
