@@ -96,11 +96,12 @@ def _resolve_metadata(overrides: PublishOverrides) -> tuple[str, str, list[str]]
 def _pending_bundles(inbox: Path) -> list[Path]:
     """Resumed (uploaded-marker) bundles come first so a throttled fresh
     bundle cannot starve the cleanup queue. ``uploaded`` takes precedence
-    over ``failed`` because it represents a real YouTube id."""
+    over ``failed`` because it represents a real YouTube id. Within each
+    queue, process newest-first (LIFO)."""
     if not inbox.is_dir():
         return []
-    resumed: list[Path] = []
-    fresh: list[Path] = []
+    resumed: list[tuple[float, Path]] = []
+    fresh: list[tuple[float, Path]] = []
     now = time.time()
     for d in sorted(inbox.iterdir()):
         if not d.is_dir():
@@ -110,8 +111,9 @@ def _pending_bundles(inbox: Path) -> list[Path]:
         # half-rsynced bundle whose video.mp4 happened to be written first.
         if d.name.startswith("."):
             continue
-        if (d / B.MARKER_UPLOADED).exists():
-            resumed.append(d)
+        marker_uploaded = d / B.MARKER_UPLOADED
+        if marker_uploaded.exists():
+            resumed.append((marker_uploaded.stat().st_mtime, d))
             continue
         if (d / B.MARKER_FAILED).exists():
             continue
@@ -119,10 +121,15 @@ def _pending_bundles(inbox: Path) -> list[Path]:
         params = d / B.PARAMS
         if not (video.exists() and params.exists()):
             continue
-        if (now - video.stat().st_mtime) < SETTLE_SECONDS:
+        video_mtime = video.stat().st_mtime
+        if (now - video_mtime) < SETTLE_SECONDS:
             continue
-        fresh.append(d)
-    return resumed + fresh
+        fresh.append((video_mtime, d))
+    sort_key = lambda item: (item[0], item[1].name)
+    return (
+        [d for _, d in sorted(resumed, key=sort_key, reverse=True)]
+        + [d for _, d in sorted(fresh, key=sort_key, reverse=True)]
+    )
 
 
 def _build_upload_entry(

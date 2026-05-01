@@ -12,11 +12,12 @@ from unittest import mock
 
 import pytest
 
+from publish import bundle as B
 from publish import titles
 from publish.ffmpeg import FFmpegCommand
 from publish.metadata import VideoMetadata, sidecar_path
 from publish.post import MUSIC_EXTENSIONS, pick_music
-from publish.watcher import _pending_videos
+from publish.watcher import _pending_bundles
 
 # ---------------------------------------------------------------------------
 # metadata
@@ -134,32 +135,57 @@ def test_music_extensions_include_common_formats() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _touch_old(p: Path) -> Path:
+def _touch_with_age(p: Path, *, age_s: float) -> Path:
     p.write_bytes(b"")
     import os
     import time
 
-    old = time.time() - 60
-    os.utime(p, (old, old))
+    stamp = time.time() - age_s
+    os.utime(p, (stamp, stamp))
     return p
 
 
-def test_pending_videos_filters_markers_and_settle(tmp_path: Path) -> None:
-    a = _touch_old(tmp_path / "a.mp4")
-    _touch_old(tmp_path / "b.mp4")
-    _touch_old(tmp_path / "c.mp4")
-    fresh = tmp_path / "fresh.mp4"  # not yet settled
-    fresh.write_bytes(b"")
-    notvideo = _touch_old(tmp_path / "readme.txt")
+def _make_bundle(
+    inbox: Path,
+    name: str,
+    *,
+    video_age_s: float | None = 60,
+    uploaded_age_s: float | None = None,
+    failed: bool = False,
+    with_params: bool = True,
+) -> Path:
+    bundle = inbox / name
+    bundle.mkdir()
+    if video_age_s is not None:
+        _touch_with_age(bundle / B.VIDEO, age_s=video_age_s)
+    if with_params:
+        (bundle / B.PARAMS).write_text("{}")
+    if uploaded_age_s is not None:
+        _touch_with_age(bundle / B.MARKER_UPLOADED, age_s=uploaded_age_s)
+    if failed:
+        (bundle / B.MARKER_FAILED).write_text("oops")
+    return bundle
 
-    # mark b uploaded, c failed
-    (tmp_path / "b.mp4.uploaded").write_text("yt-id")
-    (tmp_path / "c.mp4.failed").write_text("oops")
 
-    pending = _pending_videos(tmp_path)
-    assert pending == [a]
-    assert fresh not in pending
-    assert notvideo not in pending
+def test_pending_bundles_filters_markers_settle_and_uses_lifo(tmp_path: Path) -> None:
+    fresh_old = _make_bundle(tmp_path, "fresh_old", video_age_s=180)
+    fresh_new = _make_bundle(tmp_path, "fresh_new", video_age_s=60)
+    resumed_old = _make_bundle(tmp_path, "resumed_old", video_age_s=240, uploaded_age_s=200)
+    resumed_new = _make_bundle(tmp_path, "resumed_new", video_age_s=120, uploaded_age_s=30)
+    failed = _make_bundle(tmp_path, "failed", video_age_s=180, failed=True)
+    settling = _make_bundle(tmp_path, "settling", video_age_s=0)
+    incomplete = _make_bundle(tmp_path, "incomplete", video_age_s=180, with_params=False)
+
+    staging = tmp_path / ".staging_partial"
+    staging.mkdir()
+    _touch_with_age(staging / B.VIDEO, age_s=180)
+    (staging / B.PARAMS).write_text("{}")
+
+    pending = _pending_bundles(tmp_path)
+    assert pending == [resumed_new, resumed_old, fresh_new, fresh_old]
+    assert failed not in pending
+    assert settling not in pending
+    assert incomplete not in pending
 
 
 # ---------------------------------------------------------------------------

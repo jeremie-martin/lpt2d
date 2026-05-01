@@ -7,7 +7,7 @@ chosen constraints so a single command reproduces a "good" batch:
 * light-motion regime / geom_kind / all numeric params: free
 * duration: 15 s
 * aspect: 9:16 portrait
-* resolution: chosen via ``--resolution {480p, 720p, 1080p}``
+* resolution: chosen via ``--resolution {360p, 480p, 720p, 1080p}``
 
 Run::
 
@@ -15,9 +15,9 @@ Run::
     python examples/python/families/iris_demo.py \
         --out renders/iris_demo_preview --resolution 480p
 
-    # Production (~3-4 h)
+    # Production
     python examples/python/families/iris_demo.py \
-        --out renders/iris_demo_720p --resolution 720p
+        --out renders/iris_demo_1080p --resolution 1080p
 
 The output is a self-contained directory with one subdir per variant plus
 ``index.html`` ready to upload (see ``docs/VPS_IMAGE_GALLERIES.md``).
@@ -53,8 +53,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--resolution",
         choices=list(RESOLUTION_PRESETS),
-        default="720p",
-        help="Render resolution preset (default 720p)",
+        default="1080p",
+        help="Render resolution preset (default 1080p)",
     )
     parser.add_argument("--seed", type=int, default=None, help="RNG seed")
     parser.add_argument(

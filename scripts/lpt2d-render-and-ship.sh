@@ -24,7 +24,7 @@
 #
 # Env knobs:
 #   LPT2D_WINDOW          — nightly | workday | manual (default: manual)
-#   LPT2D_RESOLUTION      — iris_demo preset (default: 720p)
+#   LPT2D_RESOLUTION      — iris_demo preset (default: 1080p)
 #   LPT2D_REMOTE          — ssh target (default: holo@rpi.local)
 #   LPT2D_REMOTE_INBOX    — remote inbox dir (default: /home/holo/lpt2d-publish/inbox)
 set -euo pipefail
@@ -51,7 +51,7 @@ fi
 cd "$ROOT"
 
 WINDOW="${LPT2D_WINDOW:-manual}"
-RESOLUTION="${LPT2D_RESOLUTION:-720p}"
+RESOLUTION="${LPT2D_RESOLUTION:-1080p}"
 REMOTE="${LPT2D_REMOTE:-holo@rpi.local}"
 REMOTE_INBOX="${LPT2D_REMOTE_INBOX:-/home/holo/lpt2d-publish/inbox}"
 

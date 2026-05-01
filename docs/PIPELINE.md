@@ -29,7 +29,7 @@ Inside the shell entrypoint:
 - **flock** against `$XDG_RUNTIME_DIR/lpt2d-render-and-ship.lock` —
   concurrent invocations exit 0 with a notice.
 - **Env knobs**: `LPT2D_WINDOW` (default `manual`), `LPT2D_RESOLUTION`
-  (`720p`), `LPT2D_REMOTE` (`holo@rpi.local`), `LPT2D_REMOTE_INBOX`
+  (`1080p`), `LPT2D_REMOTE` (`holo@rpi.local`), `LPT2D_REMOTE_INBOX`
   (`/home/holo/lpt2d-publish/inbox`).
 - **OUT dir**: `renders/lpt2d_iris_${WINDOW}_${UTC_TS}_${RESOLUTION}` — one
   per service start.
@@ -51,8 +51,8 @@ Main loop:
 4. `ship_session_bundles`.
 
 `iris_demo.py` pins `--branch solo_white`, `--duration 15.0`, and pulls
-the rest from `RESOLUTION_PRESETS`. The `720p` preset is
-`720x1280, rays=4_000_000, fps=60, depth=12, fast=False, crf=15`.
+the rest from `RESOLUTION_PRESETS`. The `1080p` preset is
+`1080x1920, rays=6_000_000, fps=60, depth=12, fast=False, crf=15`.
 
 `iris_batch.main` runs `n=1` per call: builds an RNG seeded from
 `(seed, i).__hash__()`, runs `_search_variant` (up to `--max-attempts=500`
@@ -151,12 +151,13 @@ Generic exceptions log and skip.
 
 - Skip non-dirs.
 - Skip dot-prefixed names (`.staging_*` from the producer).
-- `uploaded` marker present → `resumed` queue.
+- `uploaded` marker present → `resumed` queue, newest marker first.
 - `failed` marker present → ignored entirely.
 - Otherwise: must have `video.mp4 + params.json` and
-  `mtime(video) ≥ now − 5 s` → `fresh` queue.
-- Return `resumed + fresh` so resumed bundles always drain before fresh
-  (a throttle-blocked fresh bundle must not starve cleanup).
+  `mtime(video) ≥ now − 5 s` → `fresh` queue, newest video first.
+- Return `resumed + fresh` so resumed bundles always drain before fresh;
+  each queue is LIFO (a throttle-blocked fresh bundle must not starve
+  cleanup, but fresh uploads still prefer the newest completed bundle).
 
 `_handle`, in this exact order:
 
@@ -171,7 +172,7 @@ Generic exceptions log and skip.
 6. **Post-process**: `post.process(bundle/video.mp4, music=True,
    music_dir, music_override)`:
    - ffprobe → if `width > height`, prepend `-display_rotation 90` to
-     ffmpeg input options. **The production 720x1280 path does not rotate**
+     ffmpeg input options. **The production 1080x1920 path does not rotate**
      (already portrait). Rotation is for legacy 16:9 sources.
    - Random music or override pick; `ffmpeg -c:v copy -c:a aac` mux to
      `video_published.mp4`.
@@ -226,7 +227,7 @@ Per-upload (`upload`):
 3. **Search** loop: up to 500 sample/build/check rounds; first
    `verdict.ok` wins.
 4. `out_dir/params.json` written, then `frame.shot.json`, then
-   `video.mp4` (15 s, 60 fps, 4M rays, depth 12, ffmpeg crf=15) — the
+   `video.mp4` (15 s, 60 fps, 6M rays, depth 12, ffmpeg crf=15) — the
    multi-minute encode.
 5. `verdict.json` written **last** — producer/consumer rendezvous point.
 6. `wait $RENDER_PID` returns; `ship_session_bundles` →
@@ -238,7 +239,7 @@ Meanwhile on the watcher host:
 
 8. Watcher tick (every 60 s). `_pending_bundles` finds the bundle.
 9. `_handle`: no marker; throttle slot open (or wait); params/verdict OK.
-10. `post.process`: 720x1280 → no rotation. Random music muxed.
+10. `post.process`: 1080x1920 → no rotation. Random music muxed.
 11. `upload_fn` → resumable upload → `yt_id` → `_add_to_playlist`.
 12. `_build_upload_entry`.
 13. **marker (atomic + fsync_dir) → state → rmtree → ledger (fsync)**.
@@ -319,5 +320,5 @@ second look but that aren't bugs today:
    rsync succeeds but the SSH atomic-rename step fails (network glitch
    between the two SSH phases). The watcher correctly skips them but
    never reaps them.
-5. **720p preset uses `fast=False, crf=15`** — the higher-quality
+5. **1080p preset uses `fast=False, crf=15`** — the higher-quality
    non-preview settings, consistent with "production" intent.

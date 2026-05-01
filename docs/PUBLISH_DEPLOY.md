@@ -77,7 +77,7 @@ systemctl --user status lpt2d-publish-watcher.service
 # 3. Wire env knobs (e.g. in ~/.config/environment.d/lpt2d.conf):
 #    LPT2D_REMOTE=holo@rpi.local
 #    LPT2D_REMOTE_INBOX=/home/holo/lpt2d-publish/inbox
-#    LPT2D_RESOLUTION=720p   # iris_demo preset
+#    LPT2D_RESOLUTION=1080p  # iris_demo preset
 
 # 4. Confirm SSH key to the watcher host works without a passphrase (rsync needs it).
 ssh -o BatchMode=yes "$LPT2D_REMOTE" true && echo OK
