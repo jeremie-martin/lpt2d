@@ -58,7 +58,8 @@ reused for the entire ladder.
 0. **Foundation** — Emscripten+WebGPU build green; headless runner reads back
    pixels. *(folded into rung 1)*
 1. **Fill parity (no tracer)** — toolchain + harness + WGSL `fill` +
-   `postprocess`; a fill-only scene matches its baseline. **← first `/goal`**
+   `postprocess`; a fill-only scene matches its baseline. **✅ COMPLETE** —
+   bit-exact (`PSNR=inf`, MSE=0) vs the native baseline. See *Rung 1 results*.
 2. **Trace core** — port `trace.comp` → WGSL compute; a circle + point-light
    scene matches baseline.
 3. **Primitives, one at a time** — segments → arcs → béziers → ellipses →
@@ -113,6 +114,49 @@ REPORT each turn: current PSNR, which checks pass, and the next concrete fix.
 - `node-webgpu` / Dawn pulls native binaries; install can be slow or finicky in
   CI-less environments. Fallback: build `dawn/node` from source (heavier).
 - Emscripten must be on `PATH` (`emcc`). If not, the first turns go to setup.
+
+## Rung 1 results (complete)
+
+The `web/` project implements the fill-only path end to end and matches the
+native engine **bit-for-bit** (`PSNR=inf dB`, MSE=0) on `scenes/web_fill_smoke.json`.
+
+What landed:
+
+- `web/wasm/lpt2d_web.cpp` + `web/scripts/build-wasm.sh` — Emscripten build of the
+  GL-free core (`scene`, `geometry`, `serialize_json`, `spectrum`, `color`)
+  exposing `resolve_scene(json) -> plan` (bounds, viewport, postprocess uniforms,
+  and spectral fill colors computed by the *same* `spectral_fill_rgb` the native
+  engine uses).
+- `web/src/shaders.mjs` — WGSL ports of `fill.vert/frag` and `postprocess.frag`
+  (fill-only subset; 4× MSAA matches the native fill FBO).
+- `web/src/render.mjs` — shared WebGPU renderer (plan → RGB8), used by both the
+  browser app and the harness.
+- `web/harness/parity.mjs` — headless Dawn (`webgpu` npm) render + PSNR vs the
+  committed baseline.
+- `web/src/main.ts` + `web/index.html` — minimal browser app (same render path).
+
+Run it:
+
+```bash
+source ~/emsdk/emsdk_env.sh            # emcc on PATH
+bash web/scripts/build-wasm.sh         # -> web/public/lpt2d_web.{js,wasm}
+npm --prefix web install               # first time only
+npm --prefix web run build             # vite build (exit 0)
+node web/harness/parity.mjs scenes/web_fill_smoke.json   # PARITY PSNR=inf dB ... PASS
+```
+
+Notes / gotchas learned:
+
+- Authored scene version is **12** (the "version 10" earlier in this doc was
+  stale). `scenes/web_fill_smoke.json` is version 12.
+- For a fill-only scene the trace/HDR texture is zero, so `uMaxVal`, exposure,
+  and normalize drop out — only fill → background-mask → reinhardx → contrast →
+  gamma is active. `inv_gamma = 1/gamma`; `reinhardx` is tonemap op `2`.
+- The harness needs **real GPU access** (Dawn → Vulkan → `/dev/dri`); it won't
+  run under a syscall sandbox.
+- Dawn's native teardown can crash the process on exit, truncating buffered
+  stdout. The harness therefore emits its result via synchronous `writeSync`
+  before returning and never calls `process.exit()`.
 
 ## References
 

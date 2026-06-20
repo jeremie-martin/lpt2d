@@ -1,0 +1,20 @@
+{
+  "name": "lpt2d-web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "parity": "node harness/parity.mjs"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.70",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0",
+    "webgpu": "^0.4.0"
+  }
+}

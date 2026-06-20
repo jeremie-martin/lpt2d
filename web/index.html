@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lpt2d — web (rung 1: fill parity)</title>
+    <style>
+      body { margin: 0; background: #111; color: #ddd; font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; }
+      canvas { image-rendering: pixelated; border: 1px solid #333; width: 640px; height: 360px; }
+      #status { margin-top: 1rem; font-size: 0.9rem; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <canvas id="view" width="320" height="180"></canvas>
+      <div id="status">loading…</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
