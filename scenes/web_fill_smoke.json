@@ -1,0 +1,128 @@
+{
+  "version": 12,
+  "name": "web_fill_smoke",
+  "camera": {
+    "bounds": [
+      -1.0,
+      -0.5625,
+      1.0,
+      0.5625
+    ]
+  },
+  "canvas": {
+    "width": 320,
+    "height": 180
+  },
+  "look": {
+    "exposure": 0.0,
+    "contrast": 1.0,
+    "gamma": 2.0,
+    "tonemap": "reinhardx",
+    "white_point": 0.5,
+    "normalize": "rays",
+    "normalize_ref": 0.0,
+    "normalize_pct": 1.0,
+    "ambient": 0.0,
+    "background": [
+      0.02,
+      0.02,
+      0.03
+    ],
+    "opacity": 1.0,
+    "saturation": 1.0,
+    "vignette": 0.0,
+    "vignette_radius": 0.7,
+    "temperature": 0.0,
+    "highlights": 0.0,
+    "shadows": 0.0,
+    "hue_shift": 0.0,
+    "grain": 0.0,
+    "grain_seed": 0,
+    "chromatic_aberration": 0.0
+  },
+  "trace": {
+    "rays": 0,
+    "batch": 200000,
+    "depth": 12,
+    "intensity": 1.0,
+    "seed_mode": "deterministic"
+  },
+  "materials": {
+    "fill_a": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 1.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 0.0,
+      "fill": 0.35
+    },
+    "fill_b": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 1.0,
+      "spectral_c2": 0.0,
+      "fill": 0.30
+    },
+    "fill_c": {
+      "ior": 1.0,
+      "roughness": 0.0,
+      "metallic": 0.0,
+      "transmission": 0.0,
+      "absorption": 0.0,
+      "cauchy_b": 0.0,
+      "albedo": 1.0,
+      "emission": 0.0,
+      "spectral_c0": 0.0,
+      "spectral_c1": 0.0,
+      "spectral_c2": 1.0,
+      "fill": 0.40
+    }
+  },
+  "shapes": [
+    {
+      "id": "circle_a",
+      "type": "circle",
+      "center": [
+        -0.5,
+        0.0
+      ],
+      "radius": 0.3,
+      "material_id": "fill_a"
+    },
+    {
+      "id": "circle_b",
+      "type": "circle",
+      "center": [
+        0.4,
+        0.2
+      ],
+      "radius": 0.25,
+      "material_id": "fill_b"
+    },
+    {
+      "id": "circle_c",
+      "type": "circle",
+      "center": [
+        0.1,
+        -0.25
+      ],
+      "radius": 0.2,
+      "material_id": "fill_c"
+    }
+  ],
+  "lights": [],
+  "groups": []
+}
