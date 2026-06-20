@@ -136,12 +136,12 @@ tail -f ~/lpt2d-publish/uploads.jsonl
 ```
 
 The first bundle uploads immediately after rsync; subsequent ones drip out
-at `--min-interval` (3600s) cadence. The inbox shrinks as the watcher
+at `--min-interval` (7200s) cadence. The inbox shrinks as the watcher
 processes and deletes each one.
 
 ## Operational notes
 
-- **Rate limit**: `--min-interval 3600` is hard-coded into the unit file. To
+- **Rate limit**: `--min-interval 7200` is hard-coded into the unit file. To
   change it (e.g. 30 min), edit
   `systemd/user/lpt2d-publish-watcher.service` in the repo, push, pull on
   the watcher host, then `systemctl --user daemon-reload && systemctl --user

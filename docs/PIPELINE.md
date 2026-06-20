@@ -127,7 +127,7 @@ python -m publish watch \
     --log-file ~/lpt2d-publish/watcher.log \
     --privacy public \
     --playlist PL2G6-wO4Mi9-_XhA9GiD6Pd8N3K2X0NQO \
-    --min-interval 3600 \
+    --min-interval 7200 \
     --interval 60
 ```
 
