@@ -188,7 +188,7 @@ def build_ui() -> FuncAnimation:
     # Density panel
     ax_density = fig.add_axes([0.50, 0.59, 0.46, 0.38])
     target_line, = ax_density.plot(params.theta_grid, params.p_grid,
-                                     color="#5fb4ff", lw=2.0, label="target p(θ)",
+                                     color="#5fb4ff", lw=0.5, label="target p(θ)",
                                      animated=True)
     HIST_BINS = 96
     hist_edges = np.linspace(0.0, TWO_PI, HIST_BINS + 1)
@@ -200,7 +200,7 @@ def build_ui() -> FuncAnimation:
     ax_density.set_xlim(0, TWO_PI)
     # Fixed ylim covers any reasonable (w_corner, w_vert) within slider range —
     # avoids needing background re-capture when the density curve rescales.
-    ax_density.set_ylim(0, 2.0)
+    ax_density.set_ylim(0, 0.5)
     ax_density.set_xlabel("θ on path  (0 = +x, π/2 = +y, π = −x, 3π/2 = −y)")
     ax_density.set_ylabel("density")
     ax_density.set_title("Target p(θ) vs realized time-average")
