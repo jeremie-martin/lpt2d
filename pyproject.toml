@@ -13,6 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+plot = [
+    "matplotlib>=3.9",
+]
 publish = [
     "google-auth-oauthlib>=1.0",
     "google-api-python-client>=2.100",
