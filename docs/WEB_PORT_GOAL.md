@@ -1,162 +1,213 @@
-# Web Port — Plan & First `/goal`
+# Web Port — Full Project Plan & Terminal `/goal`
 
-Bringing lpt2d to the browser as an **interactive playground**: visitors tweak a
-scene and see a freshly rendered frame, computed **client-side**. This document
-records the decisions behind that effort and the exact `/goal` that drives its
-first milestone.
+## The destination (what "done" means)
 
-## The constraint that shapes everything
+A **browser-based, interactive lpt2d** that a person opens locally and uses to
+**author and render shots with desktop-GUI parity** — every rendering computed
+**client-side via WebGPU**, at **fidelity parity** with the native C++ engine.
 
-The engine's core (`src/shaders/trace.comp`, `max_reduce.comp`, `analysis.comp`)
-is built on **OpenGL 4.3 compute shaders + SSBOs**, dispatched via
-`glDispatchCompute` through a headless **EGL** context, with `glReadPixels`
-readback. Browsers run **WebGL2, which has no compute shaders and no SSBOs**, so
-the renderer cannot be recompiled to the web as-is.
+Concretely, "done" is all of:
 
-The path that keeps compute shaders is **WebGPU** (WGSL has compute + storage
-buffers). Verification is possible **without a browser** via Dawn's headless node
-bindings (`node-webgpu`), so render parity can be measured in a script.
+1. **Render parity** — the web renderer reproduces the native engine across the
+   entire `scenes/` corpus (not bespoke fixtures), within a PSNR threshold.
+2. **Authoring parity** — the in-browser editor matches the desktop GUI's
+   authoring power: object list, add/select/drag/delete/duplicate shapes
+   (circle, segment, arc, bézier, polygon, ellipse, path), property editing,
+   material library, lights, camera, tracer + look controls, groups /
+   enter-group, path drawing, **save/load Shot JSON**, **export PNG**.
+3. **Interactivity** — live viewport: pan/zoom, edit-and-re-render, selection,
+   direct manipulation.
+4. **Runs locally** — `npm run dev` / `npm run build` serve the app in a
+   browser. (No hosting/deploy in scope.)
+5. **Acceptance suite is green** — an automated headless-browser suite exercises
+   the whole app and passes. This suite is the project's machine-checkable
+   terminus.
 
-## Architecture: Path B (hybrid), web-additive
+The only thing outside the automated terminus is **aesthetic taste**: a suite
+can prove the app is functionally complete and correct, not that it feels good.
+So the final step is a **human aesthetic review** (you), once the suite is green.
 
-Decision: **C++ core compiled to WASM for scene/serialize/geometry; the renderer
-re-implemented in TypeScript + WGSL.** The native engine under `src/` is the
-immutable physical reference and is **not refactored** for this work — all web
-code is additive under `web/`.
+## How to follow this document to the end
 
-- **WASM (Emscripten):** the GL-free core — `scene`, `serialize_json`,
-  `geometry`, `spectrum`, `color` — parses a `Shot` JSON and returns the resolved
-  `Scene` + camera `Bounds` + fill geometry. **No** `renderer.cpp` / OpenGL / EGL
-  / GLEW is compiled.
-- **TypeScript + WebGPU:** builds GPU buffers (the `std430`-equivalent packing is
-  re-implemented in TS) and runs WGSL ports of the shaders.
+This is a **rung ladder**. Each rung has a **gate**: a command whose output lands
+in a transcript and proves the rung works. **Following this document means
+climbing every rung in order until the terminal gate passes — not stopping at the
+first.** After each rung's gate passes, **commit** (durable, resumable progress).
 
-### Known risk — accepted
+The terminal gate (the single completion condition) is:
 
-Because GPU-buffer packing is re-implemented in TS rather than reused from
-`renderer.cpp`, the scene→GPU byte layout now lives in **two languages and can
-drift**. The PSNR parity metric (below) is the **only** guard against this: treat
-any parity regression as "the TS packing diverged from C++."
+> `npm --prefix web run build` exits 0
+> **and** `node web/harness/parity_corpus.mjs` reports every `scenes/*.json` at
+> PSNR ≥ threshold
+> **and** `npm --prefix web run acceptance` (headless-browser suite) passes.
 
-## Verification: render parity vs the native engine
+A `/goal` pointed at this document is **not complete until that terminal gate
+holds.** The `/goal` block is at the bottom.
 
-Every milestone reduces to a number the `/goal` evaluator can read from the
-transcript:
+## Architecture (decided)
 
-> a headless `node-webgpu` (Dawn) harness renders a scene and computes **PSNR**
-> against the committed native baseline PNG.
+**Path B, hybrid, web-additive.** The native engine under `src/` is the
+immutable reference and is **never modified**; all web code is additive under
+`web/`.
 
-This is the same fidelity comparison the `evaluation/` module already performs for
-C++→C++ work. The native baseline is ground truth and is never regenerated to
-chase the metric.
+- **WASM (Emscripten):** the GL-free C++ core (`scene`, `geometry`,
+  `serialize_json`, `serialize`, `spectrum`, `color`) — parses/serializes Shot
+  JSON and resolves the physics-laden values (spectral→RGB, dispersion,
+  material/light flattening, camera bounds). The web side **reuses** this rather
+  than reimplementing physics.
+- **TypeScript + WebGPU:** the renderer (WGSL ports of the shaders) and the
+  editor UI.
 
-## Milestone ladder
+**Drift risk (accepted):** GPU-buffer *packing* is re-implemented in TS, so the
+scene→GPU byte layout lives in two languages. **Rung 4 (corpus parity) is the
+guard** — any divergence shows up as a parity regression across `scenes/`.
 
-Each rung is a separate, parity-gated `/goal`. The harness built in rung 1 is
-reused for the entire ladder.
+## Verification strategy
 
-0. **Foundation** — Emscripten+WebGPU build green; headless runner reads back
-   pixels. *(folded into rung 1)*
-1. **Fill parity (no tracer)** — toolchain + harness + WGSL `fill` +
-   `postprocess`; a fill-only scene matches its baseline. **✅ COMPLETE** —
-   bit-exact (`PSNR=inf`, MSE=0) vs the native baseline. See *Rung 1 results*.
-2. **Trace core** — port `trace.comp` → WGSL compute; a circle + point-light
-   scene matches baseline.
-3. **Primitives, one at a time** — segments → arcs → béziers → ellipses →
-   materials → spectral, each gated by a parity scene that exercises it.
-4. **WASM core + JS frontend** — live controls in the browser. UX, **not**
-   auto-verifiable; reviewed manually.
+Two machine-checkable gate types, both browser-free where possible:
 
-## Why rung 1 is fill-only
+- **Render parity** (rungs 1–4): headless **Dawn** (`webgpu` npm) renders a
+  scene; PSNR vs the committed native baseline (the same comparison
+  `evaluation/` does for C++→C++). Native baselines are ground truth — never
+  regenerated to chase the metric.
+- **Authoring + interactivity** (rungs 5–6) and the **terminal acceptance suite**
+  (rung 7): **Playwright** drives the app in headless Chromium with WebGPU
+  enabled, simulates user actions, and asserts on resulting pixels and on the
+  **Shot JSON the editor produces**. A strong correctness tie-back: web-authored
+  JSON, rendered by the **native CLI**, must match the web render — so authoring
+  is validated against the real engine, not just itself.
 
-`session.cpp` traces only when `num_lights > 0 && total_rays > 0`; otherwise it
-runs clear → fills → postprocess. A **fill-only scene with zero rays** therefore
-exercises the entire plumbing (WASM packing → WGSL fill → WGSL postprocess →
-readback → PSNR) **without** needing `trace.comp` ported. Smallest real render.
+## The rung ladder
 
-Fill + postprocess is fully deterministic (no Monte Carlo), so true parity should
-land well above the starting bar — 40 dB is achievable; tighten toward
-visually-lossless (~50 dB) once it passes.
+Each rung: **Goal**, **Gate** (the command + pass condition), **Notes**.
 
-## First `/goal`
+### Rung 1 — Fill parity (no tracer) ✅ COMPLETE
+- **Goal:** toolchain (Emscripten + Vite + Dawn harness) + WGSL `fill` +
+  `postprocess`; a fill-only scene renders client-side.
+- **Gate:** `node web/harness/parity.mjs scenes/web_fill_smoke.json` → PSNR ≥ 40.
+- **Result:** **bit-exact** (`PSNR=inf`, MSE=0). Built `web/wasm/lpt2d_web.cpp`,
+  `web/scripts/build-wasm.sh`, `web/src/{shaders,render}.mjs`,
+  `web/harness/parity.mjs`, minimal browser app (`web/src/main.ts`,
+  `web/index.html`).
 
-Run under **auto mode** (otherwise every turn prompts for tool approval). Setting
-the goal starts the loop immediately.
+### Rung 2 — Trace core (the heart of the engine)
+- **Goal:** port `src/shaders/trace.comp` → WGSL compute (storage buffers,
+  workgroups) + the line rasterization (`line.vert/frag`) and ray accumulation
+  loop. Render a circle + single point-light scene client-side.
+- **Gate:** `node web/harness/parity.mjs scenes/web_trace_smoke.json` → PSNR ≥
+  threshold vs a committed native baseline (author the scene; one circle, one
+  point light, modest ray count, deterministic seed).
+- **Notes:** this is the largest single technical step. Match the native ray
+  batching/accumulation and the deterministic seed so results are comparable;
+  expect to tune the PSNR threshold (Monte-Carlo noise means not bit-exact —
+  pick a threshold that's meaningful but achievable, e.g. start ~30 dB at a high
+  ray count and tighten).
+
+### Rung 3 — Full primitive / material / light coverage
+- **Goal:** every shape (segment, arc, bézier, polygon, ellipse, path), every
+  material parameter (ior, roughness, metallic, transmission, absorption, cauchy
+  dispersion, albedo, emission, spectral coeffs, fill), every light type
+  (point, segment, projector) and profile, plus interior fill for all fillable
+  shapes — all rendering via the WebGPU path.
+- **Gate:** a **scene matrix** (one committed scene per feature) all pass parity:
+  `node web/harness/parity_corpus.mjs --dir scenes/web_feature_matrix` → every
+  scene ≥ threshold.
+- **Notes:** add features incrementally; each new feature adds a scene + baseline
+  and must not regress earlier ones.
+
+### Rung 4 — Whole-corpus render parity (the "web renderer == engine" gate)
+- **Goal:** a single web render entry — `renderShot(shotJson, frame)` driven by
+  the WASM core + WebGPU — that matches `RenderSession::render_shot` across the
+  **committed `scenes/` library**.
+- **Gate:** `node web/harness/parity_corpus.mjs` renders **every** `scenes/*.json`
+  via the web path and vs native baselines; **all** ≥ threshold. (Generate the
+  native baselines once via the existing CLI; commit them under `web/baselines/`.)
+- **Notes:** this is the milestone that proves the port is faithful and is the
+  permanent guard against TS-packing drift.
+
+### Rung 5 — Interactive viewport
+- **Goal:** the app shows a live render on a canvas; pan/zoom camera; edits
+  trigger re-render; selection works. Reuses the rung-4 render entry.
+- **Gate:** `npm --prefix web run acceptance -- --grep viewport` (Playwright):
+  load app → assert canvas renders the default scene (pixel checksum) → simulate
+  zoom/pan → assert pixels changed and match an expected re-render.
+
+### Rung 6 — Authoring / editor parity
+- **Goal:** mirror the desktop GUI's authoring (see `src/app/`): Objects list,
+  Properties, Material Library, Camera, Tracer, Display/Look panels; add /
+  select / drag / delete / duplicate shapes; groups + enter-group; path drawing;
+  **save/load Shot JSON**; **export PNG**.
+- **Gate:** `npm --prefix web run acceptance -- --grep editor` (Playwright):
+  drive each action; after authoring, **export the Shot JSON, render it with the
+  native CLI, and assert the web render matches** (parity tie-back). Assert
+  save→load round-trips losslessly through the native `serialize_json`.
+- **Notes:** the desktop GUI (`src/app/`, ~6k lines) is the behavioral spec, not
+  a code source to copy — match *behavior*, authored via the WASM core's
+  serialize so the JSON stays canonical.
+
+### Rung 7 — Acceptance + polish (terminal)
+- **Goal:** the full automated acceptance suite green; a basic performance budget
+  (interactive frame time on the sample corpus); README for `web/`.
+- **Gate (terminal):** `npm --prefix web run build` exit 0 **and**
+  `node web/harness/parity_corpus.mjs` all-pass **and**
+  `npm --prefix web run acceptance` all-pass.
+- **Then:** human aesthetic review (you) — the one non-automatable step.
+
+## Carried-over gotchas (don't relearn these)
+
+- Authored scene version is **12**.
+- Fill-only path: trace/HDR texture is zero, so `uMaxVal`/exposure/normalize drop
+  out; only fill → background-mask → tonemap → contrast → gamma is active.
+  `inv_gamma = 1/gamma`; `reinhardx` is tonemap op **2**. Fill color =
+  `spectral_fill_rgb(c0,c1,c2)` (normalized) × `mat.fill`; circle fill is a
+  64-segment triangle fan; native fill uses **4× MSAA**.
+- Native viewport is aspect-fit min-scale, centered (`viewport_xform`).
+- The Dawn harness needs **real GPU access** (Vulkan → `/dev/dri`); it won't run
+  under a syscall sandbox. Headless-Chromium WebGPU (Playwright) likewise needs
+  GPU flags (`--enable-unsafe-webgpu --enable-features=Vulkan`) or a software
+  fallback.
+- Dawn's native teardown can crash on process exit and truncate buffered stdout —
+  emit results via synchronous `writeSync` **before** returning; never
+  `process.exit()`.
+- Root `.gitignore` has broad `*.png` and `*.ts` rules — `git add -f` real
+  baselines and TypeScript sources.
+
+## Terminal `/goal`
+
+Run under **auto mode**. This goal climbs the remaining rungs (2→7) in order and
+**does not complete until the terminal gate holds**. It is large; expect many
+turns. Commit after every rung so progress is durable and resumable.
 
 ```
-/goal Stand up a client-side WebGPU render path for lpt2d and prove it matches the native C++ engine on a fill-only scene.
+/goal Build the interactive browser lpt2d to completion by climbing the rung ladder in docs/WEB_PORT_GOAL.md (rungs 2..7), in order, without stopping at the first.
 
 DONE WHEN, all in one turn's transcript:
-- `node web/harness/parity.mjs scenes/web_fill_smoke.json` prints `PARITY PSNR=<n> dB (threshold 40.0)` with n >= 40.0
 - `npm --prefix web run build` exits 0
-- `web/scripts/build-wasm.sh` (Emscripten core build) exits 0
-Or stop after 40 turns and report the best PSNR reached.
+- `node web/harness/parity_corpus.mjs` renders every scenes/*.json via the web WebGPU path and reports each at PSNR >= its threshold (no scene below threshold, none skipped)
+- `npm --prefix web run acceptance` runs the full Playwright suite headless and reports 0 failures
+Or stop after 120 turns (or when the token budget is nearly exhausted) and report the highest rung whose gate passes.
 
-WHAT TO BUILD (everything new lives under web/ and scenes/; this work is ADDITIVE):
-- Emscripten build of the GL-free C++ core only (scene, serialize_json, geometry, spectrum, color) -> a WASM module that parses a Shot JSON and returns the resolved Scene + camera Bounds + fill geometry. Do NOT compile renderer.cpp or any OpenGL/EGL/GLEW code.
-- A TypeScript + Vite app under web/ that loads the WASM module, builds WebGPU vertex/uniform buffers in TS (packing is reimplemented in TS by design), and runs WGSL ports of fill.vert/fill.frag and postprocess.vert/postprocess.frag.
-- A headless harness web/harness/parity.mjs using node-webgpu (Dawn) that renders the scene at its canvas size, reads back RGB8, loads the committed PNG baseline, computes PSNR, and prints the PARITY line above.
-
-SCENE + BASELINE:
-- scenes/web_fill_smoke.json: a tiny fill-only shot (background + 1-2 filled shapes, no lights, trace.rays = 0) so no ray tracing is needed.
-- web/baselines/web_fill_smoke.png: native ground truth, rendered ONCE via `./build/lpt2d-cli --scene scenes/web_fill_smoke.json --output web/baselines/web_fill_smoke.png`. Never regenerate or edit it to chase the metric.
+HOW TO WORK:
+- Implement rungs 2,3,4,5,6,7 from docs/WEB_PORT_GOAL.md in order. Each rung has a Gate; make that gate pass before moving on. Commit after each rung passes.
+- All new code is ADDITIVE under web/. Do NOT modify anything under src/ — the native engine is the immutable reference. Reuse the WASM core (web/wasm) for all scene parse/serialize/physics; only the GPU execution and UI live in TS.
+- For render rungs, author a scene + generate its native baseline ONCE with ./build/lpt2d-cli, commit it (git add -f past *.png), and never regenerate a baseline to chase the metric. If parity stalls, print the actual PSNR and largest per-pixel diffs each turn and keep fixing the WGSL/packing.
+- For editor rungs, validate authoring against the real engine: export the editor's Shot JSON, render it with ./build/lpt2d-cli, and assert the web render matches; assert save/load round-trips through the native serializer.
+- Build the missing harness/tooling as needed: web/harness/parity_corpus.mjs (corpus PSNR), the Playwright acceptance suite + `acceptance` npm script, and any baselines.
 
 CONSTRAINTS:
-- Do not modify any file under src/. The native engine is the immutable reference.
-- Do not lower the threshold or alter the baseline to pass. If PSNR stalls below 40, print the actual value and the largest per-pixel diffs each turn and keep fixing the WGSL/tonemap math.
-- Each turn, run all three checks and show their output.
+- Do not modify src/. Do not lower a threshold or alter a baseline to pass. Do not mark a rung done unless its Gate command actually passed in the transcript.
+- Each turn: report the current rung, which gates pass, and the next concrete step.
 
-REPORT each turn: current PSNR, which checks pass, and the next concrete fix.
+REPORT each turn: rung in progress, gate status, next step.
 ```
 
-### Caveats (these may consume the early turns — toolchain, not logic)
+### Why the previous version stopped at rung 1
 
-- `node-webgpu` / Dawn pulls native binaries; install can be slow or finicky in
-  CI-less environments. Fallback: build `dawn/node` from source (heavier).
-- Emscripten must be on `PATH` (`emcc`). If not, the first turns go to setup.
-
-## Rung 1 results (complete)
-
-The `web/` project implements the fill-only path end to end and matches the
-native engine **bit-for-bit** (`PSNR=inf dB`, MSE=0) on `scenes/web_fill_smoke.json`.
-
-What landed:
-
-- `web/wasm/lpt2d_web.cpp` + `web/scripts/build-wasm.sh` — Emscripten build of the
-  GL-free core (`scene`, `geometry`, `serialize_json`, `spectrum`, `color`)
-  exposing `resolve_scene(json) -> plan` (bounds, viewport, postprocess uniforms,
-  and spectral fill colors computed by the *same* `spectral_fill_rgb` the native
-  engine uses).
-- `web/src/shaders.mjs` — WGSL ports of `fill.vert/frag` and `postprocess.frag`
-  (fill-only subset; 4× MSAA matches the native fill FBO).
-- `web/src/render.mjs` — shared WebGPU renderer (plan → RGB8), used by both the
-  browser app and the harness.
-- `web/harness/parity.mjs` — headless Dawn (`webgpu` npm) render + PSNR vs the
-  committed baseline.
-- `web/src/main.ts` + `web/index.html` — minimal browser app (same render path).
-
-Run it:
-
-```bash
-source ~/emsdk/emsdk_env.sh            # emcc on PATH
-bash web/scripts/build-wasm.sh         # -> web/public/lpt2d_web.{js,wasm}
-npm --prefix web install               # first time only
-npm --prefix web run build             # vite build (exit 0)
-node web/harness/parity.mjs scenes/web_fill_smoke.json   # PARITY PSNR=inf dB ... PASS
-```
-
-Notes / gotchas learned:
-
-- Authored scene version is **12** (the "version 10" earlier in this doc was
-  stale). `scenes/web_fill_smoke.json` is version 12.
-- For a fill-only scene the trace/HDR texture is zero, so `uMaxVal`, exposure,
-  and normalize drop out — only fill → background-mask → reinhardx → contrast →
-  gamma is active. `inv_gamma = 1/gamma`; `reinhardx` is tonemap op `2`.
-- The harness needs **real GPU access** (Dawn → Vulkan → `/dev/dri`); it won't
-  run under a syscall sandbox.
-- Dawn's native teardown can crash the process on exit, truncating buffered
-  stdout. The harness therefore emits its result via synchronous `writeSync`
-  before returning and never calls `process.exit()`.
+The earlier document defined only **one** auto-verifiable goal (fill parity) and
+explicitly scoped itself to "the first rung, not the whole climb." Pointed at a
+`/goal`, it correctly stopped there. This rewrite fixes that: the destination is
+the **whole product**, every rung has a machine gate, and the **terminal gate is
+the completion condition**, so following it runs to the end.
 
 ## References
 
@@ -164,3 +215,4 @@ Notes / gotchas learned:
 - Emscripten WebGPU (emdawnwebgpu): <https://github.com/emscripten-core/emscripten/issues/23432>
 - Dawn node bindings: <https://github.com/dawn-gpu/node-webgpu>
 - naga GLSL→WGSL translation: <https://deepwiki.com/gfx-rs/wgpu/4.3-shader-translation>
+- Playwright WebGPU (headless Chromium): <https://playwright.dev/>
